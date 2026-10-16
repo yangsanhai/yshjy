@@ -839,7 +839,7 @@ dependencies = [
 
 [[package]]
 name = "yshjy"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bzip2-rs",
  "encoding_rs",

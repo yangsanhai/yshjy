@@ -128,6 +128,42 @@ impl ExtractReport {
     }
 }
 
+/// **快速验证密码：只读第一个加密条目的开头，不解整个包**
+///
+/// # 为什么必须有它（三层审查 B2 的落地）
+/// 试密码时如果靠「完整解压一遍看成功没」，8 GB 的包每个候选要几分钟 ——
+/// 用户会以为程序死机（实测：一个 8.7 GB 的包，试一次就把整条 8.6 GB 条目解了一遍）。
+///
+/// 实际上 ZipCrypto 的校验字节、AES 的校验块都藏在**数据开头**，
+/// 读几 KiB 就足以判断密码对不对。
+pub fn verify_password_at<R: Read + Seek>(r: R, base: u64, len: u64, pw: &str) -> bool {
+    use std::io::Read as _;
+
+    let Ok(window) = Window::new(r, base, len) else {
+        return false;
+    };
+    let Ok(mut archive) = zip::ZipArchive::new(window) else {
+        return false;
+    };
+
+    // 找一个条目试：优先加密的那个（不加密的条目用什么密码都能读，判不出对错）
+    let enc_idx = (0..archive.len()).find(|i| {
+        archive
+            .by_index_raw(*i)
+            .map(|f| f.encrypted())
+            .unwrap_or(false)
+    });
+    let Some(idx) = enc_idx else {
+        return true; // 压根没有加密条目 → 不需要密码
+    };
+
+    let Ok(mut entry) = archive.by_index_decrypt(idx, pw.as_bytes()) else {
+        return false;
+    };
+    let mut buf = [0u8; 4096];
+    matches!(entry.read(&mut buf), Ok(n) if n > 0)
+}
+
 /// 同名时生成不冲突的名字：`a.txt` → `a (1).txt`
 fn unique_path(path: &std::path::Path) -> PathBuf {
     if !path.exists() {
@@ -639,6 +675,31 @@ mod tests {
         assert!(!rep3.skipped.is_empty(), "{path}: 错密码应如实报告失败");
 
         let _ = fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 快速验证密码只读开头不解整包() {
+        // 用真实加密样本（zipcrypto）验证：读 4 KiB 就能判对错
+        let path = "tests/data/zipcrypto_secret.zip";
+        if !std::path::Path::new(path).exists() {
+            eprintln!("样本 {path} 不存在，跳过");
+            return;
+        }
+        let data = fs::read(path).unwrap();
+        let len = data.len() as u64;
+        assert!(
+            verify_password_at(Cursor::new(data.clone()), 0, len, "secret"),
+            "正确密码应当通过"
+        );
+        assert!(
+            !verify_password_at(Cursor::new(data), 0, len, "不是这个密码"),
+            "错密码应当立刻被拒（不该等整包解完）"
+        );
+
+        // 没有加密条目的包：不需要密码，任何输入都算通过（调用方据此跳过试密码）
+        let plain = make_zip();
+        let plen = plain.len() as u64;
+        assert!(verify_password_at(Cursor::new(plain), 0, plen, "随便"));
     }
 
     #[test]
