@@ -486,10 +486,11 @@ pub fn extract_tar_ctx<R: Read + 'static>(
                 .push((name.clone(), format!("建父目录失败: {e}")));
             continue;
         }
-        if safety::is_risky_executable(&name) {
-            report
-                .warnings
-                .push(format!("{name}：可执行文件，已解出但请谨慎运行"));
+        if safety::should_warn_executable(&opts.limits, &name) {
+            // 走**事件**而不是往内部列表里塞字符串：
+            // ① 事件外壳才看得见（否则这条提醒等于没发）
+            // ② 文案由外壳查语言包渲染（引擎不产句子）
+            ctx.diagnostic(crate::event::DiagnosticCode::RiskyEntry, name.clone());
         }
 
         // tar 头里记的时间戳 / 权限（落盘后再设上去，见下面成功分支）

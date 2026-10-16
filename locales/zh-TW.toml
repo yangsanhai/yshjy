@@ -128,6 +128,8 @@ queued = "📋 排好 {count} 個任務（大的先跑）"
 password_tried = "   🔒 這個壓縮檔有密碼（已試 {count} 次）"
 show_config = "目前設定（這個檔案：{path}）"
 import_done = "✅ 匯入了 {added} 個密碼（現在共 {total} 筆）→ {path}"
+diag_line = "   ℹ {text}：{detail}"
+fail_line = "❌ {input}：{reason}"
 
 [result.phrase]
 ok = "解開"

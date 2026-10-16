@@ -128,6 +128,8 @@ queued = "📋 {count} 件をキューに追加（大きい順）"
 password_tried = "   🔒 この圧縮ファイルはロックされています（{count} 回試行）"
 show_config = "現在の設定（ファイル：{path}）"
 import_done = "✅ パスワードを {added} 件取り込みました（合計 {total} 件）→ {path}"
+diag_line = "   ℹ {text}：{detail}"
+fail_line = "❌ {input}：{reason}"
 
 [result.phrase]
 ok = "展開完了"

@@ -221,10 +221,8 @@ pub fn extract_rar_ctx(
                 .push((name.clone(), format!("建父目录失败: {e}")));
             return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
         }
-        if safety::is_risky_executable(&name) {
-            rep2.borrow_mut()
-                .warnings
-                .push(format!("{name}：可执行文件，已解出但请谨慎运行"));
+        if safety::should_warn_executable(&opts.limits, &name) {
+            ctx.diagnostic(crate::event::DiagnosticCode::RiskyEntry, name.clone());
         }
 
         let f = match fs::File::create(&out_path) {

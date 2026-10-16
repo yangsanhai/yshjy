@@ -345,7 +345,10 @@ fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
                 if try_list_by_rescue(t, quiet).is_some() {
                     continue;
                 }
-                eprintln!("❌ {t}：{}", 失败文案(e.code));
+                eprintln!(
+                    "{}",
+                    文案().t("cli.fail_line", &[("input", t), ("reason", &失败文案(e.code))])
+                );
                 if !quiet {
                     eprintln!("   （{e}）");
                     eprintln!("{}", 文案().t("cli.rescue_hint", &[]));
@@ -716,7 +719,13 @@ impl yshjy::event::EventSink for 终端出口 {
             }
             Event::Diagnostic { code, note, .. } => {
                 self.清行();
-                eprintln!("   ℹ {}：{note}", 诊断文案(*code));
+                eprintln!(
+                    "{}",
+                    文案().t(
+                        "cli.diag_line",
+                        &[("text", &诊断文案(*code)), ("detail", note)]
+                    )
+                );
             }
             Event::PasswordNeeded { attempts, .. } => {
                 self.清行();

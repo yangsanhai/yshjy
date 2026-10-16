@@ -128,6 +128,8 @@ queued = "📋 {count}개 작업 대기 (큰 것부터)"
 password_tried = "   🔒 이 압축 파일은 잠겨 있습니다 ({count}회 시도)"
 show_config = "현재 설정 (파일: {path})"
 import_done = "✅ 비밀번호 {added}개를 가져왔습니다 (총 {total}개) → {path}"
+diag_line = "   ℹ {text}: {detail}"
+fail_line = "❌ {input}: {reason}"
 
 [result.phrase]
 ok = "압축 풀기 완료"
