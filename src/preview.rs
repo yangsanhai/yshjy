@@ -168,8 +168,11 @@ fn preview_zip_volumes(volumes: &[PathBuf]) -> Result<Preview> {
     preview_zip_reader(window)
 }
 
-/// 真正的清单读取（普通 ZIP / 分卷共用同一份）
-fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Result<Preview> {
+/// 真正的清单读取（普通 ZIP / 分卷 / 统一接口共用同一份）
+///
+/// `pub(crate)`：统一接口（[`crate::unpack::ZipUnpacker`] 的 `list`）也调它 ——
+/// 一份实现两处用，别再抄第二份。
+pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Result<Preview> {
     let mut archive = zip::ZipArchive::new(src)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip open: {e}")))?;
 
