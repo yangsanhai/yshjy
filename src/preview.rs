@@ -135,6 +135,7 @@ pub fn preview(
 fn preview_target(input: &Path, target: &Target, password: Option<&str>) -> Result<Preview> {
     match target {
         Target::Zip { base, len } => preview_zip(input, *base, *len),
+        Target::ZipSplit { volumes } => preview_zip_volumes(volumes),
         Target::SevenZ { volumes } => preview_7z(volumes, password),
         Target::Rar => preview_rar(input),
         Target::Stream {
@@ -151,7 +152,25 @@ fn preview_zip(input: &Path, base: u64, len: u64) -> Result<Preview> {
         .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
     let window = crate::io::Window::new(f, base, len)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
-    let mut archive = zip::ZipArchive::new(window)
+    preview_zip_reader(window)
+}
+
+/// ZIP 分卷的清单：拼成逻辑流 → 找中央目录 → 之后和普通 ZIP 完全一样
+fn preview_zip_volumes(volumes: &[PathBuf]) -> Result<Preview> {
+    let mut mf = crate::extract7z::MultiFile::open(volumes)?;
+    let size = mf.total();
+    let l = crate::layout::zip::locate(&mut mf, size).map_err(|e| {
+        Error::new(ErrorCode::NotArchive)
+            .context(format!("分卷里的中央目录没找到（是不是缺了一块？）: {e}"))
+    })?;
+    let window = crate::io::Window::new(mf, l.base, l.data_len())
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
+    preview_zip_reader(window)
+}
+
+/// 真正的清单读取（普通 ZIP / 分卷共用同一份）
+fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Result<Preview> {
+    let mut archive = zip::ZipArchive::new(src)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip open: {e}")))?;
 
     let mut entries = Vec::with_capacity(archive.len());
@@ -322,7 +341,8 @@ fn preview_stream(
         hints: Vec::new(),
         total_size: 0,
         encrypted_count: 0,
-        format: "stream",
+        // 显示具体格式名（brotli / lz4 / gzip…）比笼统的 "stream" 有用得多
+        format: format.as_str(),
         complete: true,
     })
 }

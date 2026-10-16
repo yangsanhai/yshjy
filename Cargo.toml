@@ -1,6 +1,6 @@
 [package]
 name = "yshjy"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 license = "MIT"
 authors = ["yangsanhai"]
@@ -9,11 +9,28 @@ readme = "README.md"
 keywords = ["archive", "extract", "zip", "7z", "rar", "steganography"]
 categories = ["command-line-utilities", "compression"]
 
+[features]
+# 默认 = **常用版**：日常下载会遇到的格式全都在，体积小、依赖少、攻击面小
+default = []
+# **全能版**（`cargo build --release --features full`）：冷门格式挂这里
+#
+# 加一个新格式的步骤：
+#   ① Cargo.toml 里把它的依赖写成 optional = true
+#   ② 把依赖名挂进下面这个列表
+#   ③ 代码里用 #[cfg(feature = "full")] 写「识别 + 解压」两个分支
+#   ④ 打两个包：bash scripts/release.sh
+#
+# 为什么分档：常用版依赖越少，「某个第三方库被投毒」的风险面越小，
+# 而且冷门格式的解析器代码复杂、稳定性差，不该拖累主路径。
+full = []
+
 [dependencies]
+brotli = "9.0.0"
 bzip2-rs = "0.1.2"
 ctrlc = "3.4"
 encoding_rs = "0.8.42"
 flate2 = "1.1.10"
+lz4_flex = "0.14.0"
 lzma-rs = "0.3.0"
 rars = { version = "0.11.0", default-features = false, features = ["encryption", "parallel"] }
 ruzstd = "0.9.1"

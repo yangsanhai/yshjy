@@ -37,6 +37,7 @@ const HELP: &str = r#"杨三海解压（yshjy） —— 专治「伪装成视频
   yshjy --list <文件>             先看看里面有什么（不解压）
   yshjy --rescue <文件>           文件坏了也尽量救出来
   yshjy --help                    看这份帮助
+  yshjy -V, --version             看版本和档位（常用版 / 全能版）
 
 常用选项：
   -o, --dest <目录>               解压到哪（默认：当前目录下的同名文件夹）
@@ -66,6 +67,27 @@ const HELP: &str = r#"杨三海解压（yshjy） —— 专治「伪装成视频
 解不开？先试 yshjy --list 看能不能认出里面有什么。
 "#;
 
+/// `--version` 的输出
+///
+/// **档位是编译期定死的**：不带 `--features full` 编出来的就是「常用版」。
+fn 版本信息() -> String {
+    let 档 = if cfg!(feature = "full") {
+        "全能版"
+    } else {
+        "常用版"
+    };
+    let mut s = format!("yshjy {}（{档}）—— 杨三海解压\n", env!("CARGO_PKG_VERSION"));
+    s.push_str(
+        "  支持的格式：ZIP（含分卷）/ 7z / RAR / TAR / gzip / xz / zstd / bzip2 / brotli / lz4\n",
+    );
+    if cfg!(feature = "full") {
+        s.push_str("  全能版：冷门格式（ISO/UDF、CAB、ARJ…）陆续补进来，当前覆盖与常用版一致\n");
+    } else {
+        s.push_str("  常用版：日常下载会遇到的格式全都在（体积更小、依赖更少）\n");
+    }
+    s
+}
+
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().collect();
     let quiet = argv.iter().any(|a| a == "-q" || a == "--quiet");
@@ -84,6 +106,10 @@ fn main() -> ExitCode {
     }
     if has("--help") || has("-h") {
         print!("{HELP}");
+        return ExitCode::from(code::OK);
+    }
+    if has("--version") || has("-V") {
+        print!("{}", 版本信息());
         return ExitCode::from(code::OK);
     }
 

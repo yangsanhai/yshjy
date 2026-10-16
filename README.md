@@ -5,7 +5,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/平台-Linux%20%7C%20Windows%20%7C%20Android-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.6.0%20测试版-2ECC71)
+![状态](https://img.shields.io/badge/状态-v0.7.0%20测试版-2ECC71)
+
+> **两个版本**
+> - **常用版**（文件名 `yshjy-*`）—— 日常下载会遇到的格式全都在，体积小、依赖少，**推荐装这个**
+> - **全能版**（文件名 `yshjy-full-*`）—— 给冷门格式预留（ISO/UDF、CAB、ARJ…陆续补进来）
+>
+> 当前两版格式覆盖**一致** —— 全能版的价值要等冷门格式一个个补完才拉开。
+> `yshjy --version` 会告诉你装的是哪一档。
 
 ---
 
