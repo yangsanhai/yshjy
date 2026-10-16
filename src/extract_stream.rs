@@ -379,7 +379,9 @@ pub fn extract_tar_ctx<R: Read + 'static>(
         .entries()
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("读 tar 条目失败: {e}")))?;
 
-    for (idx, ent) in entries.enumerate() {
+    for (zero_based, ent) in entries.enumerate() {
+        // tar 的迭代也不给"用户看到的号"，自己算（**1-based**，与预览一致）
+        let idx = zero_based as u64 + 1;
         // 用户取消：已解出的保留，不再往下做
         if ctx.is_cancelled() {
             report.cancelled = true;
@@ -406,7 +408,7 @@ pub fn extract_tar_ctx<R: Read + 'static>(
         // 挑选：没被勾中的条目直接跳过（不写盘、不算错）
         if !opts
             .selection
-            .matches(idx as u64, &name, ent.header().entry_type().is_dir())
+            .matches(idx, &name, ent.header().entry_type().is_dir())
         {
             continue;
         }
@@ -416,7 +418,7 @@ pub fn extract_tar_ctx<R: Read + 'static>(
             if let Ok(d) = safety::resolve_safe(&opts.dest, &name) {
                 let _ = fs::create_dir_all(&d);
             }
-            ctx.entry_done(idx as u64, &name, ItemResult::Ok, 0);
+            ctx.entry_done(idx, &name, ItemResult::Ok, 0);
             continue;
         }
         // 符号链接：明确跳过并说明（避免逃逸）
@@ -514,11 +516,11 @@ pub fn extract_tar_ctx<R: Read + 'static>(
             Some(msg) => {
                 report.skipped.push((name.clone(), msg));
                 let _ = fs::remove_file(&out_path);
-                ctx.entry_done(idx as u64, &name, ItemResult::DataError, 0);
+                ctx.entry_done(idx, &name, ItemResult::DataError, 0);
             }
             None => {
                 report.bytes_written += written;
-                ctx.entry_done(idx as u64, &name, ItemResult::Ok, written);
+                ctx.entry_done(idx, &name, ItemResult::Ok, written);
                 report.files.push(crate::extract::ExtractedFile {
                     name,
                     out_path,

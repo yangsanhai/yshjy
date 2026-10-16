@@ -85,7 +85,8 @@ yshjy [命令] [选项] <文件...>
 |------|------|------|
 | `-j, --jobs <N>` | 并行任务数（分片并行，结果仍按任务号排序） | 1（顺序跑，对磁盘最友好） |
 | `--select <条件>` | 只解一部分（四种写法见下） | 全解 |
-| `--json` | 事件流 + 汇总结论按行输出 JSON（脚本 / 前端消费） | 关 |
+| `--json` | 事件流 + 汇总结论 + 预览结果按行输出 JSON | 关 |
+| `--no-smart-dir` | 关掉「智能解压三规则」，永远建同名文件夹 | 关（默认开启智能） |
 
 `--select` 的四种写法：
 
@@ -134,14 +135,36 @@ $ yshjy 示例视频.mp4
 ```
 > 只输出最终路径；适合 `cd $(yshjy -q 文件.mp4)` 这种用法。
 
-### 4.3 列表模式（`--list`，机器可读）
+### 4.3 列表模式（`--list`）
+
+**人话版**（默认）：带序号的清单，**序号可直接喂给 `--select`**
+
 ```
-$ yshjy --list 电影.mp4
-示例包.7z.001	8590199667	encrypted=no	volume=1/2
-示例包.7z.002	5550775459	encrypted=no	volume=2/2
-封面视频.mp4	119248031	encrypted=no
+$ yshjy --list 包.mp4
+📦 包.mp4（zip）
+   ℹ 其中 1 个带锁 —— 解压需要解压码
+
+     🔒    1.    8.59 GB  示例包.7z.001
+             2.    5.55 GB  示例包.7z.002
+
+   合计 14.14 GB / 2 个文件
+   解压码：看旁边的「说明.txt」，或 yshjy -p "解压码" "包.mp4"
+   只解一部分：yshjy --select "1,3" "包.mp4"
 ```
-> Tab 分隔，便于 `awk` 处理。
+
+**脚本版**（`--json`）：一条 JSON，`entries[]` 里是 index / path / size / encrypted / risky
+
+```
+$ yshjy --list --json 包.mp4
+{"input":"包.mp4","format":"zip","complete":true,"files":2,"total_size":15171313151,
+ "encrypted":1,"hints":["其中 1 个带锁 —— 解压需要解压码"],
+ "entries":[{"index":1,"path":"示例包.7z.001","size":8590199667,"is_dir":false,...}]}
+```
+
+**安静版**（`--quiet`）：每行一个路径（`awk` / `xargs` 友好）
+
+> 支持的格式：ZIP / 7z / RAR / 单流。RAR 的大小拿不到（库没暴露）会标 `complete=false`；
+> TAR 家族暂不预览（顺序格式要扫完整流）。
 
 ### 4.4 进度条规则
 - 只有 TTY 且非 `--quiet` 时才画进度条；管道输出时自动改为逐行日志。

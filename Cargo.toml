@@ -1,6 +1,6 @@
 [package]
 name = "yshjy"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "MIT"
 authors = ["yangsanhai"]
@@ -11,6 +11,7 @@ categories = ["command-line-utilities", "compression"]
 
 [dependencies]
 bzip2-rs = "0.1.2"
+ctrlc = "3.4"
 encoding_rs = "0.8.42"
 flate2 = "1.1.10"
 lzma-rs = "0.3.0"

@@ -89,11 +89,20 @@ yshjy --json 包.mp4             # 事件流按行输出（脚本/前端消费�
 
 ```
 A. 图形界面 —— Flutter + FRB（设计已备齐：docs/UI-SPEC.md 586 行 + 45 张竞品截图）
-   ★ 引擎这一层已经就绪：事件流 / 进度 / 取消 / 挑选 / 批量 全部可用
-B. 欠债清理 —— 智能解压三规则、CLI 接管 Ctrl-C、ExtractReport 中文文案改错误码
-C. 三平台构建 —— Windows / macOS / Android（含 Android 构建链最小验证）
-D. 其它设计里已画好、尚未实现 —— --report 诊断包、密码本 UI、配置读写（BACKEND-SPEC §2/§4）
-E. 预览接线 —— PreviewReady 事件已定义但未接；多格式预览 + --list --json（界面 S3 靠它）
+   ★ 引擎侧已完全就绪：事件流 / 进度 / 取消 / 挑选 / 批量 / **预览** 全部可用
+B. 三平台构建 —— Windows / macOS / Android（含 Android 构建链最小验证）
+C. 其它设计里已画好、尚未实现 —— --report 诊断包、密码本 UI、配置读写（BACKEND-SPEC §2/§4）
+D. RAR 预览的条目大小（要往下解析 RAR 头；`rars` 没暴露）+ TAR 家族预览
+```
+
+### 已完成（v0.6 第一批，2026-10-17）
+
+```
+✅ 预览接线      新增 src/preview.rs：ZIP / 7z / RAR / 单流都能「不解压就列内容」
+                PreviewReady 事件接线（界面 S3 的数据源）；CLI --list 走新路径 + --list --json
+✅ 智能解压三规则 单一顶层目录/单文件 → 直接解；散文件 → 建同名子目录（--no-smart-dir 可关）
+✅ Ctrl-C 接管   信号 → 引擎取消令牌（已解出的保留、退出码 130）；连按两次强制退出
+✅ 序号统一      条目号一律 1-based（界面显示的号 = --select 用的号）
 ```
 
 ---

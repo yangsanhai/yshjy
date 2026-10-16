@@ -230,7 +230,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         for i in 0..archive.len() {
             if let Ok(f) = archive.by_index_raw(i) {
                 let nm = crate::layout::zip::decode_name(f.name_raw(), false);
-                if opts.selection.matches(i as u64, &nm, f.is_dir()) {
+                if opts.selection.matches(i as u64 + 1, &nm, f.is_dir()) {
                     bytes += f.size();
                     files += 1;
                 }
@@ -273,7 +273,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         };
 
         // 挑选：没被勾中的条目直接跳过（不写盘、不算错，见 docs/V0.5-ENGINE.md §5）
-        if !opts.selection.matches(i as u64, &name, is_dir) {
+        if !opts.selection.matches(i as u64 + 1, &name, is_dir) {
             continue;
         }
 
@@ -295,7 +295,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                     .push((name.clone(), format!("建目录失败: {e}")));
             }
             // 目录也算一个「做完了」的条目，否则界面上的总数对不上
-            ctx.entry_done(i as u64, &name, ItemResult::Ok, 0);
+            ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
             continue;
         }
 
@@ -406,11 +406,11 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 // 清理半成品（对齐 unar「失败即删输出文件」的做法）
                 drop(out);
                 let _ = fs::remove_file(&out_path);
-                ctx.entry_done(i as u64, &name, ItemResult::DataError, 0);
+                ctx.entry_done(i as u64 + 1, &name, ItemResult::DataError, 0);
             }
             None => {
                 report.bytes_written += written;
-                ctx.entry_done(i as u64, &name, ItemResult::Ok, written);
+                ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, written);
                 report.files.push(ExtractedFile {
                     name,
                     out_path,
@@ -774,9 +774,10 @@ mod tests {
         assert!(by_dir.matches(1, "sub/deep/b.txt", false));
         assert!(!by_dir.matches(2, "other/c.txt", false));
 
-        let by_index = Selection::only(vec![0, 2]);
-        assert!(by_index.matches(0, "任意", false));
-        assert!(!by_index.matches(1, "任意", false));
+        let by_index = Selection::only(vec![1, 3]);
+        assert!(by_index.matches(1, "任意", false), "序号从 1 开始（界面上看到的号）");
+        assert!(!by_index.matches(2, "任意", false));
+        assert!(by_index.matches(3, "任意", true));
 
         assert!(Selection::all().matches(9, "任意", true), "默认全都要");
     }
