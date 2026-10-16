@@ -97,6 +97,12 @@ pub struct ExtractReport {
     pub budget_hit: bool,
     /// 是否被用户取消（**已解出的文件保留**，见台账 §5.8）
     pub cancelled: bool,
+    /// 索引坏了、但**在内存里打补丁救回来**的说明（`None` = 没修过索引）
+    ///
+    /// 为什么不只发一条事件：批量汇总要据此把任务标成「索引有错但救回来了」
+    /// （`ArchiveFlags::HEADERS_ERROR`）。事件是**给人看**的，这个字段是**给机器看**的，
+    /// 两者不能混（BACKEND-SPEC §6.2 那条例）。
+    pub repaired: Option<String>,
 }
 
 impl ExtractReport {
@@ -105,8 +111,14 @@ impl ExtractReport {
         self.files.is_empty()
     }
     /// 是否「全部干净成功」（没有跳过、没有警告）
+    ///
+    /// 注意：**修过索引不算干净** —— 文件都出来了，但那是我们替它擦的屁股，
+    /// 值得让上层知道（批量汇总会据此把任务标成「索引有错但救回来了」）。
     pub fn is_clean(&self) -> bool {
-        self.skipped.is_empty() && self.warnings.is_empty() && !self.budget_hit
+        self.skipped.is_empty()
+            && self.warnings.is_empty()
+            && !self.budget_hit
+            && self.repaired.is_none()
     }
     /// 一句话摘要
     pub fn summary(&self) -> String {
