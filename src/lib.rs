@@ -23,6 +23,7 @@ pub mod extract7z;
 pub mod extract_rar;
 pub mod extract_stream;
 pub mod hardware;
+pub mod i18n;
 pub mod io;
 pub mod job;
 pub mod layout;

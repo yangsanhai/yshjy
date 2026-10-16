@@ -1,0 +1,115 @@
+# English (US) —— yshjy language pack
+#
+# ══════════════════════════════════════════════════════════════
+#  Want to add a new language? Three steps, no coding required:
+#    1. Copy this file and rename it to your language code (e.g. fr-FR.toml)
+#    2. Change `code` / `name` under [meta]
+#    3. Translate the text on the right of each `=`
+#
+#  Only want to override a few lines? Put a partial file at
+#  ~/.config/yshjy/locales/xx-XX.toml — anything you omit falls back
+#  to the built-in pack.
+#
+#  Keep placeholders like {name} exactly as they are.
+# ══════════════════════════════════════════════════════════════
+
+[meta]
+code = "en-US"
+name = "English"
+translators = "yshjy project"
+
+[help]
+text = """
+yshjy — the tool for "videos" that are really archives
+
+USAGE:
+  yshjy <file>                    extract (default)
+  yshjy jy <file>                 extract (explicit form, good for scripts)
+  yshjy ys <file or folder>       pack into a disguised file
+  yshjy --list <file>             list what's inside, without extracting
+  yshjy --rescue <file>           salvage as much as possible from a broken archive
+  yshjy --help                    show this help
+  yshjy -V, --version             show version and edition (common / full)
+
+COMMON OPTIONS:
+  -o, --dest <dir>                where to extract (default: folder named after the archive)
+  -p, --password <pw>             password for extracting / packing
+  -j, --jobs <N>                  how many archives at once (default 1; sequential is easiest on disks)
+  --select <rule>                 extract only part of it:
+                                    --select "*.exe"     only .exe files
+                                    --select "data/**"   only that subtree
+                                    --select "1,3,5"     only entries #1, #3 and #5
+                                    --select required    skip junk like .DS_Store
+  --json                          print the event stream / results as JSON lines (for scripts)
+  --no-smart-dir                  turn off "smart extract": by default, when the archive has a single
+                                  top-level folder we extract straight into the destination instead of
+                                  nesting another same-named folder. This flag always nests.
+  -q, --quiet                     print results only (for scripts)
+  --lang <lang>                   switch the UI language (e.g. zh-CN, ja, ko, ru, es)
+  --tail                          pack with the "append to tail" layout (default: inside a free atom)
+
+EXAMPLES:
+  yshjy movie.mp4                 extract the archive hidden inside a video
+  yshjy downloads/                queue every archive in a folder (one failure won't stop the rest)
+  yshjy --list movie.mp4          just show what's inside
+  yshjy --select "*.exe" game.mp4 only the .exe files
+  yshjy -p "secret" game.mp4      extract with a password
+  yshjy ys my-game/               pack a folder into a disguised video
+  yshjy --rescue broken.zip       salvage from a broken archive
+  yshjy --json pack.mp4 | jq .    feed a script or front-end
+
+Can't open it? Run `yshjy --list` first to see whether we can identify what's inside.
+"""
+
+[tier]
+common = "common edition"
+full = "full edition"
+
+[version]
+line = "yshjy {version} ({tier}) —— Yang Sanhai Jieya"
+formats = "  Formats: ZIP (incl. split volumes) / 7z / RAR / TAR / gzip / xz / zstd / bzip2 / brotli / lz4"
+tier_common = "  Common edition: every format you'll realistically run into — smaller binary, fewer deps"
+tier_full = "  Full edition: rare formats (ISO/UDF, CAB, ARJ…) are being added; currently same coverage"
+
+[preview]
+title = "📦 {input} ({format})"
+incomplete = "   ⚠ This format only exposes partial info (sizes unknown)"
+empty = "   (nothing to list)"
+row = "   {lock}{icon} {index:>4}  {size:>10}  {path}{risk}"
+row_more = "   … and {count} more"
+total = "   Total {size} / {count} files"
+password_hint = "   Password: check the readme beside it, or run yshjy -p \"the-password\" \"{input}\""
+select_hint = "   Extract only part: yshjy --select \"1,3\" \"{input}\""
+risky = " ⚠executable"
+unknown_size = "—"
+
+[preview.hint]
+volumes_merged = "{count} split volumes detected — they'll be joined automatically"
+nested_archive = "There's another archive nested inside ({inner})"
+needs_password = "{count} of them are locked — a password is required"
+looks_truncated = "This archive looks incomplete (data missing at the end)"
+hidden_at = "The archive sits inside the file (offset {offset}); located at its real position"
+rebuilt_index = "The index was damaged — this listing was rebuilt from the file headers"
+video_unplayable = "The cover video itself is broken, but the files inside can still be extracted"
+
+[result]
+ok = "✅ {input} — extracted ({size} in {secs}s)"
+partial = "⚠ {input} — partially extracted ({done} ok, {skipped} skipped)"
+failed = "❌ {input} — failed: {reason}"
+cancelled = "⏹ {input} — cancelled (files already extracted are kept)"
+
+[error]
+not_archive = "Not an archive (no recognizable compressed data found)"
+password_wrong = "Wrong password"
+password_missing = "This archive is locked and needs a password"
+path_not_found = "File or folder not found"
+no_space = "Not enough disk space"
+cancel = "Cancelled"
+corrupt = "File is damaged or incomplete"
+unsupported = "This format isn't supported yet"
+internal = "Internal error"
+
+[misc]
+file_missing = "❌ {input}: file not found"
+lang_unknown = "⚠ No \"{lang}\" language pack — using {fallback} (available: {available})"
+lang_switched = "UI language: {name} ({code})"
