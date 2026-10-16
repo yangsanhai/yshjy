@@ -48,6 +48,8 @@ COMMON OPTIONS:
   --force                         skip the pre-extraction free-space check (which otherwise
                                   refuses to start when the disk is too full)
   --lang <lang>                   switch the UI language (e.g. zh-CN, ja, ko, ru, es)
+  --show-config                   show current settings (where the config file is, and its values)
+  --import-passwords <file>       import a password list (one per line, # starts a comment)
   --tail                          pack with the "append to tail" layout (default: inside a free atom)
 
 EXAMPLES:
@@ -130,6 +132,8 @@ rescue_hint = "   Tip: if it won't open, try --rescue."
 nothing_found = "❌ Nothing to process: {targets}"
 queued = "📋 Queued {count} job(s) (largest first)"
 password_tried = "   🔒 This archive is locked (tried {count} time(s))"
+show_config = "Current settings (file: {path})"
+import_done = "✅ Imported {added} password(s) (now {total} total) → {path}"
 
 [result.phrase]
 ok = "extracted"
@@ -147,6 +151,19 @@ partial_data = "data is incomplete"
 hidden_at = "the archive sits inside the file; located at its real position"
 rebuilt_index = "the index was damaged; the listing was rebuilt from headers"
 offset_corrected = "the offsets were wrong; corrected automatically"
+
+[config]
+path = "Config file"
+language = "Language"
+jobs = "Parallel jobs"
+out_dir = "Default output dir"
+conflict = "Name conflict"
+ratio = "Max compression ratio"
+passwords = "Password list"
+follow_system = "(follow system)"
+beside_package = "(next to the archive)"
+passwords_fmt = "{path} ({count} entries)"
+line = "   {key}: {value}"
 
 [misc]
 file_missing = "❌ {input}: file not found"

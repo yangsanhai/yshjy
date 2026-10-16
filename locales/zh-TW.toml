@@ -126,6 +126,8 @@ rescue_hint = "   提示：解不開時加上 --rescue 試試救援模式。"
 nothing_found = "❌ 找不到能處理的東西：{targets}"
 queued = "📋 排好 {count} 個任務（大的先跑）"
 password_tried = "   🔒 這個壓縮檔有密碼（已試 {count} 次）"
+show_config = "目前設定（這個檔案：{path}）"
+import_done = "✅ 匯入了 {added} 個密碼（現在共 {total} 筆）→ {path}"
 
 [result.phrase]
 ok = "解開"
@@ -143,6 +145,19 @@ partial_data = "資料不完整"
 hidden_at = "壓縮檔藏在檔案中間，已按真實位置定位"
 rebuilt_index = "索引壞了，清單是依檔案標頭重建的"
 offset_corrected = "偏移不對，已自動修正"
+
+[config]
+path = "設定檔"
+language = "語言"
+jobs = "並行任務數"
+out_dir = "預設輸出目錄"
+conflict = "重名策略"
+ratio = "壓縮比上限"
+passwords = "密碼本"
+follow_system = "（跟隨系統）"
+beside_package = "（壓縮檔旁邊）"
+passwords_fmt = "{path}（{count} 筆）"
+line = "   {key}：{value}"
 
 [misc]
 file_missing = "❌ {input}：檔案不存在"

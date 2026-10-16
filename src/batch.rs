@@ -138,6 +138,8 @@ pub struct BatchOptions {
     ///
     /// 预检只在**预估得出总大小时**才拦人（拿不准就放行，见 [`crate::safety::check_space`]）。
     pub force: bool,
+    /// 安全限值（来自配置文件：压缩比上限、单次写出上限等）
+    pub limits: crate::safety::Limits,
 }
 
 impl Default for BatchOptions {
@@ -150,6 +152,7 @@ impl Default for BatchOptions {
             dest: None,
             smart_dir: true,
             force: false,
+            limits: crate::safety::Limits::default(),
         }
     }
 }

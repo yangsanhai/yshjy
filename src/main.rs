@@ -72,6 +72,20 @@ fn 文案() -> &'static yshjy::i18n::I18n {
 }
 
 fn main() -> ExitCode {
+    // 修一个"用起来正常、但报错很吓人"的毛病：
+    // Rust 默认会**忽略 SIGPIPE**，于是「管道对端关掉」变成「写 stdout 失败」，
+    // 而 `println!` 遇到写失败会 **panic** —— 用户跑
+    // `yshjy --list 包.mp4 | head -3` 就会看到一段 panic 回溯（其实一切正常）。
+    // 恢复系统默认行为：对端关了管道，我们就安静地结束，像所有 Unix 工具一样。
+    #[cfg(unix)]
+    {
+        // SAFETY: 只是把 SIGPIPE 的处理方式设回系统默认（SIG_DFL），
+        // 不涉及任何内存操作，也没有信号处理函数里该避免的事。
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
+    }
+
     let argv: Vec<String> = std::env::args().collect();
     let quiet = argv.iter().any(|a| a == "-q" || a == "--quiet");
 
@@ -83,8 +97,15 @@ fn main() -> ExitCode {
     };
     let has = |k: &str| argv.iter().any(|a| a == k || a == short_of(k));
 
-    // 多语言：`--lang xx` 优先，其次 YSHTY_LANG，再跟系统语言（见 i18n::detect）
-    let _ = I18N.set(yshjy::i18n::I18n::new(val_of("--lang").as_deref()));
+    // 配置（读一次就够；文件不在就用默认值 —— 见 config 模块的"读的时候宽容"）
+    let cfg = yshjy::config::全局配置();
+
+    // 多语言：`--lang` > 配置文件里的 language > 系统语言（见 i18n::detect）
+    let _ = I18N.set(yshjy::i18n::I18n::new(
+        val_of("--lang")
+            .or_else(|| cfg.general.language.clone())
+            .as_deref(),
+    ));
     if !文案().is_requested_ok() {
         // 要的语言没有 → 用兜底语言提示一句（文案本身也走语言包）
         let avail = 文案().available().join(", ");
@@ -112,6 +133,61 @@ fn main() -> ExitCode {
     if has("--version") || has("-V") {
         print!("{}", 版本信息());
         return ExitCode::from(code::OK);
+    }
+
+    // 看当前配置（改了哪个文件、每一项现在是什么值）
+    if has("--show-config") {
+        let 语 = 文案();
+        let 路径 = yshjy::config::config_path().display().to_string();
+        println!("{}", 语.t("cli.show_config", &[("path", &路径)]));
+        for (键, 值) in yshjy::config::配置摘要(cfg) {
+            // 两个"空值"要渲染成提示语；密码本那条要拆成「路径 + 条数」两个参数
+            let 值 = match 键 {
+                "language" if 值.is_empty() => 语.t("config.follow_system", &[]),
+                "out_dir" if 值.is_empty() => 语.t("config.beside_package", &[]),
+                "passwords" => {
+                    let mut it = 值.splitn(2, '|');
+                    let p = it.next().unwrap_or_default().to_string();
+                    let c = it.next().unwrap_or("0").to_string();
+                    语.t("config.passwords_fmt", &[("path", &p), ("count", &c)])
+                }
+                _ => 值,
+            };
+            println!(
+                "{}",
+                语.t(
+                    "config.line",
+                    &[("key", &语.t(&format!("config.{键}"), &[])), ("value", &值)]
+                )
+            );
+        }
+        return ExitCode::from(code::OK);
+    }
+
+    // 导入外部密码本（兼容隐写者的 PW.txt：Tab 取第一列，且不过滤中文）
+    if let Some(src) = val_of("--import-passwords") {
+        let dst = cfg.passwords_path();
+        return match yshjy::config::导入密码本(std::path::Path::new(&src), &dst) {
+            Ok(added) => {
+                let total = yshjy::config::读密码本(&dst).len();
+                println!(
+                    "{}",
+                    文案().t(
+                        "cli.import_done",
+                        &[
+                            ("added", &added.to_string()),
+                            ("total", &total.to_string()),
+                            ("path", &dst.display().to_string()),
+                        ]
+                    )
+                );
+                ExitCode::from(code::OK)
+            }
+            Err(e) => {
+                eprintln!("❌ {e}");
+                ExitCode::from(code::ERR)
+            }
+        };
     }
 
     // 收集"非选项参数"（文件名 / 目录 / 子命令）
@@ -191,7 +267,7 @@ fn main() -> ExitCode {
                 return ExitCode::from(code::USAGE);
             }
         },
-        None => 1,
+        None => cfg.general.jobs, // 配置文件里可以定默认并行数
     };
     let selection = match val_of("--select") {
         Some(expr) => match yshjy::select::Selection::parse(&expr) {
@@ -210,7 +286,8 @@ fn main() -> ExitCode {
 
     do_extract(解压参数 {
         targets,
-        dest: val_of("--dest"),
+        // 输出目录优先级：命令行 -o > 配置文件 output.dir > 智能规则
+        dest: val_of("--dest").or_else(|| cfg.output_dir().map(|p| p.display().to_string())),
         password: val_of("--password"),
         quiet,
         jobs: jobs_n,
@@ -474,6 +551,7 @@ struct 解压参数 {
 }
 
 fn do_extract(a: 解压参数) -> ExitCode {
+    let cfg = yshjy::config::全局配置();
     let 解压参数 {
         targets,
         dest: dest_opt,
@@ -527,6 +605,11 @@ fn do_extract(a: 解压参数) -> ExitCode {
         dest: dest_opt.clone().map(PathBuf::from),
         smart_dir,
         force,
+        limits: yshjy::safety::Limits {
+            max_ratio: cfg.safety.zip_bomb_ratio,
+            warn_executables: cfg.safety.warn_executables,
+            ..Default::default()
+        },
     };
 
     let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));

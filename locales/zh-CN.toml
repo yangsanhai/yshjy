@@ -45,6 +45,8 @@ text = """
   -q, --quiet                     只输出结果（脚本用）
   --force                         跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）
   --lang <语言>                   切换界面语言（如 en、ja、ko、ru、es）
+  --show-config                   看当前配置（配置文件在哪、各项现在是什么值）
+  --import-passwords <文件>       导入密码本（每行一个解压码，# 开头是注释）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
 
 例子：
@@ -127,6 +129,8 @@ rescue_hint = "   提示：解不开时加 --rescue 试试救援模式。"
 nothing_found = "❌ 没找到能处理的东西：{targets}"
 queued = "📋 排好 {count} 个任务（大的先跑）"
 password_tried = "   🔒 这个包有密码（已试 {count} 次）"
+show_config = "当前配置（这个文件：{path}）"
+import_done = "✅ 导入了 {added} 个解压码（现在共 {total} 条）→ {path}"
 
 [result.phrase]
 ok = "解开"
@@ -144,6 +148,19 @@ partial_data = "数据不完整"
 hidden_at = "包藏在文件中间，已按真实位置定位"
 rebuilt_index = "索引坏了，清单是按文件头重建的"
 offset_corrected = "偏移不对，已自动修正"
+
+[config]
+path = "配置文件"
+language = "语言"
+jobs = "并行任务数"
+out_dir = "默认输出目录"
+conflict = "重名策略"
+ratio = "压缩比上限"
+passwords = "密码本"
+follow_system = "（跟随系统）"
+beside_package = "（包旁边）"
+passwords_fmt = "{path}（{count} 条）"
+line = "   {key}：{value}"
 
 [misc]
 file_missing = "❌ {input}：文件不存在"

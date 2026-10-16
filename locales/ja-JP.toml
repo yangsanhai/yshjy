@@ -126,6 +126,8 @@ rescue_hint = "   ヒント：開けないときは --rescue を試してくだ�
 nothing_found = "❌ 処理できるものが見つかりません：{targets}"
 queued = "📋 {count} 件をキューに追加（大きい順）"
 password_tried = "   🔒 この圧縮ファイルはロックされています（{count} 回試行）"
+show_config = "現在の設定（ファイル：{path}）"
+import_done = "✅ パスワードを {added} 件取り込みました（合計 {total} 件）→ {path}"
 
 [result.phrase]
 ok = "展開完了"
@@ -143,6 +145,19 @@ partial_data = "データが不完全です"
 hidden_at = "圧縮ファイルはファイルの途中にあります。実際の位置で特定しました"
 rebuilt_index = "インデックスが壊れていたため、ヘッダーから一覧を再構築しました"
 offset_corrected = "オフセットが誤っていたため自動修正しました"
+
+[config]
+path = "設定ファイル"
+language = "言語"
+jobs = "同時処理数"
+out_dir = "既定の出力先"
+conflict = "同名時の動作"
+ratio = "最大圧縮比"
+passwords = "パスワードリスト"
+follow_system = "（システムに従う）"
+beside_package = "（圧縮ファイルの隣）"
+passwords_fmt = "{path}（{count} 件）"
+line = "   {key}：{value}"
 
 [misc]
 file_missing = "❌ {input}：ファイルが存在しません"

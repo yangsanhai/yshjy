@@ -1,0 +1,532 @@
+//! 配置与密码本（见 docs/BACKEND-SPEC.md §2）
+//!
+//! # 为什么自己算路径、不引 `directories`
+//!
+//! 三个平台的规矩二十行能写清楚；这个工具要单文件跨平台分发，少一个依赖少一份风险。
+//!
+//! # 放哪儿
+//!
+//! ```text
+//! Linux    $XDG_CONFIG_HOME/yshjy/  （没设就 ~/.config/yshjy/）
+//! macOS    ~/Library/Application Support/yshjy/
+//! Windows  %APPDATA%\yshjy\
+//! ```
+//!
+//! 环境变量 `YSHJY_CONFIG_DIR` 可以整个换掉（测试和便携场景用）。
+//!
+//! # 设计原则：**读的时候宽容，写的时候规矩**
+//!
+//! - 文件不存在 → 全用默认值，不报错（用户没配置是常态）
+//! - 某一段写错 → 那一段用默认值，**其余照常生效**（不因为一个笔误整个配置失效）
+//! - 未知字段 → 忽略（用户多写了一句注释性字段不该报错）
+//! - 路径里的 `~` 会展开（用户手写配置时习惯这么写）
+
+use std::path::{Path, PathBuf};
+
+
+/// 配置目录（`YSHJY_CONFIG_DIR` 优先，其次按平台惯例）
+pub fn config_dir() -> PathBuf {
+    if let Some(d) = std::env::var("YSHJY_CONFIG_DIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+    {
+        return PathBuf::from(d);
+    }
+    if cfg!(target_os = "windows")
+        && let Some(a) = std::env::var("APPDATA").ok().filter(|s| !s.is_empty())
+    {
+        return PathBuf::from(a).join("yshjy");
+    }
+    if cfg!(target_os = "macos")
+        && let Some(h) = std::env::var("HOME").ok().filter(|s| !s.is_empty())
+    {
+        return PathBuf::from(h)
+            .join("Library/Application Support")
+            .join("yshjy");
+    }
+    // Linux / 其它 Unix：XDG
+    if let Some(x) = std::env::var("XDG_CONFIG_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+    {
+        return PathBuf::from(x).join("yshjy");
+    }
+    if let Some(h) = std::env::var("HOME").ok().filter(|s| !s.is_empty()) {
+        return PathBuf::from(h).join(".config").join("yshjy");
+    }
+    // 连 HOME 都没有（极端情况）：退到当前目录，至少能用
+    PathBuf::from(".yshjy")
+}
+
+/// 配置文件路径
+pub fn config_path() -> PathBuf {
+    config_dir().join("config.toml")
+}
+
+/// 把配置里的 `~` 展开成用户主目录
+pub fn 展开波浪号(p: &str) -> PathBuf {
+    if let Some(rest) = p.strip_prefix("~/")
+        && let Some(h) = std::env::var("HOME").ok().filter(|s| !s.is_empty())
+    {
+        return PathBuf::from(h).join(rest);
+    }
+    PathBuf::from(p)
+}
+
+// ───────────────────────────── 配置结构 ─────────────────────────────
+
+/// 整份配置
+#[derive(Debug, Clone, Default)]
+pub struct Config {
+    /// 总体
+    pub general: General,
+    /// 密码相关
+    pub password: Password,
+    /// 输出相关
+    pub output: Output,
+    /// 安全限值
+    pub safety: Safety,
+}
+
+/// `[general]`
+#[derive(Debug, Clone)]
+pub struct General {
+    /// 界面语言（不写 = 跟随系统；写法见 `--help` 的 `--lang`）
+    pub language: Option<String>,
+    /// 默认模式：`auto` | `extract` | `pack`
+    pub default_mode: String,
+    /// 并行任务数（默认 1，对机械盘友好）
+    pub jobs: usize,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            language: None,
+            default_mode: "auto".into(),
+            jobs: 1,
+        }
+    }
+}
+
+/// `[password]`
+#[derive(Debug, Clone)]
+pub struct Password {
+    /// 密码本文件（相对配置目录；不写就是 `passwords.txt`）
+    pub file: String,
+    /// 从同目录的「说明.txt」里自动抓解压码
+    pub auto_from_notes: bool,
+    /// 尝试内置的常见解压码
+    pub try_common: bool,
+    /// 最多试几个候选（试密码是有成本的，别让用户干等）
+    pub max_candidates: usize,
+}
+
+impl Default for Password {
+    fn default() -> Self {
+        Self {
+            file: "passwords.txt".into(),
+            auto_from_notes: true,
+            try_common: true,
+            max_candidates: 12,
+        }
+    }
+}
+
+/// `[output]`
+#[derive(Debug, Clone)]
+pub struct Output {
+    /// 默认输出目录（不写 = 每个包解到自己旁边）
+    pub dir: Option<String>,
+    /// 重名怎么办：`rename` | `skip` | `replace`
+    pub conflict: String,
+}
+
+impl Default for Output {
+    fn default() -> Self {
+        Self {
+            dir: None,
+            conflict: "rename".into(),
+        }
+    }
+}
+
+/// `[safety]`
+#[derive(Debug, Clone)]
+pub struct Safety {
+    /// 解压后/前 的比值上限（防炸弹）
+    pub zip_bomb_ratio: u64,
+    /// 解出可执行文件时提醒
+    pub warn_executables: bool,
+}
+
+impl Default for Safety {
+    fn default() -> Self {
+        Self {
+            zip_bomb_ratio: 100,
+            warn_executables: true,
+        }
+    }
+}
+
+impl Config {
+    /// 读配置：文件不在、或整段写坏，都退回默认值（**不报错**）
+    pub fn load() -> Self {
+        Self::load_from(&config_path())
+    }
+
+    /// 从指定路径读
+    ///
+    /// **逐字段取值**，而不是整份反序列化 —— 因为要的是「读的时候宽容」：
+    /// 用户少个引号、把数字写成字符串、多写一段自己的备注，都只该影响**那一个字段**，
+    /// 其余照常生效。一个笔误让整份配置作废，是最让人恼火的失败方式。
+    pub fn load_from(path: &Path) -> Self {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return Self::default();
+        };
+        // 整份 TOML 语法就坏（比如中文键名没加引号）→ 无从下手，全用默认
+        let Ok(v) = toml::from_str::<toml::Value>(&text) else {
+            return Self::default();
+        };
+        let mut cfg = Self::default();
+
+        if let Some(t) = v.get("general") {
+            if let Some(x) = t.get("language").and_then(|x| x.as_str())
+                && !x.trim().is_empty()
+            {
+                cfg.general.language = Some(x.trim().to_string());
+            }
+            if let Some(x) = t.get("default_mode").and_then(|x| x.as_str()) {
+                cfg.general.default_mode = x.to_string();
+            }
+            if let Some(x) = t.get("jobs").and_then(|x| x.as_integer()) {
+                cfg.general.jobs = x.max(1) as usize;
+            }
+        }
+        if let Some(t) = v.get("password") {
+            if let Some(x) = t.get("file").and_then(|x| x.as_str()) {
+                cfg.password.file = x.to_string();
+            }
+            if let Some(x) = t.get("auto_from_notes").and_then(|x| x.as_bool()) {
+                cfg.password.auto_from_notes = x;
+            }
+            if let Some(x) = t.get("try_common").and_then(|x| x.as_bool()) {
+                cfg.password.try_common = x;
+            }
+            if let Some(x) = t.get("max_candidates").and_then(|x| x.as_integer()) {
+                cfg.password.max_candidates = x.max(1) as usize;
+            }
+        }
+        if let Some(t) = v.get("output") {
+            if let Some(x) = t.get("dir").and_then(|x| x.as_str())
+                && !x.trim().is_empty()
+            {
+                cfg.output.dir = Some(x.to_string());
+            }
+            if let Some(x) = t.get("conflict").and_then(|x| x.as_str()) {
+                cfg.output.conflict = x.to_string();
+            }
+        }
+        if let Some(t) = v.get("safety") {
+            if let Some(x) = t.get("zip_bomb_ratio").and_then(|x| x.as_integer()) {
+                cfg.safety.zip_bomb_ratio = x.max(1) as u64;
+            }
+            if let Some(x) = t.get("warn_executables").and_then(|x| x.as_bool()) {
+                cfg.safety.warn_executables = x;
+            }
+        }
+        cfg
+    }
+
+    /// 默认输出目录（展开 `~`）
+    pub fn output_dir(&self) -> Option<PathBuf> {
+        self.output.dir.as_deref().map(展开波浪号)
+    }
+
+    /// 密码本文件路径
+    pub fn passwords_path(&self) -> PathBuf {
+        // 绝对路径直接用；相对的相对配置目录
+        let p = Path::new(&self.password.file);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            config_dir().join(p)
+        }
+    }
+
+    /// 读密码本（文件不在 = 空列表）
+    pub fn passwords(&self) -> Vec<String> {
+        读密码本(&self.passwords_path())
+    }
+}
+
+// ───────────────────────────── 密码本 ─────────────────────────────
+
+/// 进程级配置（读一次就够）
+///
+/// 配置文件只有几百字节，但没必要**每个任务**都读一遍 —— 批量解 50 个包就是 50 次
+/// 系统调用。CLI 一次进程用一个配置，正是 `OnceLock` 的用武之地。
+pub fn 全局配置() -> &'static Config {
+    static C: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
+    C.get_or_init(Config::load)
+}
+
+/// 读密码本
+///
+/// - 每行一个密码
+/// - `#` 开头是注释，跳过
+/// - 空行跳过
+/// - **兼容隐写者的 `PW.txt`**：那种文件是 `密码<Tab>说明`，所以按 Tab 取第一列
+/// - **绝不做 ASCII 过滤** —— 隐写者的 bug 就是过滤掉了中文密码
+pub fn 读密码本(path: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        // 兼容 `密码<Tab>备注` 的格式
+        let pw = line.split('\t').next().unwrap_or(line).trim();
+        if pw.is_empty() {
+            continue;
+        }
+        if !out.iter().any(|x: &String| x == pw) {
+            out.push(pw.to_string());
+        }
+    }
+    out
+}
+
+/// 把外部密码本导入进来（追加、去重）
+///
+/// 返回新增了几个。源文件的格式规则同 [`读密码本`]。
+pub fn 导入密码本(src: &Path, dst: &Path) -> crate::error::Result<usize> {
+    let 新 = 读密码本(src);
+    if 新.is_empty() {
+        return Err(crate::error::Error::new(crate::error::ErrorCode::InvalidArgument)
+            .context(format!("{} 里没读到任何密码", src.display())));
+    }
+    let mut 现有 = 读密码本(dst);
+    let mut 加了 = 0;
+    for pw in 新 {
+        if !现有.iter().any(|x| x == &pw) {
+            现有.push(pw);
+            加了 += 1;
+        }
+    }
+    if let Some(parent) = dst.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            crate::error::Error::new(crate::error::ErrorCode::PermissionDenied)
+                .context(format!("建配置目录失败 {}: {e}", parent.display()))
+        })?;
+    }
+    let mut 文本 = String::new();
+    if !dst.exists() {
+        文本.push_str("# yshjy 密码本 —— 每行一个密码，# 开头是注释\n");
+        文本.push_str("# 支持中文密码（不会被过滤）\n");
+    }
+    for pw in &现有 {
+        文本.push_str(pw);
+        文本.push('\n');
+    }
+    std::fs::write(dst, 文本).map_err(|e| {
+        crate::error::Error::new(crate::error::ErrorCode::PermissionDenied)
+            .context(format!("写密码本失败 {}: {e}", dst.display()))
+    })?;
+    Ok(加了)
+}
+
+/// 配置摘要：**只给键名和值，不给句子**（句子由外壳查语言包渲染）
+///
+/// 键名对应语言包里的 `config.<键>`。
+pub fn 配置摘要(cfg: &Config) -> Vec<(&'static str, String)> {
+    vec![
+        ("path", config_path().display().to_string()),
+        (
+            "language",
+            cfg.general
+                .language
+                .clone()
+                .unwrap_or_default(), // 空 = 外壳渲染成"（跟随系统）"
+        ),
+        ("jobs", cfg.general.jobs.to_string()),
+        (
+            "out_dir",
+            cfg.output_dir()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+        ),
+        ("conflict", cfg.output.conflict.clone()),
+        ("ratio", cfg.safety.zip_bomb_ratio.to_string()),
+        (
+            "passwords",
+            format!("{}|{}", cfg.passwords_path().display(), cfg.passwords().len()),
+        ),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn 临时目录(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("yshjy_cfg_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn 没有配置文件时全用默认值() {
+        let cfg = Config::load_from(Path::new("/绝对不存在的路径/config.toml"));
+        assert_eq!(cfg.general.jobs, 1);
+        assert_eq!(cfg.safety.zip_bomb_ratio, 100);
+        assert!(cfg.general.language.is_none());
+        assert!(cfg.output_dir().is_none());
+    }
+
+    #[test]
+    fn 能读出用户写的配置() {
+        let dir = 临时目录("read");
+        let f = dir.join("config.toml");
+        std::fs::write(
+            &f,
+            r#"
+[general]
+language = "en-US"
+jobs = 3
+
+[output]
+dir = "/tmp/出"
+conflict = "skip"
+
+[safety]
+zip_bomb_ratio = 50
+"#,
+        )
+        .unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(cfg.general.language.as_deref(), Some("en-US"));
+        assert_eq!(cfg.general.jobs, 3);
+        assert_eq!(cfg.output.conflict, "skip");
+        assert_eq!(cfg.safety.zip_bomb_ratio, 50);
+        // 没写的段仍然是默认值
+        assert_eq!(cfg.password.max_candidates, 12);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 写坏的配置退回默认值而不是崩掉() {
+        let dir = 临时目录("bad");
+        let f = dir.join("config.toml");
+        std::fs::write(&f, "这不是合法的 toml [[[").unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(cfg.general.jobs, 1, "写坏了就该退回默认，不该报错给用户");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 未知字段被忽略() {
+        let dir = 临时目录("unknown");
+        let f = dir.join("config.toml");
+        // 注意中文键名**必须加引号** —— TOML 的裸键只允许 ASCII 字母数字下划线连字符
+        std::fs::write(
+            &f,
+            "[general]\njobs = 2\n\"我自己的备注\" = \"随便写\"\n\n[\"未来的段\"]\nx = 1\n",
+        )
+        .unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(cfg.general.jobs, 2, "多写了一句备注、多了一个自造的段，都不该让配置失效");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 某一段写错不影响其它段() {
+        let dir = 临时目录("onerow");
+        let f = dir.join("config.toml");
+        // jobs 本该是数字，给成字符串 → 只有 [general] 退回默认
+        std::fs::write(
+            &f,
+            "[general]\njobs = \"本该是数字\"\n\n[safety]\nzip_bomb_ratio = 42\n",
+        )
+        .unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(cfg.general.jobs, 1, "写坏的那段退回默认");
+        assert_eq!(
+            cfg.safety.zip_bomb_ratio, 42,
+            "没写坏的段必须照常生效 —— 一个笔误不该让整份配置作废"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 密码本能读注释和中文() {
+        let dir = 临时目录("pw");
+        let f = dir.join("passwords.txt");
+        std::fs::write(
+            &f,
+            "# 这是注释\ndemo-password\nwangyihan2024\n\n# 又是注释\n动漫之家\n",
+        )
+        .unwrap();
+        let pws = 读密码本(&f);
+        assert_eq!(pws, vec!["demo-password", "wangyihan2024", "动漫之家"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 密码本兼容隐写者的_tab_格式且不过滤中文() {
+        // 隐写者的 PW.txt 是「密码<Tab>说明」，而且它自己会 ascii 过滤吞掉中文
+        let dir = 临时目录("pw_tab");
+        let f = dir.join("PW.txt");
+        std::fs::write(&f, "password123\t备注一\ndemo-password\t中文密码\t多一列\n").unwrap();
+        let pws = 读密码本(&f);
+        assert_eq!(pws, vec!["password123", "demo-password"], "Tab 取第一列 + 中文保留");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 导入密码本会去重并保留原有() {
+        let dir = 临时目录("import");
+        let src = dir.join("外部.txt");
+        let dst = dir.join("passwords.txt");
+        std::fs::write(&src, "新的甲\n新的乙\n重复的\n").unwrap();
+        std::fs::write(&dst, "# 已有\n重复的\n老的\n").unwrap();
+
+        let 加 = 导入密码本(&src, &dst).unwrap();
+        assert_eq!(加, 2, "只有两个是新的");
+        let 全部 = 读密码本(&dst);
+        assert!(全部.contains(&"老的".to_string()), "原有的不能丢");
+        assert!(全部.contains(&"新的甲".to_string()));
+        assert_eq!(全部.iter().filter(|p| *p == "重复的").count(), 1, "不该有重复");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 导入空文件会报错而不是默默成功() {
+        let dir = 临时目录("import_empty");
+        let src = dir.join("空.txt");
+        std::fs::write(&src, "# 只有注释\n\n").unwrap();
+        let 结果 = 导入密码本(&src, &dir.join("passwords.txt"));
+        assert!(结果.is_err(), "一个密码都没读到就该明确报错");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 波浪号会展开() {
+        // 只在有 HOME 的环境下检查
+        if let Ok(h) = std::env::var("HOME")
+            && !h.is_empty()
+        {
+            assert_eq!(
+                展开波浪号("~/下载/出").display().to_string(),
+                format!("{h}/下载/出")
+            );
+        }
+        // 不带波浪号的路径原样
+        assert_eq!(展开波浪号("/tmp/x").display().to_string(), "/tmp/x");
+        assert_eq!(展开波浪号("相对路径").display().to_string(), "相对路径");
+    }
+}

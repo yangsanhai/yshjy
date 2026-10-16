@@ -126,6 +126,8 @@ rescue_hint = "   Consejo: si no se abre, prueba --rescue."
 nothing_found = "❌ No hay nada que procesar: {targets}"
 queued = "📋 {count} tarea(s) en cola (las más grandes primero)"
 password_tried = "   🔒 Este archivo está bloqueado ({count} intento(s))"
+show_config = "Configuración actual (archivo: {path})"
+import_done = "✅ Importadas {added} contraseña(s) (ahora {total} en total) → {path}"
 
 [result.phrase]
 ok = "extraído"
@@ -143,6 +145,19 @@ partial_data = "los datos están incompletos"
 hidden_at = "el archivo está dentro del fichero; localizado en su posición real"
 rebuilt_index = "el índice estaba dañado; el listado se reconstruyó desde las cabeceras"
 offset_corrected = "los desplazamientos eran incorrectos; corregidos automáticamente"
+
+[config]
+path = "Archivo de configuración"
+language = "Idioma"
+jobs = "Tareas en paralelo"
+out_dir = "Carpeta de salida"
+conflict = "Conflicto de nombres"
+ratio = "Ratio de compresión máx."
+passwords = "Lista de contraseñas"
+follow_system = "(seguir el sistema)"
+beside_package = "(junto al archivo)"
+passwords_fmt = "{path} ({count} entradas)"
+line = "   {key}: {value}"
 
 [misc]
 file_missing = "❌ {input}: archivo no encontrado"

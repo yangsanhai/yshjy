@@ -30,7 +30,6 @@ use crate::extract_stream::{self, ExtractStreamOptions};
 use crate::extract7z::Extract7zOptions;
 use crate::layout::ArchiveFormat;
 use crate::progress::CancelToken;
-use crate::safety::Limits;
 
 /// 认出来的目标
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -469,6 +468,7 @@ fn extract_target(
             let mut eopts = ExtractOptions::new(dest);
             eopts.password = password;
             eopts.selection = opts.selection.clone();
+            eopts.limits = opts.limits.clone();
             let (rep, repair_note) =
                 crate::extract::extract_zip_auto_ctx(&mut f, *base, *len, &eopts, ctx)?;
             if let Some(note) = repair_note {
@@ -488,6 +488,7 @@ fn extract_target(
             let mut eopts = ExtractOptions::new(dest);
             eopts.password = password;
             eopts.selection = opts.selection.clone();
+            eopts.limits = opts.limits.clone();
             let (rep, repair_note) =
                 crate::extract::extract_zip_auto_ctx(&mut mf, l.base, l.data_len(), &eopts, ctx)?;
             if let Some(note) = repair_note {
@@ -500,12 +501,14 @@ fn extract_target(
             let mut eopts = Extract7zOptions::new(dest);
             eopts.password = password;
             eopts.selection = opts.selection.clone();
+            eopts.limits = opts.limits.clone();
             crate::extract7z::extract_7z_volumes_ctx(volumes, &eopts, ctx)
         }
         Target::Rar => {
             let mut eopts = ExtractRarOptions::new(dest);
             eopts.password = password;
             eopts.selection = opts.selection.clone();
+            eopts.limits = opts.limits.clone();
             crate::extract_rar::extract_rar_file_ctx(&job.input, &eopts, ctx)
         }
         Target::Stream {
@@ -516,6 +519,7 @@ fn extract_target(
             let mut eopts = ExtractStreamOptions::new(dest);
             eopts.packed_hint = *packed;
             eopts.selection = opts.selection.clone();
+            eopts.limits = opts.limits.clone();
             eopts.out_name = extract_stream::strip_suffix(&job.input, *format)
                 .map(|x| x.to_string_lossy().to_string());
 
@@ -542,7 +546,7 @@ fn extract_target(
                     *format,
                     f,
                     &out_path,
-                    &Limits::default(),
+                    &opts.limits,
                     *packed,
                     ctx,
                 )?;
@@ -568,7 +572,25 @@ fn extract_target(
 /// **在临时目录里静默试**，成功了才采用 —— 不往用户的输出目录里写垃圾
 /// （三层审查 B2：「试密码会污染输出目录」）。
 fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String> {
-    let hints = crate::password_hint::find_hints_near(&job.input);
+    // 候选来源：① 用户的密码本（自己维护的常用解压码）② 旁边的「说明.txt」
+    // 密码本放在前面 —— 那是用户**主动**记下来的，可信度比从说明里现抓的高
+    let cfg = crate::config::全局配置();
+    let mut hints: Vec<crate::password_hint::PasswordHint> = Vec::new();
+    let 密码本 = cfg.passwords();
+    if !密码本.is_empty() {
+        let src = cfg.passwords_path();
+        for pw in 密码本.into_iter().take(cfg.password.max_candidates) {
+            hints.push(crate::password_hint::PasswordHint {
+                password: pw,
+                source: src.clone(),
+                line: String::new(), // 密码本没有"原文行"可核对
+                confidence: 200,     // 用户自己记的，比从说明里猜的更可信
+            });
+        }
+    }
+    if cfg.password.auto_from_notes {
+        hints.extend(crate::password_hint::find_hints_near(&job.input));
+    }
     if hints.is_empty() {
         return None;
     }

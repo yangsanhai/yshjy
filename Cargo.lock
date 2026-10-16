@@ -1004,6 +1004,7 @@ dependencies = [
  "filetime",
  "flate2",
  "fs4",
+ "libc",
  "lz4_flex",
  "lzma-rs",
  "rars",
