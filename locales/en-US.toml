@@ -45,6 +45,8 @@ COMMON OPTIONS:
                                   top-level folder we extract straight into the destination instead of
                                   nesting another same-named folder. This flag always nests.
   -q, --quiet                     print results only (for scripts)
+  --force                         skip the pre-extraction free-space check (which otherwise
+                                  refuses to start when the disk is too full)
   --lang <lang>                   switch the UI language (e.g. zh-CN, ja, ko, ru, es)
   --tail                          pack with the "append to tail" layout (default: inside a free atom)
 
@@ -93,6 +95,7 @@ rebuilt_index = "The index was damaged — this listing was rebuilt from the fil
 video_unplayable = "The cover video itself is broken, but the files inside can still be extracted"
 
 [result]
+line = "{icon} {input} — {text} ({size} in {secs}s)"
 ok = "✅ {input} — extracted ({size} in {secs}s)"
 partial = "⚠ {input} — partially extracted ({done} ok, {skipped} skipped)"
 failed = "❌ {input} — failed: {reason}"
@@ -107,6 +110,13 @@ no_space = "Not enough disk space"
 cancel = "Cancelled"
 corrupt = "File is damaged or incomplete"
 unsupported = "This format isn't supported yet"
+invalid_argument = "Invalid argument"
+permission_denied = "Not allowed to write here"
+truncated = "File is incomplete (often a partial download)"
+missing_volume = "A volume is missing"
+data_lost = "A chunk of data in the middle is lost"
+encrypted_unbreakable = "Encrypted — the publisher must provide the password"
+video_unplayable = "The cover video itself is broken"
 internal = "Internal error"
 
 [misc]

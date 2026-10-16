@@ -394,6 +394,33 @@ pub fn run_job(
         ..Default::default()
     };
 
+    // ①' 空间预检（体感最直接的护栏：14 GB 的包解到一半磁盘满，前面时间全白费）
+    //      只有预估得出总大小时才拦人 —— 拿不准就放行，见 safety::check_space 的说明
+    if !opts.force {
+        let need = prepared
+            .as_ref()
+            .ok()
+            .and_then(|(_, pv)| pv.as_ref())
+            .map(|p| p.total_size)
+            .unwrap_or(0);
+        if let crate::safety::SpaceCheck::NotEnough { available, need } =
+            crate::safety::check_space(&dest, need)
+        {
+            // 结构化参数交给外壳渲染（引擎不产出句子）
+            let e = Error::new(ErrorCode::NotEnoughSpace)
+                .with("need", need.to_string())
+                .with("available", available.to_string())
+                .with("dest", dest.display().to_string());
+            return JobOutcome {
+                id: job.id,
+                input: job.input.clone(),
+                outcome: Outcome::from_error(&e),
+                stats,
+                note: None,
+            };
+        }
+    }
+
     // ② 解压
     let outcome = match prepared {
         Err(e) => {
