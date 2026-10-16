@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod batch;
 pub mod error;
 pub mod event;
 pub mod extract;
@@ -30,6 +31,7 @@ pub mod repair;
 pub mod rescue;
 pub mod safety;
 pub mod scan;
+pub mod select;
 pub mod tools;
 
 pub use error::{Error, ErrorCode, Result};
