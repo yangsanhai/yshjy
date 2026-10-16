@@ -126,6 +126,8 @@ rescue_hint = "   Подсказка: если не открывается, по
 nothing_found = "❌ Нечего обрабатывать: {targets}"
 queued = "📋 В очереди задач: {count} (сначала крупные)"
 password_tried = "   🔒 Архив зашифрован (попыток: {count})"
+show_config = "Текущие настройки (файл: {path})"
+import_done = "✅ Импортировано паролей: {added} (всего {total}) → {path}"
 
 [result.phrase]
 ok = "распаковано"
@@ -143,6 +145,19 @@ partial_data = "данные неполные"
 hidden_at = "архив находится внутри файла; определён по реальной позиции"
 rebuilt_index = "индекс повреждён; список восстановлен по заголовкам"
 offset_corrected = "смещения были неверны; исправлено автоматически"
+
+[config]
+path = "Файл настроек"
+language = "Язык"
+jobs = "Параллельных задач"
+out_dir = "Каталог вывода"
+conflict = "Конфликт имён"
+ratio = "Макс. коэффициент сжатия"
+passwords = "Список паролей"
+follow_system = "(как в системе)"
+beside_package = "(рядом с архивом)"
+passwords_fmt = "{path} ({count} шт.)"
+line = "   {key}: {value}"
 
 [misc]
 file_missing = "❌ {input}: файл не найден"

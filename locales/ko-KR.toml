@@ -126,6 +126,8 @@ rescue_hint = "   팁: 안 풀리면 --rescue 를 시도해 보세요."
 nothing_found = "❌ 처리할 수 있는 것을 찾지 못했습니다: {targets}"
 queued = "📋 {count}개 작업 대기 (큰 것부터)"
 password_tried = "   🔒 이 압축 파일은 잠겨 있습니다 ({count}회 시도)"
+show_config = "현재 설정 (파일: {path})"
+import_done = "✅ 비밀번호 {added}개를 가져왔습니다 (총 {total}개) → {path}"
 
 [result.phrase]
 ok = "압축 풀기 완료"
@@ -143,6 +145,19 @@ partial_data = "데이터가 불완전합니다"
 hidden_at = "압축 파일이 파일 중간에 있습니다. 실제 위치로 찾았습니다"
 rebuilt_index = "인덱스가 손상되어 헤더에서 목록을 다시 만들었습니다"
 offset_corrected = "오프셋이 잘못되어 자동 수정했습니다"
+
+[config]
+path = "설정 파일"
+language = "언어"
+jobs = "동시 작업 수"
+out_dir = "기본 출력 폴더"
+conflict = "이름 충돌 처리"
+ratio = "최대 압축비"
+passwords = "비밀번호 목록"
+follow_system = "(시스템 설정 따름)"
+beside_package = "(압축 파일 옆)"
+passwords_fmt = "{path} ({count}개)"
+line = "   {key}: {value}"
 
 [misc]
 file_missing = "❌ {input}: 파일이 없습니다"
