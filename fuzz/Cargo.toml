@@ -1,0 +1,40 @@
+[package]
+name = "yshjy-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.yshjy]
+path = ".."
+
+# 每个 target 一个 bin（cargo-fuzz 的约定）
+[[bin]]
+name = "list_zip"
+path = "fuzz_targets/list_zip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "locate_zip"
+path = "fuzz_targets/locate_zip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "detect_stream"
+path = "fuzz_targets/detect_stream.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+# 空 workspace 段：让这个 crate 独立构建，不被父目录的 workspace 收编
+# （cargo-fuzz 的惯例；少了它 `cargo +nightly fuzz run` 会报 workspace 冲突）
