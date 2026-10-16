@@ -17,9 +17,11 @@
 //! - 解压炸弹：走 `safety::ExtractBudget`（压缩比 + 总量双闸）
 //! - 危险文件：`safety::is_risky_executable` 只警告不阻断（用户自己决定）
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::ctx::UnpackCtx;
+use crate::error::{Error, ErrorCode, ItemResult, Result};
 use crate::io::Window;
 use crate::safety::{self, ExtractBudget, Limits};
+use crate::select::Selection;
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::PathBuf;
@@ -45,8 +47,8 @@ pub struct ExtractOptions {
     pub password: Option<String>,
     /// 同名处理
     pub overwrite: Overwrite,
-    /// 只解这些条目（`None` = 全解）；支持目录前缀匹配
-    pub selected: Option<Vec<String>>,
+    /// 挑哪些条目（默认全要）—— 见 [`crate::select::Selection`]
+    pub selection: Selection,
     /// 安全限值
     pub limits: Limits,
 }
@@ -58,7 +60,7 @@ impl ExtractOptions {
             dest: dest.into(),
             password: None,
             overwrite: Overwrite::default(),
-            selected: None,
+            selection: Selection::all(),
             limits: Limits::default(),
         }
     }
@@ -93,6 +95,8 @@ pub struct ExtractReport {
     pub bytes_written: u64,
     /// 是否因为限额被中止
     pub budget_hit: bool,
+    /// 是否被用户取消（**已解出的文件保留**，见台账 §5.8）
+    pub cancelled: bool,
 }
 
 impl ExtractReport {
@@ -124,18 +128,6 @@ impl ExtractReport {
     }
 }
 
-/// 选中判断：`selected` 为 `None` 表示全选；
-/// 否则条目名等于某项、或以某项 + `/` 开头（目录前缀）都算选中。
-fn is_selected(selected: &Option<Vec<String>>, name: &str) -> bool {
-    match selected {
-        None => true,
-        Some(list) => list.iter().any(|s| {
-            let s = s.trim_end_matches('/');
-            name == s || name.starts_with(&format!("{s}/"))
-        }),
-    }
-}
-
 /// 同名时生成不冲突的名字：`a.txt` → `a (1).txt`
 fn unique_path(path: &std::path::Path) -> PathBuf {
     if !path.exists() {
@@ -162,11 +154,24 @@ fn unique_path(path: &std::path::Path) -> PathBuf {
 /// - `r`：源（一般传 `&mut File`）
 /// - `base`：ZIP 数据在源里的起始偏移（来自 `layout::zip::locate` 或 `scan`）
 /// - `len`：ZIP 数据长度（从 `ZipLayout::data_len()` 拿）
+///
+/// 这是「不报进度、不能取消」的简单入口；要进度/取消/事件请用 [`extract_zip_at_ctx`]。
 pub fn extract_zip_at<R: Read + Seek>(
     r: R,
     base: u64,
     len: u64,
     opts: &ExtractOptions,
+) -> Result<ExtractReport> {
+    extract_zip_at_ctx(r, base, len, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_zip_at`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_zip_at_ctx<R: Read + Seek>(
+    r: R,
+    base: u64,
+    len: u64,
+    opts: &ExtractOptions,
+    ctx: &UnpackCtx,
 ) -> Result<ExtractReport> {
     // 把「文件 + 偏移」虚拟成一个独立的小 ZIP 文件
     let window = Window::new(r, base, len)
@@ -182,12 +187,34 @@ pub fn extract_zip_at<R: Read + Seek>(
         .max(1);
     let mut budget = ExtractBudget::new(opts.limits.clone(), packed_total);
 
+    // 进度总量：**只统计被挑中的条目**，否则进度条永远到不了 100%
+    let (raw_total, file_count) = {
+        let mut bytes = 0u64;
+        let mut files = 0u64;
+        for i in 0..archive.len() {
+            if let Ok(f) = archive.by_index_raw(i) {
+                let nm = crate::layout::zip::decode_name(f.name_raw(), false);
+                if opts.selection.matches(i as u64, &nm, f.is_dir()) {
+                    bytes += f.size();
+                    files += 1;
+                }
+            }
+        }
+        (bytes, files)
+    };
+    ctx.set_total(raw_total, file_count);
+
     fs::create_dir_all(&opts.dest)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("mkdir dest: {e}")))?;
 
     let mut report = ExtractReport::default();
 
     for i in 0..archive.len() {
+        // 用户取消：已解出的保留，不再往下做（取消不是错误，见台账 §5.8）
+        if ctx.is_cancelled() {
+            report.cancelled = true;
+            break;
+        }
         // 取名字（先不解码数据）
         let (name, is_dir, _size, encrypted, out_path_result) = {
             let f = match archive.by_index_raw(i) {
@@ -209,7 +236,8 @@ pub fn extract_zip_at<R: Read + Seek>(
             (raw_name, is_dir, _size, encrypted, safe)
         };
 
-        if !is_selected(&opts.selected, &name) {
+        // 挑选：没被勾中的条目直接跳过（不写盘、不算错，见 docs/V0.5-ENGINE.md §5）
+        if !opts.selection.matches(i as u64, &name, is_dir) {
             continue;
         }
 
@@ -230,6 +258,8 @@ pub fn extract_zip_at<R: Read + Seek>(
                     .skipped
                     .push((name.clone(), format!("建目录失败: {e}")));
             }
+            // 目录也算一个「做完了」的条目，否则界面上的总数对不上
+            ctx.entry_done(i as u64, &name, ItemResult::Ok, 0);
             continue;
         }
 
@@ -297,7 +327,13 @@ pub fn extract_zip_at<R: Read + Seek>(
         let mut buf = vec![0u8; 64 * 1024];
         let mut written = 0u64;
         let mut read_err = None;
+        let mut cancelled_now = false;
         loop {
+            // 取消检查下沉到数据块级：8 GB 的单文件也能及时停下（三层审查 B1）
+            if ctx.is_cancelled() {
+                cancelled_now = true;
+                break;
+            }
             match file.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
@@ -310,6 +346,8 @@ pub fn extract_zip_at<R: Read + Seek>(
                         break;
                     }
                     written += n as u64;
+                    // 进度：节流由 ctx 负责（100ms 合并推送，避免刷爆外壳）
+                    ctx.advance(n as u64, Some(&name));
                 }
                 Err(e) => {
                     read_err = Some(format!("读取失败: {e}"));
@@ -318,15 +356,25 @@ pub fn extract_zip_at<R: Read + Seek>(
             }
         }
 
+        if cancelled_now {
+            // 取消：这个文件写了一半就删掉；之前解好的文件全部保留
+            drop(out);
+            let _ = fs::remove_file(&out_path);
+            report.cancelled = true;
+            break;
+        }
+
         match read_err {
             Some(msg) => {
                 report.skipped.push((name.clone(), msg));
                 // 清理半成品（对齐 unar「失败即删输出文件」的做法）
                 drop(out);
                 let _ = fs::remove_file(&out_path);
+                ctx.entry_done(i as u64, &name, ItemResult::DataError, 0);
             }
             None => {
                 report.bytes_written += written;
+                ctx.entry_done(i as u64, &name, ItemResult::Ok, written);
                 report.files.push(ExtractedFile {
                     name,
                     out_path,
@@ -355,10 +403,25 @@ pub fn extract_zip_auto<R: Read + Seek>(
     len: u64,
     opts: &ExtractOptions,
 ) -> Result<(ExtractReport, Option<String>)> {
+    extract_zip_auto_ctx(r, base, len, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_zip_auto`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_zip_auto_ctx<R: Read + Seek>(
+    r: &mut R,
+    base: u64,
+    len: u64,
+    opts: &ExtractOptions,
+    ctx: &UnpackCtx,
+) -> Result<(ExtractReport, Option<String>)> {
     // ① 先走正常路径
-    match extract_zip_at(&mut *r, base, len, opts) {
+    match extract_zip_at_ctx(&mut *r, base, len, opts, ctx) {
         Ok(rep) => Ok((rep, None)),
         Err(first_err) => {
+            // 用户取消不是「索引坏了」，别去修
+            if first_err.is_cancelled() {
+                return Err(first_err);
+            }
             // ② 尝试分析索引问题
             let analysis = match crate::repair::analyze(r, base, len) {
                 Ok(a) => a,
@@ -376,7 +439,7 @@ pub fn extract_zip_auto<R: Read + Seek>(
                     Error::new(ErrorCode::Internal).context(format!("建补丁窗口失败: {e}"))
                 })?;
             let mut patched = patched;
-            let rep = extract_zip_at(&mut patched, 0, len, opts)?;
+            let rep = extract_zip_at_ctx(&mut patched, 0, len, opts, ctx)?;
             Ok((rep, Some(plan.reason)))
         }
     }
@@ -484,7 +547,7 @@ mod tests {
         let dest = scratch_dir("select");
         let mut cur = Cursor::new(data);
         let mut opts = ExtractOptions::new(&dest);
-        opts.selected = Some(vec!["plain.txt".to_string()]);
+        opts.selection = Selection::matching("plain.txt");
         let rep = extract_zip_at(&mut cur, 0, len, &opts).unwrap();
         assert_eq!(rep.files.len(), 1);
         assert_eq!(rep.files[0].name, "plain.txt");
@@ -643,11 +706,136 @@ mod tests {
     }
 
     #[test]
-    fn 选中判断支持目录前缀() {
-        let sel = Some(vec!["sub".to_string()]);
-        assert!(is_selected(&sel, "sub/a.txt"));
-        assert!(is_selected(&sel, "sub/deep/b.txt"));
-        assert!(!is_selected(&sel, "other/c.txt"));
-        assert!(is_selected(&None, "任意"));
+    fn 挑选支持目录前缀与序号() {
+        // 旧的「目录前缀」语义现在用 `sub/**` 表达
+        let by_dir = Selection::matching("sub/**");
+        assert!(by_dir.matches(0, "sub/a.txt", false));
+        assert!(by_dir.matches(1, "sub/deep/b.txt", false));
+        assert!(!by_dir.matches(2, "other/c.txt", false));
+
+        let by_index = Selection::only(vec![0, 2]);
+        assert!(by_index.matches(0, "任意", false));
+        assert!(!by_index.matches(1, "任意", false));
+
+        assert!(Selection::all().matches(9, "任意", true), "默认全都要");
+    }
+
+    #[test]
+    fn 解压时上报进度与条目事件() {
+        use crate::ctx::UnpackCtx;
+        use crate::event::{ChannelSink, Event};
+
+        let data = make_zip();
+        let len = data.len() as u64;
+        let dest = scratch_dir("progress_ctx");
+        let sink = ChannelSink::new(512);
+        let ctx = UnpackCtx::quiet(1).with_sink(sink.clone());
+
+        let mut cur = Cursor::new(data);
+        let rep = extract_zip_at_ctx(&mut cur, 0, len, &ExtractOptions::new(&dest), &ctx).unwrap();
+        assert_eq!(rep.files.len(), 2);
+        assert!(!rep.cancelled);
+
+        let evs = sink.drain();
+        let kinds: Vec<&str> = evs.iter().map(Event::kind).collect();
+        assert!(
+            kinds.contains(&"ENTRY_FINISHED"),
+            "应当有条目级事件（S7/S8 的明细来源）: {kinds:?}"
+        );
+        assert!(kinds.contains(&"EXTRACT_PROGRESS"), "应当有进度事件");
+
+        // 目录 + 2 个文件 = 3 个条目，进度总量必须是 3，否则界面上的进度永远到不了头
+        assert_eq!(ctx.progress.view().done_files, 3);
+        assert_eq!(ctx.progress.view().total_files, 3);
+        assert!(ctx.progress.view().done_bytes > 0);
+        assert_eq!(
+            ctx.progress.view().done_bytes,
+            ctx.progress.view().total_bytes,
+            "解完了就该是 100%"
+        );
+        let _ = fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 挑选后进度总量只算被选中的() {
+        use crate::ctx::UnpackCtx;
+
+        let data = make_zip();
+        let len = data.len() as u64;
+        let dest = scratch_dir("progress_selected");
+        let ctx = UnpackCtx::quiet(1);
+        let mut opts = ExtractOptions::new(&dest);
+        opts.selection = Selection::matching("plain.txt");
+
+        let mut cur = Cursor::new(data);
+        let rep = extract_zip_at_ctx(&mut cur, 0, len, &opts, &ctx).unwrap();
+        assert_eq!(rep.files.len(), 1);
+        let v = ctx.progress.view();
+        assert_eq!(v.total_files, 1, "只选了 1 个条目");
+        assert_eq!(v.done_files, 1);
+        assert_eq!(v.done_bytes, v.total_bytes);
+        let _ = fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 取消后保留已解出的文件() {
+        use crate::ctx::UnpackCtx;
+        use crate::event::{Event, EventSink};
+        use crate::progress::CancelToken;
+
+        /// 收到第一个**真实文件**完成事件就取消（模拟用户点「取消」）
+        ///
+        /// 注意要跳过目录条目（`bytes == 0`）—— 否则解压刚开始就被取消掉。
+        struct 取消于首个文件(CancelToken);
+        impl EventSink for 取消于首个文件 {
+            fn emit(&self, ev: &Event) {
+                if matches!(ev, Event::EntryFinished { bytes, .. } if *bytes > 0) {
+                    self.0.cancel_with("测试：解出第一个文件之后取消");
+                }
+            }
+        }
+
+        let data = make_zip();
+        let len = data.len() as u64;
+        let dest = scratch_dir("cancel_ctx");
+        let cancel = CancelToken::new();
+        let ctx = UnpackCtx::quiet(1)
+            .with_sink(std::sync::Arc::new(取消于首个文件(cancel.clone())))
+            .with_cancel(cancel);
+
+        let mut cur = Cursor::new(data);
+        let rep = extract_zip_at_ctx(&mut cur, 0, len, &ExtractOptions::new(&dest), &ctx).unwrap();
+
+        assert!(rep.cancelled, "应当标记为已取消");
+        assert!(
+            !rep.files.is_empty() && rep.files.len() < 2,
+            "取消不是失败：已解出的要留下，实际 {:?}",
+            rep.files
+        );
+        assert!(rep.skipped.is_empty(), "取消不该产生「跳过」的错误记录");
+        // 已解出的文件真的在盘上
+        for f in &rep.files {
+            assert!(f.out_path.exists(), "{:?} 应当还在", f.out_path);
+        }
+        let _ = fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 一上来就取消时一个都不解() {
+        use crate::ctx::UnpackCtx;
+        use crate::progress::CancelToken;
+
+        let data = make_zip();
+        let len = data.len() as u64;
+        let dest = scratch_dir("cancel_first");
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let ctx = UnpackCtx::quiet(1).with_cancel(cancel);
+
+        let mut cur = Cursor::new(data);
+        let rep = extract_zip_at_ctx(&mut cur, 0, len, &ExtractOptions::new(&dest), &ctx).unwrap();
+        assert!(rep.cancelled);
+        assert!(rep.files.is_empty());
+        let _ = fs::remove_dir_all(&dest);
     }
 }

@@ -417,16 +417,12 @@ pub fn extract_by_locals<R: Read + Seek>(
     let mut budget = ExtractBudget::new(opts.limits.clone(), packed_total.max(1));
     let mut report = crate::extract::ExtractReport::default();
 
-    for item in &items {
-        // 选中过滤（支持目录前缀）
-        let selected = match &opts.selected {
-            None => true,
-            Some(list) => list.iter().any(|s| {
-                let s = s.trim_end_matches('/');
-                item.path == s || item.path.starts_with(&format!("{s}/"))
-            }),
-        };
-        if !selected {
+    for (idx, item) in items.iter().enumerate() {
+        // 挑选过滤（序号 / 通配 / 目录前缀，见 crate::select）
+        if !opts
+            .selection
+            .matches(idx as u64, &item.path, item.is_dir())
+        {
             continue;
         }
 
