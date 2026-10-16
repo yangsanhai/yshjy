@@ -17,26 +17,39 @@
 ## 当前进度：v0.9 开发中（v0.8 已定稿但未发布）—— 统一接口地基 + 安全边界
 
 ```
-git 提交       2b4f7c5（v0.9 共 2 批；每批一个提交、都可回滚）
+git 提交       875ee0a（v0.9 共 3 批 + 1 次文档收口；每批一个提交、都可回滚）
                6955a3a  第1批 统一解压器接口地基（新增 src/unpack.rs）
                2b4f7c5  第2批 安全护栏 + 密码抓取词边界修复
-源码           16764 行 / 34 个文件
+               bbe9c0d  文档收口（HANDOFF）
+               875ee0a  第3批 统一接口接进编排层（job.rs 不再按格式写 match）
+源码           16844 行 / 34 个文件
 测试           257 单元 + 25 冒烟（全过）
 代码规范       clippy -D warnings 零警告
 语言包         7 种（zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES），中文包 89 条键
 发布包         dist/yshjy-0.7.0-*.tar.gz（v0.8 / v0.9 的包**都还没打**）
 ```
 
-### 本轮（v0.9 第 1、2 批）做完的
+### 本轮（v0.9 第 1~3 批）做完的
 
 | 项 | 状态 | 说明 |
 |---|---|---|
-| 统一解压器接口 | 🟡 地基已完成 | `src/unpack.rs`：`trait InArchive` + 静态有序注册表 `HANDLERS` + `Caps` 能力表 + 统一参数 `UnpackOptions`（四份合并成一份）+ `Source`（只认一条流）。**加格式三步**：写 impl → HANDLERS 加一行 → 补能力表测试 |
-| 接口接线进 job.rs | ⬜ | 还没做：现在实现体**委托**既有函数（行为零变化），编排层仍按 `Target` 写 match |
-| 预览（`list()`）归位 | ⬜ | 要先把 `preview.rs` 从「按路径 + Target」改成「按一条流」 |
+| 统一解压器接口 | ✅ 已落地 | `src/unpack.rs`：`trait InArchive` + 静态有序注册表 `HANDLERS` + `Caps` 能力表 + 统一参数 `UnpackOptions`（四份合并成一份）+ `Source`（只认一条流）。**加格式三步**：写 impl → HANDLERS 加一行 → 补能力表测试 |
+| 接口接线进 job.rs | ✅ 已落地 | `extract_target` 从「五段平行代码」变成「准备源 → 查注册表 → 交给解压器」；7z / RAR 也改走一条流（新增 `extract_7z_stream_ctx` / `extract_rar_stream_ctx`）；`Source.path` 删掉（没人读了）。全项目唯一按格式取实现的地方是 `unpack::find_or_err` |
+| 预览（`list()`）归位 | ⬜ | 下一步：`preview.rs` 现在还是「按路径 + Target」写 match，要改成按一条流才能并进 trait（`preview_zip_reader` 已经是流式的了，7z/RAR/单流还差） |
 | 安全护栏 | ✅ | 候选数夹硬上限 64；删掉 `try_common` 空壳开关；「只试不存」写进代码 + 测试保险丝；README 新增「本工具不做的事」 |
 | 密码抓取词边界（真 bug） | ✅ | `251 passed` 曾被抓出垃圾候选 `ed`；现按词边界判定 |
 | 两处松绑 | ✅ | `extract_tar_ctx` 的 `'static` → `'a`；`ExtractReport` 新增 `repaired` 字段 |
+
+**真实包复验（第 3 批，改了核心解压路径后必做）**：
+
+```
+5.9 GB 包 PxoPiyCQKv9gsqFX_1.mp4.zip → 示例包.7z.002
+   SHA-256 = 7dda988370e9403eb07eb00c0a0949477b1e8c0df5d3f0026aecd2491203fb59  ✓ 与基准一致（129 秒）
+8.7 GB 包 lvIesSotSDRhnZfL_1.mp4.zip → 示例包.7z.001
+   8,589,934,592 字节，SHA-256 = e6269244dd96fb3740f359c6a9aa7b12465d365ffa6b4cb009899d22316962dd  ✓ 与基准一致（481 秒）
+```
+
+（复验产物落在 `~/.hermes/cache/scratch/verify_*`，属过程文件，可随时删。）
 
 **用户问过的那个问题（重要，别再走回头路）**：「自动输密码会不会给别人入侵别人电脑的机会？」
 答：不会（不联网、只对已经拿到的那份包试、不给登录/远程能力），但**双用性是真的**
