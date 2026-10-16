@@ -46,6 +46,7 @@ use crate::extract7z::Extract7zOptions;
 use crate::extract_rar::ExtractRarOptions;
 use crate::extract_stream::ExtractStreamOptions;
 use crate::layout::ArchiveFormat;
+use crate::preview::Preview;
 use crate::safety::Limits;
 use crate::select::Selection;
 use std::io::{Read, Seek};
@@ -169,7 +170,11 @@ impl<'a> Source<'a> {
         self
     }
 
-    /// 可读长度：优先用显式给的，其次用压缩大小，最后退回兜底值
+    /// 长度兜底链：**显式给的长度 → 压缩后总大小 → 调用方给的兜底值**
+    ///
+    /// ⚠️ 它**不**会去问流自己要长度。字段 `len` 为 `None` 的契约是「用到流尾」；
+    /// 要按这个语义拿长度，得自己 `seek(End)` 量一次（`ZipUnpacker::list` 就是这么做的）——
+    /// 曾经把"未知"当成 0 传给窗口，得到一个长度 0 的窗口，一个字节都读不出来。
     pub fn len_or(&self, fallback: u64) -> u64 {
         match self.len {
             Some(n) => n,
@@ -296,6 +301,23 @@ pub trait InArchive: Sync {
         opts: &UnpackOptions,
         ctx: &UnpackCtx,
     ) -> Result<ExtractReport>;
+
+    /// 列内容（不解压）—— `--list` 与将来 GUI 的预览面板用
+    ///
+    /// 默认实现**显式报「这个格式还没实现列清单」**，而不是返回空清单：
+    /// 空清单会被上层和用户理解成"包里什么都没有"，那是最糟的误导。
+    /// 加格式时请自己实现它（ZIP 已实现，见 [`ZipUnpacker`]）。
+    fn list(
+        &self,
+        _src: &mut Source<'_>,
+        _pw: Option<&str>,
+        _ctx: &UnpackCtx,
+    ) -> Result<Preview> {
+        Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "list_not_implemented")
+            .with("format", self.formats()[0].as_str())
+            .context("这个格式还没有实现「只列内容」"))
+    }
 }
 
 // ─────────────────────────── 各格式的实现 ───────────────────────────
@@ -348,6 +370,38 @@ impl InArchive for ZipUnpacker {
         // 批量汇总据此把任务标成「索引有错但救回来了」
         rep.repaired = repair_note;
         Ok(rep)
+    }
+
+    fn list(
+        &self,
+        src: &mut Source<'_>,
+        _pw: Option<&str>,
+        _ctx: &UnpackCtx,
+    ) -> Result<Preview> {
+        // ZIP 的文件名**不加密**，所以无密码也能列出清单（这也是它能当"预览主力"的原因）。
+        // `_pw` / `_ctx` 暂时用不上，写成 `_` 是为了让 clippy 的未使用检查闭嘴，
+        // 同时明确"这个参数在 ZIP 上确实没有语义"。
+        //
+        // 长度：显式给了就用；没给就按契约「用到流尾」——**量一次流自己**。
+        // ⚠️ 别把"未知"当 0：那样窗口长度是 0，一个字节都读不出来，
+        //    症状是「明明是好包却报不是压缩包」（写这个 handler 时真踩了一次，
+        //    靠新加的测试逮住的）。
+        let len = match src.len.or(if src.packed_total > 0 {
+            Some(src.packed_total)
+        } else {
+            None
+        }) {
+            Some(n) => n,
+            None => {
+                let end = src.reader.seek(std::io::SeekFrom::End(0)).map_err(|e| {
+                    Error::new(ErrorCode::Internal).context(format!("取流长度失败: {e}"))
+                })?;
+                end.saturating_sub(src.base)
+            }
+        };
+        let window = crate::io::Window::new(&mut *src.reader, src.base, len)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
+        crate::preview::preview_zip_reader(window)
     }
 }
 
@@ -702,5 +756,47 @@ mod tests {
         // 这个常量的值必须与 job.rs / preview.rs 里的硬编码一致，
         // 否则统一接口接上去会改变文件名（回归会炸）
         assert_eq!(兜底输出名, "解压结果");
+    }
+
+    #[test]
+    fn zip_的列清单走统一接口() {
+        // 造一个内存 ZIP（和 extract.rs 的测试同样的手法）
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let opt: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default();
+        w.start_file("a.txt", opt).unwrap();
+        std::io::Write::write_all(&mut w, b"hello").unwrap();
+        w.start_file("中文名.bin", opt).unwrap();
+        std::io::Write::write_all(&mut w, b"xy").unwrap();
+        let data = w.finish().unwrap().into_inner();
+
+        let mut cur = std::io::Cursor::new(&data[..]);
+        let mut src = Source::new(&mut cur);
+        let handler = find(ArchiveFormat::Zip, Shape::Plain).unwrap();
+        let pv = handler
+            .list(&mut src, None, &UnpackCtx::quiet(0))
+            .expect("ZIP 应当能列清单");
+
+        assert_eq!(pv.entries.len(), 2);
+        assert_eq!(pv.entries[0].path, "a.txt");
+        assert_eq!(pv.entries[1].path, "中文名.bin", "中文名不能变成乱码");
+        assert_eq!(pv.total_size, 7);
+        assert_eq!(pv.encrypted_count, 0);
+        assert!(pv.complete);
+        // 序号必须 1-based（界面显示的号 = `--select` 用的号）
+        assert_eq!(pv.entries[0].index, 1);
+    }
+
+    #[test]
+    fn 没实现列清单的格式要明确报错而不是给空清单() {
+        // 7z / RAR / 单流 / tar 目前还没接 `list`：必须是**明确的错误**，
+        // 绝不能返回空清单 —— 那会被上层和用户理解成"包里什么都没有"。
+        let mut cur = std::io::Cursor::new(&b"\x1f\x8b\x08\x00"[..]);
+        let mut src = Source::new(&mut cur);
+        let handler = find(ArchiveFormat::Gzip, Shape::Single).unwrap();
+        let err = handler
+            .list(&mut src, None, &UnpackCtx::quiet(0))
+            .expect_err("还没实现的格式必须报错");
+        assert_eq!(err.param("reason"), Some("list_not_implemented"));
+        assert!(err.param("format").is_some(), "报错要说清是哪个格式");
     }
 }
