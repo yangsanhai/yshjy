@@ -109,6 +109,15 @@ impl Default for General {
     }
 }
 
+/// 试密码候选数的**硬上限**
+///
+/// # 为什么必须有它（这是安全边界，不是性能考量）
+/// 候选来源只有两个，都是「用户已知」或「公开」的信息：用户自己记的密码本、
+/// 包作者公开写在旁边的说明文件。这个工具**不做字典、不做爆破**。
+/// 但没有上限的配置项就能把它变成爆破器（把 `max_candidates` 配成 100000），
+/// 所以这里夹死上限 —— 让「改配置改成破解工具」这件事从根上不可能发生。
+pub const 候选数硬上限: usize = 64;
+
 /// `[password]`
 #[derive(Debug, Clone)]
 pub struct Password {
@@ -116,18 +125,21 @@ pub struct Password {
     pub file: String,
     /// 从同目录的「说明.txt」里自动抓解压码
     pub auto_from_notes: bool,
-    /// 尝试内置的常见解压码
-    pub try_common: bool,
-    /// 最多试几个候选（试密码是有成本的，别让用户干等）
+    /// 最多试几个候选（试密码是有成本的，别让用户干等；硬上限见 [`候选数硬上限`]）
     pub max_candidates: usize,
 }
+
+// 说明：这里原本还有个 `try_common` 字段（"尝试内置的常见解压码"），**已删除**。
+// 它从来没接线过（配置项在、但没有任何代码读它），而且真要实现它，就得内置一张
+// 常见密码表 —— 那张表就是一个小字典，跨过了本项目的安全边界。
+// 删掉比留一个骗人的开关好：用户以为有、实际没有，比明说"我们不干这个"更糟。
+// （配套证据见 README「本工具不做的事」与 CHANGELOG 的安全护栏批次。）
 
 impl Default for Password {
     fn default() -> Self {
         Self {
             file: "passwords.txt".into(),
             auto_from_notes: true,
-            try_common: true,
             max_candidates: 12,
         }
     }
@@ -210,11 +222,11 @@ impl Config {
             if let Some(x) = t.get("auto_from_notes").and_then(|x| x.as_bool()) {
                 cfg.password.auto_from_notes = x;
             }
-            if let Some(x) = t.get("try_common").and_then(|x| x.as_bool()) {
-                cfg.password.try_common = x;
-            }
+            // 注：老配置里可能还写着 `try_common = ...`，这里**故意不认** ——
+            // 宽容解析的意义就是"多写一段只影响那一段"，不会因此报错。
             if let Some(x) = t.get("max_candidates").and_then(|x| x.as_integer()) {
-                cfg.password.max_candidates = x.max(1) as usize;
+                // 上限夹死（安全边界）：配置改不出"爆破模式"
+                cfg.password.max_candidates = (x.max(1) as usize).min(候选数硬上限);
             }
         }
         if let Some(t) = v.get("output") {
@@ -440,6 +452,59 @@ zip_bomb_ratio = 50
         .unwrap();
         let cfg = Config::load_from(&f);
         assert_eq!(cfg.general.jobs, 2, "多写了一句备注、多了一个自造的段，都不该让配置失效");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 配置改不出爆破模式() {
+        // ★ 安全边界：max_candidates 只能夹在 [1, 硬上限] 之间。
+        //   不然把配置写成 100000，这工具就变成爆破器了。
+        let dir = 临时目录("bruteforce");
+        let f = dir.join("config.toml");
+        std::fs::write(&f, "[password]\nmax_candidates = 100000\n").unwrap();
+        assert_eq!(
+            Config::load_from(&f).password.max_candidates,
+            候选数硬上限,
+            "配到天上也得夹回硬上限"
+        );
+
+        // 下限也要夹住（写 0 = 一个候选都不试，那等于把功能写没了，不是合法配置）
+        std::fs::write(&f, "[password]\nmax_candidates = 0\n").unwrap();
+        assert_eq!(Config::load_from(&f).password.max_candidates, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 老配置里的try_common不会让配置失效() {
+        // 这个字段已删（它本来就是个没接线的空壳），但老用户的配置文件里可能还写着它。
+        // 宽容解析要保证：写着也不报错，且同段其它字段照常生效。
+        let dir = 临时目录("oldtrycommon");
+        let f = dir.join("config.toml");
+        std::fs::write(
+            &f,
+            "[password]\ntry_common = true\nmax_candidates = 5\nauto_from_notes = false\n",
+        )
+        .unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(cfg.password.max_candidates, 5);
+        assert!(!cfg.password.auto_from_notes);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 读密码本绝不改动文件本身() {
+        // ★ 保险丝：将来谁加了"自动把抓到的密码 / 试成功的密码写进密码本"的逻辑，
+        //   这条测试会红。密码本只允许**用户主动**写（自己编辑，或 `--import-passwords`）。
+        let dir = 临时目录("pwlock");
+        let f = dir.join("passwords.txt");
+        std::fs::write(&f, "# 我自己记的\nabc123\n中文密码7\n").unwrap();
+        let 读之前 = std::fs::read(&f).unwrap();
+
+        let got = 读密码本(&f);
+        assert_eq!(got, vec!["abc123".to_string(), "中文密码7".to_string()]);
+
+        let 读之后 = std::fs::read(&f).unwrap();
+        assert_eq!(读之前, 读之后, "读密码本不许写回文件（只试不存）");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -595,7 +595,11 @@ fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String
         return None;
     }
 
-    // 只有 ZIP 能低成本地先试一下；其它格式（7z/rar 每次候选 121ms 起）先取第一个候选
+    // 只有 ZIP 能低成本地先试一下（只读加密条目的开头 4 KiB 就能判对错）；
+    // 其它格式得**真解一遍**才知道密码对不对（7z/rar 每次候选 121 ms 起），
+    // 所以这里只把**置信度最高的那一个**候选交出去。
+    // 这是能力取舍，不是安全策略：在 7z/RAR 上逐个试候选 = 整包解一遍又一遍，
+    // 用户会以为程序死了。
     let Target::Zip { base, len } = target else {
         let first = hints.first()?;
         ctx.diagnostic(
@@ -606,7 +610,19 @@ fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String
     };
 
     // 逐个候选**只读开头**验证（不解整个包：8 GB 的包完整试一次要几分钟）
-    for the_hint in hints.iter().take(3) {
+    //
+    // 试几个由配置决定（`max_candidates`，且被夹在硬上限之内）。
+    //
+    // ★ 安全边界（改这段之前先读 README「本工具不做的事」）：
+    //   · 候选只来自「用户自己记的密码本」和「包旁边公开的说明文件」；
+    //   · **只试不存** —— 抓到的密码用完就丢，绝不回填密码本。密码本是用户亲手
+    //     维护的东西，工具替用户"收集密码"是另一类东西了；
+    //   · 不做字典、不做掩码/增量爆破、不联网查库。
+    let 试几个 = cfg
+        .password
+        .max_candidates
+        .min(crate::config::候选数硬上限);
+    for the_hint in hints.iter().take(试几个) {
         if ctx.is_cancelled() {
             break;
         }
