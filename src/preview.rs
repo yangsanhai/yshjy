@@ -240,7 +240,7 @@ fn 列清单(
 /// `pub(crate)`：统一接口（[`crate::unpack::ZipUnpacker`] 的 `list`）也调它 ——
 /// 一份实现两处用，别再抄第二份。
 pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Result<Preview> {
-    let mut archive = zip::ZipArchive::new(src)
+    let mut archive = crate::layout::zip::打开已知偏移(src)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip open: {e}")))?;
 
     let mut entries = Vec::with_capacity(archive.len());

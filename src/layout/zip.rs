@@ -81,6 +81,32 @@ fn u64le(b: &[u8], off: usize) -> u64 {
     u64::from_le_bytes(a)
 }
 
+// ───────────────────── 打开 ZIP（统一入口） ─────────────────────
+
+/// 用**已知偏移**打开 ZIP：明确告诉库「归档从 0 开始」，别让它自己去检测
+///
+/// # 为什么这件事很要命（有实测数字）
+/// `zip` 库的默认配置是 [`zip::read::ArchiveOffset::Detect`] —— 它会去"搜索中央
+/// 目录的真实位置"来**反推**归档偏移。而我们的偏移**早就自己算好了**
+/// （`io::Window` 已经把 base 归零，对它来说偏移就是 0），让库再检测一次纯属浪费，
+/// 且代价极大：
+///
+/// - HANDOFF 的实测：库自己检测，8.7 GB 伪装包要 **113 秒**；直接喂偏移只要
+///   **69 微秒**（快约 1600 倍）
+/// - v0.9 性能批次复现：`--list` 总耗时 115 秒，而 Locate 阶段只占 **40 毫秒** ——
+///   剩下的全是在这里"检测偏移"把整个窗口扫了一遍
+///
+/// 这就是本项目一贯的分工：**我们负责定位、库负责解码**（见 `extract.rs` 模块头）。
+/// 所以任何"打开 ZIP"的地方都走这个函数，不要直接 `ZipArchive::new`。
+pub fn 打开已知偏移<R: std::io::Read + std::io::Seek>(
+    reader: R,
+) -> zip::result::ZipResult<zip::ZipArchive<R>> {
+    let cfg = zip::read::Config {
+        archive_offset: zip::read::ArchiveOffset::Known(0),
+    };
+    zip::ZipArchive::with_config(cfg, reader)
+}
+
 /// 在缓冲区里从后往前找 EOCD 签名，返回其下标
 pub fn find_eocd_backwards(buf: &[u8]) -> Option<usize> {
     if buf.len() < 4 {
