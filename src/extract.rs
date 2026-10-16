@@ -154,7 +154,7 @@ pub fn verify_password_at<R: Read + Seek>(r: R, base: u64, len: u64, pw: &str) -
     let Ok(window) = Window::new(r, base, len) else {
         return false;
     };
-    let Ok(mut archive) = zip::ZipArchive::new(window) else {
+    let Ok(mut archive) = crate::layout::zip::打开已知偏移(window) else {
         return false;
     };
 
@@ -225,7 +225,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
     let window = Window::new(r, base, len)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
 
-    let mut archive = zip::ZipArchive::new(window)
+    let mut archive = crate::layout::zip::打开已知偏移(window)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip open: {e}")))?;
 
     // 先列出「打包后总大小」，给炸弹防护做基准
