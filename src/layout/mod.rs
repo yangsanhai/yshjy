@@ -33,6 +33,10 @@ pub enum ArchiveFormat {
     Zstd,
     /// bzip2 单流
     Bzip2,
+    /// Brotli 单流（**没有魔数**，只能按扩展名 `.br` 认）
+    Brotli,
+    /// LZ4 帧格式（魔数 `04 22 4D 18`）
+    Lz4,
     /// 未知
     Unknown,
 }
@@ -50,6 +54,8 @@ impl ArchiveFormat {
             Self::Xz => "xz",
             Self::Zstd => "zstd",
             Self::Bzip2 => "bzip2",
+            Self::Brotli => "brotli",
+            Self::Lz4 => "lz4",
             Self::Unknown => "unknown",
         }
     }

@@ -51,9 +51,13 @@ pub fn detect(head: &[u8]) -> Option<Detected> {
         Some(ArchiveFormat::Zstd)
     } else if head.starts_with(b"BZh") {
         Some(ArchiveFormat::Bzip2)
+    } else if head.starts_with(&[0x04, 0x22, 0x4D, 0x18]) {
+        // LZ4 帧格式：魔数 0x184D2204（小端）
+        Some(ArchiveFormat::Lz4)
     } else {
         None
     };
+    // 注：Brotli **没有魔数**，光看头部认不出来 —— 只能按扩展名 `.br`（见 `looks_like_brotli_by_name`）
 
     // 裸 tar：偏移 257 处有 ustar（且开头不是压缩格式）
     let is_tar = head.len() > 262 && &head[257..262] == b"ustar";
@@ -99,8 +103,23 @@ pub fn looks_like_tar_by_name(path: &Path) -> bool {
         ".tzst",
         ".tbz2",
         ".tbz",
+        ".tar.br",
+        ".tar.lz4",
     ];
     TAR_SUFFIXES.iter().any(|s| name.ends_with(s))
+}
+
+/// 按**文件名**判断是不是 Brotli（`.br`）
+///
+/// 为什么只能看名字：**Brotli 压根没有文件头魔数**（格式就是这么设计的），
+/// 光看字节认不出来 —— 所有工具都是靠扩展名这条约定。
+pub fn looks_like_brotli_by_name(path: &Path) -> bool {
+    path.file_name()
+        .map(|n| {
+            let l = n.to_string_lossy().to_lowercase();
+            l.ends_with(".br") || l.ends_with(".brotli")
+        })
+        .unwrap_or(false)
 }
 
 /// 从文件名推测"解出来应该叫什么"
@@ -114,6 +133,8 @@ pub fn strip_suffix(path: &Path, fmt: ArchiveFormat) -> Option<PathBuf> {
         ArchiveFormat::Xz => &[".xz", ".lzma", ".txz"],
         ArchiveFormat::Zstd => &[".zst", ".zstd", ".tzst"],
         ArchiveFormat::Bzip2 => &[".bz2", ".bz", ".tbz2", ".tbz"],
+        ArchiveFormat::Lz4 => &[".lz4"],
+        ArchiveFormat::Brotli => &[".br"],
         _ => &[],
     };
     for s in suffixes {
@@ -229,7 +250,7 @@ pub fn decompress_stream_ctx<R: Read>(
         return Ok(written);
     }
 
-    // 其它三种都是标准 Read 解码器
+    // 其它都是标准 Read 解码器（一行一个，新格式往这儿加就行）
     let mut reader: Box<dyn Read> = match fmt {
         ArchiveFormat::Gzip => Box::new(flate2::read::GzDecoder::new(src)),
         ArchiveFormat::Zstd => {
@@ -238,6 +259,10 @@ pub fn decompress_stream_ctx<R: Read>(
             })?)
         }
         ArchiveFormat::Bzip2 => Box::new(bzip2_rs::DecoderReader::new(src)),
+        // LZ4 帧格式（64 KiB 一块，块本身自带校验）
+        ArchiveFormat::Lz4 => Box::new(lz4_flex::frame::FrameDecoder::new(src)),
+        // Brotli（没有魔数，靠扩展名进来的）
+        ArchiveFormat::Brotli => Box::new(brotli::Decompressor::new(src, 64 * 1024)),
         other => {
             return Err(Error::new(ErrorCode::NotArchive)
                 .with("reason", format!("不是单流格式: {other:?}")));
@@ -763,6 +788,98 @@ mod tests {
             assert_eq!(got, b"tar content a", "{name} 内容不对");
         }
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lz4_单流能靠魔数认出并解开() {
+        use std::io::Write;
+        // 用「不太能压」的数据：压缩炸弹防护会拦高压缩比（这是防护正常工作，
+        // 别为了测试去放宽安全限值）
+        let data: Vec<u8> = (0..15000u32)
+            .map(|i| (i.wrapping_mul(2654435761) >> 17) as u8)
+            .collect();
+
+        let mut enc = lz4_flex::frame::FrameEncoder::new(Vec::new());
+        enc.write_all(&data).unwrap();
+        let packed = enc.finish().unwrap();
+
+        // ① 有魔数 → 光看头部就能认
+        let d = detect(&packed).expect("LZ4 应当能靠魔数认出来");
+        assert_eq!(d.format, ArchiveFormat::Lz4);
+
+        // ② 解开逐字节一致
+        let p = 测试临时目录("lz4");
+        let out = p.join("a.txt");
+        let n = decompress_stream(
+            ArchiveFormat::Lz4,
+            std::io::Cursor::new(&packed),
+            &out,
+            &Limits::default(),
+            packed.len() as u64,
+        )
+        .unwrap();
+        assert_eq!(n as usize, data.len());
+        assert_eq!(fs::read(&out).unwrap(), data);
+
+        // ③ 解出来的名字：去掉 .lz4
+        assert_eq!(
+            strip_suffix(Path::new("a.txt.lz4"), ArchiveFormat::Lz4),
+            Some(PathBuf::from("a.txt"))
+        );
+        let _ = fs::remove_dir_all(&p);
+    }
+
+    #[test]
+    fn brotli_没有魔数只能按扩展名认并解开() {
+        use std::io::Write;
+        // 同上：数据要「不太能压」，否则会被压缩炸弹防护拦下
+        let data: Vec<u8> = (0..15000u32)
+            .map(|i| (i.wrapping_mul(40503) >> 11) as u8)
+            .collect();
+
+        let mut packed = Vec::new();
+        {
+            let mut w = brotli::CompressorWriter::new(&mut packed, 4096, 5, 22);
+            w.write_all(&data).unwrap();
+        }
+
+        // ① 光看头部**认不出来** —— 这是格式特性不是 bug，代码注释和文档都写清楚
+        assert_ne!(
+            detect(&packed).map(|d| d.format),
+            Some(ArchiveFormat::Brotli),
+            "brotli 不该靠魔数认出来（它根本没有魔数）"
+        );
+        // ② 所以只能按文件名认
+        assert!(looks_like_brotli_by_name(Path::new("a.txt.br")));
+        assert!(looks_like_brotli_by_name(Path::new("备份.BR")));
+        assert!(!looks_like_brotli_by_name(Path::new("a.txt.zip")));
+
+        // ③ 解开逐字节一致
+        let p = 测试临时目录("br");
+        let out = p.join("a.txt");
+        let n = decompress_stream(
+            ArchiveFormat::Brotli,
+            std::io::Cursor::new(&packed),
+            &out,
+            &Limits::default(),
+            packed.len() as u64,
+        )
+        .unwrap();
+        assert_eq!(n as usize, data.len());
+        assert_eq!(fs::read(&out).unwrap(), data);
+        assert_eq!(
+            strip_suffix(Path::new("a.txt.br"), ArchiveFormat::Brotli),
+            Some(PathBuf::from("a.txt"))
+        );
+        let _ = fs::remove_dir_all(&p);
+    }
+
+    /// 测试用临时目录（每个用例独立，跑完自己删）
+    fn 测试临时目录(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("yshjy_stream_{tag}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
     }
 
     #[test]

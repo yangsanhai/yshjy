@@ -47,6 +47,13 @@ pub enum Target {
         /// 分卷路径列表
         volumes: Vec<PathBuf>,
     },
+    /// ZIP 分卷（`.z01` / `.z02` … 最后一块是 `.zip`）
+    ///
+    /// 拼成一个逻辑流后，就和一个普通 ZIP 一模一样（中央目录里的偏移是相对整条流的）。
+    ZipSplit {
+        /// 分卷路径（已按序排好，最后一块是 `.zip`）
+        volumes: Vec<PathBuf>,
+    },
     /// RAR（只解不压）
     Rar,
     /// 单流压缩 / TAR 家族
@@ -65,6 +72,7 @@ impl Target {
     pub fn as_str(&self) -> &'static str {
         match self {
             Target::Zip { .. } => "zip",
+            Target::ZipSplit { .. } => "zip",
             Target::SevenZ { .. } => "7z",
             Target::Rar => "rar",
             Target::Stream { format, is_tar, .. } => {
@@ -97,6 +105,12 @@ pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
 }
 
 fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
+    // ①' ZIP 分卷（`.z01`/`.z02`… + `.zip`）
+    //     **必须在 7z 分卷之前判**：`.z01` 是 ZIP 分卷的专用后缀，
+    //     而 7z 分卷的编号从 `.001` 起（常带 `.7z` 前缀）—— 顺序反了会被 7z 抢走。
+    if let Some(volumes) = as_zip_volumes(path) {
+        return Ok(Target::ZipSplit { volumes });
+    }
     // ① 7z（含分卷）
     if let Some(volumes) = as_7z_volumes(path) {
         return Ok(Target::SevenZ { volumes });
@@ -113,6 +127,15 @@ fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
         return Ok(Target::Stream {
             format: d.format,
             is_tar,
+            packed,
+        });
+    }
+    // ③' Brotli：**没有魔数**（格式就这么设计的），只能按扩展名 `.br` 认
+    if extract_stream::looks_like_brotli_by_name(path) {
+        let packed = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        return Ok(Target::Stream {
+            format: ArchiveFormat::Brotli,
+            is_tar: extract_stream::looks_like_tar_by_name(path),
             packed,
         });
     }
@@ -174,6 +197,56 @@ fn is_rar(path: &Path) -> bool {
         }
     }
     false
+}
+
+/// 认出「ZIP 分卷」（`.z01` / `.z02` … + 最后一块 `.zip`）
+///
+/// 两种入口都给同一个结果：
+/// - 用户点 `.z01` → 往后收集 `.z02`、`.z03`… 最后接上 `.zip` 收尾块
+/// - 用户点 `.zip` → 看同目录有没有同名的 `.z01`（有 → 这就是分卷的收尾块）
+///
+/// 和 7z 分卷的区别：7z 是「裸字节切分」；ZIP 分卷每块自成一体，
+/// 但**中央目录里的偏移是相对整条逻辑流的**，所以拼起来就能当普通 ZIP 读。
+fn as_zip_volumes(path: &Path) -> Option<Vec<PathBuf>> {
+    let name = path.file_name()?.to_string_lossy().to_string();
+    let lower = name.to_lowercase();
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+
+    // 主干名：去掉 `.zip` 或 `.z01` 这类尾巴
+    let stem = if lower.ends_with(".zip") {
+        name[..name.len() - 4].to_string()
+    } else {
+        let pos = lower.rfind(".z")?;
+        let digits = &lower[pos + 2..];
+        if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        name[..pos].to_string()
+    };
+    if stem.is_empty() {
+        return None;
+    }
+
+    // 从 .z01 开始按序收集（缺一块就停 —— 不去猜后面的编号）
+    let mut volumes = Vec::new();
+    for n in 1..=99u32 {
+        let p = dir.join(format!("{stem}.z{n:02}"));
+        if p.exists() {
+            volumes.push(p);
+        } else {
+            break;
+        }
+    }
+    if volumes.is_empty() {
+        return None; // 连第一块都不在 → 不是分卷
+    }
+    // 收尾块 `.zip`：没有它说明下载缺块，老实报错比猜好
+    let last = dir.join(format!("{stem}.zip"));
+    if !last.exists() {
+        return None;
+    }
+    volumes.push(last);
+    Some(volumes)
 }
 
 /// 看文件头判断单流格式 / TAR
@@ -371,6 +444,25 @@ fn extract_target(
             eopts.selection = opts.selection.clone();
             let (rep, repair_note) =
                 crate::extract::extract_zip_auto_ctx(&mut f, *base, *len, &eopts, ctx)?;
+            if let Some(note) = repair_note {
+                ctx.diagnostic(DiagnosticCode::OffsetCorrected, note);
+                stats.flags.insert(ArchiveFlags::HEADERS_ERROR);
+            }
+            Ok(rep)
+        }
+        Target::ZipSplit { volumes } => {
+            // 拼成一条逻辑流 → 找中央目录 → 解（和普通 ZIP 同一条路）
+            let mut mf = crate::extract7z::MultiFile::open(volumes)?;
+            let size = mf.total();
+            let l = crate::layout::zip::locate(&mut mf, size).map_err(|e| {
+                Error::new(ErrorCode::NotArchive)
+                    .context(format!("分卷里的中央目录没找到（是不是缺了一块？）: {e}"))
+            })?;
+            let mut eopts = ExtractOptions::new(dest);
+            eopts.password = password;
+            eopts.selection = opts.selection.clone();
+            let (rep, repair_note) =
+                crate::extract::extract_zip_auto_ctx(&mut mf, l.base, l.data_len(), &eopts, ctx)?;
             if let Some(note) = repair_note {
                 ctx.diagnostic(DiagnosticCode::OffsetCorrected, note);
                 stats.flags.insert(ArchiveFlags::HEADERS_ERROR);
@@ -590,6 +682,88 @@ mod tests {
             other => panic!("应当识别成 ZIP，实际 {other:?}"),
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zip_分卷能认出并拼接解开() {
+        let dir = scratch("zipvol");
+
+        // 造一个普通 ZIP，再按字节切成两块 —— 这正是 `zip -s` 的排法：
+        // 数据流被切开，中央目录留在最后一块的尾部，偏移是相对整条流的
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let opt: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        // 数据要「不太能压」：`'x'*5000` 这种压缩比能到 100 倍，
+        // 会被压缩炸弹防护拦下（防护是对的，别改安全限值来迁就测试）
+        let blob: Vec<u8> = (0..5000u32)
+            .map(|i| (i.wrapping_mul(2654435761) >> 13) as u8)
+            .collect();
+        w.start_file("游戏/a.dat", opt).unwrap();
+        w.write_all(&blob).unwrap();
+        w.start_file("说明.txt", opt).unwrap();
+        w.write_all("里面有东西".as_bytes()).unwrap();
+        let bytes = w.finish().unwrap().into_inner();
+
+        let cut = bytes.len() / 2;
+        let z01 = dir.join("包.z01");
+        let last = dir.join("包.zip");
+        std::fs::write(&z01, &bytes[..cut]).unwrap();
+        std::fs::write(&last, &bytes[cut..]).unwrap();
+
+        let ctx = UnpackCtx::quiet(1);
+        let sink: Arc<dyn EventSink> = Arc::new(NullSink);
+
+        // 对照组：**先确认不切分时这份 ZIP 自己能解开**
+        // （不然分不清是「分卷逻辑坏了」还是「测试造的包本身有问题」）
+        let whole = dir.join("整包.zip");
+        std::fs::write(&whole, &bytes).unwrap();
+        let out_w = scratch("zipvol_whole");
+        let opts_w = BatchOptions {
+            dest: Some(out_w.clone()),
+            smart_dir: false,
+            ..Default::default()
+        };
+        let o_w = run_job(
+            &Job::new(1, whole.clone(), 0),
+            &opts_w,
+            &sink,
+            &CancelToken::new(),
+        );
+        assert_eq!(
+            o_w.outcome, Outcome::Success,
+            "对照组（不切分）就失败了 → 是造数据的问题，不是分卷逻辑: {:?}",
+            o_w.stats
+        );
+
+        // ① 从 .z01 入口认出来
+        let t = identify(&z01, &ctx).unwrap();
+        assert!(
+            matches!(t, Target::ZipSplit { .. }),
+            "从 .z01 应当认成分卷，实际 {t:?}"
+        );
+        // ② 从收尾块 .zip 入口也认出来（下载点最后一块很常见）
+        let t2 = identify(&last, &ctx).unwrap();
+        assert!(
+            matches!(t2, Target::ZipSplit { .. }),
+            "从 .zip 应当认成分卷，实际 {t2:?}"
+        );
+
+        // ③ 真解一遍：拼接后的内容和原 ZIP 一致
+        let out = scratch("zipvol_out");
+        let opts = BatchOptions {
+            dest: Some(out.clone()),
+            smart_dir: false,
+            ..Default::default()
+        };
+        let outcome = run_job(&Job::new(1, z01.clone(), 0), &opts, &sink, &CancelToken::new());
+        assert_eq!(outcome.outcome, Outcome::Success, "{:?}", outcome.stats);
+        assert!(out.join("游戏/a.dat").exists(), "分卷里的文件应当解出来");
+        assert_eq!(
+            std::fs::read(out.join("说明.txt")).unwrap(),
+            "里面有东西".as_bytes()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&out);
     }
 
     #[test]
