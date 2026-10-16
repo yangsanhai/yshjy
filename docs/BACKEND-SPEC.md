@@ -78,8 +78,9 @@ jobs = 1                    # 并行任务数（磁盘友好）
 [password]
 file = "passwords.txt"
 auto_from_notes = true      # 从同目录"说明.txt"里自动抓解压码
-try_common = true           # 尝试内置常见解压码库
-max_candidates = 12         # 上限（7z 每候选 121ms，避免久等）
+max_candidates = 12         # 上限；**硬上限 64**，配置改不出爆破模式
+# 注：原本这里还有个 try_common（尝试内置常见解压码库），已**刻意删除** ——
+#     内置常见密码表等于自带小字典，越过安全边界（见 README「本工具不做的事」）
 
 [output]
 dir = "~/yshjy-output"      # 默认输出目录

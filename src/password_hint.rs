@@ -63,6 +63,35 @@ const LABELS: &[(&str, u8)] = &[
     ("pwd", 50),
 ];
 
+/// 在**小写化**的文本里找一个 ASCII 标签，且要求它卡在词边界上
+///
+/// # 为什么必须有词边界
+/// `pass` 是个短标签，几乎藏在任何英文单词里：`passed` / `bypass` / `passwordless`。
+/// 不做边界检查的后果**真实发生过**：`test result: ok. 251 passed; 1 failed;` 这行
+/// 会被抓出候选解压码 `ed`（`pass` 之后的残留）—— 于是"旁边放着一份日志"的用户
+/// 会白试一堆垃圾密码，界面还会说"从说明文件里抓到了密码"。
+///
+/// 只对 ASCII 标签做这件事：中文标签（`解压码`）的词边界是天然的，
+/// 而按字节去切中文会切坏 UTF-8。
+fn 找ascii标签(text_lower: &str, label_lower: &str) -> Option<usize> {
+    if label_lower.is_empty() {
+        return None;
+    }
+    let mut from = 0usize;
+    while from < text_lower.len() {
+        let rel = text_lower[from..].find(label_lower)?;
+        let pos = from + rel;
+        let end = pos + label_lower.len();
+        let 词字符 = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        if !词字符(text_lower[..pos].chars().next_back()) && !词字符(text_lower[end..].chars().next()) {
+            return Some(pos);
+        }
+        // 这次命中不合法（是别的单词的一部分）→ 从标签末尾继续找下一个
+        from = end;
+    }
+    None
+}
+
 /// 从一段文本里抽出候选解压码
 ///
 /// 支持的写法（实测资源里常见的）：
@@ -83,7 +112,7 @@ pub fn extract_passwords(text: &str) -> Vec<(String, u8, String)> {
         for (label, conf) in LABELS {
             let label_lower = label.to_lowercase();
             let pos = if label.is_ascii() {
-                lower.find(&label_lower)
+                找ascii标签(&lower, &label_lower)
             } else {
                 line.find(label)
             };
@@ -336,15 +365,51 @@ mod tests {
 
     #[test]
     fn 隔壁是二进制大文件不会浪费时间去读() {
-        let dir = std::env::temp_dir().join(format!("yshjy_pwhint2_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
+        // ⚠️ `find_hints_near` 会连**上一级目录**一起扫（说明文件有时放在外层），
+        // 所以目标必须放在自己造的**深层目录**里。直接放在 `temp_dir()` 下面的话，
+        // TMPDIR 里随便一份含 "pass" 的日志就能让这个测试挂 —— 真实踩过
+        //（当时 TMPDIR 里躺着一份 cargo 输出）。
+        let 根 = std::env::temp_dir().join(format!("yshjy_pwhint2_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&根);
+        let dir = 根.join("包");
         fs::create_dir_all(&dir).unwrap();
         // 一个 3 MB 的 .txt（超过 2 MB 限制）不该被读
         let big = dir.join("说明.txt");
         fs::write(&big, vec![b'x'; 3 * 1024 * 1024]).unwrap();
         let target = dir.join("x.mp4");
         fs::write(&target, b"x").unwrap();
-        assert!(find_hints_near(&target).is_empty());
-        let _ = fs::remove_dir_all(&dir);
+        assert!(
+            find_hints_near(&target).is_empty(),
+            "超过 2 MB 的说明文件不该被读（上级 {} 里也确实没有说明文件）",
+            根.display()
+        );
+        let _ = fs::remove_dir_all(&根);
+    }
+
+    #[test]
+    fn 英文单词里的pass不算标签() {
+        // 真实踩到：cargo 的 `test result: ok. 251 passed; 1 failed;` 曾被抓出 `ed`
+        let 日志 = "test result: ok. 251 passed; 1 failed; 0 ignored; 0 measured";
+        assert!(
+            extract_passwords(日志).is_empty(),
+            "passed 里的 pass 不是标签，实际抓到：{:?}",
+            extract_passwords(日志)
+        );
+        assert!(extract_passwords("bypass the check").is_empty());
+        assert!(extract_passwords("passwordless login").is_empty());
+    }
+
+    #[test]
+    fn 真正的password写法照样能抓到() {
+        // 别为了修 bug 把正常写法一起修没了
+        let got = extract_passwords("password: hunter2");
+        assert_eq!(got[0].0, "hunter2", "实际：{got:?}");
+        let got = extract_passwords("解压码 abc123");
+        assert_eq!(got[0].0, "abc123", "实际：{got:?}");
+        let got = extract_passwords("密码 ＝ 中文密码7");
+        assert_eq!(got[0].0, "中文密码7", "实际：{got:?}");
+        // 标签被空格围着、在句子中间也要认（`pass: x` 这种写法实测存在）
+        let got = extract_passwords("提取 pass: zz99");
+        assert!(got.iter().any(|(p, _, _)| p == "zz99"), "实际：{got:?}");
     }
 }
