@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/平台-Linux%20%7C%20Windows%20%7C%20Android-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.5.0%20测试版-2ECC71)
+![状态](https://img.shields.io/badge/状态-v0.6.0%20测试版-2ECC71)
 
 ---
 
