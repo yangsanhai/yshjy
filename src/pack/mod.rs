@@ -243,16 +243,9 @@ fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize
     } else {
         zip::CompressionMethod::Deflated
     };
-    // 带密码时用「带生命周期的」FileOptions（加密选项借用密码）
-    let plain: zip::write::FileOptions<'_, '_, ()> = zip::write::SimpleFileOptions::default()
-        .compression_method(method)
-        .compression_level(Some(opts.level as i64));
-    let fopt = match &opts.password {
-        Some(pw) => plain
-            .with_deprecated_encryption(pw.as_bytes())
-            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("加密选项无效: {e}")))?,
-        None => plain,
-    };
+    // 每个条目要带**自己的**修改时间，所以选项按文件就地构造、不共用
+    // （共用会让所有条目都变成 ZIP 格式起点 1980-01-01 —— 实测踩到过）
+    let pw = opts.password.as_deref();
 
     let mut count = 0usize;
     for input in inputs {
@@ -264,12 +257,13 @@ fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "dir".into());
-            count += add_dir(&mut zw, input, &base_name, &fopt)?;
+            count += add_dir(&mut zw, input, &base_name, method, opts.level as i64, pw)?;
         } else {
             let name = input
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "file".into());
+            let fopt = 条目选项(method, opts.level as i64, meta.modified().ok(), pw)?;
             zw.start_file(&name, fopt)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
             let mut f = fs::File::open(input).map_err(|e| {
@@ -286,11 +280,51 @@ fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize
     Ok(count)
 }
 
-fn add_dir<'a, W: Write + Seek>(
+/// 给一个条目构造 ZIP 选项（带上它**自己的**修改时间）
+///
+/// 为什么要带时间：不写的话 ZIP 里存的就是格式起点 1980-01-01，
+/// 解出来所有文件都会变成那个假时间（实测踩到：解出的文件全是 1980-01-01 08:00）。
+/// **也不能共用一个 options** —— 那样所有条目只能有一个时间。
+fn 条目选项<'a>(
+    method: zip::CompressionMethod,
+    level: i64,
+    mtime: Option<std::time::SystemTime>,
+    pw: Option<&'a str>,
+) -> Result<zip::write::FileOptions<'a, 'a, ()>> {
+    let mut o = zip::write::SimpleFileOptions::default()
+        .compression_method(method)
+        .compression_level(Some(level));
+    if let Some(dt) = mtime.and_then(系统时间转_zip_时间) {
+        o = o.last_modified_time(dt);
+    }
+    match pw {
+        Some(p) => o
+            .with_deprecated_encryption(p.as_bytes())
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("加密选项无效: {e}"))),
+        None => Ok(o),
+    }
+}
+
+/// 系统时间 → ZIP 的「年月日时分秒」
+///
+/// ZIP 的 DOS 时间戳只能表示 1980–2107 年；超范围（或早于 1970）返回 `None`，
+/// 让它保持默认 —— 硬塞上去会得到一个荒唐的日期。
+fn 系统时间转_zip_时间(t: std::time::SystemTime) -> Option<zip::DateTime> {
+    let secs = t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs() as i64;
+    let (y, m, d, hh, mm, ss) = crate::restore::unix_to_civil(secs);
+    if !(1980..=2107).contains(&y) {
+        return None;
+    }
+    zip::DateTime::from_date_and_time(y as u16, m as u8, d as u8, hh as u8, mm as u8, ss as u8).ok()
+}
+
+fn add_dir<W: Write + Seek>(
     zw: &mut zip::ZipWriter<W>,
     dir: &Path,
     prefix: &str,
-    fopt: &zip::write::FileOptions<'a, 'a, ()>,
+    method: zip::CompressionMethod,
+    level: i64,
+    pw: Option<&str>,
 ) -> Result<usize> {
     let mut n = 0usize;
     let rd = fs::read_dir(dir)
@@ -305,9 +339,10 @@ fn add_dir<'a, W: Write + Seek>(
             .metadata()
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?;
         if meta.is_dir() {
-            n += add_dir(zw, &p, &arc, fopt)?;
+            n += add_dir(zw, &p, &arc, method, level, pw)?;
         } else {
-            zw.start_file(&arc, *fopt)
+            let fopt = 条目选项(method, level, meta.modified().ok(), pw)?;
+            zw.start_file(&arc, fopt)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
             let mut f = fs::File::open(&p)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open {p:?}: {e}")))?;

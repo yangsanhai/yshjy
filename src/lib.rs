@@ -33,6 +33,7 @@ pub mod preview;
 pub mod progress;
 pub mod repair;
 pub mod rescue;
+pub mod restore;
 pub mod safety;
 pub mod scan;
 pub mod select;

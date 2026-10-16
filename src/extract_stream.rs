@@ -492,6 +492,15 @@ pub fn extract_tar_ctx<R: Read + 'static>(
                 .push(format!("{name}：可执行文件，已解出但请谨慎运行"));
         }
 
+        // tar 头里记的时间戳 / 权限（落盘后再设上去，见下面成功分支）
+        let attrs = {
+            let h = ent.header();
+            crate::restore::EntryAttrs {
+                mtime: h.mtime().ok().map(|s| s as i64),
+                mode: h.mode().ok(),
+            }
+        };
+
         let mut out = match fs::File::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
@@ -545,6 +554,13 @@ pub fn extract_tar_ctx<R: Read + 'static>(
             }
             None => {
                 report.bytes_written += written;
+                // 还原归档里记的时间戳 / 权限（尽力而为：设不上不影响"解压成功"这个结论）
+                if !attrs.is_empty()
+                    && let Err(e) = crate::restore::apply(&out_path, &attrs)
+                    && report.warnings.len() < 3
+                {
+                    report.warnings.push(format!("属性没还原上：{e}"));
+                }
                 ctx.entry_done(idx, &name, ItemResult::Ok, written);
                 report.files.push(crate::extract::ExtractedFile {
                     name,

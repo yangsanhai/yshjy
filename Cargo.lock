@@ -1001,6 +1001,7 @@ dependencies = [
  "bzip2-rs",
  "ctrlc",
  "encoding_rs",
+ "filetime",
  "flate2",
  "fs4",
  "lz4_flex",
