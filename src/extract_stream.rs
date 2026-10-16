@@ -338,7 +338,12 @@ impl Write for BudgetWriter<'_> {
 /// **解压 TAR**（含 `.tar.gz` / `.tar.xz` / `.tar.zst` / `.tar.bz2` 两层）
 ///
 /// `outer` 传 `None` 表示裸 tar；传 `Some(fmt)` 表示先解外层压缩流再展开 tar。
-pub fn extract_tar<R: Read + 'static>(
+/// # 为什么是 `R: Read + 'a` 而不是 `R: Read + 'static`
+/// 早先写成了 `'static`，只是因为内部把源装进了 `Box<dyn Read>`（默认带 `'static`）。
+/// 这让**借来的流**（`&mut File`、`&mut Window`…）没法传进来 —— 而统一接口
+/// （`crate::unpack::Source`）恰恰只提供借来的流。放宽成 `'a` 后两种都收，
+/// 对原有调用点（传 `File` 这类拥有型）完全兼容：约束更松，调用更自由。
+pub fn extract_tar<'a, R: Read + 'a>(
     src: R,
     outer: Option<ArchiveFormat>,
     opts: &ExtractStreamOptions,
@@ -347,7 +352,7 @@ pub fn extract_tar<R: Read + 'static>(
 }
 
 /// 同 [`extract_tar`]，但带上事件 / 进度 / 取消上下文
-pub fn extract_tar_ctx<R: Read + 'static>(
+pub fn extract_tar_ctx<'a, R: Read + 'a>(
     src: R,
     outer: Option<ArchiveFormat>,
     opts: &ExtractStreamOptions,
@@ -357,7 +362,7 @@ pub fn extract_tar_ctx<R: Read + 'static>(
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
 
     // ── 剥外层压缩流 ──
-    let reader: Box<dyn Read> = match outer {
+    let reader: Box<dyn Read + 'a> = match outer {
         None => Box::new(src),
         Some(ArchiveFormat::Gzip) => Box::new(flate2::read::GzDecoder::new(src)),
         Some(ArchiveFormat::Zstd) => {
