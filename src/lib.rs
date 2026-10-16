@@ -28,6 +28,7 @@ pub mod job;
 pub mod layout;
 pub mod pack;
 pub mod password_hint;
+pub mod preview;
 pub mod progress;
 pub mod repair;
 pub mod rescue;

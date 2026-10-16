@@ -131,6 +131,9 @@ pub struct BatchOptions {
     pub selection: Selection,
     /// 统一输出目录（`None` = 每个包解到自己的同名目录）
     pub dest: Option<PathBuf>,
+    /// 智能解压三规则（UI-SPEC §9.2）：单一顶层目录/单文件直接解到目标目录，
+    /// 否则自动建同名子目录。默认开。
+    pub smart_dir: bool,
 }
 
 impl Default for BatchOptions {
@@ -141,6 +144,7 @@ impl Default for BatchOptions {
             password: None,
             selection: Selection::all(),
             dest: None,
+            smart_dir: true,
         }
     }
 }

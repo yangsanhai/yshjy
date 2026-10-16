@@ -48,6 +48,8 @@ const HELP: &str = r#"杨三海解压（yshjy） —— 专治「伪装成视频
                                     --select "1,3,5"      只要第 1、3、5 个
                                     --select required     跳过 .DS_Store 之类的垃圾
   --json                          按行输出事件流/结果（给脚本用）
+  --no-smart-dir                  关掉「智能解压」：默认会看包里有没有单一顶层目录来决定
+                                  要不要多套一层同名文件夹，加这个就永远建同名文件夹
   -q, --quiet                     只输出结果（脚本用）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
 
@@ -139,8 +141,9 @@ fn main() -> ExitCode {
         return ExitCode::from(code::USAGE);
     }
 
+    let json = has("--json");
     if has("--list") || has("-l") {
-        return do_list(&targets, quiet);
+        return do_list(&targets, quiet, json);
     }
     if has("--rescue") {
         return do_rescue(&targets, &val_of("--dest"), quiet);
@@ -156,7 +159,6 @@ fn main() -> ExitCode {
     }
 
     // ── 解压（v0.5：多目标 / 批量 / 挑选 / 进度事件）──
-    let json = has("--json");
     let jobs_n: usize = match val_of("--jobs") {
         Some(s) => match s.parse() {
             Ok(n) => n,
@@ -187,6 +189,7 @@ fn main() -> ExitCode {
         jobs_n,
         selection,
         json,
+        !has("--no-smart-dir"),
     )
 }
 
@@ -209,76 +212,133 @@ fn mask(pw: &str) -> String {
     format!("{}{}", "•".repeat(n.min(6)), if n > 6 { "…" } else { "" })
 }
 
-/// 打开文件并定位压缩包（尾部窗口失败时自动全文件扫描兜底）
-fn open_and_locate(
-    path: &str,
-) -> Result<(std::fs::File, u64, yshjy::layout::zip::ZipLayout), String> {
-    let mut f = std::fs::File::open(path).map_err(|e| format!("打不开 {path}：{e}"))?;
-    let size = f
-        .metadata()
-        .map_err(|e| format!("读不到文件信息：{e}"))?
-        .len();
+/// 列内容（v0.6：走引擎的 `preview`，**所有格式**都能列，且支持 `--json`）
+///
+/// 和 v0.4 的区别：以前只有 ZIP 能列，现在 ZIP / 7z / RAR / 单流都能列；
+/// 并且会发出 `PreviewReady` 事件 —— 这就是界面 S3「列出内容 → 勾选」的数据源。
+fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
+    use std::sync::Arc;
+    use yshjy::ctx::UnpackCtx;
+    use yshjy::event::EventSink;
 
-    if let Ok(l) = yshjy::layout::zip::locate(&mut f, size) {
-        return Ok((f, size, l));
-    }
-    // 兜底：全文件扫描（对付"包藏在中间"的情况）
-    let hits = yshjy::scan::scan_whole_file(&mut f, size, &yshjy::scan::ScanOptions::strict())
-        .map_err(|e| format!("扫描失败：{e}"))?;
-    if hits.is_empty() {
-        return Err(format!("{path} 里没找到压缩包（也可能这个格式还没支持）"));
-    }
-    // 用更宽的窗口再定位一次
-    let l = yshjy::layout::zip::locate_with_window(&mut f, size, size)
-        .map_err(|e| format!("找到了线索但读不出来：{e}"))?;
-    Ok((f, size, l))
-}
+    let mut worst: u8 = code::OK;
+    for t in targets {
+        let path = PathBuf::from(t);
+        let sink: Arc<dyn EventSink> = Arc::new(终端出口::new(quiet, json));
+        let ctx = UnpackCtx::new(1, sink);
 
-fn do_list(targets: &[String], quiet: bool) -> ExitCode {
-    let path = &targets[0];
-    match open_and_locate(path) {
-        Ok((mut f, _size, layout)) => match yshjy::layout::zip::list_entries(&mut f, &layout) {
-            Ok(entries) => {
-                if quiet {
-                    for e in &entries {
-                        println!("{}", e.path);
-                    }
+        match yshjy::preview::preview(&path, &ctx, None) {
+            Ok((_target, pv)) => {
+                if json {
+                    println!("{}", 预览_json(t, &pv));
                 } else {
-                    println!("📦 {path} 里有 {} 个文件：\n", entries.len());
-                    let mut total = 0u64;
-                    for e in entries.iter().take(50) {
-                        let lock = if e.encrypted { "🔒" } else { "  " };
-                        println!("   {lock} {:>12} 字节   {}", e.size, e.path);
-                        total += e.size;
-                    }
-                    if entries.len() > 50 {
-                        println!("   … 还有 {} 个", entries.len() - 50);
-                    }
-                    let enc = entries.iter().filter(|e| e.encrypted).count();
-                    println!("\n   合计 {:.1} MB", total as f64 / 1_048_576.0);
-                    if enc > 0 {
-                        println!("   其中 {enc} 个带锁 🔒 —— 解压需要解压码");
-                    }
+                    打印预览(t, &pv, quiet);
                 }
-                ExitCode::from(code::OK)
             }
             Err(e) => {
-                eprintln!("❌ 列不出内容：{e}");
-                ExitCode::from(code::NOT_ARCHIVE)
+                // 兜底：中央目录被改坏 → 按 local header 重建清单（v0.4 的老本事，不能丢）
+                if try_list_by_rescue(t, quiet).is_some() {
+                    continue;
+                }
+                eprintln!("❌ {t}：{}", 失败文案(e.code));
+                if !quiet {
+                    eprintln!("   （{e}）");
+                    eprintln!("   提示：解不开时加 --rescue 试试救援模式。");
+                }
+                if worst == code::OK {
+                    worst = e.code.cli_exit_code().clamp(0, 255) as u8;
+                }
             }
-        },
-        Err(msg) => {
-            // 兜底：中央目录被改坏时，按 local header 重建清单（不写盘）
-            if let Some(rc) = try_list_by_rescue(path, quiet) {
-                return rc;
-            }
-            eprintln!("❌ {msg}");
-            if !quiet {
-                eprintln!("\n   提示：用 yshjy --rescue 试试救援模式。");
-            }
-            ExitCode::from(code::NOT_ARCHIVE)
         }
     }
+    ExitCode::from(worst)
+}
+
+/// 预览提示码 → 中文一句话（引擎只发码，文案归这里）
+fn 预览提示文案(h: &yshjy::event::PreviewHint) -> String {
+    use yshjy::event::PreviewHint as H;
+    match h {
+        H::VolumesMerged { count } => format!("检测到 {count} 个分卷，解压时会自动拼起来"),
+        H::NestedArchive { inner } => format!("里面还套了一层压缩包（{inner}）"),
+        H::NeedsPassword { entries } => format!("其中 {entries} 个带锁 —— 解压需要解压码"),
+        H::LooksTruncated => "这个包可能没下完（尾部数据缺失）".to_string(),
+        H::HiddenAt { offset } => {
+            format!("包藏在文件中间（偏移 {offset}），已按真实位置定位")
+        }
+        H::RebuiltIndex => "索引坏了，清单是按文件头重建的".to_string(),
+        H::VideoUnplayable => "封面视频本身有问题，但里面的文件还能解".to_string(),
+    }
+}
+
+/// 把预览结果打印成人话
+fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
+    if quiet {
+        for e in &pv.entries {
+            println!("{}", e.path);
+        }
+        return;
+    }
+
+    println!("📦 {t}（{}）", pv.format);
+    for h in &pv.hints {
+        println!("   ℹ {}", 预览提示文案(h));
+    }
+    if !pv.complete {
+        println!("   ⚠ 这个格式只能列出部分信息（大小未知）");
+    }
+    if pv.entries.is_empty() {
+        println!("   （列不出内容）");
+        return;
+    }
+
+    println!();
+    for e in pv.entries.iter().take(40) {
+        let lock = if e.encrypted { "🔒" } else { "  " };
+        let icon = if e.is_dir { "📁" } else { "  " };
+        let size = if e.size > 0 {
+            人类可读(e.size)
+        } else {
+            "—".to_string()
+        };
+        let risk = if e.is_risky { " ⚠可执行" } else { "" };
+        println!("   {lock}{icon} {:>4}.  {size:>10}  {}{risk}", e.index, e.path);
+    }
+    if pv.entries.len() > 40 {
+        println!("   … 还有 {} 个", pv.entries.len() - 40);
+    }
+
+    println!();
+    println!(
+        "   合计 {} / {} 个文件",
+        人类可读(pv.total_size),
+        pv.file_count()
+    );
+    if pv.encrypted_count > 0 {
+        println!("   解压码：看旁边的「说明.txt」，或 yshjy -p \"解压码\" \"{t}\"");
+    }
+    println!("   只解一部分：yshjy --select \"1,3\" \"{t}\"");
+}
+
+/// 预览结果 → JSON（给脚本/前端消费）
+fn 预览_json(t: &str, pv: &yshjy::preview::Preview) -> String {
+    serde_json::json!({
+        "input": t,
+        "format": pv.format,
+        "complete": pv.complete,
+        "files": pv.file_count(),
+        "total_size": pv.total_size,
+        "encrypted": pv.encrypted_count,
+        "hints": pv.hints.iter().map(预览提示文案).collect::<Vec<_>>(),
+        "entries": pv.entries.iter().map(|e| serde_json::json!({
+            "index": e.index,
+            "path": e.path,
+            "size": e.size,
+            "is_dir": e.is_dir,
+            "encrypted": e.encrypted,
+            "risky": e.is_risky,
+        })).collect::<Vec<_>>(),
+    })
+    .to_string()
 }
 
 /// 中央目录坏了时的兜底列举：按 local header 顺序重建
@@ -337,6 +397,7 @@ fn do_extract(
     jobs_n: usize,
     selection: yshjy::select::Selection,
     json: bool,
+    smart_dir: bool,
 ) -> ExitCode {
     use std::sync::Arc;
     use yshjy::batch;
@@ -372,10 +433,27 @@ fn do_extract(
         password: password.clone(),
         selection,
         dest: dest_opt.clone().map(PathBuf::from),
+        smart_dir,
     };
 
     let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));
     let cancel = CancelToken::new();
+
+    // Ctrl-C 接管：把信号转成引擎的「取消」——
+    // 好处是取消走的是同一条路（已解出的文件保留、写了一半的删掉、退出码 130），
+    // 而不是被信号直接打死留一堆半成品。
+    {
+        let c = cancel.clone();
+        let _ = ctrlc::set_handler(move || {
+            if c.is_cancelled() {
+                // 第二次 Ctrl-C：用户等不及了，直接退
+                eprintln!("\n⏹  再按一次就强制退出");
+                std::process::exit(130);
+            }
+            c.cancel_with("user pressed ctrl-c");
+            eprintln!("\n⏹  收到 Ctrl-C —— 正在收尾（已解出的文件会保留，再按一次强制退出）");
+        });
+    }
 
     let report = batch::run_batch(jobs, &opts, &sink, &cancel, yshjy::job::run_job);
 

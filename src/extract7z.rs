@@ -219,8 +219,9 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
         &dest,
         password,
         |entry, reader, dest_path| {
-            let idx = entry_index.get();
-            entry_index.set(idx + 1);
+            // 7z 的回调不给条目序号，我们自己数（**1-based**，与预览显示的号一致）
+            let idx = entry_index.get() + 1;
+            entry_index.set(idx);
             let name = entry.name().to_string();
 
             // 用户取消：返回 false 让库停下；已解出的文件保留

@@ -238,17 +238,36 @@ fn split_volume_name(name: &str) -> Option<(String, u32, usize)> {
 
 /// 决定解到哪
 ///
-/// 优先级：任务自带的目录 > 批量选项里的 `-o` > 「去掉外壳扩展名的同名文件夹」
+/// 优先级：任务自带的目录 > 智能解压三规则 > 「去掉外壳扩展名的同名文件夹」
 ///
-/// > 注：UI-SPEC §9.2 的「智能解压三规则」（单条目直接解到当前目录 / 重名加 `(2)`）
-/// > 需要先预览才知道条目数，v0.5 暂不启用，留 v0.6 与 GUI 一起做。
+/// 智能解压三规则（UI-SPEC §9.2，源自 Bandizip，实战最省事）：
+/// 1. 包里只有**一个顶层目录** → 直接解到目标目录（那层由包里的结构自己带出来）
+/// 2. 只有一个文件 → 也直接放目标目录
+/// 3. 一堆散文件 → 建同名子目录（免得几十个文件散在下载目录里）
 pub fn resolve_dest(job: &Job, opts: &BatchOptions) -> PathBuf {
+    decide_dest(job, opts, None)
+}
+
+/// 带预览结果的目录决策（`pv` 为 `None` 时退回 v0.5 的老行为）
+pub fn decide_dest(job: &Job, opts: &BatchOptions, pv: Option<&crate::preview::Preview>) -> PathBuf {
+    // ① 任务自带目录优先（批量时 CLI 已经给每个包分好子目录了）
     if let Some(d) = &job.dest {
         return d.clone();
     }
-    match &opts.dest {
+    let legacy = || match &opts.dest {
         Some(d) => d.clone(),
         None => PathBuf::from(output_dir_name(&job.input)),
+    };
+    if !opts.smart_dir {
+        return legacy();
+    }
+    let base = match &opts.dest {
+        Some(d) => d.clone(),
+        None => PathBuf::from("."),
+    };
+    match pv {
+        Some(p) => crate::preview::smart_dest(&base, p, &output_dir_name(&job.input)),
+        None => legacy(),
     }
 }
 
@@ -277,19 +296,38 @@ pub fn run_job(
 ) -> JobOutcome {
     let ctx = UnpackCtx::new(job.id, sink.clone()).with_cancel(cancel.clone());
     let started = Instant::now();
-    let dest = resolve_dest(job, opts);
 
+    // ① 识别 + 预览
+    //    预览有两个用处：喂给「智能解压三规则」判断该不该多套一层目录；
+    //    同时把 `PreviewReady` 事件发给外壳（界面 S3 的数据源）
+    let prepared: Result<(Target, Option<crate::preview::Preview>)> = identify(&job.input, &ctx)
+        .map(|target| {
+            let pv = if opts.smart_dir && job.dest.is_none() {
+                crate::preview::preview(&job.input, &ctx, opts.password.as_deref())
+                    .ok()
+                    .map(|(_, p)| p)
+            } else {
+                None
+            };
+            (target, pv)
+        });
+
+    let dest = match &prepared {
+        Ok((_, pv)) => decide_dest(job, opts, pv.as_ref()),
+        Err(_) => resolve_dest(job, opts),
+    };
     let mut stats = JobStats {
         dest: Some(dest.clone()),
         ..Default::default()
     };
 
-    let outcome = match identify(&job.input, &ctx) {
+    // ② 解压
+    let outcome = match prepared {
         Err(e) => {
             ctx.diagnostic(DiagnosticCode::PartialData, format!("identify: {e}"));
             Outcome::from_error(&e)
         }
-        Ok(target) => {
+        Ok((target, _pv)) => {
             let t0 = Instant::now();
             ctx.stage_started(Stage::Extract);
             let res = extract_target(job, opts, &ctx, &dest, &target, &mut stats);
@@ -575,6 +613,8 @@ mod tests {
         let sink: Arc<dyn EventSink> = ChannelSink::new(512);
         let opts = BatchOptions {
             dest: Some(out.clone()),
+            // 这个用例测「基本解压」，关掉智能目录，保持断言直白
+            smart_dir: false,
             ..Default::default()
         };
         let job = Job::new(1, p.clone(), 0);
@@ -589,6 +629,33 @@ mod tests {
     }
 
     #[test]
+    fn 智能解压三规则在真实任务上生效() {
+        let dir = scratch("smart");
+        let p = fake_mp4_zip(&dir);
+        let out = scratch("smart_out");
+
+        let sink: Arc<dyn EventSink> = Arc::new(NullSink);
+        // 默认 smart_dir = true：这个包有两个顶层条目（「游戏」和「说明.txt」）
+        // → 不是单一顶层目录 → 自动建同名子目录（包名 = 去掉 .mp4 后的名字）
+        let opts = BatchOptions {
+            dest: Some(out.clone()),
+            ..Default::default()
+        };
+        let outcome = run_job(&Job::new(1, p.clone(), 0), &opts, &sink, &CancelToken::new());
+
+        assert_eq!(outcome.outcome, Outcome::Success);
+        let dest = outcome.stats.dest.clone().unwrap();
+        assert_ne!(dest, out, "散文件应当解到子目录里，而不是直接铺在 -o 目录");
+        assert!(
+            dest.join("游戏/pak.dat").exists(),
+            "实际落盘位置：{:?}",
+            dest
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
     fn 挑选只解勾中的条目() {
         let dir = scratch("select");
         let p = fake_mp4_zip(&dir);
@@ -598,6 +665,7 @@ mod tests {
         let opts = BatchOptions {
             dest: Some(out.clone()),
             selection: crate::select::Selection::matching("*.txt"),
+            smart_dir: false,
             ..Default::default()
         };
         let outcome = run_job(&Job::new(1, p.clone(), 0), &opts, &sink, &CancelToken::new());

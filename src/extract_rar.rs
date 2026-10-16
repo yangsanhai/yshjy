@@ -157,8 +157,9 @@ pub fn extract_rar_ctx(
     let bud2 = budget.clone();
 
     let res = archive.extract_to(pw_bytes.as_deref(), move |meta| {
-        let idx = idx_ref.get();
-        idx_ref.set(idx + 1);
+        // RAR 回调不给条目序号，我们自己数（**1-based**，与预览显示的号一致）
+        let idx = idx_ref.get() + 1;
+        idx_ref.set(idx);
         let name = String::from_utf8_lossy(&meta.name).into_owned();
 
         // 用户取消：后面的条目一律不写盘（这里没法真正打断库，只能让它空转完）
