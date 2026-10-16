@@ -410,6 +410,9 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             }
             None => {
                 report.bytes_written += written;
+                // 把归档里记录的时间戳 / 权限还原到刚解出来的文件上
+                // （尽力而为：设不上不该把一次成功解压变成失败）
+                还原条目属性(&out_path, &file, &mut report);
                 ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, written);
                 report.files.push(ExtractedFile {
                     name,
@@ -481,10 +484,114 @@ pub fn extract_zip_auto_ctx<R: Read + Seek>(
     }
 }
 
+/// 从 ZIP 条目读「时间戳 / 权限」并应用到落盘文件
+///
+/// 失败只记一条提示（最多 3 条，免得刷屏）—— 属性没还原上**不影响解压成功**这个结论。
+fn 还原条目属性<R: std::io::Read>(
+    path: &std::path::Path,
+    entry: &zip::read::ZipFile<'_, R>,
+    report: &mut ExtractReport,
+) {
+    let mut attrs = crate::restore::EntryAttrs::default();
+    if let Some(dt) = entry.last_modified() {
+        // ZIP 里存的是「年月日时分秒」的 DOS 格式（且按本地时间看待）
+        attrs.mtime = Some(crate::restore::civil_to_unix(
+            dt.year() as i32,
+            dt.month() as u32,
+            dt.day() as u32,
+            dt.hour() as u32,
+            dt.minute() as u32,
+            dt.second() as u32,
+        ));
+    }
+    attrs.mode = entry.unix_mode();
+    if attrs.is_empty() {
+        return;
+    }
+    if let Err(e) = crate::restore::apply(path, &attrs)
+        && report.warnings.len() < 3
+    {
+        report.warnings.push(format!("属性没还原上：{e}"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn 解压后保留归档里的时间戳() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("yshjy_mtime_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // 造一个 ZIP，条目时间写死成 2020-10-17 12:00:00
+        let dt = zip::DateTime::from_date_and_time(2020, 10, 17, 12, 0, 0).unwrap();
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let opt = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored)
+            .last_modified_time(dt);
+        w.start_file("老文件.txt", opt).unwrap();
+        w.write_all(b"hello").unwrap();
+        let data = w.finish().unwrap().into_inner();
+
+        let pack = dir.join("包.zip");
+        std::fs::write(&pack, &data).unwrap();
+
+        let out = dir.join("出");
+        let mut f = std::fs::File::open(&pack).unwrap();
+        let opts = ExtractOptions::new(&out);
+        extract_zip_at_ctx(&mut f, 0, data.len() as u64, &opts, &UnpackCtx::quiet(1))
+            .expect("解压应当成功");
+
+        let md = std::fs::metadata(out.join("老文件.txt")).unwrap();
+        let got = filetime::FileTime::from_last_modification_time(&md);
+        assert_eq!(
+            got.unix_seconds(),
+            crate::restore::civil_to_unix(2020, 10, 17, 12, 0, 0),
+            "解出来的文件应当保留归档里记的时间戳（而不是变成\"现在\"）"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 解出来的文件内容仍然正确没有因为设属性坏掉() {
+        // 属性还原是在写完之后做的 —— 确认它没有破坏文件内容/长度
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("yshjy_mtime2_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let dt = zip::DateTime::from_date_and_time(2019, 3, 4, 5, 6, 7).unwrap();
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let opt = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .last_modified_time(dt);
+        w.start_file("数据.bin", opt).unwrap();
+        w.write_all("内容不能被破坏".as_bytes()).unwrap();
+        let data = w.finish().unwrap().into_inner();
+
+        let pack = dir.join("包.zip");
+        std::fs::write(&pack, &data).unwrap();
+        let out = dir.join("出");
+        let mut f = std::fs::File::open(&pack).unwrap();
+        extract_zip_at_ctx(
+            &mut f,
+            0,
+            data.len() as u64,
+            &ExtractOptions::new(&out),
+            &UnpackCtx::quiet(1),
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read(out.join("数据.bin")).unwrap(),
+            "内容不能被破坏".as_bytes()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// 造一个内存 ZIP（含中文名 + 目录）
     fn make_zip() -> Vec<u8> {
