@@ -91,6 +91,7 @@ rebuilt_index = "インデックスが壊れていたため、ヘッダーから
 video_unplayable = "カバー動画自体は壊れていますが、中のファイルは展開できます"
 
 [result]
+line = "{icon} {input} —— {text}（{size}、{secs} 秒）"
 ok = "✅ {input} —— 展開完了（{size}、{secs} 秒）"
 partial = "⚠ {input} —— 一部のみ展開（成功 {done} 件、スキップ {skipped} 件）"
 failed = "❌ {input} —— 失敗：{reason}"
@@ -105,6 +106,13 @@ no_space = "ディスクの空き容量が足りません"
 cancel = "キャンセルしました"
 corrupt = "ファイルが壊れているか、データが不完全です"
 unsupported = "この形式はまだ対応していません"
+invalid_argument = "引数が正しくありません"
+permission_denied = "この場所には書き込めません"
+truncated = "ファイルが不完全です（ダウンロード未完了など）"
+missing_volume = "分割ファイルが不足しています"
+data_lost = "途中のデータが欠落しています"
+encrypted_unbreakable = "暗号化されています。配布者のパスワードが必要です"
+video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"
 
 [misc]

@@ -43,6 +43,7 @@ text = """
   --no-smart-dir                  关掉「智能解压」：默认会看包里有没有单一顶层目录来决定
                                   要不要多套一层同名文件夹，加这个就永远建同名文件夹
   -q, --quiet                     只输出结果（脚本用）
+  --force                         跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）
   --lang <语言>                   切换界面语言（如 en、ja、ko、ru、es）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
 
@@ -91,6 +92,7 @@ rebuilt_index = "索引坏了，清单是按文件头重建的"
 video_unplayable = "封面视频本身有问题，但里面的文件还能解"
 
 [result]
+line = "{icon} {input} —— {text}（{size}，用时 {secs} 秒）"
 ok = "✅ {input} —— 解开（{size}，用时 {secs} 秒）"
 partial = "⚠ {input} —— 解了一部分（成功 {done} 个，跳过 {skipped} 个）"
 failed = "❌ {input} —— 没解开：{reason}"
@@ -105,6 +107,13 @@ no_space = "磁盘空间不够"
 cancel = "已取消"
 corrupt = "文件损坏或数据不完整"
 unsupported = "这个格式暂时解不了"
+invalid_argument = "参数不对"
+permission_denied = "这个位置不让写"
+truncated = "文件不完整（常见于下载没下完）"
+missing_volume = "缺分卷"
+data_lost = "中间有一段数据丢了"
+encrypted_unbreakable = "加密了，需要发布者给解压码"
+video_unplayable = "封面视频本身有问题"
 internal = "内部错误"
 
 [misc]

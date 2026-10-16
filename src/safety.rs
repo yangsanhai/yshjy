@@ -37,6 +37,63 @@ impl Default for Limits {
     }
 }
 
+/// 磁盘空间的检查结论
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpaceCheck {
+    /// 够用
+    Enough {
+        /// 目标盘可用字节
+        available: u64,
+        /// 预估需要字节
+        need: u64,
+    },
+    /// 不够
+    NotEnough {
+        /// 目标盘可用字节
+        available: u64,
+        /// 预估需要字节
+        need: u64,
+    },
+    /// 预估不出来 → **不拦**
+    Unknown,
+}
+
+/// 解压前看看目标盘够不够（体感最直接的护栏：14 GB 的包解到一半磁盘满，前面的时间全白费）
+///
+/// # 为什么 `need` 为 0 时放行
+///
+/// `need` 来自预览的总大小。有些格式给不出来（RAR 预览没有条目大小、单流格式不带原始尺寸）。
+/// 这种时候**宁可放行**让用户自己承担风险，也不要因为"我猜不准"就拒绝一次正常解压 ——
+/// 假拒绝比漏拒更让人恼火，而且用户没法绕过。
+///
+/// # 为什么留 5% 余量
+///
+/// 文件系统元数据、已有的临时文件、以及预估与实际的偏差都要地方落。预估得刚刚好 =
+/// 大概率还是差一点。
+pub fn check_space(dest: &Path, need: u64) -> SpaceCheck {
+    if need == 0 {
+        return SpaceCheck::Unknown;
+    }
+    // 目标目录可能还不存在 → 往上找第一个存在的祖先（磁盘是同一个）
+    let mut probe = dest.to_path_buf();
+    while !probe.exists() {
+        match probe.parent() {
+            Some(p) if !p.as_os_str().is_empty() => probe = p.to_path_buf(),
+            _ => break,
+        }
+    }
+    // 查不到可用空间（不支持的挂载 / 权限）→ 别拦人
+    let Ok(available) = fs4::available_space(&probe) else {
+        return SpaceCheck::Unknown;
+    };
+    let need_with_margin = need.saturating_add(need / 20);
+    if available >= need_with_margin {
+        SpaceCheck::Enough { available, need }
+    } else {
+        SpaceCheck::NotEnough { available, need }
+    }
+}
+
 /// Windows 保留设备名（不区分大小写，带扩展名也算）
 const WINDOWS_RESERVED: &[&str] = &[
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
@@ -314,5 +371,59 @@ mod tests {
         );
         assert!(b.record(500).is_ok()); // 比值 5
         assert!(b.record(600).is_err()); // 比值 11 > 10
+    }
+
+    #[test]
+    fn 空间预检的三种结论() {
+        // ① need = 0（预估不出来）→ 不拦 —— 宁可放行也不假拒绝
+        assert_eq!(check_space(Path::new("."), 0), SpaceCheck::Unknown);
+
+        // ② 只要 1 KB → 肯定够
+        assert!(
+            matches!(check_space(Path::new("."), 1024), SpaceCheck::Enough { .. }),
+            "1 KB 都不够的话这机器没法用了"
+        );
+
+        // ③ 要 1 EiB → 谁都不够
+        match check_space(Path::new("."), 1 << 60) {
+            SpaceCheck::NotEnough { available, need } => {
+                assert_eq!(need, 1 << 60);
+                assert!(available < need, "可用空间不该有 1 EiB 那么大");
+            }
+            other => panic!("应当判定为不够，实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn 空间预检能处理还不存在的目标目录() {
+        // 目标目录还没建 → 往上找存在的祖先，仍然要能查到磁盘可用空间
+        let p = std::env::temp_dir().join("yshjy_还没建的目录_xyz/更深的");
+        match check_space(&p, 1024) {
+            SpaceCheck::Enough { .. } => {}
+            other => panic!("应当能顺着父目录找到磁盘，实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn 空间预检留了余量() {
+        // 刚好等于可用空间 → 因为留了 5% 余量，应当判不够
+        let probe = std::env::temp_dir();
+        let Ok(avail) = fs4::available_space(&probe) else {
+            return; // 这环境查不到就算了
+        };
+        assert!(
+            matches!(
+                check_space(&probe, avail),
+                SpaceCheck::NotEnough { .. }
+            ),
+            "预估刚好等于可用空间时必须留余量，否则解到最后一刻才失败"
+        );
+        assert!(
+            matches!(
+                check_space(&probe, avail / 2),
+                SpaceCheck::Enough { .. }
+            ),
+            "只要一半可用空间就该放行"
+        );
     }
 }

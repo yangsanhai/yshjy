@@ -52,6 +52,14 @@ fn 版本信息() -> String {
     s
 }
 
+/// 需要跟一个值的选项 —— 收集命令行里的"文件名"时必须跳过它们的值
+///
+/// 抽成常量而不是散在 `matches!` 里：**漏登记一个就会出真事故**
+/// —— `--lang en 包.mp4` 会把 `en` 当成要解压的文件（多语言上线时正好踩到）。
+const 带值的选项: &[&str] = &[
+    "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang",
+];
+
 /// 进程级文案仓库
 ///
 /// CLI 一次进程只跑一种语言，用单例最省事。**它放在外壳里** —— 引擎侧保持无全局状态，
@@ -111,10 +119,7 @@ fn main() -> ExitCode {
     let mut i = 1;
     while i < argv.len() {
         let a = &argv[i];
-        if matches!(
-            a.as_str(),
-            "--dest" | "-o" | "--password" | "-p" | "--jobs" | "-j" | "--select"
-        ) {
+        if 带值的选项.contains(&a.as_str()) {
             i += 2; // 跳过它的值
             continue;
         }
@@ -200,16 +205,17 @@ fn main() -> ExitCode {
         None => yshjy::select::Selection::all(),
     };
 
-    do_extract(
-        &targets,
-        &val_of("--dest"),
-        &val_of("--password"),
+    do_extract(解压参数 {
+        targets,
+        dest: val_of("--dest"),
+        password: val_of("--password"),
         quiet,
-        jobs_n,
+        jobs: jobs_n,
         selection,
         json,
-        !has("--no-smart-dir"),
-    )
+        smart_dir: !has("--no-smart-dir"),
+        force: has("--force"),
+    })
 }
 
 /// 长选项对应的短选项（用于参数识别）
@@ -416,16 +422,34 @@ fn try_list_by_rescue(path: &str, quiet: bool) -> Option<ExitCode> {
 ///
 /// 编排全在引擎里（`yshjy::job`），这里只干两件事：
 /// 把**事件渲染成人话**、把**结论变成退出码**。
-fn do_extract(
-    targets: &[String],
-    dest_opt: &Option<String>,
-    password: &Option<String>,
+/// 解压命令的全部参数
+///
+/// 打包成一个结构体而不是往函数签名里塞 9 个参数 —— clippy 的 `too_many_arguments`
+/// 拦过一次，这是好事：参数一长串时，调用点极易传错顺序（而 bool 传错了还不报错）。
+struct 解压参数 {
+    targets: Vec<String>,
+    dest: Option<String>,
+    password: Option<String>,
     quiet: bool,
-    jobs_n: usize,
+    jobs: usize,
     selection: yshjy::select::Selection,
     json: bool,
     smart_dir: bool,
-) -> ExitCode {
+    force: bool,
+}
+
+fn do_extract(a: 解压参数) -> ExitCode {
+    let 解压参数 {
+        targets,
+        dest: dest_opt,
+        password,
+        quiet,
+        jobs: jobs_n,
+        selection,
+        json,
+        smart_dir,
+        force,
+    } = a;
     use std::sync::Arc;
     use yshjy::batch;
     use yshjy::progress::CancelToken;
@@ -446,7 +470,7 @@ fn do_extract(
         // 多任务且用户指定了 -o：每个包解到自己的子目录，
         // 免得两个包的文件挤在一起互相改名（游戏包撞名会很乱）
         if js.len() > 1
-            && let Some(base) = dest_opt
+            && let Some(base) = &dest_opt
         {
             for j in &mut js {
                 j.dest = Some(PathBuf::from(base).join(yshjy::job::output_dir_name(&j.input)));
@@ -461,6 +485,7 @@ fn do_extract(
         selection,
         dest: dest_opt.clone().map(PathBuf::from),
         smart_dir,
+        force,
     };
 
     let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));
@@ -610,29 +635,32 @@ fn 结论文案(o: &yshjy::error::Outcome) -> (String, &'static str) {
         Outcome::Success => ("解开".to_string(), "✅"),
         Outcome::Partial { done, total } => (format!("解开 {done}/{total} 个"), "⚠️ "),
         Outcome::Cancelled { done, total } => (format!("已取消（解出 {done}/{total}）"), "⏹ "),
-        Outcome::Failed(code) => (失败文案(*code).to_string(), "❌"),
+        Outcome::Failed(code) => (失败文案(*code), "❌"),
     }
 }
 
-/// 错误码 → 中文（UI-SPEC §10 的 CLI 版渲染）
-fn 失败文案(code: yshjy::error::ErrorCode) -> &'static str {
+/// 错误码 → 文案（**走语言包**，UI-SPEC §10 的 CLI 版渲染）
+///
+/// 引擎只发码，句子在这一层拼 —— 换语言不用动引擎一行代码。
+fn 失败文案(code: yshjy::error::ErrorCode) -> String {
     use yshjy::error::ErrorCode as C;
-    match code {
-        C::PathNotFound => "文件不在这个位置",
-        C::InvalidArgument => "参数不对",
-        C::NotEnoughSpace => "磁盘空间不够",
-        C::PermissionDenied => "这个位置不让写",
-        C::NeedPassword => "有密码，但没给解压码",
-        C::WrongPassword => "解压码不对",
-        C::NotArchive => "既不是压缩包，里面也没藏着压缩包",
-        C::Truncated => "文件不完整（常见于下载没下完）",
-        C::MissingVolume => "缺分卷",
-        C::DataLost => "中间有一段数据丢了",
-        C::EncryptedUnbreakable => "加密了，需要发布者给解压码",
-        C::VideoUnplayable => "封面视频本身有问题",
-        C::Cancelled => "已取消",
-        C::Internal => "程序内部出错（这属于 bug，麻烦反馈一下）",
-    }
+    let key = match code {
+        C::PathNotFound => "error.path_not_found",
+        C::InvalidArgument => "error.invalid_argument",
+        C::NotEnoughSpace => "error.no_space",
+        C::PermissionDenied => "error.permission_denied",
+        C::NeedPassword => "error.password_missing",
+        C::WrongPassword => "error.password_wrong",
+        C::NotArchive => "error.not_archive",
+        C::Truncated => "error.truncated",
+        C::MissingVolume => "error.missing_volume",
+        C::DataLost => "error.data_lost",
+        C::EncryptedUnbreakable => "error.encrypted_unbreakable",
+        C::VideoUnplayable => "error.video_unplayable",
+        C::Cancelled => "error.cancel",
+        C::Internal => "error.internal",
+    };
+    文案().t(key, &[])
 }
 
 /// 打印每个任务的结果
@@ -644,11 +672,20 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
             println!("{}", j.stats.dest.as_deref().unwrap_or(&j.input).display());
             continue;
         }
+        let 耗时 = format!("{:.1}", j.stats.millis as f64 / 1000.0);
+        let 大小 = 人类可读(j.stats.bytes_written);
         println!(
-            "{icon} {} —— {txt}（{}，用时 {:.1} 秒）",
-            j.input.display(),
-            人类可读(j.stats.bytes_written),
-            j.stats.millis as f64 / 1000.0
+            "{}",
+            文案().t(
+                "result.line",
+                &[
+                    ("icon", icon),
+                    ("input", &j.input.display().to_string()),
+                    ("text", &txt),
+                    ("size", &大小),
+                    ("secs", &耗时),
+                ]
+            )
         );
         if let Some(d) = &j.stats.dest {
             println!("     📁 {}", d.display());

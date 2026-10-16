@@ -91,6 +91,7 @@ rebuilt_index = "Индекс повреждён — список восстан
 video_unplayable = "Видео-обложка сама повреждена, но файлы внутри распаковать можно"
 
 [result]
+line = "{icon} {input} — {text} ({size} за {secs} с)"
 ok = "✅ {input} — распаковано ({size} за {secs} с)"
 partial = "⚠ {input} — распаковано частично (успешно {done}, пропущено {skipped})"
 failed = "❌ {input} — не удалось: {reason}"
@@ -105,6 +106,13 @@ no_space = "Недостаточно места на диске"
 cancel = "Отменено"
 corrupt = "Файл повреждён или неполный"
 unsupported = "Этот формат пока не поддерживается"
+invalid_argument = "Недопустимый аргумент"
+permission_denied = "Нет прав на запись в это место"
+truncated = "Файл неполный (часто — незавершённая загрузка)"
+missing_volume = "Не хватает тома"
+data_lost = "Часть данных в середине утеряна"
+encrypted_unbreakable = "Зашифровано — нужен пароль от издателя"
+video_unplayable = "Само видео-обложка повреждено"
 internal = "Внутренняя ошибка"
 
 [misc]

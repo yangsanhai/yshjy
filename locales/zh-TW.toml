@@ -91,6 +91,7 @@ rebuilt_index = "索引壞了，清單是依檔案標頭重建的"
 video_unplayable = "封面影片本身有問題，但裡面的檔案還是能解"
 
 [result]
+line = "{icon} {input} —— {text}（{size}，耗時 {secs} 秒）"
 ok = "✅ {input} —— 解開（{size}，耗時 {secs} 秒）"
 partial = "⚠ {input} —— 解了一部分（成功 {done} 個，跳過 {skipped} 個）"
 failed = "❌ {input} —— 沒解開：{reason}"
@@ -105,6 +106,13 @@ no_space = "磁碟空間不足"
 cancel = "已取消"
 corrupt = "檔案損壞或資料不完整"
 unsupported = "這個格式暫時解不了"
+invalid_argument = "參數不對"
+permission_denied = "這個位置不讓寫"
+truncated = "檔案不完整（常見於下載沒下完）"
+missing_volume = "缺分卷"
+data_lost = "中間有一段資料遺失"
+encrypted_unbreakable = "已加密，需要發布者提供密碼"
+video_unplayable = "封面影片本身有問題"
 internal = "內部錯誤"
 
 [misc]
