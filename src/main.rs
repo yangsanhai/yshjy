@@ -164,6 +164,11 @@ fn main() -> ExitCode {
         return ExitCode::from(code::OK);
     }
 
+    // 生成诊断包（报障用：把环境 + 识别结果打包成一个「能直接贴出去」的 zip）
+    if has("--report") {
+        return do_report(&argv, has("--no-paths"));
+    }
+
     // 导入外部密码本（兼容隐写者的 PW.txt：Tab 取第一列，且不过滤中文）
     if let Some(src) = val_of("--import-passwords") {
         let dst = cfg.passwords_path();
@@ -995,6 +1000,41 @@ fn do_pack(
         }
         Err(e) => {
             eprintln!("❌ 打包失败：{e}");
+            ExitCode::from(code::ERR)
+        }
+    }
+}
+
+/// `--report [包]`：生成诊断包（报障用）
+///
+/// 里面**不含**文件内容与任何密码（命令行里的密码值会被抹成 `<已抹掉>`）；
+/// 路径默认包含，加 `--no-paths` 就换成 `<path-1>` 这类占位符。
+/// 详细的红线见 `src/report.rs` 模块头。
+fn do_report(argv: &[String], hide_paths: bool) -> ExitCode {
+    let 语 = 文案();
+    // 位置参数里第一个"不是选项"的当目标（可选：不给就只收环境信息）
+    let 目标 = argv
+        .iter()
+        .skip(1)
+        .find(|a| !a.starts_with('-'))
+        .map(PathBuf::from);
+    let opts = yshjy::report::ReportOptions {
+        target: 目标,
+        hide_paths,
+        out_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        argv: argv.to_vec(),
+    };
+    let ctx = yshjy::ctx::UnpackCtx::quiet(1);
+    match yshjy::report::生成(&opts, &ctx) {
+        Ok(路径) => {
+            println!(
+                "{}",
+                语.t("cli.report_done", &[("path", &路径.display().to_string())])
+            );
+            ExitCode::from(code::OK)
+        }
+        Err(e) => {
+            eprintln!("{}", 语.t("cli.report_failed", &[("err", &e.to_string())]));
             ExitCode::from(code::ERR)
         }
     }

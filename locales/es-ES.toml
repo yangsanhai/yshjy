@@ -28,6 +28,7 @@ USO:
   yshjy --list <archivo>          ver el contenido sin extraer
   yshjy --rescue <archivo>        rescatar lo máximo posible de un archivo dañado
   yshjy --help                    esta ayuda
+  yshjy --report <archivo>        crear un paquete de diagnóstico (--no-paths oculta rutas)
   yshjy -V, --version             versión y edición (común / completa)
 
 OPCIONES HABITUALES:
@@ -116,6 +117,8 @@ video_unplayable = "El vídeo de portada está dañado"
 internal = "Error interno"
 
 [cli]
+report_done = "✅ Paquete de diagnóstico creado: {path}\n   (No incluye el contenido de tus archivos ni contraseñas. Para publicarlo usa --no-paths.)"
+report_failed = "❌ No se pudo crear el paquete de diagnóstico: {err}"
 no_target = "❌ No indicaste ningún archivo.\n\n   Uso: yshjy <archivo>\n   Más: yshjy --help"
 bad_jobs = "❌ --jobs necesita un número, p. ej. --jobs 2 (recibido {value})"
 bad_select = "❌ No se puede interpretar --select: {expr}\n   ({reason})"

@@ -28,6 +28,7 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
   yshjy --list <ファイル>          中身を見るだけ（展開しない）
   yshjy --rescue <ファイル>        壊れた圧縮ファイルから可能な限り救出
   yshjy --help                     このヘルプ
+  yshjy --report <ファイル>        診断パッケージを作成（--no-paths でパスを伏せる）
   yshjy -V, --version              バージョンとエディション（常用版 / 全能版）
 
 よく使うオプション：
@@ -116,6 +117,8 @@ video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"
 
 [cli]
+report_done = "✅ 診断パッケージを作成しました：{path}\n   （ファイルの中身とパスワードは含まれません。公開するときは --no-paths を付けてください）"
+report_failed = "❌ 診断パッケージの作成に失敗しました：{err}"
 no_target = "❌ 処理するファイルが指定されていません。\n\n   使い方：yshjy <ファイル>\n   詳細：yshjy --help"
 bad_jobs = "❌ --jobs には数値が必要です（例：--jobs 2）。受け取った値：{value}"
 bad_select = "❌ --select を解釈できません：{expr}\n   （{reason}）"

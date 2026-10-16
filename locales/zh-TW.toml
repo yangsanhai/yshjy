@@ -28,6 +28,7 @@ text = """
   yshjy --list <檔案>             先看看裡面有什麼（不解壓縮）
   yshjy --rescue <檔案>           檔案壞了也盡量救回來
   yshjy --help                    看這份說明
+  yshjy --report <檔案>           產生診斷包（報障用；--no-paths 去識別路徑）
   yshjy -V, --version             看版本與版本檔次（常用版 / 全能版）
 
 常用選項：
@@ -116,6 +117,8 @@ video_unplayable = "封面影片本身有問題"
 internal = "內部錯誤"
 
 [cli]
+report_done = "✅ 診斷包已產生：{path}\n   （不含你的檔案內容與任何密碼；要貼到公開的地方，請加 --no-paths 重新產生一份）"
+report_failed = "❌ 產生診斷包失敗：{err}"
 no_target = "❌ 沒告訴我要處理哪個檔案。\n\n   用法：yshjy <檔案>\n   更多：yshjy --help"
 bad_jobs = "❌ --jobs 要寫個數字，例如 --jobs 2（收到 {value}）"
 bad_select = "❌ --select 看不懂：{expr}\n   （{reason}）"
