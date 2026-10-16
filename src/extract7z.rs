@@ -16,8 +16,10 @@
 //! # 与 ZIP 路径的共同点
 //! 安全落盘、限额、同名策略、结果分级，全部复用同一套（[`crate::safety`] + 报告结构）。
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::ctx::UnpackCtx;
+use crate::error::{Error, ErrorCode, ItemResult, Result};
 use crate::safety::{self, ExtractBudget, Limits};
+use crate::select::Selection;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -127,6 +129,8 @@ pub struct Extract7zOptions {
     pub password: Option<String>,
     /// 同名策略（复用 ZIP 那套语义）
     pub overwrite: crate::extract::Overwrite,
+    /// 挑哪些条目（默认全要）
+    pub selection: Selection,
     /// 安全限值
     pub limits: Limits,
 }
@@ -138,6 +142,7 @@ impl Extract7zOptions {
             dest: dest.into(),
             password: None,
             overwrite: crate::extract::Overwrite::default(),
+            selection: Selection::all(),
             limits: Limits::default(),
         }
     }
@@ -148,11 +153,20 @@ pub fn extract_7z_volumes(
     volumes: &[PathBuf],
     opts: &Extract7zOptions,
 ) -> Result<crate::extract::ExtractReport> {
+    extract_7z_volumes_ctx(volumes, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_7z_volumes`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_7z_volumes_ctx(
+    volumes: &[PathBuf],
+    opts: &Extract7zOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
     let multi = MultiFile::open(volumes)?;
     // 用**分卷实际总大小**作为解压炸弹防护的基准
     // （7z 没有 ZIP 那样的"中央目录先验"，只能拿压缩后的体积当分母）
     let packed_total = multi.total();
-    extract_7z_with_hint(multi, packed_total, opts)
+    extract_7z_with_hint_ctx(multi, packed_total, opts, ctx)
 }
 
 /// 从任意流解出 7z（`packed_total` 传压缩后的字节数，用于炸弹防护）
@@ -160,15 +174,26 @@ pub fn extract_7z<R: Read + Seek>(
     src: R,
     opts: &Extract7zOptions,
 ) -> Result<crate::extract::ExtractReport> {
-    extract_7z_with_hint(src, 1, opts)
+    extract_7z_ctx(src, opts, &UnpackCtx::quiet(0))
 }
 
-/// 内部实现：`packed_total` 是"压缩包多大"，用于算压缩比
-fn extract_7z_with_hint<R: Read + Seek>(
+/// 同 [`extract_7z`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_7z_ctx<R: Read + Seek>(
+    src: R,
+    opts: &Extract7zOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    extract_7z_with_hint_ctx(src, 1, opts, ctx)
+}
+
+/// 内部实现（带上下文）：`packed_total` 是"压缩包多大"，用于算压缩比
+fn extract_7z_with_hint_ctx<R: Read + Seek>(
     src: R,
     packed_total: u64,
     opts: &Extract7zOptions,
+    ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
+    use std::cell::Cell;
     use std::io::Write;
 
     std::fs::create_dir_all(&opts.dest)
@@ -185,13 +210,24 @@ fn extract_7z_with_hint<R: Read + Seek>(
 
     let dest = opts.dest.clone();
     let overwrite = opts.overwrite;
+    let selection = &opts.selection;
+    // 7z 的回调不给条目序号，我们自己数（预览到解压的挑选锚点就靠它）
+    let entry_index = Cell::new(0u64);
 
     let res = sevenz_rust2::decompress_with_extract_fn_and_password(
         src,
         &dest,
         password,
         |entry, reader, dest_path| {
+            let idx = entry_index.get();
+            entry_index.set(idx + 1);
             let name = entry.name().to_string();
+
+            // 用户取消：返回 false 让库停下；已解出的文件保留
+            if ctx.is_cancelled() {
+                report.cancelled = true;
+                return Ok(false);
+            }
 
             if entry.is_directory() {
                 if let Err(e) = std::fs::create_dir_all(dest_path) {
@@ -199,6 +235,12 @@ fn extract_7z_with_hint<R: Read + Seek>(
                         .skipped
                         .push((name.clone(), format!("建目录失败: {e}")));
                 }
+                ctx.entry_done(idx, &name, ItemResult::Ok, 0);
+                return Ok(true);
+            }
+
+            // 挑选：没被勾中的条目直接跳过（不写盘、不算错）
+            if !selection.matches(idx, &name, false) {
                 return Ok(true);
             }
 
@@ -257,6 +299,14 @@ fn extract_7z_with_hint<R: Read + Seek>(
             let mut buf = vec![0u8; 64 * 1024];
             let mut written = 0u64;
             loop {
+                // 取消检查下沉到数据块级：单个大文件也能及时停
+                if ctx.is_cancelled() {
+                    drop(out);
+                    let _ = std::fs::remove_file(&out_path);
+                    report.cancelled = true;
+                    ctx.entry_done(idx, &name, ItemResult::Skipped, 0);
+                    return Ok(false);
+                }
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
@@ -267,6 +317,7 @@ fn extract_7z_with_hint<R: Read + Seek>(
                                 .push((name.clone(), format!("安全限额中止: {e}")));
                             drop(out);
                             let _ = std::fs::remove_file(&out_path);
+                            ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                             return Ok(false); // 停止
                         }
                         if let Err(e) = out.write_all(&buf[..n]) {
@@ -275,9 +326,11 @@ fn extract_7z_with_hint<R: Read + Seek>(
                                 .push((name.clone(), format!("写盘失败: {e}")));
                             drop(out);
                             let _ = std::fs::remove_file(&out_path);
+                            ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                             return Ok(true);
                         }
                         written += n as u64;
+                        ctx.advance(n as u64, Some(&name));
                     }
                     Err(e) => {
                         report
@@ -285,12 +338,14 @@ fn extract_7z_with_hint<R: Read + Seek>(
                             .push((name.clone(), format!("读取失败: {e}")));
                         drop(out);
                         let _ = std::fs::remove_file(&out_path);
+                        ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                         return Ok(true);
                     }
                 }
             }
 
             report.bytes_written += written;
+            ctx.entry_done(idx, &name, ItemResult::Ok, written);
             report.files.push(crate::extract::ExtractedFile {
                 name,
                 out_path,
@@ -302,6 +357,11 @@ fn extract_7z_with_hint<R: Read + Seek>(
     );
 
     if let Err(e) = res {
+        // 用户取消：不是错误，如实把「已解出多少」交回去（台账 §5.8）
+        if report.cancelled {
+            ctx.force_progress(None);
+            return Ok(report);
+        }
         // 一个文件都没解出来 → 当作整体失败（密码错 / 格式不支持 / 数据坏）
         if report.files.is_empty() {
             let msg = e.to_string();
@@ -353,6 +413,49 @@ fn unique_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn 挑选与进度在_7z_路径上也生效() {
+        use crate::ctx::UnpackCtx;
+        use crate::event::{ChannelSink, Event};
+
+        let dir = scratch("ctx");
+        let data = make_7z(&dir, &[("a.txt", b"aaa"), ("b.txt", b"bbb")]);
+        let dest = scratch("ctx_out");
+        let sink = ChannelSink::new(256);
+        let ctx = UnpackCtx::quiet(1).with_sink(sink.clone());
+
+        let mut opts = Extract7zOptions::new(&dest);
+        opts.selection = Selection::matching("a.txt");
+
+        let rep = extract_7z_ctx(Cursor::new(data), &opts, &ctx).unwrap();
+        assert_eq!(rep.files.len(), 1, "只该解出 a.txt：{:?}", rep.files);
+        assert_eq!(rep.files[0].name, "a.txt");
+        let evs = sink.drain();
+        assert!(
+            evs.iter()
+                .any(|e| matches!(e, Event::EntryFinished { .. })),
+            "应当有条目级事件"
+        );
+        assert!(ctx.progress.view().done_bytes > 0, "应当累计了字节数");
+    }
+
+    #[test]
+    fn 一上来就取消时_7z_不报错也不解东西() {
+        use crate::ctx::UnpackCtx;
+        use crate::progress::CancelToken;
+
+        let dir = scratch("cancel");
+        let data = make_7z(&dir, &[("a.txt", b"aaa")]);
+        let dest = scratch("cancel_out");
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let ctx = UnpackCtx::quiet(1).with_cancel(cancel);
+
+        let rep = extract_7z_ctx(Cursor::new(data), &Extract7zOptions::new(&dest), &ctx).unwrap();
+        assert!(rep.cancelled, "应当标记为已取消");
+        assert!(rep.files.is_empty());
+    }
 
     fn scratch(tag: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("yshjy_7z_{tag}_{}", std::process::id()));

@@ -17,9 +17,11 @@
 //! 所以 `.tar.gz` 这种是**两层**：先解压缩流得到 `.tar`，再把 tar 展开成目录树。
 //! 本模块会自动识别并剥这两层。
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::ctx::UnpackCtx;
+use crate::error::{Error, ErrorCode, ItemResult, Result};
 use crate::layout::ArchiveFormat;
 use crate::safety::{self, Limits};
+use crate::select::Selection;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -143,6 +145,8 @@ pub struct ExtractStreamOptions {
     pub out_name: Option<String>,
     /// 压缩数据大小（用于压缩比防护；0 = 不检查）
     pub packed_hint: u64,
+    /// 挑哪些条目（单流只有一个条目，但 tar 家族用得上）
+    pub selection: Selection,
 }
 
 impl ExtractStreamOptions {
@@ -154,6 +158,7 @@ impl ExtractStreamOptions {
             limits: Limits::default(),
             out_name: None,
             packed_hint: 0,
+            selection: Selection::all(),
         }
     }
 }
@@ -168,6 +173,25 @@ pub fn decompress_stream<R: Read>(
     limits: &Limits,
     packed_hint: u64,
 ) -> Result<u64> {
+    decompress_stream_ctx(
+        fmt,
+        src,
+        out_path,
+        limits,
+        packed_hint,
+        &UnpackCtx::quiet(0),
+    )
+}
+
+/// 同 [`decompress_stream`]，但带上事件 / 进度 / 取消上下文
+pub fn decompress_stream_ctx<R: Read>(
+    fmt: ArchiveFormat,
+    src: R,
+    out_path: &Path,
+    limits: &Limits,
+    packed_hint: u64,
+    ctx: &UnpackCtx,
+) -> Result<u64> {
     if let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
@@ -175,6 +199,10 @@ pub fn decompress_stream<R: Read>(
 
     // `packed_hint` = 压缩数据大小（0 = 不检查压缩比）
     let mut budget = crate::safety::ExtractBudget::new(limits.clone(), packed_hint);
+    let out_label = out_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "output".to_string());
 
     // XZ 特殊：`lzma-rs` 的接口是「输入 reader + 输出 writer」，不走 Read 适配
     if fmt == ArchiveFormat::Xz {
@@ -185,11 +213,20 @@ pub fn decompress_stream<R: Read>(
             })?,
             budget: &mut budget,
             written: 0,
+            ctx: ctx.clone(),
+            label: out_label.clone(),
+            cancelled: false,
         };
         let mut src = std::io::BufReader::new(src);
         lzma_rs::xz_decompress(&mut src, &mut out)
             .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("xz 解压失败: {e}")))?;
-        return Ok(out.written);
+        let written = out.written;
+        if out.cancelled {
+            let _ = fs::remove_file(out_path);
+            return Err(Error::cancelled());
+        }
+        ctx.entry_done(0, &out_label, ItemResult::Ok, written);
+        return Ok(written);
     }
 
     // 其它三种都是标准 Read 解码器
@@ -212,6 +249,12 @@ pub fn decompress_stream<R: Read>(
     let mut buf = vec![0u8; 64 * 1024];
     let mut total = 0u64;
     loop {
+        // 取消检查下沉到数据块级
+        if ctx.is_cancelled() {
+            drop(out);
+            let _ = fs::remove_file(out_path);
+            return Err(Error::cancelled());
+        }
         let n = match reader.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => n,
@@ -224,8 +267,10 @@ pub fn decompress_stream<R: Read>(
         out.write_all(&buf[..n])
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("写盘失败: {e}")))?;
         total += n as u64;
+        ctx.advance(n as u64, Some(&out_label));
     }
     out.flush().ok();
+    ctx.entry_done(0, &out_label, ItemResult::Ok, total);
     Ok(total)
 }
 
@@ -234,15 +279,30 @@ struct BudgetWriter<'a> {
     inner: fs::File,
     budget: &'a mut crate::safety::ExtractBudget,
     written: u64,
+    /// 事件 / 进度 / 取消上下文
+    ctx: UnpackCtx,
+    /// 条目名（事件里用）
+    label: String,
+    /// 是否因取消而中途停了
+    cancelled: bool,
 }
 
 impl Write for BudgetWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        // 取消检查：解到一半也能停（xz 走 writer 接口，只能在这里拦）
+        if self.ctx.is_cancelled() {
+            self.cancelled = true;
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "cancelled by user",
+            ));
+        }
         self.budget
             .record(buf.len() as u64)
             .map_err(std::io::Error::other)?;
         let n = self.inner.write(buf)?;
         self.written += n as u64;
+        self.ctx.advance(n as u64, Some(&self.label));
         Ok(n)
     }
     fn flush(&mut self) -> std::io::Result<()> {
@@ -257,6 +317,16 @@ pub fn extract_tar<R: Read + 'static>(
     src: R,
     outer: Option<ArchiveFormat>,
     opts: &ExtractStreamOptions,
+) -> Result<crate::extract::ExtractReport> {
+    extract_tar_ctx(src, outer, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_tar`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_tar_ctx<R: Read + 'static>(
+    src: R,
+    outer: Option<ArchiveFormat>,
+    opts: &ExtractStreamOptions,
+    ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
     fs::create_dir_all(&opts.dest)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
@@ -309,7 +379,12 @@ pub fn extract_tar<R: Read + 'static>(
         .entries()
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("读 tar 条目失败: {e}")))?;
 
-    for ent in entries {
+    for (idx, ent) in entries.enumerate() {
+        // 用户取消：已解出的保留，不再往下做
+        if ctx.is_cancelled() {
+            report.cancelled = true;
+            break;
+        }
         let mut ent = match ent {
             Ok(e) => e,
             Err(e) => {
@@ -328,11 +403,20 @@ pub fn extract_tar<R: Read + 'static>(
         };
         let name = raw_path.clone();
 
+        // 挑选：没被勾中的条目直接跳过（不写盘、不算错）
+        if !opts
+            .selection
+            .matches(idx as u64, &name, ent.header().entry_type().is_dir())
+        {
+            continue;
+        }
+
         // 目录
         if ent.header().entry_type().is_dir() {
             if let Ok(d) = safety::resolve_safe(&opts.dest, &name) {
                 let _ = fs::create_dir_all(&d);
             }
+            ctx.entry_done(idx as u64, &name, ItemResult::Ok, 0);
             continue;
         }
         // 符号链接：明确跳过并说明（避免逃逸）
@@ -393,7 +477,13 @@ pub fn extract_tar<R: Read + 'static>(
         let mut buf = vec![0u8; 64 * 1024];
         let mut written = 0u64;
         let mut err: Option<String> = None;
+        let mut cancelled_now = false;
         loop {
+            // 取消检查下沉到数据块级
+            if ctx.is_cancelled() {
+                cancelled_now = true;
+                break;
+            }
             match ent.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
@@ -406,6 +496,7 @@ pub fn extract_tar<R: Read + 'static>(
                         break;
                     }
                     written += n as u64;
+                    ctx.advance(n as u64, Some(&name));
                 }
                 Err(e) => {
                     err = Some(format!("读取失败: {e}"));
@@ -414,13 +505,20 @@ pub fn extract_tar<R: Read + 'static>(
             }
         }
         drop(out);
+        if cancelled_now {
+            let _ = fs::remove_file(&out_path);
+            report.cancelled = true;
+            break;
+        }
         match err {
             Some(msg) => {
                 report.skipped.push((name.clone(), msg));
                 let _ = fs::remove_file(&out_path);
+                ctx.entry_done(idx as u64, &name, ItemResult::DataError, 0);
             }
             None => {
                 report.bytes_written += written;
+                ctx.entry_done(idx as u64, &name, ItemResult::Ok, written);
                 report.files.push(crate::extract::ExtractedFile {
                     name,
                     out_path,

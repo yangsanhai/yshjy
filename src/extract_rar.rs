@@ -12,8 +12,10 @@
 //! RAR 的压缩算法是专有的，`rars` 是 Apache-2.0 的**纯 Rust 读取实现** ——
 //! 我们只做解压、不生成 RAR，符合许可边界。
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::ctx::UnpackCtx;
+use crate::error::{Error, ErrorCode, ItemResult, Result};
 use crate::safety::{self, Limits};
+use crate::select::Selection;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -29,6 +31,8 @@ pub struct ExtractRarOptions {
     pub password: Option<String>,
     /// 同名策略
     pub overwrite: crate::extract::Overwrite,
+    /// 挑哪些条目（默认全要）
+    pub selection: Selection,
     /// 安全限值
     pub limits: Limits,
 }
@@ -40,6 +44,7 @@ impl ExtractRarOptions {
             dest: dest.into(),
             password: None,
             overwrite: crate::extract::Overwrite::default(),
+            selection: Selection::all(),
             limits: Limits::default(),
         }
     }
@@ -49,6 +54,15 @@ impl ExtractRarOptions {
 pub fn extract_rar_file(
     path: &Path,
     opts: &ExtractRarOptions,
+) -> Result<crate::extract::ExtractReport> {
+    extract_rar_file_ctx(path, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_rar_file`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_rar_file_ctx(
+    path: &Path,
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
     let size = fs::metadata(path)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读文件信息失败: {e}")))?
@@ -67,7 +81,7 @@ pub fn extract_rar_file(
     }
     let data = fs::read(path)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读取失败: {e}")))?;
-    extract_rar(&data, opts)
+    extract_rar_ctx(&data, opts, ctx)
 }
 
 /// 从内存字节解压 RAR
@@ -75,6 +89,15 @@ pub fn extract_rar_file(
 /// 说明：`rars` 的提取回调语义是「库主动写、我们提供 Writer」，
 /// 所以我们在这里包一层**带限额的 Writer** 来做解压炸弹防护。
 pub fn extract_rar(data: &[u8], opts: &ExtractRarOptions) -> Result<crate::extract::ExtractReport> {
+    extract_rar_ctx(data, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_rar`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_rar_ctx(
+    data: &[u8],
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
     use std::cell::RefCell;
     use std::io::Write;
     use std::rc::Rc;
@@ -91,6 +114,13 @@ pub fn extract_rar(data: &[u8], opts: &ExtractRarOptions) -> Result<crate::extra
     let overwrite = opts.overwrite;
     let limits = opts.limits.clone();
     let has_pw = opts.password.is_some();
+    let selection = opts.selection.clone();
+    // RAR 回调不给条目序号，我们自己数（预览→解压的挑选锚点就靠它）
+    let idx_cell = Rc::new(std::cell::Cell::new(0u64));
+    let idx_ref = idx_cell.clone();
+    // 上下文里全是 Arc / 可克隆量，放进回调没有生命周期顾虑
+    // （外层仍用借用版的 ctx，闭包里用这份 owned 的）
+    let ctx_owned = ctx.clone();
 
     // ── 先验证密码 ──
     // 重要：`rars` 在解密失败时**不报错**，只是静默不写数据（会产出空文件）。
@@ -127,12 +157,26 @@ pub fn extract_rar(data: &[u8], opts: &ExtractRarOptions) -> Result<crate::extra
     let bud2 = budget.clone();
 
     let res = archive.extract_to(pw_bytes.as_deref(), move |meta| {
+        let idx = idx_ref.get();
+        idx_ref.set(idx + 1);
         let name = String::from_utf8_lossy(&meta.name).into_owned();
+
+        // 用户取消：后面的条目一律不写盘（这里没法真正打断库，只能让它空转完）
+        if ctx_owned.is_cancelled() {
+            rep2.borrow_mut().cancelled = true;
+            return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
+        }
 
         if meta.is_directory {
             let dir = safety::resolve_safe(&dest, &name)
                 .unwrap_or_else(|_| dest.join(name.replace(['/', '\\'], "_")));
             let _ = fs::create_dir_all(&dir);
+            ctx_owned.entry_done(idx, &name, ItemResult::Ok, 0);
+            return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
+        }
+
+        // 挑选：没被勾中的条目直接跳过（不写盘、不算错）
+        if !selection.matches(idx, &name, false) {
             return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
         }
 
@@ -191,9 +235,12 @@ pub fn extract_rar(data: &[u8], opts: &ExtractRarOptions) -> Result<crate::extra
             written: 0,
             budget: bud2.clone(),
             report: rep2.clone(),
-            name,
+            name: name.clone(),
             out_path,
             encrypted: has_pw,
+            ctx: ctx_owned.clone(),
+            idx,
+            cancelled: false,
         }) as Box<dyn Write>)
     });
 
@@ -203,6 +250,11 @@ pub fn extract_rar(data: &[u8], opts: &ExtractRarOptions) -> Result<crate::extra
         .unwrap_or_default();
 
     if let Err(e) = res {
+        // 用户取消：不是错误，如实返回「已解出多少」（台账 §5.8）
+        if final_report.cancelled {
+            ctx.force_progress(None);
+            return Ok(final_report);
+        }
         if final_report.files.is_empty() {
             let msg = e.to_string();
             let low = msg.to_lowercase();
@@ -235,10 +287,25 @@ struct CountingWriter {
     name: String,
     out_path: PathBuf,
     encrypted: bool,
+    /// 事件 / 进度 / 取消上下文（内部全是 Arc，克隆很轻）
+    ctx: UnpackCtx,
+    /// 条目序号（事件里用）
+    idx: u64,
+    /// 是否因用户取消而中途停了
+    cancelled: bool,
 }
 
 impl std::io::Write for CountingWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        // 取消检查下沉到数据块级：正在解一个大文件时也能及时停
+        if self.ctx.is_cancelled() {
+            self.cancelled = true;
+            self.report.borrow_mut().cancelled = true;
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "cancelled by user",
+            ));
+        }
         // 解压炸弹防护
         if let Err(e) = self.budget.borrow_mut().record(buf.len() as u64) {
             let mut r = self.report.borrow_mut();
@@ -249,6 +316,7 @@ impl std::io::Write for CountingWriter {
         }
         let n = self.inner.write(buf)?;
         self.written += n as u64;
+        self.ctx.advance(n as u64, Some(&self.name));
         Ok(n)
     }
 
@@ -259,9 +327,16 @@ impl std::io::Write for CountingWriter {
 
 impl Drop for CountingWriter {
     fn drop(&mut self) {
-        // 成功写完才登记（写失败时文件已被调用方清理语义覆盖）
+        // 取消：删掉写了一半的这个文件（之前解好的全部保留）
+        if self.cancelled {
+            let _ = fs::remove_file(&self.out_path);
+            return;
+        }
+        // 成功写完才登记
         let mut r = self.report.borrow_mut();
         r.bytes_written += self.written;
+        self.ctx
+            .entry_done(self.idx, &self.name, ItemResult::Ok, self.written);
         r.files.push(crate::extract::ExtractedFile {
             name: self.name.clone(),
             out_path: self.out_path.clone(),
@@ -293,6 +368,46 @@ fn unique_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 挑选与进度在_rar_路径上也生效() {
+        use crate::ctx::UnpackCtx;
+        use crate::event::{ChannelSink, Event};
+
+        let data = make_rar(&[("a.txt", b"aaa"), ("b.txt", b"bbb")], None);
+        let dest = scratch("ctx_out");
+        let sink = ChannelSink::new(256);
+        let ctx = UnpackCtx::quiet(1).with_sink(sink.clone());
+
+        let mut opts = ExtractRarOptions::new(&dest);
+        opts.selection = Selection::matching("a.txt");
+
+        let rep = extract_rar_ctx(&data, &opts, &ctx).unwrap();
+        assert_eq!(rep.files.len(), 1, "只该解出 a.txt：{:?}", rep.files);
+        let evs = sink.drain();
+        assert!(
+            evs.iter()
+                .any(|e| matches!(e, Event::EntryFinished { .. })),
+            "应当有条目级事件"
+        );
+        assert!(ctx.progress.view().done_bytes > 0, "应当累计了字节数");
+    }
+
+    #[test]
+    fn 一上来就取消时_rar_不报错也不解东西() {
+        use crate::ctx::UnpackCtx;
+        use crate::progress::CancelToken;
+
+        let data = make_rar(&[("a.txt", b"aaa")], None);
+        let dest = scratch("cancel_out");
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let ctx = UnpackCtx::quiet(1).with_cancel(cancel);
+
+        let rep = extract_rar_ctx(&data, &ExtractRarOptions::new(&dest), &ctx).unwrap();
+        assert!(rep.cancelled, "应当标记为已取消");
+        assert!(rep.files.is_empty());
+    }
 
     fn scratch(tag: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("yshjy_rar_{tag}_{}", std::process::id()));
