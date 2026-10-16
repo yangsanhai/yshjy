@@ -287,6 +287,11 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                     .push(format!("{name}：可执行文件，已解出但请谨慎运行"));
             }
 
+            // 注：7z 条目里其实记着修改时间（`entry.last_modified_date`），但
+            // `sevenz-rust2` 把它的原始值定义成 `pub(crate)` —— **外部取不出来**，
+            // 所以 7z 解出来的文件暂时保留不了原始时间戳（ZIP / TAR 已支持）。
+            // 等这个库暴露访问器（或换库）再补，不要用"格式化再解析"那种脏办法。
+
             let mut out = match File::create(&out_path) {
                 Ok(f) => f,
                 Err(e) => {
