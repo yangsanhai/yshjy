@@ -15,6 +15,7 @@
 #![warn(missing_docs)]
 
 pub mod batch;
+pub mod ctx;
 pub mod error;
 pub mod event;
 pub mod extract;
