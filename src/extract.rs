@@ -323,10 +323,11 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         }
 
         // 危险可执行文件：警告但不阻断（用户自己决定跑不跑）
-        if safety::is_risky_executable(&name) {
-            report
-                .warnings
-                .push(format!("{name}：可执行文件，已解出但请谨慎运行"));
+        if safety::should_warn_executable(&opts.limits, &name) {
+            // 走**事件**而不是往内部列表里塞字符串：
+            // ① 事件外壳才看得见（否则这条提醒等于没发）
+            // ② 文案由外壳查语言包渲染（引擎不产句子）
+            ctx.diagnostic(crate::event::DiagnosticCode::RiskyEntry, name.clone());
         }
 
         // ── 真正解码 ──

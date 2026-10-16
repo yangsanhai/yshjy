@@ -131,6 +131,8 @@ queued = "📋 排好 {count} 个任务（大的先跑）"
 password_tried = "   🔒 这个包有密码（已试 {count} 次）"
 show_config = "当前配置（这个文件：{path}）"
 import_done = "✅ 导入了 {added} 个解压码（现在共 {total} 条）→ {path}"
+diag_line = "   ℹ {text}：{detail}"
+fail_line = "❌ {input}：{reason}"
 
 [result.phrase]
 ok = "解开"

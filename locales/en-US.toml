@@ -134,6 +134,8 @@ queued = "📋 Queued {count} job(s) (largest first)"
 password_tried = "   🔒 This archive is locked (tried {count} time(s))"
 show_config = "Current settings (file: {path})"
 import_done = "✅ Imported {added} password(s) (now {total} total) → {path}"
+diag_line = "   ℹ {text}: {detail}"
+fail_line = "❌ {input}: {reason}"
 
 [result.phrase]
 ok = "extracted"

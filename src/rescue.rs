@@ -478,7 +478,10 @@ pub fn extract_by_locals<R: Read + Seek>(
                 .push((item.path.clone(), format!("建父目录失败: {e}")));
             continue;
         }
-        if safety::is_risky_executable(&item.path) {
+        // 注：救援路径的函数签名里没有 ctx（没有事件通道），所以"解出了可执行文件"
+        // 这条提醒暂时只进内部 warnings、到不了外壳。救援本来就是"包已经坏了"的
+        // 兜底路径，优先级低；等给救援接上事件再说。
+        if safety::should_warn_executable(&opts.limits, &item.path) {
             report
                 .warnings
                 .push(format!("{}：可执行文件，已解出但请谨慎运行", item.path));

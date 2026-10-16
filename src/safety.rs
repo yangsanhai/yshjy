@@ -100,6 +100,15 @@ const WINDOWS_RESERVED: &[&str] = &[
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
+/// 要不要提醒用户"解出了可执行文件"
+///
+/// 提醒开关来自配置（`[safety] warn_executables`，默认开）。
+/// 之所以单独一层：**"是不是可执行文件"和"要不要提醒"是两件事** ——
+/// 列表里照样会给可执行条目打标记（那是信息），但解压时可以按配置闭嘴。
+pub fn should_warn_executable(limits: &Limits, name: &str) -> bool {
+    limits.warn_executables && is_risky_executable(name)
+}
+
 /// 解出的文件是否属于"可能危险"的可执行类型（外壳据此提醒，见 UI-SPEC §9.3）
 pub fn is_risky_executable(entry: &str) -> bool {
     let lower = entry.to_ascii_lowercase();
