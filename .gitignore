@@ -25,6 +25,11 @@ __pycache__/
 # 参考库与构建产物（体积大，不入库）
 target/
 dist/
-fuzz/
+# fuzz：**目标是源码，要入库**；只忽略它的构建产物与运行产物
+# （以前是整目录 `fuzz/` 忽略，那样连目标代码都进不了库 —— 修于 v0.9 fuzz 批次）
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
 *.tar.gz
 tests/data/
