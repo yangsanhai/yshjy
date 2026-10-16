@@ -115,6 +115,35 @@ encrypted_unbreakable = "已加密，需要發布者提供密碼"
 video_unplayable = "封面影片本身有問題"
 internal = "內部錯誤"
 
+[cli]
+no_target = "❌ 沒告訴我要處理哪個檔案。\n\n   用法：yshjy <檔案>\n   更多：yshjy --help"
+bad_jobs = "❌ --jobs 要寫個數字，例如 --jobs 2（收到 {value}）"
+bad_select = "❌ --select 看不懂：{expr}\n   （{reason}）"
+select_examples = "   範例：--select \"*.exe\" / --select \"遊戲資料/**\" / --select 1,3 / --select required"
+interrupted = "⏹  收到 Ctrl-C —— 正在收尾（已解出的檔案會保留，再按一次強制結束）"
+interrupted_again = "⏹  再按一次就強制結束"
+rescue_hint = "   提示：解不開時加上 --rescue 試試救援模式。"
+nothing_found = "❌ 找不到能處理的東西：{targets}"
+queued = "📋 排好 {count} 個任務（大的先跑）"
+password_tried = "   🔒 這個壓縮檔有密碼（已試 {count} 次）"
+
+[result.phrase]
+ok = "解開"
+partial = "解開 {done}/{total} 個"
+cancelled = "已取消（解出 {done}/{total}）"
+
+[diag]
+volumes_merged = "分卷已自動拼起來"
+layout_guessed = "佈局是猜的，不一定準"
+video_unplayable = "封面影片本身壞了，但裡面的檔案還是能解"
+risky_entry = "解出了可執行檔，執行前請確認來源"
+slow_path = "走了慢路（全檔案掃描）"
+password_from_notes = "密碼是從旁邊的說明裡找到的"
+partial_data = "資料不完整"
+hidden_at = "壓縮檔藏在檔案中間，已按真實位置定位"
+rebuilt_index = "索引壞了，清單是依檔案標頭重建的"
+offset_corrected = "偏移不對，已自動修正"
+
 [misc]
 file_missing = "❌ {input}：檔案不存在"
 lang_unknown = "⚠ 沒有 \"{lang}\" 這個語言包，改用 {fallback}（可用：{available}）"

@@ -115,6 +115,35 @@ encrypted_unbreakable = "Está cifrado — el autor debe facilitar la contraseñ
 video_unplayable = "El vídeo de portada está dañado"
 internal = "Error interno"
 
+[cli]
+no_target = "❌ No indicaste ningún archivo.\n\n   Uso: yshjy <archivo>\n   Más: yshjy --help"
+bad_jobs = "❌ --jobs necesita un número, p. ej. --jobs 2 (recibido {value})"
+bad_select = "❌ No se puede interpretar --select: {expr}\n   ({reason})"
+select_examples = "   Ejemplos: --select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
+interrupted = "⏹  Ctrl-C recibido — terminando (los archivos ya extraídos se conservan; pulsa otra vez para forzar salida)"
+interrupted_again = "⏹  Pulsa otra vez para forzar la salida"
+rescue_hint = "   Consejo: si no se abre, prueba --rescue."
+nothing_found = "❌ No hay nada que procesar: {targets}"
+queued = "📋 {count} tarea(s) en cola (las más grandes primero)"
+password_tried = "   🔒 Este archivo está bloqueado ({count} intento(s))"
+
+[result.phrase]
+ok = "extraído"
+partial = "extraídos {done}/{total}"
+cancelled = "cancelado ({done}/{total} hechos)"
+
+[diag]
+volumes_merged = "los volúmenes se unieron automáticamente"
+layout_guessed = "la disposición es estimada — puede no ser exacta"
+video_unplayable = "el vídeo de portada está dañado, pero los archivos de dentro están bien"
+risky_entry = "se extrajeron ejecutables — comprueba el origen antes de ejecutarlos"
+slow_path = "se usó la ruta lenta (escaneo completo del archivo)"
+password_from_notes = "la contraseña se encontró en las notas de al lado"
+partial_data = "los datos están incompletos"
+hidden_at = "el archivo está dentro del fichero; localizado en su posición real"
+rebuilt_index = "el índice estaba dañado; el listado se reconstruyó desde las cabeceras"
+offset_corrected = "los desplazamientos eran incorrectos; corregidos automáticamente"
+
 [misc]
 file_missing = "❌ {input}: archivo no encontrado"
 lang_unknown = "⚠ No hay paquete de idioma \"{lang}\" — se usa {fallback} (disponibles: {available})"
