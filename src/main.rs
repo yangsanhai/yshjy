@@ -11,20 +11,21 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// 退出码常量
+/// 退出码常量 —— **全部从引擎取**，外壳不许自己定数
+///
+/// 台账 `7zip-工程层.md` §7.6 的反面案例：7-Zip 的命令行壳和 GUI 壳各算一份退出码，
+/// 结果两边行为不一致。所以我们只在 `yshjy::error::exit_code` 里定义一次。
 mod code {
     /// 成功
-    pub const OK: u8 = 0;
+    pub const OK: u8 = yshjy::error::exit_code::OK as u8;
     /// 一般错误
-    pub const ERR: u8 = 1;
-    /// 用法错误
-    pub const USAGE: u8 = 2;
+    pub const ERR: u8 = yshjy::error::exit_code::ERROR as u8;
+    /// 用法错误（参数不对 —— 这一档只有外壳用得上）
+    pub const USAGE: u8 = yshjy::error::exit_code::USAGE as u8;
     /// 不是压缩包
-    pub const NOT_ARCHIVE: u8 = 3;
-    /// 密码问题
-    pub const PASSWORD: u8 = 4;
+    pub const NOT_ARCHIVE: u8 = yshjy::error::exit_code::NOT_ARCHIVE as u8;
     /// 部分成功
-    pub const PARTIAL: u8 = 5;
+    pub const PARTIAL: u8 = yshjy::error::exit_code::PARTIAL as u8;
 }
 
 const HELP: &str = r#"杨三海解压（yshjy） —— 专治「伪装成视频/图片的压缩包」
@@ -40,15 +41,25 @@ const HELP: &str = r#"杨三海解压（yshjy） —— 专治「伪装成视频
 常用选项：
   -o, --dest <目录>               解压到哪（默认：当前目录下的同名文件夹）
   -p, --password <密码>           解压码 / 打包密码
+  -j, --jobs <N>                  同时跑几个（默认 1，按顺序来最省磁盘）
+  --select <条件>                 只解一部分：
+                                    --select "*.exe"      只要 exe
+                                    --select "游戏数据/**" 只要某个目录
+                                    --select "1,3,5"      只要第 1、3、5 个
+                                    --select required     跳过 .DS_Store 之类的垃圾
+  --json                          按行输出事件流/结果（给脚本用）
   -q, --quiet                     只输出结果（脚本用）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
 
 例子：
   yshjy 示例视频.mp4            解开藏在视频里的压缩包
+  yshjy 下载/                     整个目录里的包排队解（一个坏了不影响其余）
   yshjy --list 电影.mp4           只看里面有什么
+  yshjy --select "*.exe" 游戏.mp4  只要里面的 exe
   yshjy -p "demo-password" 游戏.mp4   带解压码解压
   yshjy ys 我的游戏/               把文件夹打包成伪装视频
   yshjy --rescue 坏了的.zip        文件坏了也尽量救
+  yshjy --json 包.mp4 | jq .       给脚本/前端消费
 
 解不开？先试 yshjy --list 看能不能认出里面有什么。
 "#;
@@ -79,7 +90,10 @@ fn main() -> ExitCode {
     let mut i = 1;
     while i < argv.len() {
         let a = &argv[i];
-        if a == "--dest" || a == "-o" || a == "--password" || a == "-p" {
+        if matches!(
+            a.as_str(),
+            "--dest" | "-o" | "--password" | "-p" | "--jobs" | "-j" | "--select"
+        ) {
             i += 2; // 跳过它的值
             continue;
         }
@@ -140,7 +154,40 @@ fn main() -> ExitCode {
             quiet,
         );
     }
-    do_extract(&targets, &val_of("--dest"), &val_of("--password"), quiet)
+
+    // ── 解压（v0.5：多目标 / 批量 / 挑选 / 进度事件）──
+    let json = has("--json");
+    let jobs_n: usize = match val_of("--jobs") {
+        Some(s) => match s.parse() {
+            Ok(n) => n,
+            Err(_) => {
+                eprintln!("❌ --jobs 要写个数，比如 --jobs 2（收到 {s}）");
+                return ExitCode::from(code::USAGE);
+            }
+        },
+        None => 1,
+    };
+    let selection = match val_of("--select") {
+        Some(expr) => match yshjy::select::Selection::parse(&expr) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("❌ --select 看不懂：{expr}\n   （{e}）");
+                eprintln!("   例子：--select \"*.exe\" / --select \"游戏数据/**\" / --select 1,3 / --select required");
+                return ExitCode::from(code::USAGE);
+            }
+        },
+        None => yshjy::select::Selection::all(),
+    };
+
+    do_extract(
+        &targets,
+        &val_of("--dest"),
+        &val_of("--password"),
+        quiet,
+        jobs_n,
+        selection,
+        json,
+    )
 }
 
 /// 长选项对应的短选项（用于参数识别）
@@ -148,6 +195,7 @@ fn short_of(long: &str) -> &str {
     match long {
         "--dest" => "-o",
         "--password" => "-p",
+        "--jobs" => "-j",
         "--quiet" => "-q",
         "--list" => "-l",
         "--help" => "-h",
@@ -277,609 +325,301 @@ fn try_list_by_rescue(path: &str, quiet: bool) -> Option<ExitCode> {
     Some(ExitCode::from(code::OK))
 }
 
+/// 解压（v0.5：多目标 + 批量 + 事件驱动渲染）
+///
+/// 编排全在引擎里（`yshjy::job`），这里只干两件事：
+/// 把**事件渲染成人话**、把**结论变成退出码**。
 fn do_extract(
     targets: &[String],
     dest_opt: &Option<String>,
     password: &Option<String>,
     quiet: bool,
+    jobs_n: usize,
+    selection: yshjy::select::Selection,
+    json: bool,
 ) -> ExitCode {
-    let path = &targets[0];
-    // 先看是不是 7z（含分卷）—— 这类不是 ZIP，走另一条路
-    if let Some(vols) = as_7z_volumes(std::path::Path::new(path)) {
-        return do_extract_7z(&vols, dest_opt, password, quiet);
+    use std::sync::Arc;
+    use yshjy::batch;
+    use yshjy::progress::CancelToken;
+
+    // 目录会递归展开，多文件自动排队（重复的会去掉、大文件先跑）
+    let paths: Vec<PathBuf> = targets.iter().map(PathBuf::from).collect();
+    let expanded = batch::expand_inputs(&paths);
+    if expanded.is_empty() {
+        eprintln!("❌ 没找到能处理的东西：{}", targets.join(" "));
+        return ExitCode::from(code::USAGE);
     }
-    // 再看是不是 RAR
-    if is_rar(std::path::Path::new(path)) {
-        return do_extract_rar(path, dest_opt, password, quiet);
-    }
-    // 单流格式（gz / xz / zstd / bzip2）与 TAR —— 走流式解压
-    if let Some(d) = sniff_stream(std::path::Path::new(path)) {
-        return do_extract_stream(path, d, dest_opt, quiet);
+    if !quiet && !json && expanded.len() > 1 {
+        println!("📋 排好 {} 个任务（大的先跑）", expanded.len());
     }
 
-    let (mut f, size, layout) = match open_and_locate(path) {
-        Ok(v) => v,
-        Err(_) => {
-            // 兜底：索引被改坏的包，用「扫起点 + 修索引」的路子救
-            return do_extract_broken(path, dest_opt, password, quiet);
+    let jobs = {
+        let mut js = batch::make_jobs(&expanded);
+        // 多任务且用户指定了 -o：每个包解到自己的子目录，
+        // 免得两个包的文件挤在一起互相改名（游戏包撞名会很乱）
+        if js.len() > 1
+            && let Some(base) = dest_opt
+        {
+            for j in &mut js {
+                j.dest = Some(PathBuf::from(base).join(yshjy::job::output_dir_name(&j.input)));
+            }
         }
+        js
     };
-    let _ = size;
-
-    // 默认输出目录：文件名去掉"外壳扩展名"后的同名文件夹
-    let dest: PathBuf = match dest_opt {
-        Some(d) => PathBuf::from(d),
-        None => {
-            let stem = std::path::Path::new(path)
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "解压结果".into());
-            let cleaned = stem
-                .trim_end_matches(".mp4")
-                .trim_end_matches(".mkv")
-                .trim_end_matches(".zip")
-                .to_string();
-            PathBuf::from(if cleaned.is_empty() { stem } else { cleaned })
-        }
+    let opts = batch::BatchOptions {
+        jobs: jobs_n.max(1),
+        continue_on_error: true,
+        password: password.clone(),
+        selection,
+        dest: dest_opt.clone().map(PathBuf::from),
     };
 
-    if !quiet {
-        println!("📦 {path}");
-        println!(
-            "   里面 {} 个文件，解开到：{}",
-            layout.entries_total,
-            dest.display()
-        );
-        if let Some(pw) = password {
-            println!("   解压码：{}（不回显）", mask(pw));
-        }
-    }
+    let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));
+    let cancel = CancelToken::new();
 
-    let mut opts = yshjy::extract::ExtractOptions::new(&dest);
-    opts.password = password.clone();
+    let report = batch::run_batch(jobs, &opts, &sink, &cancel, yshjy::job::run_job);
 
-    // ── 用户没给密码？先看看旁边的「说明.txt」里有没有 ──
-    let mut auto_pw_note: Option<String> = None;
-    if opts.password.is_none() && layout.entries_total > 0 {
-        let hints = yshjy::password_hint::find_hints_near(std::path::Path::new(path));
-        if !hints.is_empty() {
-            if !quiet {
-                println!(
-                    "   🔑 旁边 {} 里找到 {} 个候选解压码，试着用…",
-                    hints[0]
-                        .source
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy(),
-                    hints.len()
-                );
-            }
-            // 用一个条目先探一下：能列出内容就说明不需要密码，
-            // 需要密码的话就逐个候选试（试到成功为止）
-            for h in &hints {
-                let mut probe = yshjy::extract::ExtractOptions::new(&dest);
-                probe.password = Some(h.password.clone());
-                if let Ok((rep, _)) =
-                    yshjy::extract::extract_zip_auto(&mut f, layout.base, layout.data_len(), &probe)
-                    && !rep.files.is_empty()
-                {
-                    auto_pw_note = Some(format!(
-                        "从「{}」找到并用上了（原始行：{}）",
-                        h.source.file_name().unwrap_or_default().to_string_lossy(),
-                        h.line.trim()
-                    ));
-                    opts.password = Some(h.password.clone());
-                    break;
-                }
-                if quiet {
-                    continue;
-                }
-                println!("      试过：{}（不对）", mask(&h.password));
-            }
-        }
-    }
-
-    let started = std::time::Instant::now();
-
-    // 用「带自动修复」的版本：索引坏了也能救（不改磁盘文件）
-    match yshjy::extract::extract_zip_auto(&mut f, layout.base, layout.data_len(), &opts) {
-        Ok((rep, repair_note)) => {
-            if let Some(note) = &repair_note
-                && !quiet
-            {
-                println!("   🔧 走了修复路径：{note}");
-            }
-            if let Some(note) = &auto_pw_note
-                && !quiet
-            {
-                println!("   🔑 {note}");
-            }
-            if quiet {
-                for fe in &rep.files {
-                    println!("{}", fe.out_path.display());
-                }
-            } else {
-                println!(
-                    "\n✅ {}（用时 {:.1} 秒）",
-                    rep.summary(),
-                    started.elapsed().as_secs_f32()
-                );
-                for fe in rep.files.iter().take(8) {
-                    println!("   {}  {}", if fe.encrypted { "🔓" } else { "  " }, fe.name);
-                }
-                if rep.files.len() > 8 {
-                    println!("   … 还有 {} 个", rep.files.len() - 8);
-                }
-                for (n, why) in &rep.skipped {
-                    println!("   ⚠ 跳过 {n}：{why}");
-                }
-                for w in &rep.warnings {
-                    println!("   ℹ {w}");
-                }
-            }
-
-            // 退出码：全成 0 / 部分成 5 / 全失败 1（或 4 密码问题）
-            if !rep.skipped.is_empty() && !rep.files.is_empty() {
-                return ExitCode::from(code::PARTIAL);
-            }
-            if rep.files.is_empty() {
-                let pw_issue = rep
-                    .skipped
-                    .iter()
-                    .any(|(_, why)| why.contains("密码") || why.contains("解密"));
-                return ExitCode::from(if pw_issue { code::PASSWORD } else { code::ERR });
-            }
-            ExitCode::from(code::OK)
-        }
-        Err(e) => {
-            eprintln!("❌ 解压失败：{e}");
-            ExitCode::from(code::ERR)
-        }
-    }
-}
-
-/// 嗅探单流格式 / TAR（看文件头）
-fn sniff_stream(path: &std::path::Path) -> Option<yshjy::extract_stream::Detected> {
-    use std::io::Read;
-    let mut f = std::fs::File::open(path).ok()?;
-    let mut head = vec![0u8; 512];
-    let n = f.read(&mut head).ok()?;
-    head.truncate(n);
-    yshjy::extract_stream::detect(&head)
-}
-
-/// 单流格式 / TAR 解压分支
-fn do_extract_stream(
-    path: &str,
-    d: yshjy::extract_stream::Detected,
-    dest_opt: &Option<String>,
-    quiet: bool,
-) -> ExitCode {
-    use yshjy::layout::ArchiveFormat;
-    let p = std::path::Path::new(path);
-    let dest: PathBuf = match dest_opt {
-        Some(x) => PathBuf::from(x),
-        None => PathBuf::from(
-            p.file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "解压结果".into()),
-        ),
-    };
-
-    let started = std::time::Instant::now();
-    // 压缩数据大小（用于压缩比防护）
-    let packed = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-
-    // ── TAR 家族：展开成目录树 ──
-    // 注意：`.tar.gz` 这种看头部看不出是 tar（只看到 gzip），必须按文件名判断
-    let is_tar = d.is_tar || yshjy::extract_stream::looks_like_tar_by_name(p);
-    if is_tar {
-        let outer = if d.format == ArchiveFormat::Tar {
-            None
-        } else {
-            Some(d.format)
-        };
-        if !quiet {
-            println!(
-                "📦 {path}（{}）",
-                if outer.is_some() {
-                    "压缩的 TAR"
-                } else {
-                    "TAR"
-                }
-            );
-            println!("   展开到：{}", dest.display());
-        }
-        let f = match std::fs::File::open(p) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("❌ 打不开：{e}");
-                return ExitCode::from(code::ERR);
-            }
-        };
-        let mut opts = yshjy::extract_stream::ExtractStreamOptions::new(&dest);
-        opts.packed_hint = packed;
-        match yshjy::extract_stream::extract_tar(f, outer, &opts) {
-            Ok(rep) => {
-                if quiet {
-                    for fe in &rep.files {
-                        println!("{}", fe.out_path.display());
-                    }
-                } else {
-                    println!(
-                        "\n✅ {}（用时 {:.1} 秒）",
-                        rep.summary(),
-                        started.elapsed().as_secs_f32()
-                    );
-                    for fe in rep.files.iter().take(8) {
-                        println!("     {}", fe.name);
-                    }
-                    for (n, why) in rep.skipped.iter().take(5) {
-                        println!("   ⚠ 跳过 {n}：{why}");
-                    }
-                }
-                if rep.files.is_empty() {
-                    ExitCode::from(code::ERR)
-                } else if rep.skipped.is_empty() {
-                    ExitCode::from(code::OK)
-                } else {
-                    ExitCode::from(code::PARTIAL)
-                }
-            }
-            Err(e) => {
-                eprintln!("❌ 解压失败：{e}");
-                ExitCode::from(code::ERR)
-            }
-        }
+    if json {
+        println!("{}", 汇总_json(&report));
     } else {
-        // ── 单流格式：解出一个文件 ──
-        let out_name = yshjy::extract_stream::strip_suffix(p, d.format)
-            .map(|x| x.to_string_lossy().to_string());
-        let out_path = match &out_name {
-            Some(n) => dest.join(n),
-            None => {
-                let stem = p
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "解出".into());
-                dest.join(stem)
-            }
-        };
-        if !quiet {
-            println!("📦 {path}（{:?} 单流格式）", d.format);
-            println!("   解开到：{}", out_path.display());
-        }
-        let f = match std::fs::File::open(p) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("❌ 打不开：{e}");
-                return ExitCode::from(code::ERR);
-            }
-        };
-        match yshjy::extract_stream::decompress_stream(
-            d.format,
-            f,
-            &out_path,
-            &yshjy::safety::Limits::default(),
-            packed,
-        ) {
-            Ok(n) => {
-                if quiet {
-                    println!("{}", out_path.display());
-                } else {
-                    println!(
-                        "\n✅ 解出 {} 字节（用时 {:.1} 秒）",
-                        n,
-                        started.elapsed().as_secs_f32()
-                    );
-                }
-                ExitCode::from(code::OK)
-            }
-            Err(e) => {
-                eprintln!("❌ 解压失败：{e}");
-                ExitCode::from(code::ERR)
-            }
-        }
+        打印汇总(&report, quiet);
     }
+    ExitCode::from(report.exit_code().clamp(0, 255) as u8)
 }
 
-/// 按扩展名或签名判断是不是 RAR
-fn is_rar(path: &std::path::Path) -> bool {
-    let by_ext = path
-        .extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .map(|e| e == "rar")
-        .unwrap_or(false);
-    if by_ext {
-        return true;
-    }
-    // 看签名（RAR4: "Rar!\x1a\x07\x00"，RAR5: "Rar!\x1a\x07\x01\x00"）
-    if let Ok(mut f) = std::fs::File::open(path) {
-        use std::io::Read;
-        let mut buf = [0u8; 8];
-        if f.read_exact(&mut buf).is_ok() {
-            return buf.starts_with(b"Rar!\x1a\x07");
-        }
-    }
-    false
-}
-
-/// RAR 解压分支
-fn do_extract_rar(
-    path: &str,
-    dest_opt: &Option<String>,
-    password: &Option<String>,
+/// 把引擎事件渲染成终端上的人话（引擎只发码和数字，文案归这里）
+struct 终端出口 {
     quiet: bool,
-) -> ExitCode {
-    let dest: PathBuf = match dest_opt {
-        Some(d) => PathBuf::from(d),
-        None => PathBuf::from(
-            std::path::Path::new(path)
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "解压结果".into()),
-        ),
-    };
-    if !quiet {
-        println!("📦 {path}（RAR）");
-        println!("   解开到：{}", dest.display());
-        if let Some(pw) = password {
-            println!("   密码：{}（不回显）", mask(pw));
+    json: bool,
+    /// stderr 是不是终端：不是（管道/重定向）就不画进度条，免得刷出一堆 \r
+    tty: bool,
+    last_draw: std::sync::Mutex<std::time::Instant>,
+}
+
+impl 终端出口 {
+    fn new(quiet: bool, json: bool) -> Self {
+        use std::io::IsTerminal;
+        Self {
+            quiet,
+            json,
+            tty: std::io::stderr().is_terminal(),
+            last_draw: std::sync::Mutex::new(std::time::Instant::now()),
         }
     }
-    let mut opts = yshjy::extract_rar::ExtractRarOptions::new(&dest);
-    opts.password = password.clone();
-    let started = std::time::Instant::now();
 
-    match yshjy::extract_rar::extract_rar_file(std::path::Path::new(path), &opts) {
-        Ok(rep) => {
-            if quiet {
-                for fe in &rep.files {
-                    println!("{}", fe.out_path.display());
+    /// 清掉当前那行进度（**只在终端上做**：管道/日志里不该出现 \r 与转义序列）
+    fn 清行(&self) {
+        if self.tty {
+            eprint!("\r\x1b[K");
+        }
+    }
+}
+
+impl yshjy::event::EventSink for 终端出口 {
+    fn emit(&self, ev: &yshjy::event::Event) {
+        use yshjy::event::Event;
+
+        // `--json`：原样把事件按行吐出去（脚本/其它前端消费）
+        if self.json {
+            if let Ok(s) = serde_json::to_string(ev) {
+                println!("{s}");
+            }
+            return;
+        }
+        if self.quiet {
+            return;
+        }
+
+        match ev {
+            Event::ExtractProgress {
+                progress, current, ..
+            } => {
+                if !self.tty {
+                    return; // 管道模式：别画进度条
                 }
-            } else {
-                println!(
-                    "\n✅ {}（用时 {:.1} 秒）",
-                    rep.summary(),
-                    started.elapsed().as_secs_f32()
+                // 重画节流：引擎侧已按 100ms 合并，这里再降到 200ms，避免刷屏
+                let now = std::time::Instant::now();
+                if let Ok(mut last) = self.last_draw.lock() {
+                    if now.duration_since(*last) < std::time::Duration::from_millis(200) {
+                        return;
+                    }
+                    *last = now;
+                }
+                let pct = progress
+                    .fraction()
+                    .map(|f| format!("{:>5.1}%", f * 100.0))
+                    .unwrap_or_else(|| "  …  ".into());
+                let what = current.as_deref().unwrap_or("");
+                eprint!(
+                    "\r   {pct}  {}/{}  {what}\x1b[K",
+                    人类可读(progress.done_bytes),
+                    人类可读(progress.total_bytes)
                 );
-                for fe in rep.files.iter().take(8) {
-                    println!("     {}", fe.name);
-                }
-                for (n, why) in rep.skipped.iter().take(5) {
-                    println!("   ⚠ 跳过 {n}：{why}");
-                }
-                for w in rep.warnings.iter().take(3) {
-                    println!("   ℹ {w}");
-                }
             }
-            if rep.files.is_empty() {
-                ExitCode::from(code::ERR)
-            } else if rep.skipped.is_empty() {
-                ExitCode::from(code::OK)
-            } else {
-                ExitCode::from(code::PARTIAL)
+            Event::EntryFinished { path, result, .. } if !result.is_ok() => {
+                self.清行();
+                eprintln!("   ⚠ {} 没解开（{}）", path, result.as_str());
             }
+            Event::Diagnostic { code, note, .. } => {
+                self.清行();
+                eprintln!("   ℹ {}：{note}", 诊断文案(*code));
+            }
+            Event::PasswordNeeded { attempts, .. } => {
+                self.清行();
+                eprintln!("   🔒 这个包有密码（已试 {} 次）", attempts);
+            }
+            Event::JobFinished { .. } => {
+                self.清行();
+            }
+            _ => {}
         }
-        Err(e) => {
-            let msg = e.to_string();
-            let pw_issue = msg.contains("密码")
-                || msg.to_lowercase().contains("password")
-                || msg.to_lowercase().contains("crypto")
-                || msg.contains("校验失败");
-            eprintln!("❌ 解压失败：{e}");
-            ExitCode::from(if pw_issue { code::PASSWORD } else { code::ERR })
+    }
+
+    /// 批量时进度条会互相覆盖，只保留进度与条目事件
+    fn wants_progress(&self) -> bool {
+        !self.json
+    }
+}
+
+/// 诊断码 → 中文一句话（UI-SPEC 的「说人话」原则）
+fn 诊断文案(code: yshjy::event::DiagnosticCode) -> &'static str {
+    use yshjy::event::DiagnosticCode as D;
+    match code {
+        D::HiddenAtOffset => "包藏在文件中间，已按真实位置定位",
+        D::RebuiltIndex => "索引坏了，已按文件头重建清单",
+        D::OffsetCorrected => "索引里的偏移是错的，已在内存里改对（没动你的文件）",
+        D::VolumesMerged => "分卷已自动拼起来",
+        D::LayoutGuessed => "布局是猜的，不一定准",
+        D::VideoUnplayable => "封面视频本身坏了，但里面的文件还能解",
+        D::RiskyEntry => "解出了可执行文件，运行前请确认来源",
+        D::SlowPath => "走了慢路（全文件扫描）",
+        D::PasswordFromNotes => "解压码是从旁边的说明里找到的",
+        D::PartialData => "数据不完整",
+    }
+}
+
+/// 任务结论 → 中文一句话 + 图标
+fn 结论文案(o: &yshjy::error::Outcome) -> (String, &'static str) {
+    use yshjy::error::Outcome;
+    match o {
+        Outcome::Success => ("解开".to_string(), "✅"),
+        Outcome::Partial { done, total } => (format!("解开 {done}/{total} 个"), "⚠️ "),
+        Outcome::Cancelled { done, total } => (format!("已取消（解出 {done}/{total}）"), "⏹ "),
+        Outcome::Failed(code) => (失败文案(*code).to_string(), "❌"),
+    }
+}
+
+/// 错误码 → 中文（UI-SPEC §10 的 CLI 版渲染）
+fn 失败文案(code: yshjy::error::ErrorCode) -> &'static str {
+    use yshjy::error::ErrorCode as C;
+    match code {
+        C::PathNotFound => "文件不在这个位置",
+        C::InvalidArgument => "参数不对",
+        C::NotEnoughSpace => "磁盘空间不够",
+        C::PermissionDenied => "这个位置不让写",
+        C::NeedPassword => "有密码，但没给解压码",
+        C::WrongPassword => "解压码不对",
+        C::NotArchive => "既不是压缩包，里面也没藏着压缩包",
+        C::Truncated => "文件不完整（常见于下载没下完）",
+        C::MissingVolume => "缺分卷",
+        C::DataLost => "中间有一段数据丢了",
+        C::EncryptedUnbreakable => "加密了，需要发布者给解压码",
+        C::VideoUnplayable => "封面视频本身有问题",
+        C::Cancelled => "已取消",
+        C::Internal => "程序内部出错（这属于 bug，麻烦反馈一下）",
+    }
+}
+
+/// 打印每个任务的结果
+fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
+    for j in &report.jobs {
+        let (txt, icon) = 结论文案(&j.outcome);
+        if quiet {
+            // 脚本模式：只吐解出来的文件路径
+            println!("{}", j.stats.dest.as_deref().unwrap_or(&j.input).display());
+            continue;
+        }
+        println!(
+            "{icon} {} —— {txt}（{}，用时 {:.1} 秒）",
+            j.input.display(),
+            人类可读(j.stats.bytes_written),
+            j.stats.millis as f64 / 1000.0
+        );
+        if let Some(d) = &j.stats.dest {
+            println!("     📁 {}", d.display());
+        }
+        for (name, res) in j.stats.failed.iter().take(5) {
+            println!("     ⚠ {name}（{}）", res.as_str());
+        }
+        if matches!(j.outcome, yshjy::error::Outcome::Failed(_))
+            && let Some(note) = &j.note
+        {
+            println!("     ({note})");
+        }
+    }
+
+    if report.len() > 1 {
+        println!(
+            "\n──── 批量完成：成功 {} · 部分 {} · 失败 {} · 取消 {} ────",
+            report.succeeded(),
+            report.partial(),
+            report.failed(),
+            report.cancelled()
+        );
+        for f in report.failures().iter().take(10) {
+            let (txt, _) = 结论文案(&f.outcome);
+            println!("   ❌ {}：{txt}", f.input.display());
         }
     }
 }
 
-/// 判断是不是 7z（含分卷），是的话返回完整的分卷列表
-///
-/// 支持的形式：
-/// - `x.7z`（单卷）
-/// - `x.7z.001` / `x.7z.002` …（7z 分卷）
-/// - `x.001` / `x.002` …（裸分卷）
-fn as_7z_volumes(path: &std::path::Path) -> Option<Vec<PathBuf>> {
-    let name = path.file_name()?.to_string_lossy().to_string();
-    let lower = name.to_lowercase();
-
-    // 单卷 .7z
-    if lower.ends_with(".7z") {
-        // 顺手检查是不是还有 .001 系列（有些人会两个都留）
-        return Some(vec![path.to_path_buf()]);
-    }
-
-    // 分卷：找出"序号后缀"的基准名
-    let (base, _num, width) = split_volume_name(&name)?;
-    if !base.to_lowercase().ends_with(".7z") && !base.to_lowercase().ends_with(".001") {
-        // 只在明显是 7z 分卷名时自动串联；否则让调用方自己给全路径
-        let first = path.to_path_buf();
-        if !base.to_lowercase().ends_with(".7z") {
-            // 仍然当作 7z 分卷试一次（裸 xxx.001）
-        }
-        let _ = first;
-    }
-
-    // 依序找出所有分卷
-    let dir = path.parent().unwrap_or(std::path::Path::new("."));
-    let mut vols = Vec::new();
-    for i in 1..=9999u32 {
-        let cand_name = format!("{base}{i:0width$}");
-        let cand = dir.join(&cand_name);
-        if cand.exists() {
-            vols.push(cand);
-        } else if i > 1 {
-            break; // 序号断了就停
-        } else {
-            return None; // 第一块都不在，说明不是分卷
-        }
-    }
-    if vols.is_empty() { None } else { Some(vols) }
+/// 汇总成 JSON（脚本消费）
+fn 汇总_json(report: &yshjy::batch::BatchReport) -> String {
+    let items: Vec<serde_json::Value> = report
+        .jobs
+        .iter()
+        .map(|j| {
+            serde_json::json!({
+                "input": j.input.display().to_string(),
+                "outcome": j.outcome.as_str(),
+                "exit_code": j.outcome.exit_code(),
+                "done": j.stats.entries_done,
+                "total": j.stats.entries_total,
+                "bytes": j.stats.bytes_written,
+                "dest": j.stats.dest.as_ref().map(|d| d.display().to_string()),
+                "failed": j.stats.failed.iter().map(|(n, r)| serde_json::json!({
+                    "path": n, "result": r.as_str()
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "engine": yshjy::VERSION,
+        "total": report.len(),
+        "ok": report.succeeded(),
+        "partial": report.partial(),
+        "failed": report.failed(),
+        "cancelled": report.cancelled(),
+        "exit_code": report.exit_code(),
+        "jobs": items,
+    })
+    .to_string()
 }
 
-/// 从 `x.7z.001` 这样的名字里拆出 (前缀, 序号, 序号宽度)
-fn split_volume_name(name: &str) -> Option<(String, u32, usize)> {
-    // 从尾部取连续数字
-    let digits_start = name.rfind(|c: char| !c.is_ascii_digit())? + 1;
-    if digits_start >= name.len() {
-        return None;
-    }
-    let digits = &name[digits_start..];
-    let num: u32 = digits.parse().ok()?;
-    let base = name[..digits_start].to_string();
-    Some((base, num, digits.len()))
-}
-
-/// 7z（含分卷）解压分支
-fn do_extract_7z(
-    volumes: &[PathBuf],
-    dest_opt: &Option<String>,
-    password: &Option<String>,
-    quiet: bool,
-) -> ExitCode {
-    let dest: PathBuf = match dest_opt {
-        Some(d) => PathBuf::from(d),
-        None => {
-            let stem = volumes[0]
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "解压结果".into());
-            // 去掉 .7z / .001 之类后缀
-            let cleaned = stem
-                .trim_end_matches(".7z")
-                .trim_end_matches(".001")
-                .to_string();
-            PathBuf::from(if cleaned.is_empty() { stem } else { cleaned })
-        }
-    };
-
-    if !quiet {
-        println!("📦 {} 个分卷（7z）", volumes.len());
-        for v in volumes.iter().take(4) {
-            println!("   {}", v.file_name().unwrap_or_default().to_string_lossy());
-        }
-        if volumes.len() > 4 {
-            println!("   … 还有 {} 个", volumes.len() - 4);
-        }
-        println!("   解开到：{}", dest.display());
-        if let Some(pw) = password {
-            println!("   密码：{}（不回显）", mask(pw));
-        }
-    }
-
-    let mut opts = yshjy::extract7z::Extract7zOptions::new(&dest);
-    opts.password = password.clone();
-    let started = std::time::Instant::now();
-
-    match yshjy::extract7z::extract_7z_volumes(volumes, &opts) {
-        Ok(rep) => {
-            if quiet {
-                for fe in &rep.files {
-                    println!("{}", fe.out_path.display());
-                }
-            } else {
-                println!(
-                    "\n✅ {}（用时 {:.1} 秒）",
-                    rep.summary(),
-                    started.elapsed().as_secs_f32()
-                );
-                for fe in rep.files.iter().take(8) {
-                    println!("     {}", fe.name);
-                }
-                if rep.files.len() > 8 {
-                    println!("   … 还有 {} 个", rep.files.len() - 8);
-                }
-                for (n, why) in rep.skipped.iter().take(5) {
-                    println!("   ⚠ 跳过 {n}：{why}");
-                }
-                for w in rep.warnings.iter().take(3) {
-                    println!("   ℹ {w}");
-                }
-            }
-            if rep.files.is_empty() {
-                ExitCode::from(code::ERR)
-            } else if rep.skipped.is_empty() {
-                ExitCode::from(code::OK)
-            } else {
-                ExitCode::from(code::PARTIAL)
-            }
-        }
-        Err(e) => {
-            let msg = e.to_string();
-            let pw_issue = msg.contains("密码")
-                || msg.to_lowercase().contains("password")
-                || msg.to_lowercase().contains("crypto");
-            eprintln!("❌ 解压失败：{e}");
-            ExitCode::from(if pw_issue { code::PASSWORD } else { code::ERR })
-        }
-    }
-}
-
-/// 索引被改坏时的兜底解压路径
-fn do_extract_broken(
-    path: &str,
-    dest_opt: &Option<String>,
-    password: &Option<String>,
-    quiet: bool,
-) -> ExitCode {
-    let mut f = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("❌ 打不开 {path}：{e}");
-            return ExitCode::from(code::ERR);
-        }
-    };
-    let size = match f.metadata() {
-        Ok(m) => m.len(),
-        Err(e) => {
-            eprintln!("❌ 读不到文件信息：{e}");
-            return ExitCode::from(code::ERR);
-        }
-    };
-    let dest: PathBuf = match dest_opt {
-        Some(d) => PathBuf::from(d),
-        None => PathBuf::from(
-            std::path::Path::new(path)
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "解压结果".into()),
-        ),
-    };
-    let mut opts = yshjy::extract::ExtractOptions::new(&dest);
-    opts.password = password.clone();
-
-    if !quiet {
-        println!("🔧 {path} 的索引有问题，尝试修复后解压…");
-    }
-    match yshjy::repair::rescue_broken_index(&mut f, size, &opts) {
-        Ok((rep, note)) => {
-            if !quiet {
-                println!("   🔧 {note}");
-                println!("   ✅ {}", rep.summary());
-                for fe in rep.files.iter().take(8) {
-                    println!(
-                        "      {}  {}",
-                        if fe.encrypted { "🔓" } else { "  " },
-                        fe.name
-                    );
-                }
-            } else {
-                for fe in &rep.files {
-                    println!("{}", fe.out_path.display());
-                }
-            }
-            if rep.files.is_empty() {
-                ExitCode::from(code::ERR)
-            } else if rep.skipped.is_empty() {
-                ExitCode::from(code::OK)
-            } else {
-                ExitCode::from(code::PARTIAL)
-            }
-        }
-        Err(e) => {
-            eprintln!("❌ 修不了：{e}");
-            ExitCode::from(code::NOT_ARCHIVE)
-        }
+/// 人类可读的体量（1.2 GB / 345 MB）
+fn 人类可读(n: u64) -> String {
+    const G: f64 = 1024.0 * 1024.0 * 1024.0;
+    const M: f64 = 1024.0 * 1024.0;
+    const K: f64 = 1024.0;
+    let f = n as f64;
+    if f >= G {
+        format!("{:.2} GB", f / G)
+    } else if f >= M {
+        format!("{:.1} MB", f / M)
+    } else if f >= K {
+        format!("{:.0} KB", f / K)
+    } else {
+        format!("{n} B")
     }
 }
 

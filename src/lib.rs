@@ -24,6 +24,7 @@ pub mod extract_rar;
 pub mod extract_stream;
 pub mod hardware;
 pub mod io;
+pub mod job;
 pub mod layout;
 pub mod pack;
 pub mod password_hint;

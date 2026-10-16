@@ -16,6 +16,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::error::{exit_code, ArchiveFlags, ItemResult, Outcome};
@@ -326,12 +327,12 @@ fn file_size(p: &Path) -> u64 {
 pub fn run_batch<F>(
     mut tasks: Vec<Job>,
     opts: &BatchOptions,
-    sink: &dyn EventSink,
+    sink: &Arc<dyn EventSink>,
     cancel: &CancelToken,
     run_one: F,
 ) -> BatchReport
 where
-    F: Fn(&Job, &BatchOptions, &dyn EventSink, &CancelToken) -> JobOutcome + Sync,
+    F: Fn(&Job, &BatchOptions, &Arc<dyn EventSink>, &CancelToken) -> JobOutcome + Sync,
 {
     tasks.sort_by_key(|t| t.id);
     let n = opts.jobs.max(1);
@@ -350,12 +351,12 @@ where
 fn run_sequential<F>(
     tasks: &[Job],
     opts: &BatchOptions,
-    sink: &dyn EventSink,
+    sink: &Arc<dyn EventSink>,
     cancel: &CancelToken,
     run_one: &F,
 ) -> Vec<JobOutcome>
 where
-    F: Fn(&Job, &BatchOptions, &dyn EventSink, &CancelToken) -> JobOutcome + Sync,
+    F: Fn(&Job, &BatchOptions, &Arc<dyn EventSink>, &CancelToken) -> JobOutcome + Sync,
 {
     let mut out = Vec::with_capacity(tasks.len());
     let mut stopped = false;
@@ -391,13 +392,13 @@ where
 fn run_parallel<F>(
     tasks: &[Job],
     opts: &BatchOptions,
-    sink: &dyn EventSink,
+    sink: &Arc<dyn EventSink>,
     cancel: &CancelToken,
     run_one: &F,
     jobs: usize,
 ) -> Vec<JobOutcome>
 where
-    F: Fn(&Job, &BatchOptions, &dyn EventSink, &CancelToken) -> JobOutcome + Sync,
+    F: Fn(&Job, &BatchOptions, &Arc<dyn EventSink>, &CancelToken) -> JobOutcome + Sync,
 {
     // 简单分片：把任务按轮转分配到 N 个线程，线程内顺序跑。
     // 不做工作窃取 —— 任务数量级是「几十个包」，分片足够（简单胜过聪明）。
@@ -492,9 +493,14 @@ mod tests {
             .collect()
     }
 
+    /// 批量测试用的空出口（Arc 形态，与 run_batch 的签名一致）
+    fn 空出口() -> Arc<dyn EventSink> {
+        Arc::new(NullSink)
+    }
+
     #[test]
     fn 顺序跑全部成功() {
-        let sink = NullSink;
+        let sink = 空出口();
         let token = CancelToken::new();
         let report = run_batch(
             造任务(3),
@@ -511,7 +517,7 @@ mod tests {
 
     #[test]
     fn 一个失败不影响其余() {
-        let sink = NullSink;
+        let sink = 空出口();
         let token = CancelToken::new();
         let report = run_batch(
             造任务(3),
@@ -536,7 +542,7 @@ mod tests {
 
     #[test]
     fn 全部失败时取第一个失败码() {
-        let sink = NullSink;
+        let sink = 空出口();
         let token = CancelToken::new();
         let report = run_batch(
             造任务(2),
@@ -553,7 +559,7 @@ mod tests {
 
     #[test]
     fn 停下来后剩余任务被跳过() {
-        let sink = NullSink;
+        let sink = 空出口();
         let token = CancelToken::new();
         let opts = BatchOptions {
             continue_on_error: false,
@@ -579,7 +585,7 @@ mod tests {
 
     #[test]
     fn 取消后剩余任务不再启动() {
-        let sink = NullSink;
+        let sink = 空出口();
         let token = CancelToken::new();
         let report = run_batch(
             造任务(4),
@@ -603,7 +609,7 @@ mod tests {
 
     #[test]
     fn 并行结果与顺序一致() {
-        let sink = NullSink;
+        let sink = 空出口();
         let token = CancelToken::new();
         let counter = AtomicU64::new(0);
         let opts = BatchOptions {
