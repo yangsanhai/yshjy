@@ -49,7 +49,10 @@ pub fn 生成(opts: &ReportOptions, ctx: &UnpackCtx) -> Result<PathBuf> {
     })?;
     let mut zip = zip::ZipWriter::new(文件);
     let 选项 = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+        .compression_method(zip::CompressionMethod::Deflated)
+        // 顺手写上时间戳：不写的话 zip 里条目全是 1980-01-01 00:00，
+        // 别人打开会以为"这包从哪台古董机器上来的"（v0.8 打包侧踩过同款坑）
+        .last_modified_time(zip时间());
 
     // ① README.txt —— **第一个写**：用户打开包最该先看到的就是"里面有什么"
    写一个(
@@ -182,6 +185,20 @@ fn 时间戳() -> String {
     format!("{年:04}{月:02}{日:02}-{时:02}{分:02}{秒数:02}")
 }
 
+/// 当前时间 → zip 的 `DateTime`
+///
+/// zip 默认给条目写 1980-01-01（就是那个"打包从不写时间戳"的老毛病），
+/// 诊断包虽然主要信息在 JSON 里，但条目时间戳错了会让人以为包很旧 —— 顺手写对。
+fn zip时间() -> zip::DateTime {
+    let 秒 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil(秒);
+    zip::DateTime::from_date_and_time(年 as u16, 月 as u8, 日 as u8, 时 as u8, 分 as u8, 秒数 as u8)
+        .unwrap_or_default()
+}
+
 /// 人类可读的生成时间
 fn 可读时间() -> String {
     let 秒 = std::time::SystemTime::now()
@@ -237,11 +254,20 @@ fn readme(时间: &str, 已脱敏: bool) -> String {
 fn meta_json(opts: &ReportOptions, 脱敏: &mut 脱敏器) -> Result<Value> {
     let 硬件 = crate::hardware::Hardware::detect();
 
-    // 磁盘余量：借用空间预检那条路（need=0 就是"只问还剩多少"）
-    let 磁盘可用 = match crate::safety::check_space(&opts.out_dir, 0) {
-        crate::safety::SpaceCheck::Enough { available, .. }
-        | crate::safety::SpaceCheck::NotEnough { available, .. } => Some(available),
-        crate::safety::SpaceCheck::Unknown => None,
+    // 磁盘余量：直接问文件系统。
+    // ⚠️ 别借 `safety::check_space(dir, 0)` —— 它对 `need == 0` 直接返回 `Unknown`
+    //    （源码第一行就是 `if need == 0 { return SpaceCheck::Unknown }`）。
+    //    实测踩过：诊断包里 `disk_available_bytes` 一直是 null。
+    // 目标目录可能还不存在 → 往上找第一个存在的祖先（都在同一个磁盘上）。
+    let 磁盘可用 = {
+        let mut 探针 = opts.out_dir.clone();
+        while !探针.exists() {
+            match 探针.parent() {
+                Some(p) if !p.as_os_str().is_empty() => 探针 = p.to_path_buf(),
+                _ => break,
+            }
+        }
+        fs4::available_space(&探针).ok()
     };
 
     // 代理环境变量：**只记"有没有设"，不记值** ——
@@ -344,6 +370,17 @@ fn 描述识别(t: &crate::job::Target, 脱敏: &mut 脱敏器) -> Value {
     }
 }
 
+/// 语言那行的值：`None` 要写成能读懂的东西
+///
+/// 直接 `{:?}` 会输出 Rust 的 `None`，那不是合法的 TOML 值（快照虽然只给人看，
+/// 但眼睛扫到 `None` 会以为出错了）。
+fn 语言行(cfg: &crate::config::Config) -> String {
+    match &cfg.general.language {
+        Some(l) => format!("{l:?}"),
+        None => "\"(跟随系统)\"".to_string(),
+    }
+}
+
 /// config.snapshot.toml：当时生效的配置（**不含密码本内容**，只记行数）
 fn 配置快照(脱敏: &mut 脱敏器) -> String {
     let cfg = crate::config::全局配置();
@@ -363,7 +400,7 @@ fn 配置快照(脱敏: &mut 脱敏器) -> String {
          # ⚠️ 不含密码本内容 —— 只记「有几行」。密码本在：{配置目录}\n\
          \n\
          [general]\n\
-         language = {:?}\n\
+         language = {}\n\
          jobs = {}\n\
          \n\
          [password]\n\
@@ -379,7 +416,7 @@ fn 配置快照(脱敏: &mut 脱敏器) -> String {
          [safety]\n\
          zip_bomb_ratio = {}\n\
          warn_executables = {}\n",
-        cfg.general.language,
+        语言行(cfg),
         cfg.general.jobs,
         cfg.password.file,
         cfg.password.auto_from_notes,
