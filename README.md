@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/平台-Linux%20%7C%20Windows%20%7C%20Android-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.4.0%20测试版-2ECC71)
+![状态](https://img.shields.io/badge/状态-v0.5.0%20测试版-2ECC71)
 
 ---
 
@@ -27,7 +27,7 @@
 
 ---
 
-## ✅ 现在就能用（v0.1.0 测试版）
+## ✅ 现在就能用（v0.5.0 测试版）
 
 ```bash
 # 解压（最简单，就这一行）
@@ -38,6 +38,20 @@ yshjy --list 电影.mp4
 
 # 带解压码
 yshjy -p "demo-password" 游戏.mp4
+
+# 整个目录排队解（一个坏了不影响其余，大的先跑）
+yshjy 下载/游戏合集/
+
+# 只要里面的一部分
+yshjy --select "*.exe" 游戏.mp4          # 只要 exe
+yshjy --select "游戏数据/**" 游戏.mp4     # 只要某个目录
+yshjy --select required 游戏.mp4         # 跳过 .DS_Store 之类垃圾
+
+# 并行跑 2 个（默认按顺序来，最省磁盘）
+yshjy --jobs 2 下载/游戏合集/
+
+# 给脚本/前端消费（按行输出事件流）
+yshjy --json 包.mp4 | jq .
 
 # 文件索引坏了也尽量救
 yshjy --rescue 坏掉的.zip

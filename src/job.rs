@@ -426,23 +426,15 @@ fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String
         return Some(first.password.clone());
     };
 
-    // 逐个候选在临时目录里静默试（7z 每候选就要 121ms，所以只试前 3 个）
+    // 逐个候选**只读开头**验证（不解整个包：8 GB 的包完整试一次要几分钟）
     for the_hint in hints.iter().take(3) {
         if ctx.is_cancelled() {
             break;
         }
-        let tmp = std::env::temp_dir().join(format!("yshjy-probe-{}-{}", std::process::id(), job.id));
-        let _ = std::fs::remove_dir_all(&tmp);
-        let mut eopts = ExtractOptions::new(&tmp);
-        eopts.password = Some(the_hint.password.clone());
         let ok = match std::fs::File::open(&job.input) {
-            Ok(mut f) => matches!(
-                crate::extract::extract_zip_at(&mut f, *base, *len, &eopts),
-                Ok(rep) if !rep.files.is_empty()
-            ),
+            Ok(f) => crate::extract::verify_password_at(f, *base, *len, &the_hint.password),
             Err(_) => false,
         };
-        let _ = std::fs::remove_dir_all(&tmp);
         if ok {
             ctx.diagnostic(
                 DiagnosticCode::PasswordFromNotes,
