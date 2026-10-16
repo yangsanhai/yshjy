@@ -1,0 +1,182 @@
+{
+  "zip1": "payload1.zip",
+  "zip1_len": 12880,
+  "zip2": "payload2.zip",
+  "zip2_len": 4430,
+  "members1": [
+    {
+      "name": "payload/r1_a.txt",
+      "size": 6000,
+      "crc": 684595951,
+      "hdr": 0,
+      "csize": 24
+    },
+    {
+      "name": "payload/r2_b.bin",
+      "size": 6000,
+      "crc": 129500795,
+      "hdr": 70,
+      "csize": 6005
+    },
+    {
+      "name": "payload/r3_c.txt",
+      "size": 11000,
+      "crc": 1204653556,
+      "hdr": 6121,
+      "csize": 72
+    },
+    {
+      "name": "payload/r4_d.bin",
+      "size": 6000,
+      "crc": 3780493589,
+      "hdr": 6239,
+      "csize": 6005
+    },
+    {
+      "name": "payload/r5_e.txt",
+      "size": 6000,
+      "crc": 3311034721,
+      "hdr": 12290,
+      "csize": 24
+    },
+    {
+      "name": "payload/中文_名.txt",
+      "size": 6200,
+      "crc": 3205686199,
+      "hdr": 12360,
+      "csize": 68
+    }
+  ],
+  "members2": [
+    {
+      "name": "payload/q1.txt",
+      "size": 2000,
+      "crc": 3559104352,
+      "hdr": 0,
+      "csize": 17
+    },
+    {
+      "name": "payload/q2.bin",
+      "size": 4000,
+      "crc": 3361545704,
+      "hdr": 61,
+      "csize": 4005
+    },
+    {
+      "name": "payload/q3_二.txt",
+      "size": 3400,
+      "crc": 4262110392,
+      "hdr": 4110,
+      "csize": 66
+    }
+  ],
+  "samples": {
+    "E1_junk5m_zip_junk5m.bin": {
+      "structure": "[随机垃圾 5MiB][完整 ZIP1][随机垃圾 5MiB]",
+      "zip_span": [
+        5242880,
+        5255760
+      ],
+      "note": "EOCD 距文件尾整整 5MiB → 尾部 64KB 窗口够不着"
+    },
+    "E2_video_split_zip_middle.mp4": {
+      "structure": "[ev10 前半 15214B][完整 ZIP1][ev10 后半 15215B]",
+      "zip_span": [
+        15214,
+        28094
+      ],
+      "video": "ev10.mp4",
+      "video_split": 15214,
+      "video_len": 30429,
+      "video_sha256": "7e8bbc08af5dd70041d540fbf7b0ec2ce0d71a59347236596cc7418e1769e36f",
+      "note": "ZIP 完整地在视频中间；把两段视频拼回应还原原始视频"
+    },
+    "E3_zip_split_by_video.mp4": {
+      "structure": "[ZIP1 前 12290B][ev6 18164B][ZIP1 后 590B]",
+      "zip_part1": [
+        0,
+        12290
+      ],
+      "inserted": [
+        12290,
+        30454
+      ],
+      "zip_part2": [
+        30454,
+        31044
+      ],
+      "note": "切点落在成员边界(r4_d.bin 结束处)；两段 ZIP 都在 → 虚接跳过视频应直接还原完整 ZIP1"
+    },
+    "E3b_zip_cut_inside_member.mp4": {
+      "structure": "[ZIP1 前 9264B][ev6 18164B][ZIP1 后 3616B]",
+      "zip_part1": [
+        0,
+        9264
+      ],
+      "inserted": [
+        9264,
+        27428
+      ],
+      "zip_part2": [
+        27428,
+        31044
+      ],
+      "note": "切点在成员 r4_d.bin 的数据中间 → 虚接要精确知道切点，需 CRC 引导搜索"
+    },
+    "E4_zip_middle_overwritten.mp4": {
+      "structure": "[ZIP1 前 6239B][视频覆盖 6051B][ZIP1 后 590B]",
+      "hole": [
+        6239,
+        12290
+      ],
+      "hole_len": 6051,
+      "lost_member": "payload/r4_d.bin",
+      "survivors": [
+        "payload/r1_a.txt",
+        "payload/r2_b.bin",
+        "payload/r3_c.txt",
+        "payload/r5_e.txt",
+        "payload/中文_名.txt"
+      ],
+      "note": "原第 4 成员(r4_d.bin)的字节真的没了；其余成员物理位置不变"
+    },
+    "E5_zip_headtail_truncated.zip": {
+      "structure": "[ZIP1 去掉头 70B + 尾 200B]",
+      "head_cut": 70,
+      "tail_cut": 200,
+      "lost_head_member": "payload/r1_a.txt",
+      "survivors": [
+        "payload/r2_b.bin",
+        "payload/r3_c.txt",
+        "payload/r4_d.bin",
+        "payload/r5_e.txt",
+        "payload/中文_名.txt"
+      ],
+      "note": "EOCD/中心目录丢失；只剩中间成员可救"
+    },
+    "E6_two_zips.mp4": {
+      "structure": "[完整 ZIP1 12880B][ev6 18164B][完整 ZIP2 4430B]",
+      "zip1_span": [
+        0,
+        12880
+      ],
+      "zip2_span": [
+        31044,
+        35474
+      ],
+      "note": "两个不同的压缩包；只看最后一个 EOCD 会漏掉第一个"
+    },
+    "E7_vid_zip_vid_zip.mp4": {
+      "structure": "[ev10_fast 30429B][ZIP1][ev6 18164B][ZIP2]",
+      "zip1_span": [
+        30429,
+        43309
+      ],
+      "zip2_span": [
+        61473,
+        65903
+      ],
+      "note": "多个穿插（含前后都有视频）"
+    }
+  }
+}

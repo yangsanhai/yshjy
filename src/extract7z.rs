@@ -1,0 +1,485 @@
+//! 7z 解压 —— 含**分卷虚接**
+//!
+//! # 为什么单独一个模块
+//! 7z 和 ZIP 的定位方式完全不同：
+//! - ZIP 有中央目录，我们靠自己算偏移（见 [`crate::layout::zip`]）
+//! - 7z 的目录在**尾部**的 NextHeader，而且分卷是**裸字节切开**（`.002` 连签名都没有）
+//!
+//! 所以流程是：分卷首尾拼成一个逻辑流 → 交给 `sevenz-rust2` 解码。
+//!
+//! # 关键实现（对齐调研结论）
+//! - `7z` 总长 = `32 + NextHeaderOffset + NextHeaderSize`，且头 32 字节自带 CRC32
+//!   （我们已在 [`crate::scan`] 里用它做高置信度识别 → 几乎零误报）
+//! - 分卷只是裸切，**直接拼接即可**，不需要任何特殊逻辑
+//! - 密码由库处理（内部转 UTF-16LE，符合 7z 规范）；中文密码无需用户配置
+//!
+//! # 与 ZIP 路径的共同点
+//! 安全落盘、限额、同名策略、结果分级，全部复用同一套（[`crate::safety`] + 报告结构）。
+
+use crate::error::{Error, ErrorCode, Result};
+use crate::safety::{self, ExtractBudget, Limits};
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
+
+/// 多个文件首尾相接，当成**一个逻辑流**（7z 分卷用）
+///
+/// 7z 的分卷是"裸字节切分"，所以拼接语义就是简单串接。
+pub struct MultiFile {
+    files: Vec<File>,
+    /// 每个分卷的长度
+    lens: Vec<u64>,
+    /// 每个分卷在逻辑流中的起始偏移
+    starts: Vec<u64>,
+    /// 逻辑流总长
+    total: u64,
+    /// 当前逻辑位置
+    pos: u64,
+}
+
+impl MultiFile {
+    /// 按顺序打开多个分卷（顺序就是它们拼接的顺序）
+    pub fn open(paths: &[PathBuf]) -> Result<Self> {
+        if paths.is_empty() {
+            return Err(Error::new(ErrorCode::Internal).with("reason", "没有分卷文件"));
+        }
+        let mut files = Vec::new();
+        let mut lens = Vec::new();
+        let mut starts = Vec::new();
+        let mut acc = 0u64;
+        for p in paths {
+            let f = File::open(p).map_err(|e| {
+                Error::new(ErrorCode::Internal).context(format!("打开分卷 {p:?} 失败: {e}"))
+            })?;
+            let n = f
+                .metadata()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读分卷信息: {e}")))?
+                .len();
+            starts.push(acc);
+            lens.push(n);
+            files.push(f);
+            acc += n;
+        }
+        Ok(Self {
+            files,
+            lens,
+            starts,
+            total: acc,
+            pos: 0,
+        })
+    }
+
+    /// 逻辑流总长
+    pub fn total(&self) -> u64 {
+        self.total
+    }
+
+    /// 分卷个数
+    pub fn volumes(&self) -> usize {
+        self.files.len()
+    }
+}
+
+impl Read for MultiFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.pos >= self.total || buf.is_empty() {
+            return Ok(0);
+        }
+        // 找到 pos 落在哪个分卷
+        let idx = match self.starts.binary_search(&self.pos) {
+            Ok(i) => i,
+            Err(i) => i - 1,
+        };
+        let within = self.pos - self.starts[idx];
+        let avail = self.lens[idx] - within;
+        let want = buf.len().min(avail as usize);
+        self.files[idx].seek(SeekFrom::Start(within))?;
+        let n = self.files[idx].read(&mut buf[..want])?;
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+impl Seek for MultiFile {
+    fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+        let target: i128 = match from {
+            SeekFrom::Start(p) => p as i128,
+            SeekFrom::End(p) => self.total as i128 + p as i128,
+            SeekFrom::Current(p) => self.pos as i128 + p as i128,
+        };
+        if target < 0 || target > self.total as i128 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "MultiFile: seek 越界",
+            ));
+        }
+        self.pos = target as u64;
+        Ok(self.pos)
+    }
+}
+
+/// 7z 解压参数
+#[derive(Debug, Clone)]
+pub struct Extract7zOptions {
+    /// 输出目录
+    pub dest: PathBuf,
+    /// 密码（`None` = 无密码）
+    pub password: Option<String>,
+    /// 同名策略（复用 ZIP 那套语义）
+    pub overwrite: crate::extract::Overwrite,
+    /// 安全限值
+    pub limits: Limits,
+}
+
+impl Extract7zOptions {
+    /// 以输出目录构造默认参数
+    pub fn new<P: Into<PathBuf>>(dest: P) -> Self {
+        Self {
+            dest: dest.into(),
+            password: None,
+            overwrite: crate::extract::Overwrite::default(),
+            limits: Limits::default(),
+        }
+    }
+}
+
+/// 从多个分卷解出 7z（只有一卷时传一个路径即可）
+pub fn extract_7z_volumes(
+    volumes: &[PathBuf],
+    opts: &Extract7zOptions,
+) -> Result<crate::extract::ExtractReport> {
+    let multi = MultiFile::open(volumes)?;
+    // 用**分卷实际总大小**作为解压炸弹防护的基准
+    // （7z 没有 ZIP 那样的"中央目录先验"，只能拿压缩后的体积当分母）
+    let packed_total = multi.total();
+    extract_7z_with_hint(multi, packed_total, opts)
+}
+
+/// 从任意流解出 7z（`packed_total` 传压缩后的字节数，用于炸弹防护）
+pub fn extract_7z<R: Read + Seek>(
+    src: R,
+    opts: &Extract7zOptions,
+) -> Result<crate::extract::ExtractReport> {
+    extract_7z_with_hint(src, 1, opts)
+}
+
+/// 内部实现：`packed_total` 是"压缩包多大"，用于算压缩比
+fn extract_7z_with_hint<R: Read + Seek>(
+    src: R,
+    packed_total: u64,
+    opts: &Extract7zOptions,
+) -> Result<crate::extract::ExtractReport> {
+    use std::io::Write;
+
+    std::fs::create_dir_all(&opts.dest)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建输出目录失败: {e}")))?;
+
+    let password = match &opts.password {
+        Some(p) => sevenz_rust2::Password::new(p),
+        None => sevenz_rust2::Password::empty(),
+    };
+
+    let mut report = crate::extract::ExtractReport::default();
+    // 以"压缩包体积"为分母算压缩比，防解压炸弹（比率为 0 表示不做比率检查）
+    let mut budget = ExtractBudget::new(opts.limits.clone(), packed_total.max(1));
+
+    let dest = opts.dest.clone();
+    let overwrite = opts.overwrite;
+
+    let res = sevenz_rust2::decompress_with_extract_fn_and_password(
+        src,
+        &dest,
+        password,
+        |entry, reader, dest_path| {
+            let name = entry.name().to_string();
+
+            if entry.is_directory() {
+                if let Err(e) = std::fs::create_dir_all(dest_path) {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("建目录失败: {e}")));
+                }
+                return Ok(true);
+            }
+
+            // 我们的安全护栏：路径穿越（库已挡一层，这里再走我们的规则）
+            let safe_path = match safety::resolve_safe(&dest, &name) {
+                Ok(p) => p,
+                Err(e) => {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("路径不安全被拒: {e}")));
+                    return Ok(true);
+                }
+            };
+
+            // 同名策略
+            let mut out_path = safe_path;
+            if out_path.exists() {
+                match overwrite {
+                    crate::extract::Overwrite::Skip => {
+                        report
+                            .skipped
+                            .push((name.clone(), "已存在，按策略跳过".into()));
+                        return Ok(true);
+                    }
+                    crate::extract::Overwrite::Replace => {}
+                    crate::extract::Overwrite::Rename => {
+                        out_path = unique_path(&out_path);
+                    }
+                }
+            }
+            if let Some(parent) = out_path.parent()
+                && let Err(e) = std::fs::create_dir_all(parent)
+            {
+                report
+                    .skipped
+                    .push((name.clone(), format!("建父目录失败: {e}")));
+                return Ok(true);
+            }
+
+            if safety::is_risky_executable(&name) {
+                report
+                    .warnings
+                    .push(format!("{name}：可执行文件，已解出但请谨慎运行"));
+            }
+
+            let mut out = match File::create(&out_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("创建失败: {e}")));
+                    return Ok(true);
+                }
+            };
+
+            let mut buf = vec![0u8; 64 * 1024];
+            let mut written = 0u64;
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Err(e) = budget.record(n as u64) {
+                            report.budget_hit = true;
+                            report
+                                .skipped
+                                .push((name.clone(), format!("安全限额中止: {e}")));
+                            drop(out);
+                            let _ = std::fs::remove_file(&out_path);
+                            return Ok(false); // 停止
+                        }
+                        if let Err(e) = out.write_all(&buf[..n]) {
+                            report
+                                .skipped
+                                .push((name.clone(), format!("写盘失败: {e}")));
+                            drop(out);
+                            let _ = std::fs::remove_file(&out_path);
+                            return Ok(true);
+                        }
+                        written += n as u64;
+                    }
+                    Err(e) => {
+                        report
+                            .skipped
+                            .push((name.clone(), format!("读取失败: {e}")));
+                        drop(out);
+                        let _ = std::fs::remove_file(&out_path);
+                        return Ok(true);
+                    }
+                }
+            }
+
+            report.bytes_written += written;
+            report.files.push(crate::extract::ExtractedFile {
+                name,
+                out_path,
+                size: written,
+                encrypted: !opts.password.is_none(),
+            });
+            Ok(true)
+        },
+    );
+
+    if let Err(e) = res {
+        // 一个文件都没解出来 → 当作整体失败（密码错 / 格式不支持 / 数据坏）
+        if report.files.is_empty() {
+            let msg = e.to_string();
+            let is_pw = msg.to_lowercase().contains("password")
+                || msg.contains("密码")
+                || msg.to_lowercase().contains("crypto");
+            let code = if is_pw {
+                // 有密码参数说明是密码不对，没有就是缺密码
+                if opts.password.is_some() {
+                    ErrorCode::WrongPassword
+                } else {
+                    ErrorCode::NeedPassword
+                }
+            } else {
+                ErrorCode::NotArchive
+            };
+            return Err(Error::new(code).context(format!("7z 解压失败: {msg}")));
+        }
+        // 部分成功：记下来但不算失败
+        report
+            .warnings
+            .push(format!("解压过程报错（已解出部分）: {e}"));
+    }
+
+    Ok(report)
+}
+
+/// 同名时生成不冲突的名字（与 ZIP 路径保持一致的语义）
+fn unique_path(path: &Path) -> PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+    let parent = path.parent().unwrap_or(Path::new("."));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let ext = path.extension().and_then(|s| s.to_str());
+    for i in 1..10_000 {
+        let candidate = match ext {
+            Some(e) => parent.join(format!("{stem} ({i}).{e}")),
+            None => parent.join(format!("{stem} ({i})")),
+        };
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    path.to_path_buf()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("yshjy_7z_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    /// 用库自带的写侧造一个**无密码** 7z（测试用；加密包用 7z 命令行造样本）
+    fn make_7z(dir: &Path, files: &[(&str, &[u8])]) -> Vec<u8> {
+        use sevenz_rust2::*;
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut w = ArchiveWriter::new(&mut cursor).unwrap();
+            for (name, data) in files {
+                let entry = ArchiveEntry::new_file(name);
+                w.push_archive_entry(entry, Some(Cursor::new(data.to_vec())))
+                    .unwrap();
+            }
+            w.finish().unwrap();
+        }
+        let _ = dir;
+        cursor.into_inner()
+    }
+
+    #[test]
+    fn multifile_虚接正确() {
+        let a = Cursor::new(b"AAAA".to_vec());
+        let b = Cursor::new(b"BBBB".to_vec());
+        drop((a, b));
+        // 用真实文件测（MultiFile 需要 File）
+        let dir = scratch("multi");
+        let p1 = dir.join("a.bin");
+        let p2 = dir.join("b.bin");
+        std::fs::write(&p1, b"AAAA").unwrap();
+        std::fs::write(&p2, b"BBBB").unwrap();
+        let mut m = MultiFile::open(&[p1, p2]).unwrap();
+        assert_eq!(m.total(), 8);
+        assert_eq!(m.volumes(), 2);
+        let mut all = Vec::new();
+        m.read_to_end(&mut all).unwrap();
+        assert_eq!(&all, b"AAAABBBB");
+
+        // 跨界 seek + 读
+        m.seek(SeekFrom::Start(2)).unwrap();
+        let mut b4 = [0u8; 4];
+        m.read_exact(&mut b4).unwrap();
+        assert_eq!(&b4, b"AABB");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 单卷_7z_能解出() {
+        let dir = scratch("one");
+        let data = make_7z(&dir, &[("hello.txt", b"hello 7z world")]);
+        let f = dir.join("t.7z");
+        std::fs::write(&f, &data).unwrap();
+
+        let dest = scratch("one_out");
+        let opts = Extract7zOptions::new(&dest);
+        let rep = extract_7z_volumes(std::slice::from_ref(&f), &opts).unwrap();
+        assert_eq!(rep.files.len(), 1, "应解出 1 个: {:?}", rep.skipped);
+        assert_eq!(
+            std::fs::read_to_string(dest.join("hello.txt")).unwrap(),
+            "hello 7z world"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 带密码的7z能解() {
+        // 用 7z 命令行造的样本（库的写侧没有加密接口）
+        let vol = PathBuf::from("tests/data/sevenz_encrypted.7z");
+        if !vol.exists() {
+            eprintln!("样本不存在，跳过");
+            return;
+        }
+        let dest = scratch("pw_out");
+        let mut opts = Extract7zOptions::new(&dest);
+
+        // 没给密码 → 应当失败或一个都没解出
+        let no_pw = extract_7z_volumes(std::slice::from_ref(&vol), &opts);
+        assert!(
+            no_pw.is_err() || no_pw.as_ref().map(|r| r.files.is_empty()).unwrap_or(false),
+            "没密码不该成功解出"
+        );
+
+        // 给对密码 → 全解出，内容对
+        opts.password = Some("secret7z".into());
+        let rep = extract_7z_volumes(&[vol], &opts).unwrap();
+        assert_eq!(rep.files.len(), 2, "给对密码应解出 2 个: {:?}", rep.skipped);
+        assert_eq!(
+            std::fs::read_to_string(dest.join("secret.txt"))
+                .unwrap()
+                .trim(),
+            "hello 7z encrypted content"
+        );
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 分卷被切成两半也能解() {
+        let dir = scratch("split");
+        let data = make_7z(
+            &dir,
+            &[
+                ("a.txt", b"split volume test content"),
+                ("b.bin", &vec![9u8; 5000]),
+            ],
+        );
+        // 裸切成两半（7z 分卷就是这个语义）
+        let mid = data.len() / 2;
+        let p1 = dir.join("x.7z.001");
+        let p2 = dir.join("x.7z.002");
+        std::fs::write(&p1, &data[..mid]).unwrap();
+        std::fs::write(&p2, &data[mid..]).unwrap();
+
+        let dest = scratch("split_out");
+        let opts = Extract7zOptions::new(&dest);
+        let rep = extract_7z_volumes(&[p1, p2], &opts).unwrap();
+        assert_eq!(rep.files.len(), 2, "分卷应解出 2 个: {:?}", rep.skipped);
+        assert_eq!(
+            std::fs::read_to_string(dest.join("a.txt")).unwrap(),
+            "split volume test content"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+}

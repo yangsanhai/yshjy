@@ -1,0 +1,43 @@
+{
+  "原视频 ev10.mp4": {
+    "path": "/home/user/hermes/yshjy/tests/assets/cover/ev10.mp4",
+    "size": 30429,
+    "ffmpeg_rc": 0,
+    "ffmpeg_err": [],
+    "sha256": "7e8bbc08af5dd70041d540fbf7b0ec2ce0d71a59347236596cc7418e1769e36f"
+  },
+  "E2 样本(含 ZIP)": {
+    "path": "/home/user/hermes/yshjy/tests/data/E2_video_split_zip_middle.mp4",
+    "size": 43309,
+    "ffmpeg_rc": 183,
+    "ffmpeg_err": [
+      "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55f012aed5c0] moov atom not found",
+      "[in#0 @ 0x55f012aed300] Error opening input: Invalid data found when processing input"
+    ],
+    "sha256": "74921d70f69861e7f616ea140d2dbab19ba0922b0854db58937b5036bc02cbd9"
+  },
+  "拼回(去掉 ZIP)": {
+    "path": "/home/user/hermes/yshjy/tests/.work/extreme/e2/rejoin.mp4",
+    "size": 30429,
+    "ffmpeg_rc": 0,
+    "ffmpeg_err": [],
+    "sha256": "7e8bbc08af5dd70041d540fbf7b0ec2ce0d71a59347236596cc7418e1769e36f"
+  },
+  "rejoin_equals_original": true,
+  "仅视频前半": {
+    "ffmpeg_rc": 183,
+    "ffmpeg_err": [
+      "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5645170575c0] moov atom not found",
+      "[in#0 @ 0x564517057300] Error opening input: Invalid data found when processing input"
+    ],
+    "size": 15214
+  },
+  "仅视频后半": {
+    "ffmpeg_rc": 0,
+    "ffmpeg_err": [
+      "[mpeg4 @ 0x55ca0a28e5c0] warning: first frame is no keyframe",
+      "[mpeg4 @ 0x55ca0a2b39c0] header damaged"
+    ],
+    "size": 15215
+  }
+}

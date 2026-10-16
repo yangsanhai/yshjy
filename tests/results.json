@@ -1,0 +1,913 @@
+{
+  "verify": {
+    "A1_steg_modeA_plain.mp4": {
+      "exists": true,
+      "size": 424759,
+      "sha256": "6c90fa81e88084d52b42fb350534213c4b89b0cf948870d784ee45f418732ff5",
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "205215",
+      "sevenzip_physical": "410709",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": "",
+      "eocd_pos": 424538,
+      "eocd_from_end": 217,
+      "pk_local_offsets": [
+        14050,
+        218990,
+        219039,
+        219145,
+        219265
+      ],
+      "tail16": "64383032626336633131383233343427",
+      "tail_math": {
+        "eocd": 424538,
+        "eocd_from_end": 217,
+        "size_cd": 360,
+        "offset_cd": 410128,
+        "concat": 14050,
+        "first_local_header": 14050,
+        "cd_at_concat": "504b0102",
+        "comment_len": 199
+      },
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 424759",
+      "zipfile": "OK",
+      "zipfile_members": 5,
+      "zipfile_bad": null,
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "A2_steg_modeA_ascii_pwd.mp4": {
+      "exists": true,
+      "size": 417824,
+      "sha256": "99dd17462ff6b8dd27deed15a4e4a692d58977000fc103daba427b397978915d",
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "412389",
+      "sevenzip_physical": "413111",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": "",
+      "eocd_pos": 417603,
+      "eocd_from_end": 217,
+      "pk_local_offsets": [
+        4713,
+        209600,
+        210901,
+        212188,
+        417102
+      ],
+      "tail16": "64383032626336633131383233343427",
+      "tail_math": {
+        "eocd": 417603,
+        "eocd_from_end": 217,
+        "size_cd": 415,
+        "offset_cd": 412475,
+        "concat": 4713,
+        "first_local_header": 4713,
+        "cd_at_concat": "504b0102",
+        "comment_len": 199
+      },
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 417824",
+      "pyzipper": "OK",
+      "pyzipper_members": 5,
+      "pyzipper_first": "payload/random.bin",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "A3_steg_modeA_cn_pwd.mp4": {
+      "exists": true,
+      "size": 468387,
+      "sha256": "4c1e9b3f682dc2af4043b942d2e30ad34aa62e21c9353adcce9fe8f0ad4aa811",
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "207588",
+      "sevenzip_physical": "413111",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": "",
+      "eocd_pos": 468166,
+      "eocd_from_end": 217,
+      "pk_local_offsets": [
+        55276,
+        56577,
+        57864,
+        57950,
+        262864
+      ],
+      "tail16": "64383032626336633131383233343427",
+      "tail_math": {
+        "eocd": 468166,
+        "eocd_from_end": 217,
+        "size_cd": 415,
+        "offset_cd": 412475,
+        "concat": 55276,
+        "first_local_header": 55276,
+        "cd_at_concat": "504b0102",
+        "comment_len": 199
+      },
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 468387",
+      "pyzipper": "OK",
+      "pyzipper_members": 5,
+      "pyzipper_first": "payload/中文目录/文件1.txt",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "A4_steg_modeB_zarchiver.mp4": {
+      "exists": true,
+      "size": 467676,
+      "sha256": "b9c09a1529fbca227737486250225b1929f6e03269bada51ab7109a53dc075b5",
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "410008",
+      "sevenzip_physical": "410709",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x56446eafa5c0] moov atom not found\n[in#0 @ 0x56446eafa300] Error opening input: Invalid data found when processing input\nError opening input file /home/user/hermes/yshjy/tests/data/A4_steg_modeB_zarchiver.mp4.\nError opening input files: Invalid data found when proce",
+      "eocd_pos": 410524,
+      "eocd_from_end": 57148,
+      "pk_local_offsets": [
+        36,
+        85,
+        204998,
+        409938,
+        410044
+      ],
+      "tail16": "2b5b5024a1324210000000086d646174",
+      "tail_math": {
+        "eocd": 410524,
+        "eocd_from_end": 57148,
+        "size_cd": 360,
+        "offset_cd": 410128,
+        "concat": 36,
+        "first_local_header": 36,
+        "cd_at_concat": "504b0102",
+        "comment_len": 199
+      },
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 467676",
+      "zipfile": "OK",
+      "zipfile_members": 5,
+      "zipfile_bad": null,
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "A4b_steg_modeB_tailnoise_gt64k.mp4": {
+      "exists": true,
+      "size": 544590,
+      "sha256": "322d6a3ee229fb1e8530ddc11b77e9db35d8fb1553c3c937131c205d141dc815",
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "410079",
+      "sevenzip_physical": "410709",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55a1b23bc5c0] moov atom not found\n[in#0 @ 0x55a1b23bc300] Error opening input: Invalid data found when processing input\nError opening input file /home/user/hermes/yshjy/tests/data/A4b_steg_modeB_tailnoise_gt64k.mp4.\nError opening input files: Invalid data found whe",
+      "eocd_pos": 410524,
+      "eocd_from_end": 134062,
+      "pk_local_offsets": [
+        36,
+        204949,
+        205055,
+        409995,
+        410115
+      ],
+      "tail16": "fb83083c5c8c1c4f000000086d646174",
+      "tail_math": {
+        "eocd": 410524,
+        "eocd_from_end": 134062,
+        "size_cd": 360,
+        "offset_cd": 410128,
+        "concat": 36,
+        "first_local_header": 36,
+        "cd_at_concat": "504b0102",
+        "comment_len": 199
+      },
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 544590",
+      "zipfile_or_pyzipper": "BadZipFile: File is not a zip file",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）",
+          "MP4 ZArchiver模式提取"
+        ],
+        "hit": [
+          "MP4 ZArchiver模式提取"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "A6_oldstyle_bare_append.mp4": {
+      "exists": true,
+      "size": 436724,
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "205188",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": "",
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 436724",
+      "eocd_pos": 424388,
+      "tail16": "000000086d646174000000086d646174",
+      "tail_math": {
+        "eocd": 424388,
+        "eocd_from_end": 12332,
+        "size_cd": 360,
+        "offset_cd": 410128,
+        "concat": 13900,
+        "first_local_header": 13900,
+        "cd_at_concat": "504b0102",
+        "comment_len": 0
+      },
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "A5_steg_mkv_mode.mkv": {
+      "exists": true,
+      "size": 438121,
+      "mkvinfo_rc": 0,
+      "mkvinfo_attach": [
+        "|  + MIME 类型: application/zip",
+        "|  + MIME 类型: application/octet-stream"
+      ],
+      "mkvinfo_err": "",
+      "mkvextract_rc": 0,
+      "mkvextract_files": {
+        "out1": 410709,
+        "out2": 8192
+      },
+      "mkvextract_err": "",
+      "attachment1_type": "zip"
+    },
+    "B1_tail_append_cat.mp4": {
+      "exists": true,
+      "size": 424410,
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "205188",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": "",
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 424410",
+      "zipfile": "OK members=5 bad=None",
+      "tail_math": {
+        "eocd": 424388,
+        "eocd_from_end": 18,
+        "size_cd": 360,
+        "offset_cd": 410128,
+        "concat": 13900,
+        "first_local_header": 13900,
+        "cd_at_concat": "504b0102",
+        "comment_len": 0
+      },
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "B2_apate.mp4": {
+      "exists": true,
+      "size": 410542,
+      "N": 28,
+      "head_hex": "504b0304140000000800d4b8cf5a0000000002000000000000001100",
+      "restore_method": "逆序还原",
+      "restored_type": "zip",
+      "restored_zipfile": "OK members=5 bad=None",
+      "restored_sha256": "fd4eac5160475c568adb735499857d397363b388e9b4c045a75db226ebc411bf",
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）",
+          "MP4 ZArchiver模式提取",
+          "MP4 free原子方法"
+        ],
+        "hit": [],
+        "err": null,
+        "wrote": []
+      }
+    },
+    "B3_png_tail.png": {
+      "exists": true,
+      "size": 410975,
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "205188",
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 410975",
+      "tail_marker": "IEND 之后有数据",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4 ZArchiver模式提取",
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "hit": [
+          "MP4文件末尾ZIP提取（WinRAR兼容）"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "B3_jpg_tail.jpg": {
+      "exists": true,
+      "size": 413332,
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "205188",
+      "sevenzip_test_rc": 0,
+      "sevenzip_test_tail": "Compressed: 413332",
+      "tail_marker": "EOI 之后有数据"
+    },
+    "B4_free_atom_interior.mp4": {
+      "exists": true,
+      "size": 496784,
+      "atoms": [
+        [
+          "ftyp",
+          0,
+          28
+        ],
+        [
+          "free",
+          28,
+          410518
+        ],
+        [
+          "free",
+          410546,
+          8
+        ],
+        [
+          "mdat",
+          410554,
+          85054
+        ],
+        [
+          "moov",
+          495608,
+          1176
+        ]
+      ],
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": "",
+      "sevenzip_type": "zip",
+      "sevenzip_offset": "205188",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      },
+      "reveal_probe": {
+        "tried": [
+          "7-Zip高速解压",
+          "MP4文件末尾ZIP提取（WinRAR兼容）",
+          "MP4 ZArchiver模式提取"
+        ],
+        "hit": [
+          "MP4 ZArchiver模式提取"
+        ],
+        "err": null,
+        "wrote": [
+          "payload"
+        ]
+      }
+    },
+    "C1_plain.zip": {
+      "exists": true,
+      "size": 411028,
+      "verify_tool": "7z t",
+      "rc": 0,
+      "tail": "Compressed: 411028",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C2_plain.7z": {
+      "exists": true,
+      "size": 410299,
+      "verify_tool": "7z t",
+      "rc": 0,
+      "tail": "Compressed: 410299",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C3_plain.tar": {
+      "exists": true,
+      "size": 419840,
+      "verify_tool": "tar -tf",
+      "rc": 0,
+      "members": 8,
+      "err": ""
+    },
+    "C4_plain.tar.gz": {
+      "exists": true,
+      "size": 410427,
+      "verify_tool": "tar -tzf",
+      "rc": 0,
+      "members": 8,
+      "err": ""
+    },
+    "C5_plain.tar.xz": {
+      "exists": true,
+      "size": 412388,
+      "verify_tool": "tar -tJf",
+      "rc": 0,
+      "members": 8,
+      "err": ""
+    },
+    "C6_plain.tar.zst": {
+      "exists": true,
+      "size": 410101,
+      "verify_tool": "tar --zstd -tf",
+      "rc": 0,
+      "members": 8,
+      "err": ""
+    },
+    "C7_plain.tar.bz2": {
+      "exists": true,
+      "size": 412789,
+      "verify_tool": "tar -tjf",
+      "rc": 0,
+      "members": 8,
+      "err": ""
+    },
+    "C5b_single.xz": {
+      "exists": true,
+      "size": 144,
+      "verify_tool": "xz -dc",
+      "rc": 0,
+      "out_bytes": 520,
+      "err": ""
+    },
+    "C6b_single.zst": {
+      "exists": true,
+      "size": 77,
+      "verify_tool": "zstd -dc",
+      "rc": 0,
+      "out_bytes": 520,
+      "err": ""
+    },
+    "C7b_single.bz2": {
+      "exists": true,
+      "size": 157,
+      "verify_tool": "bzip2 -dc",
+      "rc": 0,
+      "out_bytes": 520,
+      "err": ""
+    },
+    "C8_zipcrypto.zip": {
+      "exists": true,
+      "size": 410924,
+      "wrong_pwd_rc": 2,
+      "correct_pwd_rc": 0,
+      "correct_pwd_tail": "Compressed: 410924",
+      "sevenzip_type": "zip",
+      "local_headers": [
+        {
+          "off": 0,
+          "flags": "0x0",
+          "encrypted": false,
+          "method": 0,
+          "name": "payload/",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 38,
+          "flags": "0x800",
+          "encrypted": false,
+          "method": 0,
+          "name": "payload/中文目录/",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 89,
+          "flags": "0x809",
+          "encrypted": true,
+          "method": 8,
+          "name": "payload/中文目录/文件1.txt",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 223,
+          "flags": "0x800",
+          "encrypted": false,
+          "method": 0,
+          "name": "payload/中文目录/sub/",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 278,
+          "flags": "0x809",
+          "encrypted": true,
+          "method": 8,
+          "name": "payload/中文目录/sub/空格 文件名.bin",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 205216,
+          "flags": "0x9",
+          "encrypted": true,
+          "method": 0,
+          "name": "payload/empty.txt",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 205291,
+          "flags": "0x9",
+          "encrypted": true,
+          "method": 8,
+          "name": "payload/random.bin",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 410202,
+          "flags": "0x809",
+          "encrypted": true,
+          "method": 8,
+          "name": "payload/说明.txt",
+          "aes": null,
+          "extra_hex": ""
+        }
+      ],
+      "unzip_test_rc": 0,
+      "unzip_tail": "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/C8_zipcrypto.zip.",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C9_aes256.zip": {
+      "exists": true,
+      "size": 411278,
+      "wrong_pwd_rc": 2,
+      "correct_pwd_rc": 0,
+      "correct_pwd_tail": "Compressed: 411278",
+      "sevenzip_type": "zip",
+      "local_headers": [
+        {
+          "off": 0,
+          "flags": "0x0",
+          "encrypted": false,
+          "method": 0,
+          "name": "payload/",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 38,
+          "flags": "0x1",
+          "encrypted": true,
+          "method": 99,
+          "name": "payload/empty.txt",
+          "aes": {
+            "version": 2,
+            "vendor": "AE",
+            "strength": 3,
+            "real_method": 0
+          },
+          "extra_hex": "0199070002004145030000"
+        },
+        {
+          "off": 124,
+          "flags": "0x1",
+          "encrypted": true,
+          "method": 99,
+          "name": "payload/random.bin",
+          "aes": {
+            "version": 2,
+            "vendor": "AE",
+            "strength": 3,
+            "real_method": 0
+          },
+          "extra_hex": "0199070002004145030000"
+        },
+        {
+          "off": 205011,
+          "flags": "0x800",
+          "encrypted": false,
+          "method": 0,
+          "name": "payload/中文目录/",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 205062,
+          "flags": "0x800",
+          "encrypted": false,
+          "method": 0,
+          "name": "payload/中文目录/sub/",
+          "aes": null,
+          "extra_hex": ""
+        },
+        {
+          "off": 205117,
+          "flags": "0x801",
+          "encrypted": true,
+          "method": 99,
+          "name": "payload/中文目录/sub/空格 文件名.bin",
+          "aes": {
+            "version": 2,
+            "vendor": "AE",
+            "strength": 3,
+            "real_method": 0
+          },
+          "extra_hex": "0199070002004145030000"
+        },
+        {
+          "off": 410031,
+          "flags": "0x801",
+          "encrypted": true,
+          "method": 99,
+          "name": "payload/中文目录/文件1.txt",
+          "aes": {
+            "version": 2,
+            "vendor": "AE",
+            "strength": 3,
+            "real_method": 8
+          },
+          "extra_hex": "0199070002004145030800"
+        },
+        {
+          "off": 410189,
+          "flags": "0x801",
+          "encrypted": true,
+          "method": 99,
+          "name": "payload/说明.txt",
+          "aes": {
+            "version": 2,
+            "vendor": "AE",
+            "strength": 3,
+            "real_method": 8
+          },
+          "extra_hex": "0199070002004145030800"
+        }
+      ],
+      "pyzipper": "OK members=8",
+      "wz_aes_extra": "0a00200000000000010018000040d01807dedb0100000000000000000000000000000000",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C10_pwd_cn.7z": {
+      "exists": true,
+      "size": 410339,
+      "wrong_pwd_rc": 2,
+      "correct_pwd_rc": 0,
+      "correct_pwd_tail": "Compressed: 410339",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C10b_pwd_cn_mhe.7z": {
+      "exists": true,
+      "size": 410368,
+      "wrong_pwd_rc": 2,
+      "correct_pwd_rc": 0,
+      "correct_pwd_tail": "Compressed: 410368",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C11_split.7z.001": {
+      "size": 307200,
+      "verify_tool": "7z t .001",
+      "rc": 0,
+      "tail": "Compressed: 410299",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "C11_split.7z.002": {
+      "size": 103099
+    },
+    "C12_split.z01": {
+      "size": 307200
+    },
+    "C12_split.zip": {
+      "size": 103588,
+      "verify_tool": "7z t .zip(set)",
+      "rc": 0,
+      "tail": "Compressed: 410788",
+      "extract7z": {
+        "rc": 0,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "D1_truncated.zip": {
+      "exists": true,
+      "size": 410210,
+      "sevenzip_test_rc": 2,
+      "sevenzip_test_tail": "Open Errors: 1",
+      "eocd_present": false,
+      "local_headers": 5,
+      "rescue_local_headers": {
+        "recovered": [
+          "payload/empty.txt",
+          "payload/random.bin",
+          "payload/说明.txt",
+          "payload/中文目录/文件1.txt",
+          "payload/中文目录/sub/空格 文件名.bin"
+        ],
+        "failed": [],
+        "bytes": 412000
+      },
+      "extract7z": {
+        "rc": 2,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "D2a_eocd_cd_offset_tampered.zip": {
+      "exists": true,
+      "size": 410510,
+      "sevenzip_test_rc": 2,
+      "sevenzip_test_tail": "Sub items Errors: 5",
+      "zipfile": "OK members=5",
+      "note": "真实 CD 可被 local header 扫描救回",
+      "rescue_local_headers": {
+        "recovered": [
+          "payload/empty.txt",
+          "payload/random.bin",
+          "payload/说明.txt",
+          "payload/中文目录/文件1.txt",
+          "payload/中文目录/sub/空格 文件名.bin"
+        ],
+        "failed": [],
+        "bytes": 412000
+      },
+      "extract7z": {
+        "rc": 2,
+        "files": 5,
+        "bytes": 412000
+      }
+    },
+    "D2b_prefixed_2355200.zip": {
+      "exists": true,
+      "size": 2765702,
+      "sevenzip_test_rc": 2,
+      "sevenzip_test_tail": "Compressed: 0",
+      "zipfile": "OK members=5 bad=None",
+      "uniform_delta": 2355200,
+      "computed_concat": 2355192,
+      "cd_at_expected": "504b0102",
+      "rescue_local_headers": {
+        "recovered": [
+          "payload/empty.txt",
+          "payload/random.bin",
+          "payload/说明.txt",
+          "payload/中文目录/文件1.txt",
+          "payload/中文目录/sub/空格 文件名.bin"
+        ],
+        "failed": [],
+        "bytes": 412000
+      },
+      "extract7z": {
+        "rc": 2,
+        "files": 0,
+        "bytes": 0
+      }
+    },
+    "D3_missing_volume.7z.001": {
+      "exists": true,
+      "size": 307200,
+      "sevenzip_test_rc": 2,
+      "sevenzip_test_tail": "Compressed: 0",
+      "err_tail": "ERROR: /home/user/hermes/yshjy/tests/data/D3_missing_volume.7z.001\nD3_missing_volume.7z\nOpen ERROR: Cannot open the file as [7z] archive\n\n\nERRORS:\nUnexpected end of archive"
+    },
+    "D4_corrupt_member.zip": {
+      "exists": true,
+      "size": 410510,
+      "sevenzip_test_rc": 2,
+      "sevenzip_test_tail": "Sub items Errors: 1",
+      "err_tail": "ERROR: CRC Failed : payload/random.bin",
+      "zipfile_testzip_bad": "payload/random.bin",
+      "extract7z": {
+        "rc": 2,
+        "files": 5,
+        "bytes": 412000
+      }
+    }
+  }
+}

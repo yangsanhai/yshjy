@@ -1,0 +1,19 @@
+[package]
+name = "yshjy-spike"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "yshjy_spike"
+path = "src/lib.rs"
+
+[dependencies]
+# 只解压用不上写能力，但 zip crate 的 default 已含 aes-crypto/deflate64/lzma/ppmd/xz/zstd
+zip = { version = "9.0.4", features = ["legacy-zip"] }
+sevenz-rust2 = { version = "0.24", features = ["aes256", "bzip2", "deflate", "zstd", "brotli", "lz4", "compress", "ppmd", "util"] }
+rars = "0.11"
+crc32fast = "1"
+sha2 = "0.10"
+
+[profile.release]
+debug = true

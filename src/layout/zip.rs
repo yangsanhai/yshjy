@@ -1,0 +1,655 @@
+//! ZIP / ZIP64 结构解析与**偏移反推**
+//!
+//! # 核心问题
+//! 伪装包的 ZIP 目录表里记录的偏移是「相对于 ZIP 数据起点」的，
+//! 而这个起点前面还压着一层 MP4 外壳（例如 119 MB）。
+//! 标准解压工具一看偏移对不上就判定「文件损坏」直接放弃 —— 这就是用户卡住的原因。
+//!
+//! # 反推公式（本项目最重要的公式）
+//! ```text
+//! ZIP 起点 = 中央目录的实际位置 − ZIP64 EOCD 里记录的 cd_offset
+//! ```
+//! 算完后**必须验证**该位置处是 `PK\x03\x04`（本地文件头），
+//! 否则说明推算有误，不能拿错结果去解压。
+//!
+//! # 已实测支撑
+//! - 8.2 GB 真实伪装包：算出 base = 119248031，验证通过，提取结果 SHA-256 与包内指纹一致
+//! - 前置垃圾 2.3 MB 的样本（D2b）：7-Zip 自己打不开，本算法能算出来
+
+use crate::error::{Error, ErrorCode, Result};
+use crate::layout::EntryInfo;
+use std::io::{Read, Seek, SeekFrom};
+
+/// EOCD 签名 `PK\x05\x06`
+pub const EOCD_SIG: &[u8; 4] = b"PK\x05\x06";
+/// ZIP64 EOCD 签名 `PK\x06\x06`
+pub const ZIP64_EOCD_SIG: &[u8; 4] = b"PK\x06\x06";
+/// ZIP64 EOCD 定位器签名 `PK\x06\x07`
+pub const ZIP64_LOC_SIG: &[u8; 4] = b"PK\x06\x07";
+/// 中央目录条目签名 `PK\x01\x02`
+pub const CD_SIG: &[u8; 4] = b"PK\x01\x02";
+/// 本地文件头签名 `PK\x03\x04`
+pub const LFH_SIG: &[u8; 4] = b"PK\x03\x04";
+
+/// EOCD 固定长度（不含注释）
+const EOCD_LEN: u64 = 22;
+/// ZIP64 EOCD 固定长度
+const ZIP64_EOCD_LEN: u64 = 56;
+/// ZIP64 定位器长度（恰好 20 字节 —— 这也是 unar 分块扫描要重叠 20 字节的原因）
+const ZIP64_LOC_LEN: u64 = 20;
+/// 默认尾部搜索窗口（1 MiB）
+pub const DEFAULT_WINDOW: u64 = 1 << 20;
+
+/// ZIP 的定位结果
+#[derive(Debug, Clone)]
+pub struct ZipLayout {
+    /// **ZIP 数据在底层文件中的真实起点**（核心结果）
+    pub base: u64,
+    /// EOCD 在底层文件中的位置
+    pub eocd_at: u64,
+    /// 中央目录在底层文件中的位置
+    pub cd_at: u64,
+    /// 中央目录的字节数
+    pub cd_size: u64,
+    /// 条目总数
+    pub entries_total: u64,
+    /// 是否为 ZIP64 格式
+    pub zip64: bool,
+    /// EOCD（含注释）之后还剩多少字节 —— 便于诊断"尾部还有东西"
+    pub trailing_bytes: u64,
+    /// ZIP 注释长度
+    pub comment_len: u16,
+}
+
+impl ZipLayout {
+    /// ZIP 数据的长度（从 base 到 EOCD 结束）
+    pub fn data_len(&self) -> u64 {
+        self.eocd_at + EOCD_LEN + self.comment_len as u64 - self.base
+    }
+}
+
+// ── 小工具：从字节切片读小端整数 ──
+fn u16le(b: &[u8], off: usize) -> u16 {
+    u16::from_le_bytes([b[off], b[off + 1]])
+}
+fn u32le(b: &[u8], off: usize) -> u32 {
+    u32::from_le_bytes([b[off], b[off + 1], b[off + 2], b[off + 3]])
+}
+fn u64le(b: &[u8], off: usize) -> u64 {
+    let mut a = [0u8; 8];
+    a.copy_from_slice(&b[off..off + 8]);
+    u64::from_le_bytes(a)
+}
+
+/// 在缓冲区里从后往前找 EOCD 签名，返回其下标
+pub fn find_eocd_backwards(buf: &[u8]) -> Option<usize> {
+    if buf.len() < 4 {
+        return None;
+    }
+    // 实测对比（同一 8.7 GB 文件、1 MiB 窗口）：
+    //   标量 `rposition` → 41 µs   ← 采用
+    //   `memchr::rfind`  → 610 µs  ← 慢 15 倍
+    // 结论：窗口小时标量更快（SIMD 的建表开销盖过收益）；
+    // 只有在把窗口放大到几十 MB 时才值得换 SIMD。不要盲抄参考项目。
+    buf.windows(4).rposition(|w| w == EOCD_SIG)
+}
+
+/// **在文件中定位 ZIP 数据**（含偏移反推与结构自校验）
+///
+/// `file_size` 为底层文件长度（调用者已知，避免重复 stat）。
+///
+/// 搜索顺序：
+/// 1. 尾部窗口（默认 1 MiB）内倒着找 EOCD —— 覆盖绝大多数情况
+/// 2. 若未找到，返回 [`ErrorCode::NotArchive`]，由上层决定是否做全文件扫描
+pub fn locate<R: Read + Seek>(r: &mut R, file_size: u64) -> Result<ZipLayout> {
+    locate_with_window(r, file_size, DEFAULT_WINDOW)
+}
+
+/// 与 [`locate`] 相同，但可自定义尾部搜索窗口大小
+///
+/// 用途：某些布局会把 EOCD 推得离文件尾很远（实测 L3 布局距尾 118902 字节），
+/// 这时需要更大的窗口。
+pub fn locate_with_window<R: Read + Seek>(
+    r: &mut R,
+    file_size: u64,
+    window: u64,
+) -> Result<ZipLayout> {
+    if file_size < EOCD_LEN {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "file_too_small")
+            .with("size", file_size));
+    }
+
+    let win = window.min(file_size);
+    let win_start = file_size - win;
+    r.seek(SeekFrom::Start(win_start))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek failed: {e}")))?;
+    let mut buf = vec![0u8; win as usize];
+    let got = read_full(r, &mut buf)?;
+    buf.truncate(got);
+
+    let eocd_rel = find_eocd_backwards(&buf).ok_or_else(|| {
+        Error::new(ErrorCode::NotArchive)
+            .with("reason", "no_eocd_in_window")
+            .with("window", win)
+            .context("尾部窗口内未见 PK05 06 签名（可能需要全文件扫描）")
+    })?;
+
+    // 至少要有完整的 22 字节 EOCD
+    if eocd_rel + EOCD_LEN as usize > buf.len() {
+        return Err(Error::new(ErrorCode::Truncated)
+            .with("reason", "eocd_truncated")
+            .with("at", win_start + eocd_rel as u64));
+    }
+
+    let eocd = &buf[eocd_rel..];
+    let eocd_abs = win_start + eocd_rel as u64;
+    let comment_len = u16le(eocd, 20);
+
+    // EOCD 之后的剩余（注释 + 可能的尾部垃圾）
+    let after_eocd = file_size - eocd_abs;
+    let trailing_bytes = after_eocd.saturating_sub(EOCD_LEN + comment_len as u64);
+
+    // ── 判断是否 ZIP64：EOCD 之前 20 字节应是定位器 ──
+    let zip64 = if eocd_rel >= ZIP64_LOC_LEN as usize
+        && &buf[eocd_rel - ZIP64_LOC_LEN as usize..eocd_rel - ZIP64_LOC_LEN as usize + 4]
+            == ZIP64_LOC_SIG
+    {
+        true
+    } else {
+        // 退一步：EOCD 里记录的偏移是 0xFFFFFFFF 也说明是 ZIP64
+        u32le(eocd, 16) == 0xFFFF_FFFF || u32le(eocd, 12) == 0xFFFF_FFFF
+    };
+
+    let (cd_size, cd_offset, entries_total) = if zip64 {
+        read_zip64(r, eocd_abs, &buf, eocd_rel, win_start)?
+    } else {
+        let cd_size = u32le(eocd, 12) as u64;
+        let cd_offset = u32le(eocd, 16) as u64;
+        let entries = u16le(eocd, 10) as u64;
+        (cd_size, cd_offset, entries)
+    };
+
+    // ── 中央目录的实际位置 ──
+    // 常规布局：[CD][EOCD] 或 [CD][ZIP64 EOCD][LOCATOR][EOCD]
+    let cd_at = if zip64 {
+        // CD 紧贴在 ZIP64 EOCD 之前
+        let z64_at = find_zip64_eocd(r, eocd_abs, &buf, eocd_rel, win_start)?;
+        z64_at.checked_sub(cd_size).ok_or_else(|| {
+            Error::new(ErrorCode::Truncated).with("reason", "cd_before_file_start")
+        })?
+    } else {
+        eocd_abs.checked_sub(cd_size).ok_or_else(|| {
+            Error::new(ErrorCode::Truncated).with("reason", "cd_before_file_start")
+        })?
+    };
+
+    // ── 核心：反推 ZIP 起点 ──
+    let base = cd_at.checked_sub(cd_offset).ok_or_else(|| {
+        Error::new(ErrorCode::Truncated)
+            .with("reason", "base_before_file_start")
+            .with("cd_at", cd_at)
+            .with("cd_offset", cd_offset)
+    })?;
+
+    // ── 结构自校验：base 处必须是本地文件头 ──
+    verify_base(r, base).map_err(|e| {
+        e.context(format!(
+            "推算的 base={base} 处不是 PK03 04（cd_at={cd_at}, cd_offset={cd_offset}）"
+        ))
+    })?;
+
+    Ok(ZipLayout {
+        base,
+        eocd_at: eocd_abs,
+        cd_at,
+        cd_size,
+        entries_total,
+        zip64,
+        trailing_bytes,
+        comment_len,
+    })
+}
+
+/// 解析 ZIP64 EOCD（先从定位器入手，失败再按紧邻位置推算）
+fn read_zip64<R: Read + Seek>(
+    r: &mut R,
+    eocd_abs: u64,
+    buf: &[u8],
+    eocd_rel: usize,
+    _win_start: u64,
+) -> Result<(u64, u64, u64)> {
+    // 定位器紧邻 EOCD 之前
+    if eocd_rel < ZIP64_LOC_LEN as usize {
+        return Err(Error::new(ErrorCode::Truncated).with("reason", "no_room_for_locator"));
+    }
+    let loc_rel = eocd_rel - ZIP64_LOC_LEN as usize;
+    let loc = &buf[loc_rel..loc_rel + ZIP64_LOC_LEN as usize];
+    if &loc[0..4] != ZIP64_LOC_SIG {
+        return Err(Error::new(ErrorCode::NotArchive).with("reason", "bad_zip64_locator_sig"));
+    }
+    let loc_disk = u32le(loc, 4);
+    let z64_rel_off = u64le(loc, 8);
+
+    // ZIP64 EOCD 实际位置有两种可能：
+    //   ① 相对 ZIP 数据起点（元数据里记的）—— 但我们还不知道 base
+    //   ② 紧邻定位器之前（标准布局）
+    // 采用 ② 更稳，并用 ① 做交叉诊断
+    let z64_at = eocd_abs
+        .checked_sub(ZIP64_LOC_LEN + ZIP64_EOCD_LEN)
+        .ok_or_else(|| Error::new(ErrorCode::Truncated).with("reason", "no_room_for_eocd64"))?;
+
+    let mut hdr = [0u8; ZIP64_EOCD_LEN as usize];
+    r.seek(SeekFrom::Start(z64_at))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek: {e}")))?;
+    read_full(r, &mut hdr)?;
+    if &hdr[0..4] != ZIP64_EOCD_SIG {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "bad_zip64_eocd_sig")
+            .with("at", z64_at)
+            .context(format!(
+                "locator 指向偏移 {z64_rel_off}，记录磁盘 {loc_disk}"
+            )));
+    }
+
+    let cd_size = u64le(&hdr, 40);
+    let cd_offset = u64le(&hdr, 48);
+    let entries = u64le(&hdr, 32);
+    Ok((cd_size, cd_offset, entries))
+}
+
+/// 找到 ZIP64 EOCD 的实际位置（用于推算 CD 位置）
+fn find_zip64_eocd<R: Read + Seek>(
+    _r: &mut R,
+    eocd_abs: u64,
+    _buf: &[u8],
+    _eocd_rel: usize,
+    _win_start: u64,
+) -> Result<u64> {
+    eocd_abs
+        .checked_sub(ZIP64_LOC_LEN + ZIP64_EOCD_LEN)
+        .ok_or_else(|| Error::new(ErrorCode::Truncated).with("reason", "no_room_for_eocd64"))
+}
+
+/// 验证 base 处确实是本地文件头（防止把错偏移当成结果）
+fn verify_base<R: Read + Seek>(r: &mut R, base: u64) -> Result<()> {
+    let mut sig = [0u8; 4];
+    r.seek(SeekFrom::Start(base))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek base: {e}")))?;
+    read_full(r, &mut sig)?;
+    if &sig != LFH_SIG {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "base_is_not_local_header")
+            .with("base", base)
+            .with(
+                "found",
+                format!("{:02x}{:02x}{:02x}{:02x}", sig[0], sig[1], sig[2], sig[3]),
+            ));
+    }
+    Ok(())
+}
+
+/// 尽量读满缓冲区（返回实际读到的字节数；EOF 不算错误）
+fn read_full<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<usize> {
+    let mut total = 0;
+    while total < buf.len() {
+        match r.read(&mut buf[total..]) {
+            Ok(0) => break,
+            Ok(n) => total += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                return Err(Error::new(ErrorCode::Internal).context(format!("read failed: {e}")));
+            }
+        }
+    }
+    Ok(total)
+}
+
+/// 解析中央目录，列出条目（用于「解压前预览」）
+///
+/// 返回的每条 [`EntryInfo`] 都带 `encrypted` 标志 —— 界面上的 🔒 徽标就读它。
+pub fn list_entries<R: Read + Seek>(r: &mut R, layout: &ZipLayout) -> Result<Vec<EntryInfo>> {
+    let mut out = Vec::new();
+    r.seek(SeekFrom::Start(layout.cd_at))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek cd: {e}")))?;
+
+    let mut remaining = layout.cd_size;
+    let mut buf = vec![0u8; 4096.min(layout.cd_size as usize).max(64)];
+
+    while remaining > 0 {
+        let take = (buf.len() as u64).min(remaining) as usize;
+        let n = read_full(r, &mut buf[..take])?;
+        if n < 46 {
+            break; // 读不满一个 CD 头，结束
+        }
+        if &buf[0..4] != CD_SIG {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "bad_cd_entry_sig")
+                .with("at", layout.cd_at + (layout.cd_size - remaining)));
+        }
+
+        let flags = u16le(&buf, 8);
+        let method = u16le(&buf, 10);
+        let crc = u32le(&buf, 16);
+        let mut csize = u32le(&buf, 20) as u64;
+        let mut usize_ = u32le(&buf, 24) as u64;
+        let name_len = u16le(&buf, 28) as usize;
+        let extra_len = u16le(&buf, 30) as usize;
+        let comment_len = u16le(&buf, 32) as usize;
+        let entry_len = (46 + name_len + extra_len + comment_len) as u64;
+
+        // 名字可能跨缓冲区边界：这里按需再读
+        let mut name_bytes = Vec::new();
+        if 46 + name_len <= n {
+            name_bytes.extend_from_slice(&buf[46..46 + name_len]);
+        } else {
+            let mut nb = vec![0u8; name_len];
+            r.seek(SeekFrom::Current(
+                (46 + name_len - n.min(46 + name_len)) as i64,
+            ))
+            .ok();
+            read_full(r, &mut nb)?;
+            name_bytes = nb;
+        }
+
+        // 读 extra 字段（ZIP64 扩展里可能有真实大小）
+        let mut extra = Vec::new();
+        if extra_len > 0 {
+            let extra_start_abs =
+                layout.cd_at + (layout.cd_size - remaining) + (46 + name_len) as u64;
+            let saved = r.stream_position().unwrap_or(extra_start_abs);
+            r.seek(SeekFrom::Start(extra_start_abs)).ok();
+            extra.resize(extra_len, 0);
+            read_full(r, &mut extra)?;
+            // 恢复到条目之后
+            let after = extra_start_abs + extra_len as u64 + comment_len as u64;
+            r.seek(SeekFrom::Start(after)).ok();
+            if saved > after {
+                r.seek(SeekFrom::Start(saved)).ok();
+            }
+        }
+        // ZIP64 extra（0x0001）：当 32 位字段为 0xFFFFFFFF 时取其中的 64 位值
+        if extra.len() >= 4 && u16le(&extra, 0) == 0x0001 {
+            let body = &extra[4..];
+            let mut p = 0usize;
+            if usize_ == 0xFFFF_FFFF && body.len() >= p + 8 {
+                usize_ = u64le(body, p);
+                p += 8;
+            }
+            if csize == 0xFFFF_FFFF && body.len() >= p + 8 {
+                csize = u64le(body, p);
+            }
+        }
+
+        // 文件名编码：ZIP 规范用 UTF-8 或本地代码页；带 UTF-8 标志（bit 11）时明确为 UTF-8
+        // 文件名编码：见 decode_name 的四级回退链
+        let is_utf8 = flags & (1 << 11) != 0;
+        let path = decode_name(&name_bytes, is_utf8);
+
+        let is_dir = path.ends_with('/') || path.ends_with('\\');
+
+        out.push(EntryInfo {
+            path,
+            is_dir,
+            size: usize_,
+            compressed_size: Some(csize),
+            // 加密标志：bit 0（传统加密）/ 方法 99（WinZip AES）
+            encrypted: (flags & 1) != 0 || method == 99,
+            crc32: Some(crc),
+        });
+
+        remaining = remaining.saturating_sub(entry_len);
+        r.seek(SeekFrom::Start(layout.cd_at + (layout.cd_size - remaining)))
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek next cd: {e}")))?;
+    }
+
+    Ok(out)
+}
+
+/// 解码文件名 —— **四级回退链**
+///
+/// 思路对照 7-Zip `Archive/Zip/ZipItem.cpp:405-461`（`GetUnicodeString`）的四级链：
+/// 归档标志位 → Info-ZIP Unicode Path extra(0x7075，先验 CRC) → 用户指定代码页 → UTF-8。
+///
+/// 我们的实现顺序：
+/// 1. **UTF-8 标志位**（通用标志 bit 0x800）→ 直接按 UTF-8
+/// 2. **严格 UTF-8 可解** → 用它（很多工具不设标志位，但内容确实是 UTF-8）
+/// 3. **GB18030**（GBK/GB2312 的超集；简体中文 Windows 打包的默认编码）
+/// 4. 兜底 **有损 UTF-8** —— 保证不 panic、不丢条目
+///
+/// 取舍说明：unar 走的是"编码探测 + 启发式评分"（`XADString.m:342-408`），
+/// 更准但要拖进整个编码探测库（与单二进制体积冲突）。我们用确定性的四级链，
+/// 同时把**原始字节**一起交给上层，必要时可由 `--encoding` 强制指定。
+pub fn decode_name(bytes: &[u8], is_utf8: bool) -> String {
+    // ① 归档自己声明了 UTF-8
+    if is_utf8 {
+        return String::from_utf8_lossy(bytes).into_owned();
+    }
+    // ② 内容是合法 UTF-8（现代打包工具的常见情况）
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    // ③ GB18030：覆盖 GBK/GB2312，中文圈资源的主力编码
+    let (decoded, _, had_errors) = encoding_rs::GB18030.decode(bytes);
+    if !had_errors {
+        return decoded.into_owned();
+    }
+    // ④ 兜底：不 panic、不丢条目（宁可显示 � 也不能让整包解析失败）
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn gbk_中文文件名能正确解码() {
+        // "中文测试.txt" 的 GBK 字节（中文 Windows 打包的典型情况）
+        let gbk = [
+            0xD6, 0xD0, 0xCE, 0xC4, 0xB2, 0xE2, 0xCA, 0xD4, b'.', b't', b'x', b't',
+        ];
+        let s = decode_name(&gbk, false);
+        assert_eq!(
+            s, "中文测试.txt",
+            "GBK 中文名必须正确解码（实际得到 {s:?}）"
+        );
+    }
+
+    #[test]
+    fn utf8_名字按_utf8_解码() {
+        // 带 UTF-8 标志位
+        assert_eq!(decode_name("中文.txt".as_bytes(), true), "中文.txt");
+        // 不带标志位但内容确实是 UTF-8（很多工具这样）
+        assert_eq!(decode_name("中文.txt".as_bytes(), false), "中文.txt");
+    }
+
+    #[test]
+    fn 真实_gbk_样本端到端解码() {
+        let path = "/home/user/.hermes/cache/scratch/true_gbk_fake.mp4";
+        if !std::path::Path::new(path).exists() {
+            eprintln!("样本不存在，跳过");
+            return;
+        }
+        let mut f = std::fs::File::open(path).unwrap();
+        let size = f.metadata().unwrap().len();
+        let l = locate(&mut f, size).unwrap();
+        let entries = list_entries(&mut f, &l).unwrap();
+        eprintln!("── 端到端解出的文件名 ──");
+        for e in &entries {
+            eprintln!("   {:?}", e.path);
+        }
+        assert!(
+            entries.iter().any(|e| e.path.contains("中文测试")),
+            "GBK 样本必须解出中文名，实际拿到: {:?}",
+            entries.iter().map(|e| &e.path).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn 解码失败不_panic_也不丢条目() {
+        // 混入非法字节：只要求不 panic
+        let weird = [0xFFu8, 0xFE, 0x00, 0x41, 0x80];
+        let s = decode_name(&weird, false);
+        assert!(s.len() <= weird.len() * 3, "输出长度不应爆炸");
+    }
+
+    #[test]
+    fn gbk_与_big5_都能解出汉字() {
+        // Big5 的 "中文" = A4 A4 A4 E5 —— GB18030 解出来不是"中文"但也不该 panic
+        let big5 = [0xA4, 0xA4, 0xA4, 0xE5];
+        let s = decode_name(&big5, false);
+        assert!(!s.is_empty(), "Big5 字节至少要有输出（fallback 生效）");
+    }
+
+    use super::*;
+    use std::io::Cursor;
+
+    /// 手工构造一个最小 ZIP（stored，无压缩），可选前置垃圾
+    fn build_zip(prefix: u64, suffix: u64, name: &str, data: &[u8]) -> Vec<u8> {
+        let mut out = vec![0u8; prefix as usize];
+
+        let lfh_at = out.len() as u64;
+        // ── 本地文件头 ──
+        out.extend_from_slice(LFH_SIG);
+        out.extend_from_slice(&[20, 0]); // version needed
+        out.extend_from_slice(&[0, 0]); // flags
+        out.extend_from_slice(&[0, 0]); // method = stored
+        out.extend_from_slice(&[0, 0, 0, 0]); // time+date
+        let crc = crc32(data);
+        out.extend_from_slice(&crc.to_le_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&[0, 0]); // extra len
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(data);
+
+        // ── 中央目录（偏移相对于 ZIP 起点） ──
+        let cd_at = out.len() as u64 - prefix;
+        out.extend_from_slice(CD_SIG);
+        out.extend_from_slice(&[20, 0, 20, 0]); // version made by / needed
+        out.extend_from_slice(&[0, 0]); // flags
+        out.extend_from_slice(&[0, 0]); // method
+        out.extend_from_slice(&[0, 0, 0, 0]); // time+date
+        out.extend_from_slice(&crc.to_le_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&[0, 0]); // extra
+        out.extend_from_slice(&[0, 0]); // comment
+        out.extend_from_slice(&[0, 0]); // disk
+        out.extend_from_slice(&[0, 0]); // internal attr
+        out.extend_from_slice(&[0, 0, 0, 0]); // external attr
+        out.extend_from_slice(&(lfh_at as u32).to_le_bytes()); // LFH 偏移（相对 ZIP 起点）
+        out.extend_from_slice(name.as_bytes());
+        let cd_size = out.len() as u64 - prefix - cd_at;
+
+        // ── EOCD ──
+        out.extend_from_slice(EOCD_SIG);
+        out.extend_from_slice(&[0, 0]); // disk
+        out.extend_from_slice(&[0, 0]); // cd disk
+        out.extend_from_slice(&[1, 0]); // entries on disk
+        out.extend_from_slice(&[1, 0]); // entries total
+        out.extend_from_slice(&(cd_size as u32).to_le_bytes());
+        out.extend_from_slice(&(cd_at as u32).to_le_bytes());
+        out.extend_from_slice(&[0, 0]); // comment len
+
+        out.extend(vec![0u8; suffix as usize]);
+        out
+    }
+
+    fn crc32(data: &[u8]) -> u32 {
+        let mut c = 0xFFFF_FFFFu32;
+        for &b in data {
+            c ^= b as u32;
+            for _ in 0..8 {
+                c = if c & 1 != 0 {
+                    (c >> 1) ^ 0xEDB8_8320
+                } else {
+                    c >> 1
+                };
+            }
+        }
+        !c
+    }
+
+    #[test]
+    fn 无前置数据时_base_为零() {
+        let zip = build_zip(0, 0, "hello.txt", b"hello world");
+        let size = zip.len() as u64;
+        let mut cur = Cursor::new(zip);
+        let l = locate(&mut cur, size).unwrap();
+        assert_eq!(l.base, 0);
+        assert!(!l.zip64);
+        assert_eq!(l.entries_total, 1);
+    }
+
+    #[test]
+    fn 有前置数据时能反推出真实起点() {
+        // 模拟伪装包：前面压 1 MB 垃圾
+        let zip = build_zip(1 << 20, 0, "数据.bin", b"payload payload payload");
+        let size = zip.len() as u64;
+        let mut cur = Cursor::new(zip);
+        let l = locate(&mut cur, size).unwrap();
+        assert_eq!(l.base, 1 << 20, "应当反推出 ZIP 真实起点");
+    }
+
+    #[test]
+    fn 尾部有垃圾也能定位() {
+        // 模拟"尾部空 mdat"（隐写者会加 8 字节）
+        let zip = build_zip(4096, 8, "a.txt", b"xyz");
+        let size = zip.len() as u64;
+        let mut cur = Cursor::new(zip);
+        let l = locate(&mut cur, size).unwrap();
+        assert_eq!(l.base, 4096);
+        assert_eq!(l.trailing_bytes, 8, "应报告尾部还有 8 字节");
+    }
+
+    #[test]
+    fn 能列出条目并识别加密标志() {
+        let zip = build_zip(1000, 0, "readme.txt", b"content here");
+        let size = zip.len() as u64;
+        let mut cur = Cursor::new(zip);
+        let l = locate(&mut cur, size).unwrap();
+        let entries = list_entries(&mut cur, &l).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "readme.txt");
+        assert_eq!(entries[0].size, 12);
+        assert!(!entries[0].encrypted);
+    }
+
+    #[test]
+    fn 偏移被篡改时_校验会拦下() {
+        // 造一个 CD 偏移被改坏的包：把 EOCD 里的 cd_at 改大
+        let mut zip = build_zip(0, 0, "a.txt", b"data");
+        let n = zip.len();
+        // 找到 EOCD（最后 22 字节）
+        let eocd = n - 22;
+        let bad_cd_at = u32le(&zip, eocd + 16) + 7;
+        zip[eocd + 16..eocd + 20].copy_from_slice(&bad_cd_at.to_le_bytes());
+        let size = zip.len() as u64;
+        let mut cur = Cursor::new(zip);
+        let r = locate(&mut cur, size);
+        assert!(r.is_err(), "篡改偏移后必须报错，不能给出错误结果");
+    }
+
+    #[test]
+    fn 不是压缩包时给出明确错误码() {
+        let junk = vec![0u8; 4096];
+        let size = junk.len() as u64;
+        let mut cur = Cursor::new(junk);
+        let e = locate(&mut cur, size).unwrap_err();
+        assert_eq!(e.code, ErrorCode::NotArchive);
+        assert_eq!(e.param("reason"), Some("no_eocd_in_window"));
+    }
+
+    #[test]
+    fn 找结束标记的函数能处理多个候选() {
+        // 数据里恰好出现一次签名，应能找到
+        let mut buf = vec![0u8; 1000];
+        buf[500..504].copy_from_slice(EOCD_SIG);
+        assert_eq!(find_eocd_backwards(&buf), Some(500));
+        // 多个候选时取最后一个（离文件尾最近）
+        buf[800..804].copy_from_slice(EOCD_SIG);
+        assert_eq!(find_eocd_backwards(&buf), Some(800));
+    }
+}
