@@ -15,6 +15,7 @@
 #![warn(missing_docs)]
 
 pub mod error;
+pub mod event;
 pub mod extract;
 pub mod extract7z;
 pub mod extract_rar;
@@ -24,6 +25,7 @@ pub mod io;
 pub mod layout;
 pub mod pack;
 pub mod password_hint;
+pub mod progress;
 pub mod repair;
 pub mod rescue;
 pub mod safety;
