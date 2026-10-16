@@ -186,6 +186,23 @@ pub fn extract_7z_ctx<R: Read + Seek>(
     extract_7z_with_hint_ctx(src, 1, opts, ctx)
 }
 
+/// 从**一条流**解 7z —— 统一接口（[`crate::unpack`]）用的入口
+///
+/// 与 [`extract_7z_volumes_ctx`] 的唯一区别是「谁是数据源」：那边收分卷路径列表、
+/// 自己拼 `MultiFile`；这边收**一条已经拼好的流**。统一接口只认一条流
+/// （`xadmaster.md` ①-01「handle 是唯一 I/O 抽象」），所以「多卷拼接」留在编排层、
+/// 「解码」留在 handler —— 分工清楚，handler 不必知道卷名规则。
+///
+/// `packed_total` 必须是**真实的压缩后总大小**（炸弹防护的分母，这个坑踩过两次）。
+pub fn extract_7z_stream_ctx<R: Read + Seek>(
+    src: R,
+    packed_total: u64,
+    opts: &Extract7zOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    extract_7z_with_hint_ctx(src, packed_total, opts, ctx)
+}
+
 /// 内部实现（带上下文）：`packed_total` 是"压缩包多大"，用于算压缩比
 fn extract_7z_with_hint_ctx<R: Read + Seek>(
     src: R,

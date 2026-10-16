@@ -24,6 +24,7 @@ use crate::error::{Error, ErrorCode, ItemResult, Result};
 use crate::safety::{self, Limits};
 use crate::select::Selection;
 use std::fs;
+use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
 /// RAR 全量读入内存的上限（256 MiB）—— 超过就拒绝，避免 OOM
@@ -87,6 +88,46 @@ pub fn extract_rar_file_ctx(
             )));
     }
     let data = fs::read(path)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读取失败: {e}")))?;
+    extract_rar_ctx(&data, opts, ctx)
+}
+
+/// 从**一条流**解 RAR —— 统一接口（[`crate::unpack`]）用的入口
+///
+/// `rars` 只提供全量内存读接口（不像 ZIP/7z 能流式处理），所以这里先把流读进内存。
+/// 上限仍是 [`MAX_SIZE`]（256 MiB）：超了直接拒绝，而不是把内存吃光。
+///
+/// 与 [`extract_rar_file_ctx`] 的区别只是「数据从哪来」：那个要**路径**（自己 `fs::read`），
+/// 这个要**流**。统一接口只提供流，所以真正被用的是这一个；那个留着给「手上只有路径、
+/// 连流都不打开」的调用点。
+pub fn extract_rar_stream_ctx<R: Read + Seek>(
+    src: &mut R,
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    use std::io::SeekFrom;
+
+    let size = src
+        .seek(SeekFrom::End(0))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("取流长度失败: {e}")))?;
+    if size > MAX_SIZE {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "rar_too_large_for_memory")
+            .with("size", size)
+            .with("limit", MAX_SIZE)
+            .context(format!(
+                "这个 RAR 有 {:.0} MB，超过我们目前能处理的上限（{} MB）。\
+                 底层库还不支持流式读取 RAR —— 想处理超大 RAR 请用其它工具。",
+                size as f64 / 1_048_576.0,
+                MAX_SIZE / 1_048_576
+            )));
+    }
+    src.seek(SeekFrom::Start(0))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("回到流开头失败: {e}")))?;
+    let mut data = Vec::with_capacity(size as usize);
+    // 多读 1 字节：用来发现「流比 seek 报的长度还长」这种怪情况，别默默截断
+    src.take(MAX_SIZE + 1)
+        .read_to_end(&mut data)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读取失败: {e}")))?;
     extract_rar_ctx(&data, opts, ctx)
 }
