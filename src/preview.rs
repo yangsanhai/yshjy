@@ -17,7 +17,9 @@ use crate::ctx::UnpackCtx;
 use crate::error::{Error, ErrorCode, Result};
 use crate::event::{EntryView, Event, PreviewHint, Stage};
 use crate::job::Target;
+use crate::layout::ArchiveFormat;
 use crate::safety;
+use crate::unpack::Shape;
 
 /// 预览结果
 ///
@@ -87,7 +89,7 @@ pub fn preview(
 
     ctx.stage_started(Stage::List);
     let t0 = std::time::Instant::now();
-    let mut pv = preview_target(input, &target, password)?;
+    let mut pv = preview_target(input, &target, password, ctx)?;
     ctx.stage_finished(Stage::List, t0.elapsed().as_millis() as u64);
 
     // 补充格式特有的提示
@@ -132,41 +134,106 @@ pub fn preview(
     Ok((target, pv))
 }
 
-fn preview_target(input: &Path, target: &Target, password: Option<&str>) -> Result<Preview> {
+/// 按目标类型把「源」准备好，然后**统一**交给 [`crate::unpack`] 的解压器列清单
+///
+/// 和 `job.rs::extract_target` 是同一个分工（那边解压、这边列清单）：
+/// **源怎么准备**留在这里，**怎么读清单**交给 `impl InArchive` —— 加格式不用改这个函数。
+fn preview_target(
+    input: &Path,
+    target: &Target,
+    password: Option<&str>,
+    ctx: &UnpackCtx,
+) -> Result<Preview> {
+    // 参数对象与解压共用同一个类型；`dest` 对"列清单"没有意义（绝不写盘），
+    // 填输入所在目录只为让结构体完整。
+    let mut uopts = crate::unpack::UnpackOptions::new(
+        input
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf(),
+    );
+    uopts.password = password.map(|s| s.to_string());
+
     match target {
-        Target::Zip { base, len } => preview_zip(input, *base, *len),
-        Target::ZipSplit { volumes } => preview_zip_volumes(volumes),
-        Target::SevenZ { volumes } => preview_7z(volumes, password),
-        Target::Rar => preview_rar(input),
+        Target::Zip { base, len } => {
+            let mut f = 打开输入(input)?;
+            let mut src = crate::unpack::Source::new(&mut f).with_offset(*base, *len);
+            列清单(ctx, &mut src, &uopts, ArchiveFormat::Zip, Shape::Plain)
+        }
+        Target::ZipSplit { volumes } => {
+            // 拼成一条逻辑流 → 找中央目录 → 之后和普通 ZIP 完全一样
+            let mut mf = crate::extract7z::MultiFile::open(volumes)?;
+            let size = mf.total();
+            let l = crate::layout::zip::locate(&mut mf, size).map_err(|e| {
+                Error::new(ErrorCode::NotArchive)
+                    .context(format!("分卷里的中央目录没找到（是不是缺了一块？）: {e}"))
+            })?;
+            let mut src = crate::unpack::Source::new(&mut mf)
+                .with_offset(l.base, l.data_len())
+                .with_packed_total(size);
+            列清单(ctx, &mut src, &uopts, ArchiveFormat::Zip, Shape::Volumes)
+        }
+        Target::SevenZ { volumes } => {
+            let mut mf = crate::extract7z::MultiFile::open(volumes)?;
+            let size = mf.total();
+            let mut src = crate::unpack::Source::new(&mut mf).with_packed_total(size);
+            列清单(ctx, &mut src, &uopts, ArchiveFormat::SevenZ, Shape::Volumes)
+        }
+        Target::Rar => {
+            let mut f = 打开输入(input)?;
+            let mut src = crate::unpack::Source::new(&mut f);
+            列清单(ctx, &mut src, &uopts, ArchiveFormat::Rar4, Shape::Plain)
+        }
         Target::Stream {
             format,
             is_tar,
             packed,
-        } => preview_stream(input, *format, *is_tar, *packed),
+        } => {
+            if *is_tar {
+                // tar 家族：裸 tar 没有外层，tar.gz 这类外层就是那个压缩格式
+                uopts.outer = if *format == ArchiveFormat::Tar {
+                    None
+                } else {
+                    Some(*format)
+                };
+                let mut f = 打开输入(input)?;
+                let mut src = crate::unpack::Source::new(&mut f).with_packed_total(*packed);
+                列清单(ctx, &mut src, &uopts, ArchiveFormat::Tar, Shape::Tar)
+            } else {
+                uopts.outer = Some(*format);
+                uopts.packed_hint = *packed;
+                uopts.out_name = crate::extract_stream::strip_suffix(input, *format)
+                    .map(|x| x.to_string_lossy().to_string());
+                let mut f = 打开输入(input)?;
+                let mut src = crate::unpack::Source::new(&mut f).with_packed_total(*packed);
+                列清单(ctx, &mut src, &uopts, *format, Shape::Single)
+            }
+        }
     }
 }
 
-/// ZIP：算好偏移喂给库读中央目录（实测 8.7 GB 只要 69 微秒）
-fn preview_zip(input: &Path, base: u64, len: u64) -> Result<Preview> {
-    let f = std::fs::File::open(input)
-        .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
-    let window = crate::io::Window::new(f, base, len)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
-    preview_zip_reader(window)
+/// 打开输入文件（错误码统一：路径问题就说路径问题）
+fn 打开输入(input: &Path) -> Result<std::fs::File> {
+    std::fs::File::open(input)
+        .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))
 }
 
-/// ZIP 分卷的清单：拼成逻辑流 → 找中央目录 → 之后和普通 ZIP 完全一样
-fn preview_zip_volumes(volumes: &[PathBuf]) -> Result<Preview> {
-    let mut mf = crate::extract7z::MultiFile::open(volumes)?;
-    let size = mf.total();
-    let l = crate::layout::zip::locate(&mut mf, size).map_err(|e| {
-        Error::new(ErrorCode::NotArchive)
-            .context(format!("分卷里的中央目录没找到（是不是缺了一块？）: {e}"))
-    })?;
-    let window = crate::io::Window::new(mf, l.base, l.data_len())
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
-    preview_zip_reader(window)
+/// 查注册表拿解压器列清单（与 `job.rs` 里的解压路径同一个思路）
+fn 列清单(
+    ctx: &UnpackCtx,
+    src: &mut crate::unpack::Source<'_>,
+    uopts: &crate::unpack::UnpackOptions,
+    格式: ArchiveFormat,
+    形状: Shape,
+) -> Result<Preview> {
+    let handler = crate::unpack::find_or_err(格式, 形状)?;
+    handler.list(src, uopts, ctx)
 }
+
+// （这里原来有两个"按路径工作"的外壳：`preview_zip` 与 `preview_zip_volumes`。
+//  v0.9 把"准备源"这一步并进了统一接口 —— `src/unpack.rs` 的 `ZipUnpacker::list`
+//  接手了它，两条路共用同一个 `preview_zip_reader`。
+//  实测结论保留：算好偏移再喂给库读中央目录，8.7 GB 的包只要 69 微秒。）
 
 /// 真正的清单读取（普通 ZIP / 分卷 / 统一接口共用同一份）
 ///
@@ -217,13 +284,18 @@ pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Re
 
 /// 7z：解析头就拿到条目（不解码数据）。
 /// 加密头且没给密码时，只能报「需要密码」。
-fn preview_7z(volumes: &[PathBuf], password: Option<&str>) -> Result<Preview> {
-    let multi = crate::extract7z::MultiFile::open(volumes)?;
+///
+/// `pub(crate)` + 收**一条流**：统一接口（[`crate::unpack::SevenZUnpacker`]）也调它；
+/// 「把多卷拼成一条流」是编排层的事（`MultiFile`），这里不该知道卷名规则。
+pub(crate) fn preview_7z<R: std::io::Read + std::io::Seek>(
+    src: R,
+    password: Option<&str>,
+) -> Result<Preview> {
     let pw = match password {
         Some(p) => sevenz_rust2::Password::new(p),
         None => sevenz_rust2::Password::empty(),
     };
-    let reader = sevenz_rust2::ArchiveReader::new(multi, pw).map_err(|e| {
+    let reader = sevenz_rust2::ArchiveReader::new(src, pw).map_err(|e| {
         let msg = format!("{e}");
         let code = if msg.contains("密码") || msg.to_lowercase().contains("password") {
             ErrorCode::NeedPassword
@@ -263,10 +335,17 @@ fn preview_7z(volumes: &[PathBuf], password: Option<&str>) -> Result<Preview> {
 }
 
 /// RAR：`rars` 要求数据在内存里，超过上限就降级（如实说明，不硬撑）
-fn preview_rar(input: &Path) -> Result<Preview> {
-    let size = std::fs::metadata(input)
-        .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("stat: {e}")))?
-        .len();
+///
+/// `pub(crate)` + 收**一条流**：统一接口（[`crate::unpack::RarUnpacker`]）也调它。
+pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Result<Preview> {
+    // 注：`seek` 能直接调，是因为 `R: Seek` 这个 bound；但 `take(...)` 返回的
+    // `Take<&mut R>` 是**具体类型**，它的 `read_to_end` 需要 `Read` 在作用域里。
+    use std::io::Read as _;
+
+    // 长度从流自己量（和 `extract_rar_stream_ctx` 同一套办法）
+    let size = src
+        .seek(std::io::SeekFrom::End(0))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("取流长度失败: {e}")))?;
     if size > crate::extract_rar::MAX_SIZE {
         // 大 RAR 不预览（底层库限制），标注「不完整」让外壳显示「无法预览」
         return Ok(Preview {
@@ -275,7 +354,11 @@ fn preview_rar(input: &Path) -> Result<Preview> {
             ..Default::default()
         });
     }
-    let data = std::fs::read(input)
+    src.seek(std::io::SeekFrom::Start(0))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("回到流开头失败: {e}")))?;
+    let mut data = Vec::with_capacity(size as usize);
+    src.take(crate::extract_rar::MAX_SIZE + 1)
+        .read_to_end(&mut data)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read: {e}")))?;
     let archive = rars::ArchiveReader::read(&data)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("rar open: {e}")))?;
@@ -309,26 +392,17 @@ fn preview_rar(input: &Path) -> Result<Preview> {
     })
 }
 
-/// 单流：只有一个产物，名字由文件名推；TAR 家族暂不展开（顺序格式要扫完整流）
-fn preview_stream(
-    input: &Path,
+/// 单流：只有一个产物，名字由**编排层**给（它手上有原始文件名）
+///
+/// 为什么名字要外面给：`Source` 只认一条流、不再带路径（RAR 也能从流读之后那个
+/// 字段就删了）—— 而单流的名字只能从原始文件名推（Brotli 连魔数都没有，只认 `.br`），
+/// 所以这一步归编排层。这也让 handler 不必知道"文件叫什么"。
+pub(crate) fn preview_single_stream(
     format: crate::layout::ArchiveFormat,
-    is_tar: bool,
     packed: u64,
+    name: &str,
 ) -> Result<Preview> {
-    if is_tar {
-        return Ok(Preview {
-            format: "tar",
-            complete: false,
-            hints: Vec::new(),
-            entries: Vec::new(),
-            total_size: 0,
-            encrypted_count: 0,
-        });
-    }
-    let name = crate::extract_stream::strip_suffix(input, format)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "解压结果".to_string());
+    let name = name.to_string();
     Ok(Preview {
         entries: vec![EntryView {
             index: 1, // 单条目也就一个号
