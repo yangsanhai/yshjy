@@ -304,13 +304,15 @@ pub trait InArchive: Sync {
 
     /// 列内容（不解压）—— `--list` 与将来 GUI 的预览面板用
     ///
+    /// 参数与 [`InArchive::unpack`] 保持一致（都收 [`UnpackOptions`]，密码在
+    /// `opts.password` 里），编排层构造一次参数就能两处用。
+    ///
     /// 默认实现**显式报「这个格式还没实现列清单」**，而不是返回空清单：
     /// 空清单会被上层和用户理解成"包里什么都没有"，那是最糟的误导。
-    /// 加格式时请自己实现它（ZIP 已实现，见 [`ZipUnpacker`]）。
     fn list(
         &self,
         _src: &mut Source<'_>,
-        _pw: Option<&str>,
+        _opts: &UnpackOptions,
         _ctx: &UnpackCtx,
     ) -> Result<Preview> {
         Err(Error::new(ErrorCode::NotArchive)
@@ -375,7 +377,7 @@ impl InArchive for ZipUnpacker {
     fn list(
         &self,
         src: &mut Source<'_>,
-        _pw: Option<&str>,
+        _opts: &UnpackOptions,
         _ctx: &UnpackCtx,
     ) -> Result<Preview> {
         // ZIP 的文件名**不加密**，所以无密码也能列出清单（这也是它能当"预览主力"的原因）。
@@ -442,6 +444,13 @@ impl InArchive for SevenZUnpacker {
         let reader: &mut dyn ReadSeek = &mut *src.reader;
         crate::extract7z::extract_7z_stream_ctx(reader, src.packed_total, &eopts, ctx)
     }
+
+    fn list(&self, src: &mut Source<'_>, opts: &UnpackOptions, _ctx: &UnpackCtx) -> Result<Preview> {
+        // 7z 的头可能是加密的（`-mhe=on` 连文件名都加密），所以列清单也可能要密码 ——
+        // 密码由编排层放进 `opts.password`（没有就报「需要密码」，不假装能列）
+        let reader: &mut dyn ReadSeek = &mut *src.reader;
+        crate::preview::preview_7z(reader, opts.password.as_deref())
+    }
 }
 
 /// RAR（1.3 ~ 7；只解不压）
@@ -481,6 +490,18 @@ impl InArchive for RarUnpacker {
         // （那里先做 256 MiB 上限检查再决定要不要拒绝，见 extract_rar::MAX_SIZE）
         let mut reader: &mut dyn ReadSeek = &mut *src.reader;
         crate::extract_rar::extract_rar_stream_ctx(&mut reader, &eopts, ctx)
+    }
+
+    fn list(
+        &self,
+        src: &mut Source<'_>,
+        _opts: &UnpackOptions,
+        _ctx: &UnpackCtx,
+    ) -> Result<Preview> {
+        // `rars` 也只支持全量内存读：预览函数内部会把流读进来（同样受 256 MiB 上限
+        // 保护，超了就如实报「无法预览」，不硬撑）
+        let mut reader: &mut dyn ReadSeek = &mut *src.reader;
+        crate::preview::preview_rar(&mut reader)
     }
 }
 
@@ -552,6 +573,22 @@ impl InArchive for SingleStreamUnpacker {
         });
         Ok(rep)
     }
+
+    fn list(
+        &self,
+        _src: &mut Source<'_>,
+        opts: &UnpackOptions,
+        _ctx: &UnpackCtx,
+    ) -> Result<Preview> {
+        // 单流的清单**不需要读数据**：只有一个产物，名字由编排层算好（它知道原始
+        // 文件名）—— 这也正是 `Source` 不再带 `path` 之后，名字信息的正确来源。
+        let fmt = opts.outer.unwrap_or(ArchiveFormat::Gzip);
+        let name = opts
+            .out_name
+            .clone()
+            .unwrap_or_else(|| 兜底输出名.to_string());
+        crate::preview::preview_single_stream(fmt, opts.packed_hint, &name)
+    }
 }
 
 /// tar 家族：里面是**目录树**（tar / tar.gz / tar.xz / tar.zst / …）
@@ -589,6 +626,23 @@ impl InArchive for TarStreamUnpacker {
         // 不能 move 出来，重借用一次；泛型参数又要求 Sized，所以必须有这一层
         let reader: &mut dyn ReadSeek = &mut *src.reader;
         crate::extract_stream::extract_tar_ctx(reader, outer, &eopts, ctx)
+    }
+
+    fn list(
+        &self,
+        _src: &mut Source<'_>,
+        _opts: &UnpackOptions,
+        _ctx: &UnpackCtx,
+    ) -> Result<Preview> {
+        // tar 是**顺序格式**：列清单得把整条流扫一遍。现在如实报「信息不完整」
+        // （`complete: false`，外壳会显示"无法预览"），而不是给一个空清单 ——
+        // 空清单会被当成"包里什么都没有"，那是最糟的误导。
+        // 将来要做的话：边扫边收集，扫到哪报到哪（`complete: false` 已经预留了）。
+        Ok(Preview {
+            format: "tar",
+            complete: false,
+            ..Default::default()
+        })
     }
 }
 
@@ -773,7 +827,7 @@ mod tests {
         let mut src = Source::new(&mut cur);
         let handler = find(ArchiveFormat::Zip, Shape::Plain).unwrap();
         let pv = handler
-            .list(&mut src, None, &UnpackCtx::quiet(0))
+            .list(&mut src, &UnpackOptions::new("."), &UnpackCtx::quiet(0))
             .expect("ZIP 应当能列清单");
 
         assert_eq!(pv.entries.len(), 2);
@@ -786,16 +840,38 @@ mod tests {
         assert_eq!(pv.entries[0].index, 1);
     }
 
+    /// 只声明格式、**故意不实现 `list`** 的假解压器 —— 专门用来测 trait 的默认实现
+    struct 假解压器;
+
+    impl InArchive for 假解压器 {
+        fn formats(&self) -> &'static [ArchiveFormat] {
+            &[ArchiveFormat::Unknown]
+        }
+        fn shapes(&self) -> &'static [Shape] {
+            &[Shape::Plain]
+        }
+        fn caps(&self) -> Caps {
+            Caps::default()
+        }
+        fn unpack(
+            &self,
+            _s: &mut Source<'_>,
+            _o: &UnpackOptions,
+            _c: &UnpackCtx,
+        ) -> Result<ExtractReport> {
+            unreachable!("这个假解压器只用来测 list 的默认实现")
+        }
+    }
+
     #[test]
     fn 没实现列清单的格式要明确报错而不是给空清单() {
-        // 7z / RAR / 单流 / tar 目前还没接 `list`：必须是**明确的错误**，
+        // 将来加格式时，如果只写了 unpack 没写 list，默认实现必须**明确报错**，
         // 绝不能返回空清单 —— 那会被上层和用户理解成"包里什么都没有"。
-        let mut cur = std::io::Cursor::new(&b"\x1f\x8b\x08\x00"[..]);
+        let mut cur = std::io::Cursor::new(&b"x"[..]);
         let mut src = Source::new(&mut cur);
-        let handler = find(ArchiveFormat::Gzip, Shape::Single).unwrap();
-        let err = handler
-            .list(&mut src, None, &UnpackCtx::quiet(0))
-            .expect_err("还没实现的格式必须报错");
+        let err = 假解压器
+            .list(&mut src, &UnpackOptions::new("."), &UnpackCtx::quiet(0))
+            .expect_err("没实现 list 的格式必须报错");
         assert_eq!(err.param("reason"), Some("list_not_implemented"));
         assert!(err.param("format").is_some(), "报错要说清是哪个格式");
     }
