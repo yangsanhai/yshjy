@@ -1012,12 +1012,12 @@ fn do_pack(
 /// 详细的红线见 `src/report.rs` 模块头。
 fn do_report(argv: &[String], hide_paths: bool) -> ExitCode {
     let 语 = 文案();
-    // 位置参数里第一个"不是选项"的当目标（可选：不给就只收环境信息）
-    let 目标 = argv
-        .iter()
-        .skip(1)
-        .find(|a| !a.starts_with('-'))
-        .map(PathBuf::from);
+    // 位置参数里第一个**真正的**位置参数（选项本身、以及"带值选项的值"都要跳过）
+    //
+    // ⚠️ 实测踩到过：`yshjy --report -p 密码 包.mp4` 里，`-p` 的**值**（密码）
+    //    也是个"非选项参数"，于是被当成了要分析的文件 —— findings.json 里的
+    //    target 变成了那串密码。
+    let 目标 = 找位置参数(argv, 带值的选项);
     let opts = yshjy::report::ReportOptions {
         target: 目标,
         hide_paths,
@@ -1038,6 +1038,28 @@ fn do_report(argv: &[String], hide_paths: bool) -> ExitCode {
             ExitCode::from(code::ERR)
         }
     }
+}
+
+/// 从参数里挑出第一个**真正的**位置参数
+///
+/// 必须同时跳过两类东西：① 选项本身（`--report` / `-q` …）
+/// ② **带值选项的值**（`-p 密码` 里的密码、`--lang en` 里的 en）——
+/// 少跳过第二类就会把选项的值当成文件名（实测踩过：target 变成了密码）。
+fn 找位置参数(argv: &[String], 带值: &[&str]) -> Option<PathBuf> {
+    let mut i = 1;
+    while i < argv.len() {
+        let a = &argv[i];
+        if 带值.contains(&a.as_str()) {
+            i += 2; // 跳过选项本身 + 它的值
+            continue;
+        }
+        if a.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return Some(PathBuf::from(a));
+    }
+    None
 }
 
 fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> ExitCode {
