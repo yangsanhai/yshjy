@@ -1,0 +1,25 @@
+[package]
+name = "yshjy"
+version = "0.4.0"
+edition = "2024"
+license = "MIT"
+authors = ["yangsanhai"]
+description = "杨三海解压 —— 把「伪装成视频/图片的压缩包」一键还原成能用的文件"
+readme = "README.md"
+keywords = ["archive", "extract", "zip", "7z", "rar", "steganography"]
+categories = ["command-line-utilities", "compression"]
+
+[dependencies]
+bzip2-rs = "0.1.2"
+encoding_rs = "0.8.42"
+flate2 = "1.1.10"
+lzma-rs = "0.3.0"
+rars = { version = "0.11.0", default-features = false, features = ["encryption", "parallel"] }
+ruzstd = "0.9.1"
+sevenz-rust2 = { version = "0.24.0", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd", "util"] }
+tar = "0.4.46"
+thiserror = "2.0.21"
+zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2", "aes-crypto"] }
+
+[dev-dependencies]
+rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }

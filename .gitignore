@@ -1,0 +1,30 @@
+/target
+/spike/target
+/tests/.work
+/tests/__pycache__
+*.pyc
+__pycache__/
+
+# 参考库：别人项目的源码不入库（体积大且非本项目代码）
+/refs/7zip
+/refs/PeaZip
+/refs/SteganographierGUI
+/refs/XADMaster
+/refs/zip2
+/refs/sevenz-rust
+/refs/ui-reference
+
+# 保留：我们的分析报告与文档
+# /refs/analysis  ← 故意不忽略
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 参考库与构建产物（体积大，不入库）
+target/
+dist/
+fuzz/
+*.tar.gz
+tests/data/

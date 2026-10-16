@@ -1,0 +1,536 @@
+//! 伪装打包 —— 把压缩包藏进视频 / 图片里
+//!
+//! 与「解压」方向相反。布局由数据表驱动，实测淘汰的布局（L5 分散多段 / L6 前后加垃圾）不提供。
+//!
+//! # 布局选择（依据调研实测的兼容性矩阵）
+//! | 布局 | 说明 | 实测结论 |
+//! |---|---|---|
+//! | [`PackLayout::TailAppend`] | 视频后面直接接 ZIP | 视频能播；8 种工具全通 |
+//! | [`PackLayout::FreeAtom`] | 藏进尾部 `free` 原子 | **推荐**：视频能播 + 8 种工具全通 |
+//!
+//! 「分散多段」和「前后加垃圾」两种布局**故意不提供** —— 实测 7-Zip 只解出 1/4，
+//! 且 ffmpeg 直接报错播不了，属于"看起来更隐蔽、实际把用户坑了"。
+//!
+//! # 关键实现细节（对齐生成方 Steganographier 的做法，但修掉它的 bug）
+//! - `free` 原子：`size(4) + b"free"(4) + payload`；
+//!   payload 超过 4 GiB 时写 `size = 1` 再跟 8 字节 large-size（MP4 规范的 64 位形式）
+//! - 原子开头塞 **64–256 字节随机 pad**：既保证原子内不以 `PK` 开头（更隐蔽），
+//!   又让每次产物哈希不同
+//! - 产物**必须回读自检**（见 [`self_check`]），杜绝"造出一个打不开的包"
+
+use crate::error::{Error, ErrorCode, Result};
+use crate::pack::cover::BuiltinCover;
+// 写侧加密目前还挂在 zip 的 unstable 门后（读侧已稳定）
+use std::fs;
+use std::io::{Read, Seek, Write};
+use std::path::{Path, PathBuf};
+use zip::unstable::write::FileOptionsExt as _;
+
+pub mod cover;
+
+/// 伪装布局
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PackLayout {
+    /// 视频后面直接接 ZIP（最朴素，兼容性最好）
+    TailAppend,
+    /// 藏进尾部 `free` 原子（推荐）
+    #[default]
+    FreeAtom,
+}
+
+/// 打包参数
+#[derive(Debug, Clone)]
+pub struct PackOptions {
+    /// 要打进去的文件 / 目录
+    pub inputs: Vec<PathBuf>,
+    /// 封面数据（`None` = 用内置素材）
+    pub cover: Option<Vec<u8>>,
+    /// 输出文件扩展名 —— 决定用哪个内置素材
+    pub cover_ext: String,
+    /// 密码（`None` = 不加密）
+    pub password: Option<String>,
+    /// 布局
+    pub layout: PackLayout,
+    /// 随机 pad 范围（仅 FreeAtom 用）
+    pub pad_range: (usize, usize),
+    /// 压缩级别 0-9（0 = 只存不压）
+    pub level: u32,
+}
+
+impl Default for PackOptions {
+    fn default() -> Self {
+        Self {
+            inputs: Vec::new(),
+            cover: None,
+            cover_ext: "mp4".into(),
+            password: None,
+            layout: PackLayout::default(),
+            pad_range: (64, 256),
+            level: 6,
+        }
+    }
+}
+
+/// 打包结果
+#[derive(Debug, Clone)]
+pub struct PackReport {
+    /// 产物总大小
+    pub total_size: u64,
+    /// 其中 ZIP 部分大小
+    pub zip_size: u64,
+    /// 封面部分大小
+    pub cover_size: u64,
+    /// 打进去的条目数
+    pub entries: usize,
+    /// 用的什么布局
+    pub layout: PackLayout,
+    /// 自检发现的问题（空 = 全好）
+    pub warnings: Vec<String>,
+}
+
+impl PackReport {
+    /// 是否洁癖通过（自检零问题）
+    pub fn is_clean(&self) -> bool {
+        self.warnings.is_empty()
+    }
+
+    /// 一句话摘要
+    pub fn summary(&self) -> String {
+        let mut s = format!(
+            "写出 {} 字节（封面 {} + 内容 {}），共 {} 个条目，布局 {}",
+            self.total_size,
+            self.cover_size,
+            self.zip_size,
+            self.entries,
+            match self.layout {
+                PackLayout::TailAppend => "尾部追加",
+                PackLayout::FreeAtom => "free 原子",
+            }
+        );
+        if !self.warnings.is_empty() {
+            s += &format!("，{} 条自检提示", self.warnings.len());
+        }
+        s
+    }
+}
+
+/// **把输入打成伪装包**
+///
+/// 数据流：`封面 → [free 原子头] → 随机 pad → ZIP 数据`
+///
+/// 为了不被大文件撑爆内存，ZIP 先落在临时文件，最后流式拼接。
+pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    if opts.inputs.is_empty() {
+        return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
+    }
+
+    // ① 封面：用户给的，或内置素材
+    let cover: Vec<u8> = match &opts.cover {
+        Some(c) => c.clone(),
+        None => BuiltinCover::for_extension(&opts.cover_ext)
+            .bytes()
+            .to_vec(),
+    };
+
+    // ② 内容先打成 ZIP（走临时文件，避免大包占内存）
+    let tmp = std::env::temp_dir().join(format!(
+        "yshjy_pack_{}_{}.zip",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let zip_size = fs::metadata(&tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
+        .len();
+
+    // ③ 拼装
+    let cover_size = cover.len() as u64;
+    out.write_all(&cover)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover: {e}")))?;
+
+    let mut atom_overhead = 0u64;
+    match opts.layout {
+        PackLayout::TailAppend => {
+            let mut f = fs::File::open(&tmp)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
+            std::io::copy(&mut f, out)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+        }
+        PackLayout::FreeAtom => {
+            let pad = make_pad(opts.pad_range);
+            let payload_len = pad.len() as u64 + zip_size;
+            atom_overhead = write_free_atom_header(out, payload_len)?;
+            out.write_all(&pad)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write pad: {e}")))?;
+
+            let mut f = fs::File::open(&tmp)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
+            std::io::copy(&mut f, out)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+        }
+    }
+
+    let _ = fs::remove_file(&tmp);
+
+    Ok(PackReport {
+        total_size: cover_size + zip_size + atom_overhead,
+        zip_size,
+        cover_size,
+        entries,
+        layout: opts.layout,
+        warnings: Vec::new(),
+    })
+}
+
+/// 造随机 pad
+///
+/// 用系统时间做种子（避免为这点小事拖进 `rand` 依赖，也符合"依赖最小"原则）。
+/// 保证首两字节不是 `PK`，让 `free` 原子内部不以 ZIP 签名开头。
+fn make_pad((lo, hi): (usize, usize)) -> Vec<u8> {
+    let span = hi.saturating_sub(lo).max(1);
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize ^ (d.as_secs() as usize))
+        .unwrap_or(7);
+    let pad_len = lo + (seed % span);
+    let mut pad = vec![0u8; pad_len];
+    let mut x = (seed as u32) | 1;
+    for b in pad.iter_mut() {
+        // xorshift32：够用且零依赖
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        *b = (x & 0xFF) as u8;
+    }
+    if pad.len() >= 2 && pad[0] == b'P' && pad[1] == b'K' {
+        pad[0] = 0;
+    }
+    pad
+}
+
+/// 写 `free` 原子头，返回写入的字节数
+///
+/// MP4 规范：`size(4, 大端) + type(4)`；`size` 为 1 时表示后面跟 8 字节真实长度。
+fn write_free_atom_header<W: Write>(out: &mut W, payload_len: u64) -> Result<u64> {
+    const LARGE_THRESHOLD: u64 = u32::MAX as u64 - 16;
+    if payload_len > LARGE_THRESHOLD {
+        // 64 位形式：size=1 + 'free' + 8 字节真实大小
+        out.write_all(&1u32.to_be_bytes())
+            .and_then(|_| out.write_all(b"free"))
+            .and_then(|_| out.write_all(&(payload_len + 16).to_be_bytes()))
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("free atom (64): {e}")))?;
+        Ok(16)
+    } else {
+        let size = (payload_len + 8) as u32;
+        out.write_all(&size.to_be_bytes())
+            .and_then(|_| out.write_all(b"free"))
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("free atom: {e}")))?;
+        Ok(8)
+    }
+}
+
+/// 把输入路径（文件或目录，可递归）打成 ZIP
+fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize> {
+    let file = fs::File::create(tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("create tmp: {e}")))?;
+    let mut zw = zip::ZipWriter::new(file);
+
+    let method = if opts.level == 0 {
+        zip::CompressionMethod::Stored
+    } else {
+        zip::CompressionMethod::Deflated
+    };
+    // 带密码时用「带生命周期的」FileOptions（加密选项借用密码）
+    let plain: zip::write::FileOptions<'_, '_, ()> = zip::write::SimpleFileOptions::default()
+        .compression_method(method)
+        .compression_level(Some(opts.level as i64));
+    let fopt = match &opts.password {
+        Some(pw) => plain
+            .with_deprecated_encryption(pw.as_bytes())
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("加密选项无效: {e}")))?,
+        None => plain,
+    };
+
+    let mut count = 0usize;
+    for input in inputs {
+        let meta = fs::metadata(input)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("stat {input:?}: {e}")))?;
+        if meta.is_dir() {
+            // 保留顶层目录名（对齐生成方的 arcname = <dir>/<rel>）
+            let base_name = input
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "dir".into());
+            count += add_dir(&mut zw, input, &base_name, &fopt)?;
+        } else {
+            let name = input
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".into());
+            zw.start_file(&name, fopt)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
+            let mut f = fs::File::open(input).map_err(|e| {
+                Error::new(ErrorCode::Internal).context(format!("open {input:?}: {e}"))
+            })?;
+            std::io::copy(&mut f, &mut zw)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip write: {e}")))?;
+            count += 1;
+        }
+    }
+
+    zw.finish()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip finish: {e}")))?;
+    Ok(count)
+}
+
+fn add_dir<'a, W: Write + Seek>(
+    zw: &mut zip::ZipWriter<W>,
+    dir: &Path,
+    prefix: &str,
+    fopt: &zip::write::FileOptions<'a, 'a, ()>,
+) -> Result<usize> {
+    let mut n = 0usize;
+    let rd = fs::read_dir(dir)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read_dir {dir:?}: {e}")))?;
+    for ent in rd {
+        let ent =
+            ent.map_err(|e| Error::new(ErrorCode::Internal).context(format!("entry: {e}")))?;
+        let p = ent.path();
+        let name = ent.file_name().to_string_lossy().to_string();
+        let arc = format!("{prefix}/{name}");
+        let meta = ent
+            .metadata()
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?;
+        if meta.is_dir() {
+            n += add_dir(zw, &p, &arc, fopt)?;
+        } else {
+            zw.start_file(&arc, *fopt)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
+            let mut f = fs::File::open(&p)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open {p:?}: {e}")))?;
+            std::io::copy(&mut f, zw)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip write: {e}")))?;
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+/// **产物自检**：把刚写出的伪装包读回来，确认能定位、能列条目、条目数一致
+///
+/// 对齐生成方的教训（`Steganographier.py` 的输出目录快照仲裁）：
+/// **不能"以为成功了"就完事**，必须回读验证。
+pub fn self_check(path: &Path, expect_entries: usize) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+    let mut f = fs::File::open(path)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open out: {e}")))?;
+    let size = f
+        .metadata()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?
+        .len();
+
+    let layout = crate::layout::zip::locate(&mut f, size).map_err(|e| {
+        Error::new(ErrorCode::NotArchive).context(format!("自检失败：产物定位不了 ZIP（{e}）"))
+    })?;
+
+    let entries = crate::layout::zip::list_entries(&mut f, &layout).map_err(|e| {
+        Error::new(ErrorCode::NotArchive).context(format!("自检失败：列不出条目（{e}）"))
+    })?;
+
+    if entries.len() != expect_entries {
+        warnings.push(format!(
+            "自检：条目数不一致（写入 {expect_entries}，读回 {}）",
+            entries.len()
+        ));
+    }
+    if layout.base == 0 && layout.entries_total > 0 {
+        warnings.push("自检：ZIP 起点为 0，说明封面没有真正包裹住数据".to_string());
+    }
+    Ok(warnings)
+}
+
+/// 读一个文件的前若干字节（用于验证封面是不是合法视频/图片）
+pub fn sniff_head(path: &Path, n: usize) -> Result<Vec<u8>> {
+    let mut f = fs::File::open(path)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open: {e}")))?;
+    let mut buf = vec![0u8; n];
+    let got = f
+        .read(&mut buf)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read: {e}")))?;
+    buf.truncate(got);
+    Ok(buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("yshjy_pack_{tag}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn free原子头_小尺寸用32位形式() {
+        let mut out = Vec::new();
+        let n = write_free_atom_header(&mut out, 100).unwrap();
+        assert_eq!(n, 8);
+        assert_eq!(u32::from_be_bytes([out[0], out[1], out[2], out[3]]), 108);
+        assert_eq!(&out[4..8], b"free");
+    }
+
+    #[test]
+    fn free原子头_超大尺寸用64位形式() {
+        let mut out = Vec::new();
+        let n = write_free_atom_header(&mut out, 5_000_000_000).unwrap();
+        assert_eq!(n, 16);
+        assert_eq!(
+            u32::from_be_bytes([out[0], out[1], out[2], out[3]]),
+            1,
+            "size=1 表示 64 位形式"
+        );
+        assert_eq!(&out[4..8], b"free");
+        let real = u64::from_be_bytes(out[8..16].try_into().unwrap());
+        assert_eq!(real, 5_000_000_000 + 16);
+    }
+
+    #[test]
+    fn 打一个伪装包能被我们自己读回() {
+        let dir = scratch("basic");
+        fs::write(dir.join("a.txt"), b"hello pack").unwrap();
+        fs::write(dir.join("b.bin"), vec![7u8; 3000]).unwrap();
+
+        let opts = PackOptions {
+            inputs: vec![dir.join("a.txt"), dir.join("b.bin")],
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        build(&opts, &mut out).unwrap();
+
+        // 落盘 → 自检（读回来定位 + 列条目）
+        let outfile = dir.join("fake.mp4");
+        fs::write(&outfile, &out).unwrap();
+        let warns = self_check(&outfile, 2).unwrap();
+        assert!(warns.is_empty(), "自检应通过: {warns:?}");
+
+        // 用我们的解压引擎把它解回来
+        let dest = scratch("unpack");
+        let mut cur = Cursor::new(out);
+        let size = cur.get_ref().len() as u64;
+        let l = crate::layout::zip::locate(&mut cur, size).unwrap();
+        let rep = crate::extract::extract_zip_at(
+            &mut cur,
+            l.base,
+            l.data_len(),
+            &crate::extract::ExtractOptions::new(&dest),
+        )
+        .unwrap();
+        assert_eq!(rep.files.len(), 2, "应解回 2 个: {:?}", rep.skipped);
+        assert_eq!(
+            fs::read_to_string(dest.join("a.txt")).unwrap(),
+            "hello pack"
+        );
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 伪装包开头的封面仍是合法mp4() {
+        let dir = scratch("cover");
+        fs::write(dir.join("x.txt"), b"data").unwrap();
+        let opts = PackOptions {
+            inputs: vec![dir.join("x.txt")],
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        build(&opts, &mut out).unwrap();
+        // 前 8 字节应是内置素材（MP4 头）
+        assert_eq!(&out[4..8], b"ftyp", "外壳必须是合法 MP4");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 尾部追加布局也能读回() {
+        let dir = scratch("tail");
+        fs::write(dir.join("y.txt"), b"tail mode").unwrap();
+        let opts = PackOptions {
+            inputs: vec![dir.join("y.txt")],
+            layout: PackLayout::TailAppend,
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        build(&opts, &mut out).unwrap();
+        let outfile = dir.join("tail.mp4");
+        fs::write(&outfile, &out).unwrap();
+        assert!(self_check(&outfile, 1).unwrap().is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 带密码打包能解回来() {
+        let dir = scratch("pw");
+        fs::write(dir.join("secret.txt"), "机密内容").unwrap();
+        let opts = PackOptions {
+            inputs: vec![dir.join("secret.txt")],
+            password: Some("密码123".into()),
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        build(&opts, &mut out).unwrap();
+
+        let dest = scratch("pw_out");
+        let mut cur = Cursor::new(out);
+        let size = cur.get_ref().len() as u64;
+        let l = crate::layout::zip::locate(&mut cur, size).unwrap();
+        let mut eopts = crate::extract::ExtractOptions::new(&dest);
+        eopts.password = Some("密码123".into());
+        let rep = crate::extract::extract_zip_at(&mut cur, l.base, l.data_len(), &eopts).unwrap();
+        assert_eq!(rep.files.len(), 1, "带密码的包要能解回: {:?}", rep.skipped);
+        assert_eq!(
+            fs::read_to_string(dest.join("secret.txt")).unwrap(),
+            "机密内容"
+        );
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 目录输入保留顶层目录名() {
+        let dir = scratch("tree");
+        let sub = dir.join("我的目录");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("内.txt"), b"nested").unwrap();
+
+        let opts = PackOptions {
+            inputs: vec![sub.clone()],
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        build(&opts, &mut out).unwrap();
+
+        let dest = scratch("tree_out");
+        let mut cur = Cursor::new(out);
+        let size = cur.get_ref().len() as u64;
+        let l = crate::layout::zip::locate(&mut cur, size).unwrap();
+        let rep = crate::extract::extract_zip_at(
+            &mut cur,
+            l.base,
+            l.data_len(),
+            &crate::extract::ExtractOptions::new(&dest),
+        )
+        .unwrap();
+        let names: Vec<_> = rep.files.iter().map(|f| f.name.as_str()).collect();
+        assert!(
+            names.iter().any(|n| n.contains("我的目录/内.txt")),
+            "应保留顶层目录名: {names:?}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dest);
+    }
+}

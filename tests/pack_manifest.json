@@ -1,0 +1,381 @@
+{
+  "password": "P@ssw0rd!2026",
+  "cover": "cover5.mp4",
+  "members": [
+    "payload/README.txt",
+    "payload/data.bin",
+    "payload/sub/nest.bin",
+    "payload/中文名.txt"
+  ],
+  "cover_size": 90224,
+  "cover_sha256": "4f8bd904d937bc2d8dbe59c358a0ad054f4ac5ac19ec45f3e79ac72037c58bdd",
+  "cover_atoms": [
+    {
+      "off": 0,
+      "size": 28,
+      "type": "ftyp"
+    },
+    {
+      "off": 28,
+      "size": 8,
+      "type": "free"
+    },
+    {
+      "off": 36,
+      "size": 86903,
+      "type": "mdat"
+    },
+    {
+      "off": 86939,
+      "size": 3285,
+      "type": "moov"
+    }
+  ],
+  "stco_entries": 101,
+  "zip_plain": {
+    "path": "payload1_plain.zip",
+    "size": 11933,
+    "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58"
+  },
+  "zip_pwd": {
+    "path": "payload1_pwd.zip",
+    "size": 32780,
+    "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5"
+  },
+  "zip_plain2": {
+    "path": "payload2_plain.zip",
+    "size": 5647,
+    "sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e"
+  },
+  "zip_pwd2": {
+    "path": "payload2_pwd.zip",
+    "size": 17600,
+    "sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539"
+  },
+  "layouts": {
+    "L1_plain": {
+      "layout": "L1",
+      "variant": "plain",
+      "file": "L1_plain.mp4",
+      "size": 102157,
+      "sha256": "2f9591271d6fd9634da877df9294c2f1450ed05ea2264d45fb1b889fc950090f",
+      "structure": "尾部追加 ZIP",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          90224,
+          11933
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L1_pwd": {
+      "layout": "L1",
+      "variant": "pwd",
+      "file": "L1_pwd.mp4",
+      "size": 123004,
+      "sha256": "99ad118df221290578e186ba55cf5db605d927ea4c7b18dee16feb06e8ad610e",
+      "structure": "尾部追加 ZIP",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          90224,
+          32780
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L2_plain": {
+      "layout": "L2",
+      "variant": "plain",
+      "file": "L2_plain.mp4",
+      "size": 102382,
+      "sha256": "c75063dda85f8efab09458e272ee109012d7346ec2c1cedf9831f29a6e0db864",
+      "structure": "尾部 free 原子（8B 头 + 217B 随机 pad + ZIP）",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          90449,
+          11933
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L2_pwd": {
+      "layout": "L2",
+      "variant": "pwd",
+      "file": "L2_pwd.mp4",
+      "size": 123229,
+      "sha256": "5e6c0b95f62462458d95d1accfe06963870fdb1a8d1750e1d48481af682cf935",
+      "structure": "尾部 free 原子（8B 头 + 217B 随机 pad + ZIP）",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          90449,
+          32780
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L3_plain": {
+      "layout": "L3",
+      "variant": "plain",
+      "file": "L3_plain.mp4",
+      "size": 130871,
+      "sha256": "f480fd9852d051a3725bbab8eebba5b3035595732673d5bd5e2318c21d7f63f8",
+      "structure": "ftyp 后 free 原子内嵌 ZIP（stco += 11941）+ 尾部噪声 28706B",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          36,
+          11933
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L3_pwd": {
+      "layout": "L3",
+      "variant": "pwd",
+      "file": "L3_pwd.mp4",
+      "size": 151718,
+      "sha256": "d8aae6a5381c9b38c2b221b692f4fcca1991f71a1e626eb25ca91c63fdfa802a",
+      "structure": "ftyp 后 free 原子内嵌 ZIP（stco += 32788）+ 尾部噪声 28706B",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          36,
+          32780
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L4_plain": {
+      "layout": "L4",
+      "variant": "plain",
+      "file": "L4_plain.mp4",
+      "size": 102157,
+      "sha256": "79f78e890751f0e2ca243d94192b798024dbacf9a47b4b54bc69d8b3e726efbc",
+      "structure": "mdat 内 chunk 边界插入 ZIP（插点=46163, mdat size += 11933, stco/co64 分段补偿）",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          46163,
+          11933
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L4_pwd": {
+      "layout": "L4",
+      "variant": "pwd",
+      "file": "L4_pwd.mp4",
+      "size": 123004,
+      "sha256": "4c5be98ad89be3676994a44c17603a9922069f30e283fe6bd8a3fad675105bbe",
+      "structure": "mdat 内 chunk 边界插入 ZIP（插点=46163, mdat size += 32780, stco/co64 分段补偿）",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          46163,
+          32780
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L5_plain": {
+      "layout": "L5",
+      "variant": "plain",
+      "file": "L5_plain.mp4",
+      "size": 102157,
+      "sha256": "846a8f1fa150176dd36ca5f7dbe6e96b2a67bd8a6809fdb8622046b855939118",
+      "structure": "ZIP 切 3 块分插到 [20187, 46163, 66644]（mdat size += 11933, stco 分段补偿）",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          20187,
+          159
+        ],
+        [
+          46163,
+          11370
+        ],
+        [
+          66644,
+          404
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L5_pwd": {
+      "layout": "L5",
+      "variant": "pwd",
+      "file": "L5_pwd.mp4",
+      "size": 123004,
+      "sha256": "1d56b03138d6993a730d1d117952024b6a4d9b0ebd9ee2d921b1b55e93230a73",
+      "structure": "ZIP 切 3 块分插到 [20187, 46163, 66644]（mdat size += 32780, stco 分段补偿）",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          20187,
+          12827
+        ],
+        [
+          46163,
+          11438
+        ],
+        [
+          66644,
+          8515
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L6_plain": {
+      "layout": "L6",
+      "variant": "plain",
+      "file": "L6_plain.mp4",
+      "size": 10587917,
+      "sha256": "04fe53f6a8fc63c6d06bbaaf8be0f4ad17d47d75c6607418e3792852b86c682f",
+      "structure": "[5MiB 垃圾][外壳 MP4][ZIP][5MiB 垃圾]（外壳整体被前置推后 5242880B，未改 moov）",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          5333104,
+          11933
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 183,
+      "video_err": [
+        "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5626420295c0] moov atom not found",
+        "[in#0 @ 0x562642029300] Error opening input: Invalid data found when processing input"
+      ]
+    },
+    "L6_pwd": {
+      "layout": "L6",
+      "variant": "pwd",
+      "file": "L6_pwd.mp4",
+      "size": 10608764,
+      "sha256": "a9a3a0e53a84e87a099d1ff439df3e1fd3f03990eea402137c64c0937fa9b046",
+      "structure": "[5MiB 垃圾][外壳 MP4][ZIP][5MiB 垃圾]（外壳整体被前置推后 5242880B，未改 moov）",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          5333104,
+          32780
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 183,
+      "video_err": [
+        "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x56232234b5c0] moov atom not found",
+        "[in#0 @ 0x56232234b300] Error opening input: Invalid data found when processing input"
+      ]
+    },
+    "L7_plain": {
+      "layout": "L7",
+      "variant": "plain",
+      "file": "L7_plain.mp4",
+      "size": 107804,
+      "sha256": "dde1506fd183db3cc324016c9a65d31f2d69a8c32614e0ee25f168fb910862c9",
+      "structure": "尾部追加两个独立 ZIP（ZIP1 再用 ZIP2 接在其后）",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [
+        [
+          90224,
+          11933
+        ],
+        [
+          102157,
+          5647
+        ]
+      ],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L7_pwd": {
+      "layout": "L7",
+      "variant": "pwd",
+      "file": "L7_pwd.mp4",
+      "size": 140604,
+      "sha256": "dbc8afba5bc375c33618bd3b562f03bb6d32795d2d2de05bc1d328c08b6a6e69",
+      "structure": "尾部追加两个独立 ZIP（ZIP1 再用 ZIP2 接在其后）",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [
+        [
+          90224,
+          32780
+        ],
+        [
+          123004,
+          17600
+        ]
+      ],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L8_plain": {
+      "layout": "L8",
+      "variant": "plain",
+      "file": "L8_plain.mkv",
+      "size": 101594,
+      "sha256": "5af386b01812181aa23d00c1a456118afd3faa577e58911566fffb9a26442920",
+      "structure": "MKV 外套：视频轨 = cover5 原样转封装，ZIP 作 MKV 附件轨（mimetype=application/zip）",
+      "zip_sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+      "zip_size": 11933,
+      "zip_spans": [],
+      "extra_zip_sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+      "video_rc": 0,
+      "video_err": []
+    },
+    "L8_pwd": {
+      "layout": "L8",
+      "variant": "pwd",
+      "file": "L8_pwd.mkv",
+      "size": 122445,
+      "sha256": "22072932d2b22190d1c59136a782e683ccef39d4a66295dfb95a5cca02b0c45a",
+      "structure": "MKV 外套：视频轨 = cover5 原样转封装，ZIP 作 MKV 附件轨（mimetype=application/zip）",
+      "zip_sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+      "zip_size": 32780,
+      "zip_spans": [],
+      "extra_zip_sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+      "video_rc": 0,
+      "video_err": []
+    }
+  }
+}

@@ -1,0 +1,1398 @@
+{
+  "expected": {
+    "zip1_members": 6,
+    "zip1_bytes": 41200,
+    "names": [
+      "payload/r1_a.txt",
+      "payload/r2_b.bin",
+      "payload/r3_c.txt",
+      "payload/r4_d.bin",
+      "payload/r5_e.txt",
+      "payload/中文_名.txt"
+    ]
+  },
+  "samples": {
+    "E1_junk5m_zip_junk5m.bin": {
+      "size": 10498640,
+      "sigs": {
+        "LFH": 6,
+        "CDFH": 6,
+        "EOCD": 1
+      },
+      "our_scheme": {
+        "eocds": 1,
+        "archives": [
+          {
+            "eocd": 5255738,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 5242902,
+            "naive_start_guess": 5242880,
+            "candidates": 6,
+            "solved": true,
+            "start_lfh": 5242880,
+            "delta": 0,
+            "ranges": [
+              [
+                5242880,
+                12880
+              ]
+            ],
+            "skipped": 0,
+            "entries": 6,
+            "crc_ok": 6
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": false,
+          "reason": "跨度(12880)<=逻辑长度(12880)，非插入场景",
+          "eocd": 5255738
+        }
+      ],
+      "rescue": {
+        "found_lfh": 6,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r4_d.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          }
+        ],
+        "failed": [],
+        "bytes": 41200,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 100.0,
+      "tools": {
+        "7z_l": {
+          "rc": 0,
+          "rss_kb": 13892,
+          "sec": 0.021,
+          "tail": [
+            "2026-10-16 19:10:58 .....         6200           68  payload/中文_名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              41200        12198  6 files",
+            "Warnings: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13768,
+          "sec": 0.021,
+          "tail": [
+            "                    .....        12880        12880  2.zip",
+            "                    .....      5242880      5242880  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                              10498640     10498640  3 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 0,
+          "rss_kb": 13768,
+          "sec": 0.021,
+          "tail": [
+            "Warnings: 1",
+            "Files: 6",
+            "Size:       41200",
+            "Compressed: 10498640"
+          ]
+        },
+        "unzip_l": {
+          "rc": 9,
+          "rss_kb": 14148,
+          "sec": 0.011,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/E1_junk5m_zip_junk5m.bin or",
+            "        /home/user/hermes/yshjy/tests/data/E1_junk5m_zip_junk5m.bin.zip, and cannot find /home/user/hermes/yshjy/tests/data/E1_junk5m_zip_junk5m.bin.ZIP, period."
+          ]
+        },
+        "unzip_t": {
+          "rc": 9,
+          "rss_kb": 14148,
+          "sec": 0.011,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/E1_junk5m_zip_junk5m.bin or",
+            "        /home/user/hermes/yshjy/tests/data/E1_junk5m_zip_junk5m.bin.zip, and cannot find /home/user/hermes/yshjy/tests/data/E1_junk5m_zip_junk5m.bin.ZIP, period."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 1,
+          "rss_kb": 14148,
+          "sec": 0.061,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 1,
+          "rss_kb": 14148,
+          "sec": 0.061,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ]
+        },
+        "7z_x": {
+          "rc": 0,
+          "rss_kb": 13772,
+          "files": 6,
+          "bytes": 41200,
+          "tail": [
+            "Size:       41200",
+            "Compressed: 10498640"
+          ]
+        }
+      }
+    },
+    "E2_video_split_zip_middle.mp4": {
+      "size": 43309,
+      "sigs": {
+        "LFH": 6,
+        "CDFH": 6,
+        "EOCD": 1
+      },
+      "our_scheme": {
+        "eocds": 1,
+        "archives": [
+          {
+            "eocd": 28072,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 15237,
+            "naive_start_guess": 15214,
+            "candidates": 6,
+            "solved": true,
+            "start_lfh": 15214,
+            "delta": 0,
+            "ranges": [
+              [
+                15214,
+                12880
+              ]
+            ],
+            "skipped": 0,
+            "entries": 6,
+            "crc_ok": 6
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": false,
+          "reason": "跨度(12880)<=逻辑长度(12880)，非插入场景",
+          "eocd": 28072
+        }
+      ],
+      "rescue": {
+        "found_lfh": 6,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r4_d.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          }
+        ],
+        "failed": [],
+        "bytes": 41200,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 100.0,
+      "tools": {
+        "7z_l": {
+          "rc": 0,
+          "rss_kb": 13784,
+          "sec": 0.011,
+          "tail": [
+            "2026-10-16 19:10:58 .....         6200           68  payload/中文_名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              41200        12198  6 files",
+            "Warnings: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13784,
+          "sec": 0.011,
+          "tail": [
+            "                    .....        12880        12880  2.zip",
+            "                    .....        15215        15215  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                 43309        43309  3 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 0,
+          "rss_kb": 13784,
+          "sec": 0.011,
+          "tail": [
+            "Warnings: 1",
+            "Files: 6",
+            "Size:       41200",
+            "Compressed: 43309"
+          ]
+        },
+        "unzip_l": {
+          "rc": 1,
+          "rss_kb": 14164,
+          "sec": 0.011,
+          "tail": [
+            "---------                     -------",
+            "    41200                     6 files",
+            "warning [/home/user/hermes/yshjy/tests/data/E2_video_split_zip_middle.mp4]:  15214 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ]
+        },
+        "unzip_t": {
+          "rc": 1,
+          "rss_kb": 14164,
+          "sec": 0.011,
+          "tail": [
+            "    testing: payload/r4_d.bin         OK",
+            "    testing: payload/r5_e.txt         OK",
+            "    testing: payload/中文_名.txt   OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/E2_video_split_zip_middle.mp4."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 0,
+          "rss_kb": 14168,
+          "sec": 0.051,
+          "tail": [
+            "payload/r3_c.txt                               2026-10-16 19:10:58        11000",
+            "payload/r4_d.bin                               2026-10-16 19:10:58         6000",
+            "payload/r5_e.txt                               2026-10-16 19:10:58         6000",
+            "payload/中文_名.txt                               2026-10-16 19:10:58         6200"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 0,
+          "rss_kb": 14168,
+          "sec": 0.051,
+          "tail": [
+            "Done testing"
+          ]
+        },
+        "7z_x": {
+          "rc": 0,
+          "rss_kb": 13792,
+          "files": 6,
+          "bytes": 41200,
+          "tail": [
+            "Size:       41200",
+            "Compressed: 43309"
+          ]
+        }
+      }
+    },
+    "E3_zip_split_by_video.mp4": {
+      "size": 31044,
+      "sigs": {
+        "LFH": 6,
+        "CDFH": 6,
+        "EOCD": 1
+      },
+      "our_scheme": {
+        "eocds": 1,
+        "archives": [
+          {
+            "eocd": 31022,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 22,
+            "naive_start_guess": 18164,
+            "candidates": 6,
+            "solved": true,
+            "start_lfh": 0,
+            "delta": -18164,
+            "ranges": [
+              [
+                0,
+                12290
+              ],
+              [
+                30454,
+                590
+              ]
+            ],
+            "skipped": 18164,
+            "entries": 6,
+            "crc_ok": 6
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": true,
+          "m": 18164,
+          "cut_a": 12290,
+          "interrupted_member": "payload/r4_d.bin",
+          "search_tries": 6006,
+          "ranges": [
+            [
+              0,
+              12290
+            ],
+            [
+              30454,
+              590
+            ]
+          ],
+          "entries": 6,
+          "crc_ok": 6,
+          "detail": [],
+          "eocd": 31022
+        }
+      ],
+      "rescue": {
+        "found_lfh": 6,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r4_d.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          }
+        ],
+        "failed": [],
+        "bytes": 41200,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 100.0,
+      "tools": {
+        "7z_l": {
+          "rc": 2,
+          "rss_kb": 13800,
+          "sec": 0.011,
+          "tail": [
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              29000        12106  4 files",
+            "Warnings: 1",
+            "Errors: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13800,
+          "sec": 0.011,
+          "tail": [
+            "                    .....         5870         5870  2",
+            "                    .....        12880        12880  3.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                 31044        31044  3 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 2,
+          "rss_kb": 13808,
+          "sec": 0.011,
+          "tail": [
+            "Open Errors: 1",
+            "ERRORS:",
+            "Headers Error",
+            "Unconfirmed start of archive"
+          ]
+        },
+        "unzip_l": {
+          "rc": 1,
+          "rss_kb": 14188,
+          "sec": 0.011,
+          "tail": [
+            "---------                     -------",
+            "    41200                     6 files",
+            "warning [/home/user/hermes/yshjy/tests/data/E3_zip_split_by_video.mp4]:  18164 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ]
+        },
+        "unzip_t": {
+          "rc": 4,
+          "rss_kb": 14188,
+          "sec": 0.011,
+          "tail": [
+            "  (attempting to re-compensate)",
+            "    testing: payload/r1_a.txt         OK",
+            "error: not enough memory for bomb detection",
+            "At least one error was detected in /home/user/hermes/yshjy/tests/data/E3_zip_split_by_video.mp4."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 0,
+          "rss_kb": 14188,
+          "sec": 0.051,
+          "tail": [
+            "payload/r3_c.txt                               2026-10-16 19:10:58        11000",
+            "payload/r4_d.bin                               2026-10-16 19:10:58         6000",
+            "payload/r5_e.txt                               2026-10-16 19:10:58         6000",
+            "payload/中文_名.txt                               2026-10-16 19:10:58         6200"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 0,
+          "rss_kb": 14188,
+          "sec": 0.073,
+          "tail": [
+            "The following enclosed file is corrupted: 'payload/r1_a.txt'",
+            "Done testing"
+          ]
+        },
+        "7z_x": {
+          "rc": 2,
+          "rss_kb": 13808,
+          "files": 4,
+          "bytes": 29000,
+          "tail": [
+            "Headers Error",
+            "Unconfirmed start of archive"
+          ]
+        }
+      }
+    },
+    "E3b_zip_cut_inside_member.mp4": {
+      "size": 31044,
+      "sigs": {
+        "LFH": 6,
+        "CDFH": 6,
+        "EOCD": 1
+      },
+      "our_scheme": {
+        "eocds": 1,
+        "archives": [
+          {
+            "eocd": 31022,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 22,
+            "naive_start_guess": 18164,
+            "candidates": 6,
+            "solved": false,
+            "candidates_tried": 6,
+            "best_start": 0,
+            "best_entries": 6,
+            "best_crc_ok": 5,
+            "best_ranges": [
+              [
+                0,
+                12290
+              ],
+              [
+                30454,
+                590
+              ]
+            ],
+            "best_skipped": 18164,
+            "best_detail": [
+              "payload/r4_d.bin: BadZipFile: Bad CRC-32 for file 'payload/r4_d.bin'"
+            ]
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": true,
+          "m": 18164,
+          "cut_a": 9264,
+          "interrupted_member": "payload/r4_d.bin",
+          "search_tries": 2980,
+          "ranges": [
+            [
+              0,
+              9264
+            ],
+            [
+              27428,
+              3616
+            ]
+          ],
+          "entries": 6,
+          "crc_ok": 6,
+          "detail": [],
+          "eocd": 31022
+        }
+      ],
+      "rescue": {
+        "found_lfh": 6,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          }
+        ],
+        "failed": [
+          "payload/r4_d.bin: CRC 不符（写出 6000B 但内容不可信）"
+        ],
+        "bytes": 35200,
+        "failed_bytes": 6000
+      },
+      "rescue_pct": 85.4,
+      "tools": {
+        "7z_l": {
+          "rc": 2,
+          "rss_kb": 13816,
+          "sec": 0.011,
+          "tail": [
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              29000        12106  4 files",
+            "Warnings: 1",
+            "Errors: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13816,
+          "sec": 0.011,
+          "tail": [
+            "                    .....         5870         5870  2",
+            "                    .....        12880        12880  3.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                 31044        31044  3 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 2,
+          "rss_kb": 13824,
+          "sec": 0.011,
+          "tail": [
+            "ERRORS:",
+            "Headers Error",
+            "Unconfirmed start of archive",
+            "ERROR: CRC Failed : payload/r4_d.bin"
+          ]
+        },
+        "unzip_l": {
+          "rc": 1,
+          "rss_kb": 14204,
+          "sec": 0.011,
+          "tail": [
+            "---------                     -------",
+            "    41200                     6 files",
+            "warning [/home/user/hermes/yshjy/tests/data/E3b_zip_cut_inside_member.mp4]:  18164 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ]
+        },
+        "unzip_t": {
+          "rc": 4,
+          "rss_kb": 14204,
+          "sec": 0.011,
+          "tail": [
+            "  (attempting to re-compensate)",
+            "    testing: payload/r1_a.txt         OK",
+            "error: not enough memory for bomb detection",
+            "At least one error was detected in /home/user/hermes/yshjy/tests/data/E3b_zip_cut_inside_member.mp4."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 0,
+          "rss_kb": 14204,
+          "sec": 0.051,
+          "tail": [
+            "payload/r3_c.txt                               2026-10-16 19:10:58        11000",
+            "payload/r4_d.bin                               2026-10-16 19:10:58         6000",
+            "payload/r5_e.txt                               2026-10-16 19:10:58         6000",
+            "payload/中文_名.txt                               2026-10-16 19:10:58         6200"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 0,
+          "rss_kb": 14204,
+          "sec": 0.051,
+          "tail": [
+            "The following enclosed file is corrupted: 'payload/r1_a.txt'",
+            "Done testing"
+          ]
+        },
+        "7z_x": {
+          "rc": 2,
+          "rss_kb": 13824,
+          "files": 4,
+          "bytes": 29000,
+          "tail": [
+            "Unconfirmed start of archive",
+            "ERROR: CRC Failed : payload/r4_d.bin"
+          ]
+        }
+      }
+    },
+    "E4_zip_middle_overwritten.mp4": {
+      "size": 12880,
+      "sigs": {
+        "LFH": 5,
+        "CDFH": 6,
+        "EOCD": 1
+      },
+      "our_scheme": {
+        "eocds": 1,
+        "archives": [
+          {
+            "eocd": 12858,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 22,
+            "naive_start_guess": 0,
+            "candidates": 5,
+            "solved": false,
+            "candidates_tried": 5,
+            "best_start": 0,
+            "best_entries": 6,
+            "best_crc_ok": 2,
+            "best_ranges": [
+              [
+                0,
+                6239
+              ],
+              [
+                12290,
+                590
+              ]
+            ],
+            "best_skipped": 6051,
+            "best_detail": [
+              "payload/r1_a.txt: ValueError: negative seek",
+              "payload/r2_b.bin: ValueError: negative seek",
+              "payload/r3_c.txt: BadZipFile: File name in directory 'payload/r3_c.txt' and header b'payload/r2_b.bin' differ.",
+              "payload/r4_d.bin: BadZipFile: Bad magic number for file header"
+            ]
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": false,
+          "reason": "跨度(12880)<=逻辑长度(12880)，非插入场景",
+          "eocd": 12858
+        }
+      ],
+      "rescue": {
+        "found_lfh": 5,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          }
+        ],
+        "failed": [],
+        "bytes": 35200,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 85.4,
+      "tools": {
+        "7z_l": {
+          "rc": 0,
+          "rss_kb": 13828,
+          "sec": 0.011,
+          "tail": [
+            "2026-10-16 19:10:58 .....         6000           24  payload/r5_e.txt",
+            "2026-10-16 19:10:58 .....         6200           68  payload/中文_名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              41200        12198  6 files"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 2,
+          "rss_kb": 13828,
+          "sec": 0.011,
+          "tail": [
+            "1 file, 12880 bytes (13 KiB)",
+            "Listing archive: /home/user/hermes/yshjy/tests/data/E4_zip_middle_overwritten.mp4",
+            "Errors: 1",
+            "ERROR: /home/user/hermes/yshjy/tests/data/E4_zip_middle_overwritten.mp4 : Cannot open the file as archive"
+          ]
+        },
+        "7z_t": {
+          "rc": 2,
+          "rss_kb": 13828,
+          "sec": 0.011,
+          "tail": [
+            "Sub items Errors: 1",
+            "Archives with Errors: 1",
+            "Sub items Errors: 1",
+            "ERROR: Headers Error : payload/r4_d.bin"
+          ]
+        },
+        "unzip_l": {
+          "rc": 0,
+          "rss_kb": 14208,
+          "sec": 0.011,
+          "tail": [
+            "     6000  2026-10-16 19:10   payload/r5_e.txt",
+            "     6200  2026-10-16 19:10   payload/中文_名.txt",
+            "---------                     -------",
+            "    41200                     6 files"
+          ]
+        },
+        "unzip_t": {
+          "rc": 2,
+          "rss_kb": 14208,
+          "sec": 0.011,
+          "tail": [
+            "file #4:  bad zipfile offset (local header sig):  6239",
+            "    testing: payload/r5_e.txt         OK",
+            "    testing: payload/中文_名.txt   OK",
+            "At least one error was detected in /home/user/hermes/yshjy/tests/data/E4_zip_middle_overwritten.mp4."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 0,
+          "rss_kb": 14208,
+          "sec": 0.051,
+          "tail": [
+            "payload/r3_c.txt                               2026-10-16 19:10:58        11000",
+            "payload/r4_d.bin                               2026-10-16 19:10:58         6000",
+            "payload/r5_e.txt                               2026-10-16 19:10:58         6000",
+            "payload/中文_名.txt                               2026-10-16 19:10:58         6200"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 0,
+          "rss_kb": 14208,
+          "sec": 0.051,
+          "tail": [
+            "The following enclosed file is corrupted: 'payload/r4_d.bin'",
+            "Done testing"
+          ]
+        },
+        "7z_x": {
+          "rc": 2,
+          "rss_kb": 13828,
+          "files": 6,
+          "bytes": 35200,
+          "tail": [
+            "Sub items Errors: 1",
+            "ERROR: Headers Error : payload/r4_d.bin"
+          ]
+        }
+      }
+    },
+    "E5_zip_headtail_truncated.zip": {
+      "size": 12610,
+      "sigs": {
+        "LFH": 5,
+        "CDFH": 4,
+        "EOCD": 0
+      },
+      "our_scheme": {
+        "eocds": 0,
+        "archives": [],
+        "note": "全文件无 EOCD"
+      },
+      "insert_resolve": [],
+      "rescue": {
+        "found_lfh": 5,
+        "recovered": [
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r4_d.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          }
+        ],
+        "failed": [],
+        "bytes": 35200,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 85.4,
+      "tools": {
+        "7z_l": {
+          "rc": 2,
+          "rss_kb": 13836,
+          "sec": 0.011,
+          "tail": [
+            "2026-10-16 19:10:58 .....         6200           68  payload/中文_名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              35200        12174  5 files",
+            "Errors: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13840,
+          "sec": 0.011,
+          "tail": [
+            "                    .....         6051         6051  1",
+            "                    .....         6559         6559  2.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                 12610        12610  2 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 2,
+          "rss_kb": 13840,
+          "sec": 0.011,
+          "tail": [
+            "Archives with Errors: 1",
+            "Open Errors: 1",
+            "ERRORS:",
+            "Unexpected end of archive"
+          ]
+        },
+        "unzip_l": {
+          "rc": 9,
+          "rss_kb": 14220,
+          "sec": 0.011,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/E5_zip_headtail_truncated.zip or",
+            "        /home/user/hermes/yshjy/tests/data/E5_zip_headtail_truncated.zip.zip, and cannot find /home/user/hermes/yshjy/tests/data/E5_zip_headtail_truncated.zip.ZIP, period."
+          ]
+        },
+        "unzip_t": {
+          "rc": 9,
+          "rss_kb": 14224,
+          "sec": 0.011,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/E5_zip_headtail_truncated.zip or",
+            "        /home/user/hermes/yshjy/tests/data/E5_zip_headtail_truncated.zip.zip, and cannot find /home/user/hermes/yshjy/tests/data/E5_zip_headtail_truncated.zip.ZIP, period."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 1,
+          "rss_kb": 14224,
+          "sec": 0.062,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 1,
+          "rss_kb": 14224,
+          "sec": 0.061,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ]
+        },
+        "7z_x": {
+          "rc": 2,
+          "rss_kb": 13844,
+          "files": 5,
+          "bytes": 35200,
+          "tail": [
+            "ERRORS:",
+            "Unexpected end of archive"
+          ]
+        }
+      }
+    },
+    "E6_two_zips.mp4": {
+      "size": 35474,
+      "sigs": {
+        "LFH": 9,
+        "CDFH": 9,
+        "EOCD": 2
+      },
+      "our_scheme": {
+        "eocds": 2,
+        "archives": [
+          {
+            "eocd": 35452,
+            "entries_declared": 3,
+            "size_cd": 184,
+            "offset_cd": 4224,
+            "eocd_from_eof": 22,
+            "naive_start_guess": 31044,
+            "candidates": 3,
+            "solved": true,
+            "start_lfh": 31044,
+            "delta": 0,
+            "ranges": [
+              [
+                31044,
+                4430
+              ]
+            ],
+            "skipped": 0,
+            "entries": 3,
+            "crc_ok": 3
+          },
+          {
+            "eocd": 12858,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 22616,
+            "naive_start_guess": 0,
+            "candidates": 6,
+            "solved": true,
+            "start_lfh": 0,
+            "delta": 0,
+            "ranges": [
+              [
+                0,
+                12880
+              ]
+            ],
+            "skipped": 0,
+            "entries": 6,
+            "crc_ok": 6
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": false,
+          "reason": "跨度(4430)<=逻辑长度(4430)，非插入场景",
+          "eocd": 35452
+        },
+        {
+          "ok": false,
+          "reason": "跨度(12880)<=逻辑长度(12880)，非插入场景",
+          "eocd": 12858
+        }
+      ],
+      "rescue": {
+        "found_lfh": 9,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r4_d.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          },
+          {
+            "name": "payload/q1.txt",
+            "bytes": 2000
+          },
+          {
+            "name": "payload/q2.bin",
+            "bytes": 4000
+          },
+          {
+            "name": "payload/q3_二.txt",
+            "bytes": 3400
+          }
+        ],
+        "failed": [],
+        "bytes": 50600,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 122.8,
+      "tools": {
+        "7z_l": {
+          "rc": 0,
+          "rss_kb": 13852,
+          "sec": 0.011,
+          "tail": [
+            "2026-10-16 19:10:58 .....         6200           68  payload/中文_名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              41200        12198  6 files",
+            "Warnings: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13852,
+          "sec": 0.011,
+          "tail": [
+            "                    .....        18164        18164  2",
+            "                    .....         4430         4430  3.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                 35474        35474  3 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 0,
+          "rss_kb": 13856,
+          "sec": 0.011,
+          "tail": [
+            "Warnings: 1",
+            "Files: 6",
+            "Size:       41200",
+            "Compressed: 35474"
+          ]
+        },
+        "unzip_l": {
+          "rc": 1,
+          "rss_kb": 14236,
+          "sec": 0.011,
+          "tail": [
+            "---------                     -------",
+            "     9400                     3 files",
+            "warning [/home/user/hermes/yshjy/tests/data/E6_two_zips.mp4]:  31044 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ]
+        },
+        "unzip_t": {
+          "rc": 1,
+          "rss_kb": 14236,
+          "sec": 0.011,
+          "tail": [
+            "    testing: payload/q1.txt           OK",
+            "    testing: payload/q2.bin           OK",
+            "    testing: payload/q3_二.txt       OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/E6_two_zips.mp4."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 0,
+          "rss_kb": 14236,
+          "sec": 0.051,
+          "tail": [
+            "File Name                                             Modified             Size",
+            "payload/q1.txt                                 2026-10-16 19:10:58         2000",
+            "payload/q2.bin                                 2026-10-16 19:10:58         4000",
+            "payload/q3_二.txt                               2026-10-16 19:10:58         3400"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 0,
+          "rss_kb": 14364,
+          "sec": 0.051,
+          "tail": [
+            "Done testing"
+          ]
+        },
+        "7z_x": {
+          "rc": 0,
+          "rss_kb": 13796,
+          "files": 6,
+          "bytes": 41200,
+          "tail": [
+            "Size:       41200",
+            "Compressed: 35474"
+          ]
+        }
+      }
+    },
+    "E7_vid_zip_vid_zip.mp4": {
+      "size": 65903,
+      "sigs": {
+        "LFH": 9,
+        "CDFH": 9,
+        "EOCD": 2
+      },
+      "our_scheme": {
+        "eocds": 2,
+        "archives": [
+          {
+            "eocd": 65881,
+            "entries_declared": 3,
+            "size_cd": 184,
+            "offset_cd": 4224,
+            "eocd_from_eof": 22,
+            "naive_start_guess": 61473,
+            "candidates": 3,
+            "solved": true,
+            "start_lfh": 61473,
+            "delta": 0,
+            "ranges": [
+              [
+                61473,
+                4430
+              ]
+            ],
+            "skipped": 0,
+            "entries": 3,
+            "crc_ok": 3
+          },
+          {
+            "eocd": 43287,
+            "entries_declared": 6,
+            "size_cd": 378,
+            "offset_cd": 12480,
+            "eocd_from_eof": 22616,
+            "naive_start_guess": 30429,
+            "candidates": 6,
+            "solved": true,
+            "start_lfh": 30429,
+            "delta": 0,
+            "ranges": [
+              [
+                30429,
+                12880
+              ]
+            ],
+            "skipped": 0,
+            "entries": 6,
+            "crc_ok": 6
+          }
+        ]
+      },
+      "insert_resolve": [
+        {
+          "ok": false,
+          "reason": "跨度(4430)<=逻辑长度(4430)，非插入场景",
+          "eocd": 65881
+        },
+        {
+          "ok": false,
+          "reason": "跨度(12880)<=逻辑长度(12880)，非插入场景",
+          "eocd": 43287
+        }
+      ],
+      "rescue": {
+        "found_lfh": 9,
+        "recovered": [
+          {
+            "name": "payload/r1_a.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r2_b.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r3_c.txt",
+            "bytes": 11000
+          },
+          {
+            "name": "payload/r4_d.bin",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/r5_e.txt",
+            "bytes": 6000
+          },
+          {
+            "name": "payload/中文_名.txt",
+            "bytes": 6200
+          },
+          {
+            "name": "payload/q1.txt",
+            "bytes": 2000
+          },
+          {
+            "name": "payload/q2.bin",
+            "bytes": 4000
+          },
+          {
+            "name": "payload/q3_二.txt",
+            "bytes": 3400
+          }
+        ],
+        "failed": [],
+        "bytes": 50600,
+        "failed_bytes": 0
+      },
+      "rescue_pct": 122.8,
+      "tools": {
+        "7z_l": {
+          "rc": 0,
+          "rss_kb": 13864,
+          "sec": 0.011,
+          "tail": [
+            "2026-10-16 19:10:58 .....         6200           68  payload/中文_名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 19:10:58              41200        12198  6 files",
+            "Warnings: 1"
+          ]
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "rss_kb": 13864,
+          "sec": 0.011,
+          "tail": [
+            "                    .....        18164        18164  3",
+            "                    .....         4430         4430  4.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                 65903        65903  4 files"
+          ]
+        },
+        "7z_t": {
+          "rc": 0,
+          "rss_kb": 13868,
+          "sec": 0.011,
+          "tail": [
+            "Warnings: 1",
+            "Files: 6",
+            "Size:       41200",
+            "Compressed: 65903"
+          ]
+        },
+        "unzip_l": {
+          "rc": 1,
+          "rss_kb": 14248,
+          "sec": 0.011,
+          "tail": [
+            "---------                     -------",
+            "     9400                     3 files",
+            "warning [/home/user/hermes/yshjy/tests/data/E7_vid_zip_vid_zip.mp4]:  61473 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ]
+        },
+        "unzip_t": {
+          "rc": 1,
+          "rss_kb": 14252,
+          "sec": 0.011,
+          "tail": [
+            "    testing: payload/q1.txt           OK",
+            "    testing: payload/q2.bin           OK",
+            "    testing: payload/q3_二.txt       OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/E7_vid_zip_vid_zip.mp4."
+          ]
+        },
+        "zipfile_l": {
+          "rc": 0,
+          "rss_kb": 14252,
+          "sec": 0.051,
+          "tail": [
+            "File Name                                             Modified             Size",
+            "payload/q1.txt                                 2026-10-16 19:10:58         2000",
+            "payload/q2.bin                                 2026-10-16 19:10:58         4000",
+            "payload/q3_二.txt                               2026-10-16 19:10:58         3400"
+          ]
+        },
+        "zipfile_t": {
+          "rc": 0,
+          "rss_kb": 14252,
+          "sec": 0.052,
+          "tail": [
+            "Done testing"
+          ]
+        },
+        "7z_x": {
+          "rc": 0,
+          "rss_kb": 13872,
+          "files": 6,
+          "bytes": 41200,
+          "tail": [
+            "Size:       41200",
+            "Compressed: 65903"
+          ]
+        }
+      }
+    }
+  },
+  "harness_peak_rss_kb": 22844
+}

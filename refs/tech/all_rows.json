@@ -1,0 +1,4058 @@
+[
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`CArcInfo` = 格式元数据的唯一载体（13 个字段）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "全局定长数组 `g_Arcs[72]` + 计数器",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "宏 + 静态构造器自动登记（零登记代码）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "一套宏族覆盖「只读/读写/无签名/多签名/签名首字节自减」",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "56 个文件 / 64 处注册调用，覆盖 ~120 种格式",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "DLL 导出 5 个 C 函数，构成 handler 插件的全部 ABI",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`GetHandlerProperty2` 用 `PROPID` 开关返回任意元数据",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "同一份 `CArcInfoEx` 由两条完全不同的路径填充：静态 / DLL",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "声明式签名：`Signature + SignatureOffset`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`IsArc(p, size) -> 0/1/2` 纯函数，可选、无状态、可提前退出",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "opener 读 1 MiB 头缓冲，对每个格式跑签名/IsArc，构建候选队列",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "用 `Flags` 位图把\"怎么选我\"和\"我有什么能力\"都表达成数据",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`IInArchive` 10 个方法，读写分离成两个接口",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "用 `QueryInterface` 而不是往主接口塞方法",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "按扩展名先过滤、再按签名排序的二级候选队列",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "格式自己声明\"我是分卷\"，且能在归档内部递归打开子归档",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`maxCheckStartPosition` 把\"搜不搜起点\"交给调用方",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`ISetProperties(names[], values[], n)` 通用属性通道",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "`TimeFlags` 用 32 位打包\"支持哪些时间 × 各自精度\"",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip-工程层.md",
+  "name": "编译期开关把同一个 handler 裁成\"只解压\"版本",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "CPU 数（Windows 还看进程亲和性分组）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`_numThreads` 是 handler 的成员，通过 `mt` 属性下发",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "coder 自己决定实际能用几个线程，不够就降级",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "纯 C 的多线程解码器：N 线程 + 两个事件（canRead/canWrite）生产者消费者",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "缓冲溢出时明确退回单线程，而不是崩或丢数据",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`CMtProgress` / `CMtCompressProgressMixer`：N 线程各自的 (in,out) 增量在临界区求和，再喂给唯一的上层进度回调",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`SetTotal` 只调一次、`SetCompleted` 可并发——契约写在接口注释里",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "上限从系统 RAM 推导：压缩用 80%，解压用 ~53%",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`IArchiveRequestMemoryUseCallback`：handler 申请超额内存时反问用户",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`-mmemx` / `-smemx` 强制覆盖内存上限",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "GUI 支持运行期\"暂停\"和\"切到后台（降优先级）\"",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`IProgress` 只有两个方法，且 `completed` 是指针（可传 NULL = 未知）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`SetTotal` 调不调，决定 `SetCompleted` 的单位",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`IArchiveOpenCallback::SetTotal(files, bytes)` 两个可空指针",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`ICompressProgressInfo::SetRatioInfo(inSize, outSize)` 单独一条通道",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`CLocalProgress`：把\"局部 in/out\"折算成\"全局进度 + 偏移\"",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "每文件三个回调：`GetStream` → `PrepareOperation` → `SetOperationResult`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`NArchive::NExtract::NOperationResult` 10 值枚举",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`IArchiveExtractCallbackMessage2::ReportExtractResult(indexType, index, opRes)` 可以\"事后补报\"",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "唯一的取消通道 = 回调返回 `E_ABORT`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "SIGINT 计数器，连按 3 次才硬退",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "`CProgressSync._stopped` 标志位，临界区保护",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "GUI 用 `SetTimer(200ms)` 轮询快照，而不是 worker 推 UI 更新",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "CLI 进度器自带节流（默认 200 tick）与\"改了什么才重画\"",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "7zip-工程层.md",
+  "name": "GUI 里同一条错误消息只显示一次 + 计数",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "单文本文件，首行是类型签名 `;!@Lang2@!UTF-8!`，其后是\"隐式 id 序列\"",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "id 数组 + 偏移数组 + 一整块文本 = 零分配的紧凑结构",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "按 id 二分查找（前提：id 升序）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "两级回退：语言文件 → 编译期资源串",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "语言 id 为空 → 用系统默认语言",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "一次性加载 + 临界区保护（不热重载）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "控件 id → 语言 id 的映射表 + 批量设文本",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "7zip-工程层.md",
+  "name": "翻译文件独立于代码仓库分发",
+  "decision": "❓"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "5 档退出码：0 成功 / 1 警告(部分成功) / 2 致命 / 7 用法错 / 8 内存不足 / 255 用户中断",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "三层：HRESULT(调用成败) / opRes(每条目结果) / errorFlags(归档诊断位图)",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "`kpidErrorFlags` / `kpidWarningFlags` 作为归档属性（位图）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "系统错误码 → 文案走 `MyFormatMessage`，但有一个特例",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "`IArchive.h` 开头 22 行专门规定出参指针的进出语义",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "opRes → 用户文案的映射函数 + 未知码兜底",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "`CUpdateErrorInfo { Message, FileNames[], SystemError }` 三件套",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip-工程层.md",
+  "name": "`E_ABORT` 特判：不当错误、不当成功",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "两个 GUI 壳：`7zFM.exe`（双栏文件管理器）+ `7zG.exe`（进度对话框壳）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "工作线程跑纯逻辑，GUI 线程跑对话框，靠一个 `CProgressSync` 共享结构通信",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "`PostMsg(kCloseMessage)` + GUI 侧 `OnExternalCloseMessage` 收尾",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "`CProgressSync`：一个加锁的\"进度快照 + 停止/暂停标志 + 消息累积\"聚合体",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "一次一个模态操作，没有任务队列",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "7-Zip 没有显式状态机；状态散在 6 个 bool 里",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "timer 轮询 + 变化才重画",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "进度框里累积消息 + 结束后统一展示（含\"复制到剪贴板\"）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "取消按钮 = 只设标志 + 显示\"正在停止…\"；不立即关窗",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "GUI 浏览归档走进程内 `IArchiveFolder`（Agent 层），不是 spawn 进程",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "7zip-工程层.md",
+  "name": "\"后台\"按钮 = 进程优先级降到 IDLE",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "`UI/Common` 是双壳共享的内核层，含\"参数解析 + 打开 + 解压 + 压缩 + 进度桥接\"",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "CLI 与 GUI 用同一个命令行解析器 `CArcCmdLineParser`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "两层回调接口：COM 接口（内核依赖）+ 非 COM 的 `I*CallbackUI`（壳实现）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "壳不硬编码格式能力，一律问注册表",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "FM 压缩/解压不进程内做，而是拼命令行拉起 `7zG.exe`（用命名事件等待）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "子进程退出码 → 父进程行为（`kWarning` 被更新流程特殊对待）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "`CArchiveExtractCallback` 是双壳共用的回调实现（3000+ 行），把\"内核回调\"翻译成\"文件系统操作 + 壳回调\"",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "7zip-工程层.md",
+  "name": "参数合法性检查（路径存在性、格式名合法性）在共享层做，且失败时壳只负责\"怎么说\"",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "短读重试循环 `ReadStream`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "短读与错误分开表达 `ReadStream_FALSE` / `_FAIL`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "全量写循环 `WriteStream`（0 进度 = 失败）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "无 `GetSize` 接口时用 seek 尾模拟取长度",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "统一块缓冲 `CInBuffer`（自带 `ReadBlock`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "输出环形缓冲 `COutBuffer` + `FlushPart`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "LZ 回拷窗口 `CLzOutWindow::CopyBlock`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "生产者/消费者\"只递指针\"`CStreamBinder`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "边读边算 CRC `CSequentialInStreamWithCRC`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "尾部零字节探测 `ReadZeroTail`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "文件块读 256KB `kClusterSize`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "单一解析缓冲 + 前向预读 `LookAhead`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "环形扫描窗口：前留 64KB / 后留 1MB",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "只有 u32 的流接口",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "内存受限流 `CLimitedSequentialInStream`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "偏移输出流 `COffsetOutStream`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "多线程共享输入流加锁 `CLockedSequentialInStreamMT`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "Linux 端不用 `posix_fadvise`/`O_DIRECT`，仅 `O_RDONLY`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "7zip.md",
+  "name": "读越界用 C++ 异常表达\"半成品可用\" `CUnexpectEnd`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "2 字节 u16 哈希 + 链表索引签名",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "哈希空位快跳粗筛",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "命中即整段跳过",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "未知段填空、无缝覆盖 `[0,EOF)`",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "弱判定：`searchLimit==0` 时只认流首 4 字节",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "强判定：全文件找 marker + 内容校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "签名 + 起始头 CRC 双重校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "7z 专属 6 字节步长签名搜索",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "每格式签名表 + `SignatureOffset` + flags",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "difficult 格式（无签名/短签名/需 startOpen）逐位置试",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "起始搜索 8MB 硬上限，扫描模式取消",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "\"打不开但确认是归档\"也要留证据 `IsArc_After_NonOpen`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "时间字段合理性校验 `CheckDosTime`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "`IsStrangeItem` 单条目闸门",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "描述符双重验证 `CheckDescriptor`",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "候选顺序：扩展名匹配优先",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "OLE/EXE/ELF/Mach-O 标记为\"可做外壳的开头\" `kPreArc`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "解码器工厂：methodId → coder",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "ZIP method ↔ coder 映射 + 插件兜底",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "解压后 CRC 比对",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "用解开尺寸判截断 `useUnpackLimit`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "多余数据判定 `dataAfterEnd`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "结果分级（而非成功/失败二元）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "local header 不可信 → 只标 `kUnavailable`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "逐条独立事务：PrepareOperation/SetOperationResult",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "解码器实例复用（按 method 缓存）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "线程数注入解码器 `SetNumberOfThreads`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "内存上限推导线程数",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "字典大小 → 块大小",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "自建 MT 解码框架 `CMtDec`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "7z solid 块多 coder 流水 `CoderMixer2`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "解密后必须读到结尾",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "密码字节编码（ANSI vs UTF-8）的取舍注释",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "ZipCrypto 校验字：有描述符用时间低位",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "7zip.md",
+  "name": "时间字段解析/写回（DOS + NTFS + Unix 三套）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "Local header 写入 + 条件 Zip64 extra",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "流式写 + 数据描述符（尺寸/CRC 后置）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "Zip64 提前触发阈值 `0xF8000000`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "中央目录 + EOCD64 + Locator 写序",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "试多种方法取最小",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "UTF-8 文件名 extra `0x7075`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "时间 extra（NTFS 0x000A / Unix 0x5455）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "逐条目并行压缩（每线程一个 coder + 共享输出定序）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "每线程内存常量",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "线程数 = 内存 / 每线程开销（deflate 每线程 4MB）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "线程数还要受\"文件数 + fd 上限\"夹",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "线程数与块数匹配（BZip2/Xz）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "7z 头部也压缩 `kEncodedHeader`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "给编码器\"预期大小\"提示",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "资源档位：压缩 80% / 解压 53% 内存",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "`-mmt` 参数语义解析",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "7zip.md",
+  "name": "默认线程数 = 核数并有硬上限",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "LOCALS-CD-MODE 兜底触发",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "顺序解析全部 local header `ReadLocals`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "描述符定位的双重验证",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "强制救援开关 `Force_ReadLocals_Mode`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "从 CD/ECD64 反推 Base 并回改所有条目偏移",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "32 位偏移溢出模式识别 `Overflow32bit`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "条目数 16 位溢出标记 `Cd_NumEntries_Overflow_16bit`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "CD 与 Local 合并（以 Local 为准）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "ECD/CD 三方一致性校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "段长（PhySize）靠\"不清缓冲\"算出来",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "CD 在但 local header 坏 → 逐条降级重读",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "抽出时按 `IsLocalOffsetOK` 单条跳过",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "`NoCentralDir` → `UnconfirmedStart`（告知而非报错）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "错误标志位体系",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "7z 头部恢复：字段全 0 时从尾部反扫",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "7z 签名 CRC 校验与恢复模式弱校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "7z 精确长度与意外结束标志",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "解析异常转标志而非抛出",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "「头部有一个字节坏」的宽容点集合",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "RAR 恢复记录识别",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "7zip.md",
+  "name": "APK 签名块识别（CD 前的特殊块）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "总目录按平台分层：`bat/`(Win) `sh/`(`*x`) `freedesktop_integration/`(Linux) `macOS service menus/`(",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "所有集成入口都收敛到同一个可执行文件 + 不同 CLI 开关",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "主 `.desktop`：`MimeType=` 一口气列 60+ 个 MIME（文件关联），`Actions=` 声明 4 个右键快捷动作",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "4 个 Action 分别映射到 4 个 CLI 开关",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "兜底：为不支持 Actions 的 DE 另备\"单功能 .desktop 文件\"目录",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "GNOME/Nautilus：用 \"脚本目录\" 实现右键菜单（非 .desktop）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "Nautilus 脚本附带\"一键安装脚本\"",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "Cinnamon/Nemo：用 `.nemo_action` 文件（Nemo 专有语法）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "KDE Dolphin：Service Menu，按 KDE 版本分 4 套（KDE3/4/5/6）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "KDE 提供\"完整版\"与\"精简版\"两份菜单",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "KDE 安装脚本区分 `kio/servicemenus`(KDE5.85+/6) 与旧路径",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "Xfce/Thunar：提供 `thunar-archive-plugin` 的 `.tap` 适配器",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "Flatpak/沙箱下的路径改写规则写进文档",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "Win11 现代右键菜单：装 `.reg` 脚本，用 whitelisted ID 冒充 Microsoft 白名单动词",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "注册项结构：`MUIVerb`(显示名) + `MultiSelectModel=Player` + `Icon` + `command\\@`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "提供\"卸载/移除\"配对脚本 + 白名单 ID 清单文档",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "SendTo 菜单：预置 33 个 `.lnk` 快捷方式（每个功能一个）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "Win11 现代菜单壳扩展（C++/WinRT `IExplorerCommand`）",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "现代菜单通过 MSIX `AppxManifest` 声明 `windows.fileExplorerContextMenus`",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "菜单项定义集中在一个头文件 `Commands.h`（ID/图标/CLI 开关三元组）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "菜单顺序/分组由注册表读配置 + 代码兜底默认决定",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "经典注册表右键菜单由 InnoSetup 安装脚本统一注册/卸载",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "拖放：Windows 用自研 DLL `dragdropfilesdll.dll` 提供系统的文件拖放（含拖到图标）",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "DLL 反劫持：启动时校验 `dragdropfilesdll.dll` 的 SHA256 是否在白名单内，不匹配则 `halt`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑭系统集成",
+  "src": "peazip-工程层.md",
+  "name": "内部\"剪贴板\"是应用内自管的面板（记录 剪切/复制 待办），不是系统剪贴板",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑭系统集成",
+  "src": "peazip-工程层.md",
+  "name": "配置项 `[Clipboard mode]` 可切换行为",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "GUI 与 CLI 共用同一入口，靠 `paramstr(1)` 分派",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "CLI 开关命名规范：动作前缀 + 目标，全小写、单横线",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "多选模型 `multi`：支持一次传多个对象",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "参数位置约定：`paramstr(1)`=动作，`paramstr(2)`=目标目录/等级，`paramstr(3..)`=输入文件",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "解压\"目标策略\"用独立开关表达（默认目标 = 桌面）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "目标快捷目录开关化：Desktop/Documents/Downloads/bookmark1..8",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "维护/工具类开关：`-peazipreset`/`-peaziptotalreset`/`-peaziplanguage <file>`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "注释/元数据操作：`-setcomment <str> <files>` / `-setcommentf <file> <files>` / `-removecomment <fi",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "GUI 任务 → CLI 脚本导出（\"Save task definition as script\"）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "命令行长度保护：超 `max_cl` 报错并中止",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "peazip-工程层.md",
+  "name": "直接沿用 7z 的退出码语义，并在 UI 里翻译成人类文案",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "peazip-工程层.md",
+  "name": "PeaZip 自身不另造退出码，透传后端 `ExitStatus`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑫命令行",
+  "src": "peazip-工程层.md",
+  "name": "小工作量任务后台执行阈值（16MB）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "列表/测试走控制台窗口（`cmd /k` 保持不关，`bash -c \"...; read line\"`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "机器可读输出主要靠后端自身的 `-slt`/`l` 格式，前端只做正则解析",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "未找到 `--help`/`-h` 命令行帮助开关",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "人类可读的\"支持格式一览\"以两个常量字符串存在",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "机器路由表：`testext()` 用巨型 `case ext of` 把所有扩展名映射到数字类型 ID，分区间编号",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "扩展名 → 后端编号的二级映射 `testinput()`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "编号 → 内部后端函数名的三级映射 `testarctype()`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "主识别 = 扩展名（`testext`），内容嗅探不参与路由",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "内容嗅探函数 `getmagicbytes_arc()`：读前 8 字节比 magic",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "嗅探覆盖的签名（含带偏移的特例，注释里标了 offset）",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "RAR5 特判：读第 7 字节 =`$01` 判 RAR5，再决定用哪个 unrar",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "归档可编辑性判定 `isarchiveeditable`、以及\"强制当归档打开\"开关",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "\"打开为归档\"独立开关 `-ext2openasarchive` / `-ext2browseasarchive`",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip-工程层.md",
+  "name": "特殊浏览模式：按扩展名决定用 `-slt` 还是 `l` 列表输出",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "唯一自研格式 PEA（`pea` 可执行），独立引擎",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "所有第三方后端集中在一个 unit 里声明版本与许可",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "后端二进制不随源码分发，安装包按平台/架构放 `res/bin/<名>/`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "每个后端二进制的 SHA256 白名单硬编码，运行时校验",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "各平台/架构能力差异用 `{$IFDEF}` 显式留空",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "peazip-工程层.md",
+  "name": "\"自由软件指令\" `libre_directive`：0=关 / 1=灵活 / 2=严格只用 OSI 许可后端",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "统一进程封装：`peapexecute()`/`peapparamexecute()`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "7z 输出解析走 `-slt` 技术列表 + 正则",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "密码交互三种模式：GUI 弹窗 / 强制控制台输入 / 管道",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "后端\"卡住/无法自动喂密码\"的已知坑写成条件分支",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "进度/耗时/速度由前端自己算（掐时间、按输入大小估速），不解析后端进度",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "退出码 → 人类文案的集中翻译",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "完成后处理钩子：清理临时目录、写\"失败标记\"、移动输出",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "目录清理带重试（防文件被锁）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "任务窗口\"是否保持打开看报告\"可配置 4 档",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "未找到超时/kill 机制",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑦性能资源",
+  "src": "peazip-工程层.md",
+  "name": "前端最大命令行长度限制保护",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "首启动零向导：默认配置全套内置，直接可用",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "便携 vs 可安装由一个空文件是否存在决定",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "配置布局：便携=程序目录；可安装=用户目录（Windows 显式排除虚拟化）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "危险操作确认：删除/覆写/安全擦除前的 Yes/No 弹窗",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "危险开关带醒目提示文案（\"be careful\"）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "设置分层：常用(App options) / 高级(Advanced) 分页",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "一次任务可\"另存为脚本\"，让 GUI 用户平滑过渡到 CLI",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "语言：56 个语言文件，`default.txt` 兜底",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "Windows 端\"系统集成向导\"是独立外部程序",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "\"重置\"逃生开关：普通重置 / 完全重置",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "产品只需编 2 个工程：`project_pea`(引擎) + `project_peach`(GUI+CLI)",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "用 Pascal 写的跨平台 CI 构建程序 `make.pas`，自动发现并构建所有 `.lpi`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "CI 精简：GitHub Actions 矩阵 = {ubuntu, windows} × {x86_64, aarch64}",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "依赖以 Lazarus 包(.lpk) 形式管理，含子模块",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "版本信息集中在 `compvers.pas`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "遗留的一次性 `.bat` 散落（加密算法测试、资源编译、链接）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip-工程层.md",
+  "name": "分发形态 5 种：Portable / DEB / RPM / Flatpak / DMG / Windows 安装器 / MSIX",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip-工程层.md",
+  "name": "打包说明单列一份 `readme-pack.txt`（面向发行版打包者）",
+  "decision": "✅"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip-工程层.md",
+  "name": "Windows 安装器用 InnoSetup（Pascal 方言 `.iss`），按 WIN32/WIN64 分脚本",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip-工程层.md",
+  "name": "macOS 未签名，需用户手动 `xattr -dr com.apple.quarantine`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip-工程层.md",
+  "name": "Linux：GTK2/Qt6 双 widgetset 构建，aarch64/x86_64 双架构",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip-工程层.md",
+  "name": "Flatpak 沙箱路径改写与 `--fileforwarding` 提示",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "资源按\"架构相关 / 架构无关\"分离",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "主程序 strip + UPX 压缩，体积可控",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑯工程架构",
+  "src": "peazip-工程层.md",
+  "name": "后端按需选装（架构/平台不同，部分后端为空）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "文档分开发者向(源码包 readme.txt) 与 用户向(help PDF + readme_\\*) 两类",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "开发者 readme 用\"QUICK START（N 步 to-do）+ DETAILED GUIDE（逐目录讲解）\"双层结构",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "每个资源目录都放一个 `readme-*.txt` 就地说明",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "每个集成子目录都有 `readme_*.txt` 说明安装路径（分 DE 版本）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "官网 wiki 承载 FAQ/帮助/更新日志/主题/翻译，仓库只留\"如何构建\"",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "离线帮助随包分发（`peazip_help.pdf` 在 `res/share/`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑬图形界面",
+  "src": "peazip-工程层.md",
+  "name": "变更日志单文件 + 仓库 `CHANGELOG.md`",
+  "decision": "❓"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "动态定位清单标题行，不硬编码行号",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "key=value / key: value 记录解析器",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "-slt 详单 → 表格列映射",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "从 TOC 反推未列出的目录",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "预解析内存/时间限额，超限即中止",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "流式输出 → 内存流增量扩容",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "非 ASCII 文件名兜底显示",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "特殊格式走独立预解析路径",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "peazip.md",
+  "name": "目录树/路径工具函数族",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "扩展名 → 数字格式码矩阵",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "格式码 → 后端 ID 路由（覆盖默认）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "归档魔数嗅探（需读 8 字节）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "魔数仅用于显示，不参与派发",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "RAR5 版本探测（8 字节头第 8 字节）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "RAR 加锁标志探测（17 字节头）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "文本 / 二进制类型判定表",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "压缩率预估（按类型给档位）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "BOM 探测（UTF-8/16BE/16LE/7）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "分卷/多卷识别",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "空归档判定",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "peazip.md",
+  "name": "加密探测（内容级，双信号）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "覆盖策略四态",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "路径策略三态",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "选择集 → 过滤器命令构造",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "扁平/保留路径自动切换（e ↔ x）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "智能输出目录（自动新建文件夹）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "解压到临时目录再移动到相对路径",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "空密码占位防挂起（-pdefault）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "密码管道输入 / 控制台模式选择",
+  "decision": "⚠"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "每后端独立的解压命令构造器",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "解压前 sanitize 检查失败即中止",
+  "decision": "✅"
+ },
+ {
+  "dim": "③解压",
+  "src": "peazip.md",
+  "name": "解压后保留/删除输出的可恢复性选项",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "档位字符串 → 级别数字（按算法分表）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "算法名 → 方法开关",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "solid 分块档位（32 档）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "分卷尺寸预设（14 档）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "加密参数模型",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "时间戳精度档（pax / -mtp）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "内存使用档位 `-mmemuse=p10..p90`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "多卷/归档输出防覆盖命名",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "更新/同步模式",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "预设文件（1..15 + alt 变体）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "tar-before 两阶段打包",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "peazip.md",
+  "name": "SFX 自解压选项",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "「修复」= 委托 WinRAR/ARC，无自有修复",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "恢复卷 -rr（RAR recovery record）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "转换（transcode）代替「修补」",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "完整性测试（test 模式）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "退出码分类 → 用户文案",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "出错/中止时保留输出文件的开关",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "peazip.md",
+  "name": "（全仓 `grep -in repair\\",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "`dev/list_utils.pas:2406` `validatecl`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "真实控制台的二次消毒",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "路径穿越消毒",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "`dev/list_utils.pas:1805` `checkfiledirname`；`:1841` `checkfiledirname_io`（放行通配符）；`:1878` ",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "shell 转义（两种模式）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "拒绝串占位（fail-closed）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "命令行长度上限 + 超限中止",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "密码强度评估",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "密码入命令行的合法性 + 特殊字符降级",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "可中断（停止序列文件）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑧安全",
+  "src": "peazip.md",
+  "name": "错误文案＝引擎产出码、外壳渲染",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "非 0 偏移读取：库硬编码 `seek(Start(0))`，必须外包一层\"偏移窗口\"",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "分卷=裸字节切分：两项目都没有真正的分卷实现，须自行拼成单流",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "8 MiB 分块流式读（绝不整包入内存）",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`BoundedReader`：把子读取限制在声明的 `pack_size` 内",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`SharedBoundedReader`：多解码器共享一个源、每次读前重定位",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "线程数默认 `available_parallelism()`、可显式设并 clamp 1..=256",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "NextHeader 一次性整块读入内存（库做法；大包需自设上限）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "进度回调=已处理字节/总字节（上界估算 `8+256`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "写盘用大缓冲（32 MB 分块 + 8 MB 进度阈值）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "临时/中间文件放输入目录之外，用后即删（finally 容错清理）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "可中断读取（长扫描/长解压要能取消）",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "7z `StartHeaderCRC` 强校验：`CRC32(bytes[12..32])==u32@8`",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "7z 无「总长度」字段，但可精确推导 `总长=32+NextHeaderOffset+NextHeaderSize`",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`next_header_size > reader_len` → 截断/缺卷信号",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "版本 `major` 必须为 0（否则 `UnsupportedVersion`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "第二道 `NextHeaderCRC` 校验（读 NextHeader 后算 CRC32）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "头有效性探针：`bytes[12..32]` 全 0 才判「头无效」",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "损坏头恢复 `try_to_locale_end_header`：末尾 1MiB 反向找 `0x17/0x01`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "假签名识别：绝不「见签名即认定」",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "短签名（3 字节）误报极高 → 加合理性校验",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "MP4 `free` 原子 payload 正判定应是「内含可解析 EOCD」而非「首字节=PK」",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "把整份伪装文件当 ZIP 打开：尾部 EOCD → 中心目录 → 反推 base",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "EOCD 必须落在「末尾 64KB+22」窗口内（否则认不出）",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "ZIP64：`PK\\x06\\x06` EOCD + `PK\\x06\\x07` 定位器 + `0xFFFFFFFF` 哨兵",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`free` 原子选取门槛（`size>1024` 太宽 / `size<=8 continue` 错位）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "头加密 vs 内容加密要分开判：内容加密头明文可先列表，头加密直接 `PasswordRequired`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "「密码错」判定不能只看错误类型（三种都算错）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "sevenz-rust `src/decoder.rs:106-114, 255-271`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "header 元素 count/size 上限 `bounded_count`（防「小文件声明巨量」）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "预分配上限 `MAX_PREALLOC_BYTES=4 MiB`（按声明 size 预分配有上限）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "噪声块形态特征：`00 00 00 08 'mdat'` 可作指纹",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "原子链非法 size（`<8`/越界/随机 ASCII）→ 弃 atom 走签名扫描",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "加密 ZIP 判定：ZipCrypto vs AES（extra `0x9901`、AE-2、strength 3）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "7z AES-256-CBC + SHA-256 KDF 解码",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "密码 = 字符→UTF-16LE（`Password::from(&str)`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "raw-key 模式（`num_cycles_power==0x3F`）：key=salt‖password 截断",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "KDF 工作因子上限 `MAX_AES_CYCLES_POWER=24`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "KDF 结果缓存（按 `sha256(power‖saltlen‖salt‖pw)` 指纹单槽）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "coder method-id → 解码器映射（COPY/LZMA/LZMA2/PPMd/BZIP2/DEFLATE/ZSTD/BROTLI/LZ4/BCJ/DELTA/AES）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "BCJ2 四路输入解码（多输入 coder 图）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "分卷拼接后直接解（无卷头，等价单流）",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "逐 block 解码；非 solid 可多线程并行",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "选择性提取单文件（`read_file`，solid 要先解前面所有）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "CRC32 校验（块级/子流级/文件级），失败报 `ChecksumVerificationFailed`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "流式写盘 `io::copy`（不 `read_to_end` 到内存）",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "隐写者 `Steganographier.py:539-584`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "Zip-Slip 防护 `safe_join`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "密码预验证（解压前读第 1 个非目录成员 1 KB）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "密码候选序列：用户密码 → PW.txt → 空密码兜底",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "密码本格式：`utf-8-sig` + TAB 取首列",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "⚠️ 密码本 `encode('ascii','ignore')` 会静默吞掉中文密码",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "密码统一 `encode('utf-8')`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "双引擎重试：先 `zipfile`（快，ZipCrypto）再 `pyzipper`（AES）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "MKV 附件提取：`mkvinfo` 找附件名 → `mkvextract` 抽 #1 → ZIP 再解一层",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "7-Zip 两步解压（外层无密码、内层带密码，`-t#`）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "目录项按结尾 `/` 判定",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "同名自动改名 `name (1).ext`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "⚠️ `sanitize_path` 的 `strip('. ')` 会把 `..` 清成空→产生绝对路径 `//x`（Zip Slip 隐患）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "时间戳恢复（c/m/a）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "普通模式 `mp4`：外壳逐字节复制 + `[free头8B][随机pad 64–256B][ZIP]` 追加",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`free` 原子头：`size=8+payload`；`total>0xFFFFFFFF` 时 `size=1`+u64 large-size",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "随机 pad 的两重目的：原子内不以 `PK` 开头 + 产物哈希随机化",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "ZArchiver 模式：`free` 插在 `ftyp` 之后，并同步改写 `stco/co64`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`stco`(32 位) / `co64`(64 位) 表项整体平移 `+= delta`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "容器原子递归：`moov/trak/mdia/minf/stbl/udta`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "⚠️ 噪声块被误缩进进 `while` 循环体：每个顶层原子后都插一份",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "噪声块构成：假特征码×2 + 5–10KB urandom×2 + 空 `mdat`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "偏移修正覆盖缺口：不处理 `tfhd.base_data_offset`/`tfdt`(fMP4)、`sidx`、`saio/saiz`/`mvex`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "MKV 模式：`mkvmerge` 挂 2 个附件（ZIP + 8KB 垃圾）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "条目顺序 `random.shuffle`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "每条目随机 mtime（1980–2099 合法时间元组）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "随机压缩级别 1–9（无密码时）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "EOCD 注释固定写 SHA-256 + 时间戳 + timehash",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "=0x1`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "中文名自动置 UTF-8 标志位 `0x800`（原始名照写，不 sanitize）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "打包排除输出/临时 zip 自身 + `normpath` 防自包含膨胀",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "目录输入保留顶层目录名（arcname = `<dir>/<rel>`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "输出命名规则：`_hidden_<N>` / `_hidden_z<N>` / `_hidden_<N>.mkv`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "内置/默认封面素材（`cover_video` 目录，4 种选择策略）",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "大小-时长合理性提醒（阈值表，仅提醒不阻断）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "假特征码池（8 种签名）用于哈希随机化",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "mkv 输入 >2GB 硬拒绝",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "进度上界估算 `overhead = 8 + 256`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "7z 头损坏恢复（自行实现）：末尾反向找 `0x17/0x01` 多候选 + CRC 确认，失败即 continue",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "7z 头丢/尾截断 = 基本报废（只剩 LZMA2 裸流，边界/名单全丢）",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "假成功防护：解压前后对输出目录做快照（路径→大小+mtime_ns）仲裁",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "只有确实写出文件才删原隐写文件",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "成员级容错：单成员 CRC 错/写失败只跳过该成员、continue",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "CRC 引导恢复：靠文件级 CRC32 判断哪段可信",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "偏移修复用于「剥离隐藏数据、还原可播放原视频」",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "错密码会留下 0 字节/截断半成品且不清理（污染后续判定）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "`kAdditionalStreamsInfo` 不支持 → 遇到就整个打不开",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "reveal 方法队列「静默回退」会掩盖失败 → 应记录实际命中方法",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "sevenz-rust+steganographier.md",
+  "name": "批量统计必须真实：`不抛异常` ≠ 成功",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "handle 是唯一 I/O 抽象，自身可复制",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "尾部窗口分块倒扫 + 20B 重叠",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "无 EOCD 不放弃，直接降级",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "流式 handle + 可推回一个字节",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "偏移契约：属性袋传「内层在哪」",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "子流裁剪（copied / nonCopied 两版）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "多卷=分段虚接，段表预先展开",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "卷扫描 = 主动列目录 + 正则 + 排序",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "「洞」模型：把不连续字节伪装成连续流",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "「跳过的字节也是数据来源」两个键",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "条目内嵌前缀跳过（真实用法）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "一次性读满 maxheader 分发给所有候选",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "缓冲填充保留尾部重叠",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "顺序丢弃固定 16 KiB 块",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "可中断：解析层与解压层各自轮询",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "失败即删输出文件",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "进度节流上报",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "底层就是 stdio + 每 copy 串行锁",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "有序注册表，顺序即优先级",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "主循环：每个候选都从 seek(0) 起",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "浮动签名仲裁：最小偏移胜",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "异常吞噬式识别",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "ZIP 三条 magic（含偏移 4 的怪例）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "RAR 双签名 + 只认偏移 0",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "RAR5 前 1 MiB 全扫",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "SFX 探测：宿主特征 + 内层签名 + 合理性",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "Info-ZIP Unicode Path (0x7075) 先验 CRC 再采用",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "文件名编码三级判定",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "编码探测器 + ASCII 快路 + Mac 偏好",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "固定编码覆盖开关",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "结构参数反推（无 magic 的格式）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "用已有校验和做二次确认",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "两级怀疑：便宜线索 → 昂贵验证",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "ZIP 中央目录：local header 是名字的真源",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "条目数 65535 溢出补丁",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "「可疑/异常」上报钩子",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "`XADNSAParser.m:34-43`、`XADSARParser.m:28-37`、`XADTarParser.m:77-84`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "弱格式放最后 + 长度下限设防",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "文件存在性作为识别阳性条件",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "格式「再套一层」标记",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "路径安全化（防穿越）",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "xadmaster.md",
+  "name": "归档级脏标记而非失败",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "解码器 = 流包装器（handle 链）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "压缩方法 → handle 路由表",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "Deflate 故意不传长度",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "尺寸缺失时的「描述符搜索」解压路径",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "加密分两族、统一入口",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "密码「拉取式」，无爆破",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "逐条目 CRC 校验（可选、惰性）",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "解压失败兜底：退回当普通文件",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "单条目自动递归下钻",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "嵌套子归档继承父级密码与编码",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "目录/软链接延迟创建（两阶段收尾）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "属性回填集中一处",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "选择性提取：列完再挑",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "同名条目合并（数据叉 + 资源叉）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "输出循环：固定块 + 边解边写",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "不可 seek 流一律按 solid 处理",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "全库无压缩器（反面证据）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "`XADZipParser.m:60-97`、`XADZipSFXParsers.m:137-154`、`XAD7ZipParser.m:106-119`、`XADRARParse",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "分卷排序的第一卷特权",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "卷内前缀/尾缀布局可被读侧挖掉",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "WinZipAES extra field 结构（写侧需照抄）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "数据描述符 + flag 0x08 的写侧含义",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "ZIP64 必须写全（否则读者会退化）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "编码写入的确定性要求",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "xadmaster.md",
+  "name": "尾部可留任意字节（写侧空间）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "无中央目录 → 线性重建条目表",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "数据描述符搜索用「下一字节必须是 PK」二次确认",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "损坏后重同步：扫下一个 PK 头",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "部分抢救：先吐出已收到的部分",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "中央目录记录本身坏 → 标脏继续",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "4 GiB 无 Zip64 → 干脆放弃中央目录",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "洞修补：用 skip handle 绕开坏区",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "solid 流损坏后重启链",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "CRC 作为「切点确认」而非仅校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "大文件按 64 KiB 块倒扫（坏包定位）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "解析期二次定位签名",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "「无长度」流靠描述符/EOF 收尾",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "目录/文件判定靠后续条目反推",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "汇总校验：先看脏标记再算 CRC",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "存档级 `isCorrupted` 查询入口",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "坏包救援的「代价上限」缺失（反面）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "xadmaster.md",
+  "name": "救援模式的可用性边界（未定型）",
+  "decision": "❓"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "EOCD 尾部固定搜索窗口",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "反向窗口扫描器 `MagicFinder<Backwards>`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "`memchr::memmem::FinderRev` 做窗口内反向查找",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "倒序逐个候选 EOCD，不是取最后一个就完事",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "EOCD 注释长度用放宽不等式",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "`src/format/find_central_directory.rs:24-79`（`first_in_range:64-78`）",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "读放大上界做成回归测试",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "EOCD64 locator 位置是算出来的",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "数据起点 = `header_start + 30 + namelen + extralen`",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "`data_start` 用 `OnceLock` 缓存",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "`take(compressed_size)` 限定成员数据长度",
+  "decision": "✅"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "流式（不可 seek）读取：4 字节魔数分派",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "流式 + data descriptor 必须外部给 csize",
+  "decision": "⚠"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "`ZipArchiveMetadata` + `Arc` + `unsafe_new_with_metadata`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "①读取",
+  "src": "zip2.md",
+  "name": "`indexmap` 保序 + O(1) 名字索引",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "`src/format/blocks.rs:379-383`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "locator 声明值必须 < locator 实际位置",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "多卷直接拒绝",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "EOCD64 与 locator 零间隙",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "EOCD64.disk == locator.disk 交叉校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "守卫：`eocd64_offset >= n_files*46 + cd_offset`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "ZIP32：`cd_offset < eocd_offset` + 空包特判",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "第一条 CDFH 魔数命中才定偏移",
+  "decision": "✅"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "每条 CD entry 魔数校验",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "local header 魔数强校验",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "local 尺寸从不参与读取",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "`number_of_files` 大于 `directory_start` 就不预分配",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "预分配上限 `isize::MAX`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "ZIP64 extra「无哨兵不生效」",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "ZIP64 extra 长度自洽校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "extra field 解析防死循环",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "EOCD64 `record_size` 上下界",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "声明的 uncompressed size 是硬约束",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "`src/read/zip_archive.rs:480-519`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "symlink 目标长度硬上限 4096",
+  "decision": "🔄"
+ },
+ {
+  "dim": "②判断",
+  "src": "zip2.md",
+  "name": "路径逃逸三重检查",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "读取器枚举四态 + `Box` 压尺寸",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "CRC 尾校验 + 尺寸上限同一层",
+  "decision": "✅"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "解压器按 feature 组合",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`SUPPORTED_COMPRESSION_METHODS` 常量",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "单成员流式解压 `by_index`",
+  "decision": "✅"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`by_index_raw` 拿原始压缩字节",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`by_index_seek` 仅支持 `Stored`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`ZipReadOptions` 读取期覆盖",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "AES 解密 + AE-2 关 CRC",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`CompressedAes` 的 EOF 尾部认证",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "ZipCrypto 解密 + validator 二选一",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`ZipStreamReader` 顺序解压 + 回读 CD 补元数据",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`src/read/extract.rs:449-563`（`:547-551`）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "时间戳回写",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "`ZipFile::Drop` 排空流式 reader",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "名字：UTF-8 → cp437 回退 + UnicodePath 覆盖",
+  "decision": "🔄"
+ },
+ {
+  "dim": "③解压",
+  "src": "zip2.md",
+  "name": "legacy 解码器 + `MAX_PREALLOC` 上限",
+  "decision": "❓"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "local header 先占位、后回填",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`finish_file` 回填 crc/size",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "ZIP64 提升：`large_file` 或尺寸 ≥ u32::MAX",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`src/write.rs:1492-1544`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "data descriptor 强制（stream / ZipCrypto）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "数据对齐 + `DataStreamAlignment` extra (APPNOTE 4.6.11)",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`new_append` 追加模式",
+  "decision": "⚠"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`shallow_copy_file`：共享数据、只加 CD 条目",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`deep_copy_file`：真复制数据",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`raw_copy_file` / `raw_copy_file_touch`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`merge_archive`：整档并入",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`hide_file` / `abort_file` 删条目",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`finalize` 失败清理：把 footer 魔数置 0",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`StreamWriter`：无 seek 写出",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "AES extra field 的 AE-1/AE-2 切换",
+  "decision": "❓"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "`set_file_metadata`（unsafe）手工指定 crc/length",
+  "decision": "🔄"
+ },
+ {
+  "dim": "④压缩",
+  "src": "zip2.md",
+  "name": "压缩级别范围校验",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "`ArchiveOffset::Known(n)`：只验一个点、不回退扫描",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "ZIP32 偏移 = 第一条 CDFH 实际位置 − EOCD 声明值",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "ZIP64 偏移 = 实际 EOCD64 位置 − locator 声明值",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "`directory_start = relative_cd_offset + archive_offset`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "每条 `header_start += archive_offset`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "ZIP64 extra 可覆盖 `header_start`（仅哨兵时）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "8 字节 locator 补丁：改 `L` 让 zip2 自己算出正确的 `n`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "尾部窗口虚拟 reader：内存里改字节、不改盘",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "逐条 CD offset 就地改写",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "「保留哨兵」是走 ZIP64 分支的前提",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "兜底：ZIP32 分支盲扫 `[cd_offset, eocd)`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "空包特判用 `saturating_sub`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "多候选 EOCD 逐个试 + 外层重试轮",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "前置垃圾自愈（ZIP32 concat）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "能复用的只有 `ZipArchive` 这一层",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "`new_append` + `hide_file` 做「重写目录表」式修补",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑤修补",
+  "src": "zip2.md",
+  "name": "ZIP64 EOCD 的 extensible data sector 通道",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "找 EOCD",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "缓冲区与重叠",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "前导垃圾偏移反推",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "目录表救援",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "数据描述符",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "多线程/资源",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "文件名编码",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "分卷/多卷",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "ZIP64",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-同名技术择优.md",
+  "name": "流式读取",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-安全与健壮性.md",
+  "name": "`src/util/decompress.rs:164`（`Component::Prefix(_) \\",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-安全与健壮性.md",
+  "name": "`Steganographier.py:567-568`（`invalid_chars='<>:\"\\",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-安全与健壮性.md",
+  "name": "`list_utils.pas:1805-1839`（`checkfiledirname`：`0..31` 全拒、`*?<>\\",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-安全与健壮性.md",
+  "name": "` + `\\0` → 逐个换 `_`（`:233-244`）；正则 `^(CON\\",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-安全与健壮性.md",
+  "name": "`Steganographier.py:565-568`（`invalid_chars='<>:\"\\",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "对比-安全与健壮性.md",
+  "name": "`ExtractingFilePath.cpp:96-116`（`Correct_AltStream_Name`：`':'`、`'\\\\'`、`'/'`、`0x202E // RLO",
+  "decision": "⚠"
+ },
+ {
+  "dim": "②判断",
+  "src": "对比-安全与健壮性.md",
+  "name": "`XADPlatformWindows.m:219-223`（字符集仅 `0x01-0x1F` + `\"*:<>\\?\\\\/\\",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-安全与健壮性.md",
+  "name": "`src/read/extract.rs:313-331` 文档（\"Extraction is not atomic. If an error is encountered, so",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2 用 AFL（不是 cargo-fuzz）做模糊测试",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "读端 fuzz target：整包解压进 sink + 二次流式读",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "写端 fuzz target：Arbitrary 建模「操作序列」",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "坏包样本「一场景一 fixture + 一测试文件」命名法",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "程序化「内存里造包」而非全靠二进制 fixture",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "Miri + nextest 跑全套测试（含大端目标）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "feature-powerset 组合测试",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "minimal-versions 检查（最小依赖版本）",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "CI 把 clippy 当 error 并上传 SARIF",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PR 体积标签 / 发版自动化",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "XADMaster：按格式各一个 XCTest 测试类 + Fixtures 目录",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "XADMaster：端序（大端）单独回归工作流",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "XADMaster：Linux 只编译、macOS 才跑测试",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "sevenz-rust：按主题拆测试文件 + `tests/resources/`",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "sevenz-rust：三档 feature × 三家 OS × i686 × wasm 全矩阵",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "sevenz-rust：用 Windows 资源管理器/内置 tar 做\"真实兼容\"验收",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip 上游仓库里没有任何测试资产",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PeaZip：把测试脚本当\"运维资产\"入库",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "我方：真源码 exec 造样本（拒绝重写目标逻辑）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "我方：样本「期望结构」机器可读清单",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "unar 招牌：Mozilla UniversalDetector 自动检测",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "unar：ASCII 快路径 + 延迟解码 + 缓存",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "unar：解码失败回退 `%xx` 转义 ASCII（绝不丢字符、绝不 panic）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：GetUnicodeString 四级回退链（最完整的工程解）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：`kpidPath` 是统一属性出口",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：flag 一致性校验——名字是 ASCII 时可无视 utf8 位",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：只做 UTF-8 + CP437 回退（无 GBK/Big5）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：写端自动置 UTF-8 flag（仅当非纯 ASCII）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：Info-ZIP Unicode Path/Comment extra field (0x7075/0x6375)",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PeaZip：不做自动检测，改给用户「手动代码页」四选一 + 20 项代码页表",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "SteganographierGUI 中文密码被吞的 bug（反面教材，务必不学）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "同 bug 的上下文：读密码用 utf-8-sig，加密却按 utf-8",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "密码的多编码重试：7z 标准是 UTF-16LE",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip CLI 密码走控制台编码 → \"GBK 密码要手动切\"的根因",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip 本地化：Lang2 单文件 + id→offset 表",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PeaZip 本地化：`text_<版本>_<键>: 译文` 平铺键值 + 56 种语言",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "unar：解码与路径穿越防护同源（同一编码名贯穿）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "我方现状：注释说 GBK、代码其实只做 lossy（必须修）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "我方已有：UTF-8 flag 与 extra_field 长度已解析（但未用）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：MSRV 显式声明 + 三处同步（硬约束）",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：细粒度 feature 开关 + 可选依赖延迟绑定",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：wasm 特化（`cfg(target_arch=\"wasm32\")` 走 wasm_js）",
+  "decision": "❓"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：分包发布——`exclude` 甩掉测试/示例/fuzz/benches",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：docs.rs 全特性 + `--cfg docsrs`",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "zip2：发版自动化（release-plz + git-cliff）与 semver 检查",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "sevenz-rust：`crate-type = [\"cdylib\", \"rlib\"]` 双产物",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "sevenz-rust：可选 codec 全做 feature，默认只开核心档",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "sevenz-rust：MSRV 1.93 + 三 OS × i686 × wasm 全跑 + rustfmt/clippy 双档",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PeaZip：构建=拉源码 + Lazarus `lazbuild .lpi`",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PeaZip：第三方二进制不进源码包（按平台后置）",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "PeaZip：Portable / Installable 双形态靠一个空文件切换",
+  "decision": "🔄"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：`MAK_SINGLE_FILE` 单编译单元换体积/速度",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：可 `-DZ7_NO_UNICODE` 砍掉 Unicode 支持换体积",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：多平台 make + 汇编优化（手写 asm）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "7-Zip：上游仓库不含测试、不含语言文件（裁剪发布）",
+  "decision": "⚠"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "我方现状：极简依赖 + 已备质量配置",
+  "decision": "✅"
+ },
+ {
+  "dim": "⑨未归类",
+  "src": "对比-测试构建与编码.md",
+  "name": "我方现状：`#![forbid(unsafe_code)]` + `#![warn(missing_docs)]`",
+  "decision": "✅"
+ }
+]

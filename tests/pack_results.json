@@ -1,0 +1,3959 @@
+{
+  "password": "P@ssw0rd!2026",
+  "samples": {
+    "L1_plain": {
+      "layout": "L1",
+      "variant": "plain",
+      "file": "L1_plain.mp4",
+      "size": 102157,
+      "structure": "尾部追加 ZIP",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67152,
+        "sec": 0.179
+      },
+      "our": {
+        "file": "L1_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 102135,
+            "offset_from_eof": 22,
+            "entries_declared": 4,
+            "eocd_end": 102157,
+            "naive_start_guess": 90224,
+            "candidates": 4,
+            "solved": true,
+            "start": 90224,
+            "delta": 0,
+            "ranges": [
+              [
+                90224,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.002,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 17708,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4]:  90224 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 17708,
+          "members_seen": 4,
+          "tail": [
+            "    testing: payload/data.bin         OK",
+            "    testing: payload/sub/nest.bin     OK",
+            "    testing: payload/中文名.txt    OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n    testing: payload/README.txt       OK\n    testing: payload/data.bin         OK\n    testing: payload/sub/nest.bin     OK\n    testing: payload/中文名.txt    OK\nNo errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.073,
+          "rss_kb": 16668,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2026-10-16 12:00:00        12740",
+            "payload/data.bin                               2026-10-16 12:00:00         8192",
+            "payload/sub/nest.bin                           2026-10-16 12:00:00         3072",
+            "payload/中文名.txt                                2026-10-16 12:00:00         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2026-10-16 12:00:00        12740\npayload/data.bin                               2026-10-16 12:00:00         8192\npayload/sub/nest.bin                           2026-10-16 12:00:00         3072\npayload/中文名.txt                                2026-10-16 12:00:00         8100\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 16668,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin",
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102157 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4\nType = zip\nOffset = 90224\nPhysical Size = 11933\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 16668,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        90224        90224  1",
+            "                    .....        11933        11933  2.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                102157       102157  2 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102157 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L1_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        90224        90224  1\n                    .....        11933        11933  2.zip\n------------------- ----- ------------ ------------  ------------------------\n                                102157       102157  2 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 16668,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17708,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 17708,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L1_plain.mp4.zip]:  90224 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L1_plain.mp4.zip]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L1_plain.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L1_plain.mp4.zip]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 16668,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 102157"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 16672,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 102157"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 2,
+          "bytes": 102157,
+          "rss_kb": 16672,
+          "tail": [
+            "Files: 2",
+            "Size:       102157",
+            "Compressed: 102157"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L1_pwd": {
+      "layout": "L1",
+      "variant": "pwd",
+      "file": "L1_pwd.mp4",
+      "size": 123004,
+      "structure": "尾部追加 ZIP",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 66324,
+        "sec": 0.178
+      },
+      "our": {
+        "file": "L1_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 122982,
+            "offset_from_eof": 22,
+            "entries_declared": 4,
+            "eocd_end": 123004,
+            "naive_start_guess": 90224,
+            "candidates": 4,
+            "solved": true,
+            "start": 90224,
+            "delta": 0,
+            "ranges": [
+              [
+                90224,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.032,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18624,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4]:  90224 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 81,
+          "sec": 0.011,
+          "rss_kb": 18624,
+          "members_seen": 4,
+          "tail": [
+            "   skipping: payload/sub/nest.bin    unsupported compression method 99",
+            "   skipping: payload/中文名.txt   unsupported compression method 99",
+            "Caution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4.",
+            "4 files skipped because of unsupported compression or encoding."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n   skipping: payload/README.txt      unsupported compression method 99\n   skipping: payload/data.bin        unsupported compression method 99\n   skipping: payload/sub/nest.bin    unsupported compression method 99\n   skipping: payload/中文名.txt   unsupported compression method 99\nCaution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4.\n4 files skipped because of unsupported compression or encoding.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.051,
+          "rss_kb": 17584,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2025-06-15 23:06:40        12740",
+            "payload/data.bin                               2025-06-15 23:06:40         8192",
+            "payload/sub/nest.bin                           2025-06-15 23:06:40         3072",
+            "payload/中文名.txt                                2025-06-15 23:06:40         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2025-06-15 23:06:40        12740\npayload/data.bin                               2025-06-15 23:06:40         8192\npayload/sub/nest.bin                           2025-06-15 23:06:40         3072\npayload/中文名.txt                                2025-06-15 23:06:40         8100\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17584,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin",
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123004 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4\nType = zip\nOffset = 90224\nPhysical Size = 32780\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:4"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.012,
+          "rss_kb": 17584,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        90224        90224  1",
+            "                    .....        32780        32780  2.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                123004       123004  2 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123004 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L1_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        90224        90224  1\n                    .....        32780        32780  2.zip\n------------------- ----- ------------ ------------  ------------------------\n                                123004       123004  2 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17584,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18628,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18628,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L1_pwd.mp4.zip]:  90224 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L1_pwd.mp4.zip]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L1_pwd.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L1_pwd.mp4.zip]:  90224 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 17592,
+          "tail": [
+            "Physical Size = 32780",
+            "Enter password (will not be echoed):",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17596,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 123004"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 2,
+          "bytes": 123004,
+          "rss_kb": 17596,
+          "tail": [
+            "Files: 2",
+            "Size:       123004",
+            "Compressed: 123004"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L2_plain": {
+      "layout": "L2",
+      "variant": "plain",
+      "file": "L2_plain.mp4",
+      "size": 102382,
+      "structure": "尾部 free 原子（8B 头 + 217B 随机 pad + ZIP）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67440,
+        "sec": 0.195
+      },
+      "our": {
+        "file": "L2_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 102360,
+            "offset_from_eof": 22,
+            "entries_declared": 4,
+            "eocd_end": 102382,
+            "naive_start_guess": 90449,
+            "candidates": 4,
+            "solved": true,
+            "start": 90449,
+            "delta": 0,
+            "ranges": [
+              [
+                90449,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.002,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18744,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4]:  90449 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18744,
+          "members_seen": 4,
+          "tail": [
+            "    testing: payload/data.bin         OK",
+            "    testing: payload/sub/nest.bin     OK",
+            "    testing: payload/中文名.txt    OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n    testing: payload/README.txt       OK\n    testing: payload/data.bin         OK\n    testing: payload/sub/nest.bin     OK\n    testing: payload/中文名.txt    OK\nNo errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.051,
+          "rss_kb": 17764,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2026-10-16 12:00:00        12740",
+            "payload/data.bin                               2026-10-16 12:00:00         8192",
+            "payload/sub/nest.bin                           2026-10-16 12:00:00         3072",
+            "payload/中文名.txt                                2026-10-16 12:00:00         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2026-10-16 12:00:00        12740\npayload/data.bin                               2026-10-16 12:00:00         8192\npayload/sub/nest.bin                           2026-10-16 12:00:00         3072\npayload/中文名.txt                                2026-10-16 12:00:00         8100\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17764,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin",
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102382 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4\nType = zip\nOffset = 90449\nPhysical Size = 11933\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17768,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        90449        90449  1",
+            "                    .....        11933        11933  2.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                102382       102382  2 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102382 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L2_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        90449        90449  1\n                    .....        11933        11933  2.zip\n------------------- ----- ------------ ------------  ------------------------\n                                102382       102382  2 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17768,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18748,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18748,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L2_plain.mp4.zip]:  90449 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L2_plain.mp4.zip]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L2_plain.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L2_plain.mp4.zip]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17768,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 102382"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17768,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 102382"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 2,
+          "bytes": 102382,
+          "rss_kb": 17768,
+          "tail": [
+            "Files: 2",
+            "Size:       102382",
+            "Compressed: 102382"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L2_pwd": {
+      "layout": "L2",
+      "variant": "pwd",
+      "file": "L2_pwd.mp4",
+      "size": 123229,
+      "structure": "尾部 free 原子（8B 头 + 217B 随机 pad + ZIP）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 68100,
+        "sec": 0.183
+      },
+      "our": {
+        "file": "L2_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 123207,
+            "offset_from_eof": 22,
+            "entries_declared": 4,
+            "eocd_end": 123229,
+            "naive_start_guess": 90449,
+            "candidates": 4,
+            "solved": true,
+            "start": 90449,
+            "delta": 0,
+            "ranges": [
+              [
+                90449,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.008,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18792,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4]:  90449 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 81,
+          "sec": 0.011,
+          "rss_kb": 18792,
+          "members_seen": 4,
+          "tail": [
+            "   skipping: payload/sub/nest.bin    unsupported compression method 99",
+            "   skipping: payload/中文名.txt   unsupported compression method 99",
+            "Caution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4.",
+            "4 files skipped because of unsupported compression or encoding."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n   skipping: payload/README.txt      unsupported compression method 99\n   skipping: payload/data.bin        unsupported compression method 99\n   skipping: payload/sub/nest.bin    unsupported compression method 99\n   skipping: payload/中文名.txt   unsupported compression method 99\nCaution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4.\n4 files skipped because of unsupported compression or encoding.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.052,
+          "rss_kb": 17812,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2025-06-15 23:06:40        12740",
+            "payload/data.bin                               2025-06-15 23:06:40         8192",
+            "payload/sub/nest.bin                           2025-06-15 23:06:40         3072",
+            "payload/中文名.txt                                2025-06-15 23:06:40         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2025-06-15 23:06:40        12740\npayload/data.bin                               2025-06-15 23:06:40         8192\npayload/sub/nest.bin                           2025-06-15 23:06:40         3072\npayload/中文名.txt                                2025-06-15 23:06:40         8100\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17812,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin",
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123229 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4\nType = zip\nOffset = 90449\nPhysical Size = 32780\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:4"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17812,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        90449        90449  1",
+            "                    .....        32780        32780  2.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                123229       123229  2 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123229 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L2_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        90449        90449  1\n                    .....        32780        32780  2.zip\n------------------- ----- ------------ ------------  ------------------------\n                                123229       123229  2 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17812,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18792,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18792,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L2_pwd.mp4.zip]:  90449 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L2_pwd.mp4.zip]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L2_pwd.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L2_pwd.mp4.zip]:  90449 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 17812,
+          "tail": [
+            "Physical Size = 32780",
+            "Enter password (will not be echoed):",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17816,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 123229"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 2,
+          "bytes": 123229,
+          "rss_kb": 17816,
+          "tail": [
+            "Files: 2",
+            "Size:       123229",
+            "Compressed: 123229"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L3_plain": {
+      "layout": "L3",
+      "variant": "plain",
+      "file": "L3_plain.mp4",
+      "size": 130871,
+      "structure": "ftyp 后 free 原子内嵌 ZIP（stco += 11941）+ 尾部噪声 28706B",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67500,
+        "sec": 0.184
+      },
+      "our": {
+        "file": "L3_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 11947,
+            "offset_from_eof": 118924,
+            "entries_declared": 4,
+            "eocd_end": 11969,
+            "naive_start_guess": 36,
+            "candidates": 4,
+            "solved": true,
+            "start": 36,
+            "delta": 0,
+            "ranges": [
+              [
+                36,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {
+          "BZIP2": 3,
+          "XZ": 1
+        }
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.002,
+      "tools": {
+        "unzip_l": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 18816,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/p"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.ZIP, period.\n"
+        },
+        "unzip_t": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 18816,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/p"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4.ZIP, period.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 1,
+          "sec": 0.062,
+          "rss_kb": 17844,
+          "members_seen": 0,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ],
+          "err": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self.",
+          "full": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self._RealGetContents()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents\n    raise BadZipFile(\"File is not a zip file\")\nzipfile.BadZipFile: File is not a zip file\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17844,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 130871 bytes (128 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 36\nPhysical Size = 11933\nTail Size = 118902\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt\n------------------- ----- "
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17844,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        11933        11933  2.zip",
+            "                    .....       118902       118902  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                130871       130871  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 130871 bytes (128 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L3_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....           36           36  1\n                    .....        11933        11933  2.zip\n                    .....       118902       118902  3\n------------------- ----- ------------ ------------  ------------------------\n                                130871       130871  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17844,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18824,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 18852,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip or",
+            "        /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/t"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip.zip, and cannot find /home/user/hermes/u",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_plain.mp4.zip.ZIP, period.\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17844,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 130871"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17848,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 130871"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 130871,
+          "rss_kb": 17848,
+          "tail": [
+            "Files: 3",
+            "Size:       130871",
+            "Compressed: 130871"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L3_pwd": {
+      "layout": "L3",
+      "variant": "pwd",
+      "file": "L3_pwd.mp4",
+      "size": 151718,
+      "structure": "ftyp 后 free 原子内嵌 ZIP（stco += 32788）+ 尾部噪声 28706B",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67732,
+        "sec": 0.187
+      },
+      "our": {
+        "file": "L3_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 32794,
+            "offset_from_eof": 118924,
+            "entries_declared": 4,
+            "eocd_end": 32816,
+            "naive_start_guess": 36,
+            "candidates": 4,
+            "solved": true,
+            "start": 36,
+            "delta": 0,
+            "ranges": [
+              [
+                36,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {
+          "BZIP2": 3,
+          "XZ": 1
+        }
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.008,
+      "tools": {
+        "unzip_l": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 18864,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pac"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L3_pw",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.ZIP, period.\n"
+        },
+        "unzip_t": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 18864,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pac"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4.ZIP, period.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 1,
+          "sec": 0.061,
+          "rss_kb": 17884,
+          "members_seen": 0,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ],
+          "err": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self.",
+          "full": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self._RealGetContents()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents\n    raise BadZipFile(\"File is not a zip file\")\nzipfile.BadZipFile: File is not a zip file\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17884,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 151718 bytes (149 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 36\nPhysical Size = 32780\nTail Size = 118902\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt\n------------------- ----- ----"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17884,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        32780        32780  2.zip",
+            "                    .....       118902       118902  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                151718       151718  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 151718 bytes (149 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L3_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....           36           36  1\n                    .....        32780        32780  2.zip\n                    .....       118902       118902  3\n------------------- ----- ------------ ------------  ------------------------\n                                151718       151718  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17884,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18864,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 9,
+          "sec": 0.012,
+          "rss_kb": 18864,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip or",
+            "        /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/tes"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip.zip, and cannot find /home/user/hermes/yshjy",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/tests/.work/pack/aszip/L3_pwd.mp4.zip.ZIP, period.\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 17884,
+          "tail": [
+            "Enter password (will not be echoed):",
+            "Warnings: 1",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17884,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 151718"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 151718,
+          "rss_kb": 17884,
+          "tail": [
+            "Files: 3",
+            "Size:       151718",
+            "Compressed: 151718"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L4_plain": {
+      "layout": "L4",
+      "variant": "plain",
+      "file": "L4_plain.mp4",
+      "size": 102157,
+      "structure": "mdat 内 chunk 边界插入 ZIP（插点=46163, mdat size += 11933, stco/co64 分段补偿）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67592,
+        "sec": 0.228
+      },
+      "our": {
+        "file": "L4_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 58074,
+            "offset_from_eof": 44083,
+            "entries_declared": 4,
+            "eocd_end": 58096,
+            "naive_start_guess": 46163,
+            "candidates": 4,
+            "solved": true,
+            "start": 46163,
+            "delta": 0,
+            "ranges": [
+              [
+                46163,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.002,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.012,
+          "rss_kb": 18872,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4]:  46163 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18872,
+          "members_seen": 4,
+          "tail": [
+            "    testing: payload/data.bin         OK",
+            "    testing: payload/sub/nest.bin     OK",
+            "    testing: payload/中文名.txt    OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n    testing: payload/README.txt       OK\n    testing: payload/data.bin         OK\n    testing: payload/sub/nest.bin     OK\n    testing: payload/中文名.txt    OK\nNo errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.051,
+          "rss_kb": 17892,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2026-10-16 12:00:00        12740",
+            "payload/data.bin                               2026-10-16 12:00:00         8192",
+            "payload/sub/nest.bin                           2026-10-16 12:00:00         3072",
+            "payload/中文名.txt                                2026-10-16 12:00:00         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2026-10-16 12:00:00        12740\npayload/data.bin                               2026-10-16 12:00:00         8192\npayload/sub/nest.bin                           2026-10-16 12:00:00         3072\npayload/中文名.txt                                2026-10-16 12:00:00         8100\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17892,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102157 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 46163\nPhysical Size = 11933\nTail Size = 44061\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt\n------------------- ----"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17892,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        11933        11933  2.zip",
+            "                    .....        44061        44061  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                102157       102157  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102157 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L4_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        46163        46163  1\n                    .....        11933        11933  2.zip\n                    .....        44061        44061  3\n------------------- ----- ------------ ------------  ------------------------\n                                102157       102157  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17892,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19556,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 19444,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L4_plain.mp4.zip]:  46163 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L4_plain.mp4.zip]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L4_plain.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L4_plain.mp4.zip]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17896,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 102157"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17896,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 102157"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 102157,
+          "rss_kb": 17896,
+          "tail": [
+            "Files: 3",
+            "Size:       102157",
+            "Compressed: 102157"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L4_pwd": {
+      "layout": "L4",
+      "variant": "pwd",
+      "file": "L4_pwd.mp4",
+      "size": 123004,
+      "structure": "mdat 内 chunk 边界插入 ZIP（插点=46163, mdat size += 32780, stco/co64 分段补偿）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67528,
+        "sec": 0.2
+      },
+      "our": {
+        "file": "L4_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 78921,
+            "offset_from_eof": 44083,
+            "entries_declared": 4,
+            "eocd_end": 78943,
+            "naive_start_guess": 46163,
+            "candidates": 4,
+            "solved": true,
+            "start": 46163,
+            "delta": 0,
+            "ranges": [
+              [
+                46163,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.009,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.012,
+          "rss_kb": 18884,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4]:  46163 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 81,
+          "sec": 0.013,
+          "rss_kb": 18884,
+          "members_seen": 4,
+          "tail": [
+            "   skipping: payload/sub/nest.bin    unsupported compression method 99",
+            "   skipping: payload/中文名.txt   unsupported compression method 99",
+            "Caution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4.",
+            "4 files skipped because of unsupported compression or encoding."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n   skipping: payload/README.txt      unsupported compression method 99\n   skipping: payload/data.bin        unsupported compression method 99\n   skipping: payload/sub/nest.bin    unsupported compression method 99\n   skipping: payload/中文名.txt   unsupported compression method 99\nCaution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4.\n4 files skipped because of unsupported compression or encoding.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.073,
+          "rss_kb": 17904,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2025-06-15 23:06:40        12740",
+            "payload/data.bin                               2025-06-15 23:06:40         8192",
+            "payload/sub/nest.bin                           2025-06-15 23:06:40         3072",
+            "payload/中文名.txt                                2025-06-15 23:06:40         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2025-06-15 23:06:40        12740\npayload/data.bin                               2025-06-15 23:06:40         8192\npayload/sub/nest.bin                           2025-06-15 23:06:40         3072\npayload/中文名.txt                                2025-06-15 23:06:40         8100\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17904,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123004 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 46163\nPhysical Size = 32780\nTail Size = 44061\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt\n------------------- ----- --"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17904,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        32780        32780  2.zip",
+            "                    .....        44061        44061  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                123004       123004  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123004 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L4_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        46163        46163  1\n                    .....        32780        32780  2.zip\n                    .....        44061        44061  3\n------------------- ----- ------------ ------------  ------------------------\n                                123004       123004  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17904,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18888,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18888,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L4_pwd.mp4.zip]:  46163 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L4_pwd.mp4.zip]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L4_pwd.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L4_pwd.mp4.zip]:  46163 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 17908,
+          "tail": [
+            "Enter password (will not be echoed):",
+            "Warnings: 1",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 17912,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 123004"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 123004,
+          "rss_kb": 17912,
+          "tail": [
+            "Files: 3",
+            "Size:       123004",
+            "Compressed: 123004"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L5_plain": {
+      "layout": "L5",
+      "variant": "plain",
+      "file": "L5_plain.mp4",
+      "size": 102157,
+      "structure": "ZIP 切 3 块分插到 [20187, 46163, 66644]（mdat size += 11933, stco 分段补偿）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67816,
+        "sec": 0.193
+      },
+      "our": {
+        "file": "L5_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 78555,
+            "offset_from_eof": 23602,
+            "entries_declared": 4,
+            "eocd_end": 78577,
+            "naive_start_guess": 66644,
+            "candidates": 4,
+            "solved": true,
+            "start": 20187,
+            "delta": -46457,
+            "ranges": [
+              [
+                20187,
+                159
+              ],
+              [
+                46322,
+                11370
+              ],
+              [
+                78173,
+                404
+              ]
+            ],
+            "skipped": 46457,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.003,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18900,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4]:  66644 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 12,
+          "sec": 0.011,
+          "rss_kb": 18900,
+          "members_seen": 0,
+          "tail": [
+            "file #1:  bad zipfile offset (local header sig):  66644",
+            "  (attempting to re-compensate)",
+            "file #1:  bad zipfile offset (local header sig):  66644",
+            "error: invalid zip file with overlapped components (possible zip bomb)"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\nfile #1:  bad zipfile offset (local header sig):  66644\n  (attempting to re-compensate)\nfile #1:  bad zipfile offset (local header sig):  66644\nerror: invalid zip file with overlapped components (possible zip bomb)\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.051,
+          "rss_kb": 17920,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2026-10-16 12:00:00        12740",
+            "payload/data.bin                               2026-10-16 12:00:00         8192",
+            "payload/sub/nest.bin                           2026-10-16 12:00:00         3072",
+            "payload/中文名.txt                                2026-10-16 12:00:00         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2026-10-16 12:00:00        12740\npayload/data.bin                               2026-10-16 12:00:00         8192\npayload/sub/nest.bin                           2026-10-16 12:00:00         3072\npayload/中文名.txt                                2026-10-16 12:00:00         8100\n"
+        },
+        "7z_l": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17920,
+          "members_seen": 1,
+          "tail": [
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              12740          111  1 files",
+            "Warnings: 1",
+            "Errors: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102157 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4\nType = zip\nERRORS:\nHeaders Error\nUnconfirmed start of archive\nWARNINGS:\nThere are data after the end of archive\nOffset = 20187\nPhysical Size = 163\nTail Size = 81807\nCharacteristics = Local\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00              12740          111  1 files\n\nWarnings: 1\n\nErrors: 1\n"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17920,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        11933        11933  6.zip",
+            "                    .....        23580        23580  7",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                102157       102157  7 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 102157 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L5_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        20187        20187  1\n                    .....          163          163  2.zip\n                    .....        25972        25972  3\n                    .....        11374        11374  4.zip\n                    .....         8948         8948  5\n                    .....        11933        11933  6.zip\n                    .....        23580        23580  7\n-------------------"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17920,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18900,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18900,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L5_plain.mp4.zip]:  66644 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L5_plain.mp4.zip]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L5_plain.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2026-10-16 12:00   payload/README.txt\n     8192  2026-10-16 12:00   payload/data.bin\n     3072  2026-10-16 12:00   payload/sub/nest.bin\n     8100  2026-10-16 12:00   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L5_plain.mp4.zip]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 2,
+          "files": 1,
+          "bytes": 12740,
+          "rss_kb": 17924,
+          "tail": [
+            "ERRORS:",
+            "Headers Error",
+            "Unconfirmed start of archive"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 2,
+          "files": 1,
+          "bytes": 12740,
+          "rss_kb": 17928,
+          "tail": [
+            "ERRORS:",
+            "Headers Error",
+            "Unconfirmed start of archive"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 7,
+          "bytes": 102157,
+          "rss_kb": 17928,
+          "tail": [
+            "Files: 7",
+            "Size:       102157",
+            "Compressed: 102157"
+          ]
+        },
+        "_extracted_bytes": 12740
+      }
+    },
+    "L5_pwd": {
+      "layout": "L5",
+      "variant": "pwd",
+      "file": "L5_pwd.mp4",
+      "size": 123004,
+      "structure": "ZIP 切 3 块分插到 [20187, 46163, 66644]（mdat size += 32780, stco 分段补偿）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 68024,
+        "sec": 0.18
+      },
+      "our": {
+        "file": "L5_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 99402,
+            "offset_from_eof": 23602,
+            "entries_declared": 4,
+            "eocd_end": 99424,
+            "naive_start_guess": 66644,
+            "candidates": 4,
+            "solved": true,
+            "start": 20187,
+            "delta": -46457,
+            "ranges": [
+              [
+                20187,
+                12827
+              ],
+              [
+                58990,
+                11438
+              ],
+              [
+                90909,
+                8515
+              ]
+            ],
+            "skipped": 46457,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.021,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18928,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4]:  66644 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 81,
+          "sec": 0.012,
+          "rss_kb": 18928,
+          "members_seen": 4,
+          "tail": [
+            "   skipping: payload/sub/nest.bin    unsupported compression method 99",
+            "   skipping: payload/中文名.txt   unsupported compression method 99",
+            "Caution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4.",
+            "4 files skipped because of unsupported compression or encoding."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n   skipping: payload/README.txt      unsupported compression method 99\n   skipping: payload/data.bin        unsupported compression method 99\n   skipping: payload/sub/nest.bin    unsupported compression method 99\n   skipping: payload/中文名.txt   unsupported compression method 99\nCaution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4.\n4 files skipped because of unsupported compression or encoding.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.051,
+          "rss_kb": 17948,
+          "members_seen": 4,
+          "tail": [
+            "payload/README.txt                             2025-06-15 23:06:40        12740",
+            "payload/data.bin                               2025-06-15 23:06:40         8192",
+            "payload/sub/nest.bin                           2025-06-15 23:06:40         3072",
+            "payload/中文名.txt                                2025-06-15 23:06:40         8100"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\npayload/README.txt                             2025-06-15 23:06:40        12740\npayload/data.bin                               2025-06-15 23:06:40         8192\npayload/sub/nest.bin                           2025-06-15 23:06:40         3072\npayload/中文名.txt                                2025-06-15 23:06:40         8100\n"
+        },
+        "7z_l": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17948,
+          "members_seen": 1,
+          "tail": [
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              12740        12768  1 files",
+            "Warnings: 1",
+            "Errors: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123004 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4\nType = zip\nERRORS:\nHeaders Error\nUnconfirmed start of archive\nWARNINGS:\nThere are data after the end of archive\nOffset = 20187\nPhysical Size = 12831\nTail Size = 89986\nCharacteristics = Local\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40              12740        12768  1 files\n\nWarnings: 1\n\nErrors: 1\n"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 17948,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        32780        32780  5.zip",
+            "                    .....        23580        23580  6",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                126792       126792  6 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 123004 bytes (121 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L5_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        20187        20187  1\n                    .....        12831        12831  2.zip\n                    .....        25972        25972  3\n                    .....        11442        11442  4.zip\n                    .....        32780        32780  5.zip\n                    .....        23580        23580  6\n------------------- ----- ------------ ------------  ------------------------\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 17948,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 18928,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 18928,
+          "members_seen": 4,
+          "tail": [
+            "---------                     -------",
+            "    32104                     4 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L5_pwd.mp4.zip]:  66644 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L5_pwd.mp4.zip]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L5_pwd.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n    12740  2025-06-15 23:06   payload/README.txt\n     8192  2025-06-15 23:06   payload/data.bin\n     3072  2025-06-15 23:06   payload/sub/nest.bin\n     8100  2025-06-15 23:06   payload/中文名.txt\n---------                     -------\n    32104                     4 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L5_pwd.mp4.zip]:  66644 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 17948,
+          "tail": [
+            "Headers Error",
+            "Unconfirmed start of archive",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 2,
+          "files": 1,
+          "bytes": 12740,
+          "rss_kb": 17948,
+          "tail": [
+            "ERRORS:",
+            "Headers Error",
+            "Unconfirmed start of archive"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 6,
+          "bytes": 126792,
+          "rss_kb": 17952,
+          "tail": [
+            "Files: 6",
+            "Size:       126792",
+            "Compressed: 123004"
+          ]
+        },
+        "_extracted_bytes": 12740
+      }
+    },
+    "L6_plain": {
+      "layout": "L6",
+      "variant": "plain",
+      "file": "L6_plain.mp4",
+      "size": 10587917,
+      "structure": "[5MiB 垃圾][外壳 MP4][ZIP][5MiB 垃圾]（外壳整体被前置推后 5242880B，未改 moov）",
+      "video": {
+        "ffmpeg_rc": 183,
+        "ffmpeg_err": [
+          "Error opening input file /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.",
+          "Error opening input files: Invalid data found when processing input"
+        ],
+        "ffprobe_rc": 1,
+        "ffprobe_streams": [],
+        "rss_kb": 56256,
+        "sec": 0.308
+      },
+      "our": {
+        "file": "L6_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 5345015,
+            "offset_from_eof": 5242902,
+            "entries_declared": 4,
+            "eocd_end": 5345037,
+            "naive_start_guess": 5333104,
+            "candidates": 4,
+            "solved": true,
+            "start": 5333104,
+            "delta": 0,
+            "ranges": [
+              [
+                5333104,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.095,
+      "tools": {
+        "unzip_l": {
+          "rc": 9,
+          "sec": 0.012,
+          "rss_kb": 20008,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/p"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.ZIP, period.\n"
+        },
+        "unzip_t": {
+          "rc": 9,
+          "sec": 0.012,
+          "rss_kb": 20008,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/p"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4.ZIP, period.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 1,
+          "sec": 0.083,
+          "rss_kb": 19028,
+          "members_seen": 0,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ],
+          "err": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self.",
+          "full": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self._RealGetContents()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents\n    raise BadZipFile(\"File is not a zip file\")\nzipfile.BadZipFile: File is not a zip file\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.021,
+          "rss_kb": 19028,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 10587917 bytes (11 MiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 5333104\nPhysical Size = 11933\nTail Size = 5242880\nCharacteristics = Local Central\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  pay"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.021,
+          "rss_kb": 19028,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        11933        11933  2.zip",
+            "                    .....      5242880      5242880  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                              10587917     10587917  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 10587917 bytes (11 MiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L6_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....      5333104      5333104  1\n                    .....        11933        11933  2.zip\n                    .....      5242880      5242880  3\n------------------- ----- ------------ ------------  ------------------------\n                              10587917     10587917  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 19028,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.032,
+          "rss_kb": 23860,
+          "members_seen": 0,
+          "tail": [
+            "OpenPGP Public Key"
+          ],
+          "err": "",
+          "full": "OpenPGP Public Key\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20012,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip or",
+            "        /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/t"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip.zip, and cannot find /home/user/hermes/u",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_plain.mp4.zip.ZIP, period.\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19032,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 10587917"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19032,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 10587917"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 10587917,
+          "rss_kb": 19036,
+          "tail": [
+            "Files: 3",
+            "Size:       10587917",
+            "Compressed: 10587917"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L6_pwd": {
+      "layout": "L6",
+      "variant": "pwd",
+      "file": "L6_pwd.mp4",
+      "size": 10608764,
+      "structure": "[5MiB 垃圾][外壳 MP4][ZIP][5MiB 垃圾]（外壳整体被前置推后 5242880B，未改 moov）",
+      "video": {
+        "ffmpeg_rc": 183,
+        "ffmpeg_err": [
+          "Error opening input file /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.",
+          "Error opening input files: Invalid data found when processing input"
+        ],
+        "ffprobe_rc": 1,
+        "ffprobe_streams": [],
+        "rss_kb": 56340,
+        "sec": 0.323
+      },
+      "our": {
+        "file": "L6_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 5365862,
+            "offset_from_eof": 5242902,
+            "entries_declared": 4,
+            "eocd_end": 5365884,
+            "naive_start_guess": 5333104,
+            "candidates": 4,
+            "solved": true,
+            "start": 5333104,
+            "delta": 0,
+            "ranges": [
+              [
+                5333104,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.099,
+      "tools": {
+        "unzip_l": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20048,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pac"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L6_pw",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.ZIP, period.\n"
+        },
+        "unzip_t": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20048,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4 or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pac"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4 or\n        /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4.ZIP, period.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 1,
+          "sec": 0.072,
+          "rss_kb": 19068,
+          "members_seen": 0,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ],
+          "err": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self.",
+          "full": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self._RealGetContents()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents\n    raise BadZipFile(\"File is not a zip file\")\nzipfile.BadZipFile: File is not a zip file\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.021,
+          "rss_kb": 19068,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 10608764 bytes (11 MiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 5333104\nPhysical Size = 32780\nTail Size = 5242880\nCharacteristics = Local Central\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.031,
+          "rss_kb": 19068,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        32780        32780  2.zip",
+            "                    .....      5242880      5242880  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                              10608764     10608764  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 10608764 bytes (11 MiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L6_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....      5333104      5333104  1\n                    .....        32780        32780  2.zip\n                    .....      5242880      5242880  3\n------------------- ----- ------------ ------------  ------------------------\n                              10608764     10608764  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 19068,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.021,
+          "rss_kb": 23756,
+          "members_seen": 0,
+          "tail": [
+            "OpenPGP Public Key"
+          ],
+          "err": "",
+          "full": "OpenPGP Public Key\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20048,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip or",
+            "        /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/tes"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip.zip, and cannot find /home/user/hermes/yshjy",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip.zip, and cannot find /home/user/hermes/yshjy/tests/.work/pack/aszip/L6_pwd.mp4.zip.ZIP, period.\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 19068,
+          "tail": [
+            "Enter password (will not be echoed):",
+            "Warnings: 1",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19068,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 10608764"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 10608764,
+          "rss_kb": 19072,
+          "tail": [
+            "Files: 3",
+            "Size:       10608764",
+            "Compressed: 10608764"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L7_plain": {
+      "layout": "L7",
+      "variant": "plain",
+      "file": "L7_plain.mp4",
+      "size": 107804,
+      "structure": "尾部追加两个独立 ZIP（ZIP1 再用 ZIP2 接在其后）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 67064,
+        "sec": 0.205
+      },
+      "our": {
+        "file": "L7_plain.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 107782,
+            "offset_from_eof": 22,
+            "entries_declared": 3,
+            "eocd_end": 107804,
+            "naive_start_guess": 102157,
+            "candidates": 3,
+            "solved": true,
+            "start": 102157,
+            "delta": 0,
+            "ranges": [
+              [
+                102157,
+                5647
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 5647,
+            "sha256": "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e",
+            "n": 3,
+            "ok": 3,
+            "names": [
+              "second/s2.bin",
+              "second/second_pack.txt",
+              "second/第二个包_中文.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          },
+          {
+            "channel": "zip-eocd",
+            "eocd": 102135,
+            "offset_from_eof": 5669,
+            "entries_declared": 4,
+            "eocd_end": 102157,
+            "naive_start_guess": 90224,
+            "candidates": 4,
+            "solved": true,
+            "start": 90224,
+            "delta": 0,
+            "ranges": [
+              [
+                90224,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 7,
+          "CDFH": 7,
+          "EOCD": 2
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true,
+        "17cef7325781a8740acc9231a5028929cf1141335e13aebee31000f0e4b5784e": true
+      },
+      "our_sec": 0.002,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 20056,
+          "members_seen": 0,
+          "tail": [
+            "---------                     -------",
+            "    17070                     3 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4]:  102157 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4]:  102157 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n     5120  2026-10-16 12:00   second/s2.bin\n    10000  2026-10-16 12:00   second/second_pack.txt\n     1950  2026-10-16 12:00   second/第二个包_中文.txt\n---------                     -------\n    17070                     3 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4]:  102157 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 20056,
+          "members_seen": 0,
+          "tail": [
+            "    testing: second/s2.bin            OK",
+            "    testing: second/second_pack.txt   OK",
+            "    testing: second/第二个包_中文.txt   OK",
+            "No errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4]:  102157 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n    testing: second/s2.bin            OK\n    testing: second/second_pack.txt   OK\n    testing: second/第二个包_中文.txt   OK\nNo errors detected in compressed data of /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.061,
+          "rss_kb": 19080,
+          "members_seen": 0,
+          "tail": [
+            "File Name                                             Modified             Size",
+            "second/s2.bin                                  2026-10-16 12:00:00         5120",
+            "second/second_pack.txt                         2026-10-16 12:00:00        10000",
+            "second/第二个包_中文.txt                             2026-10-16 12:00:00         1950"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\nsecond/s2.bin                                  2026-10-16 12:00:00         5120\nsecond/second_pack.txt                         2026-10-16 12:00:00        10000\nsecond/第二个包_中文.txt                             2026-10-16 12:00:00         1950\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19080,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 107804 bytes (106 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 90224\nPhysical Size = 11933\nTail Size = 5647\nCharacteristics = Local Central\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  payload/中"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19080,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        11933        11933  2.zip",
+            "                    .....         5647         5647  3.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                107804       107804  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 107804 bytes (106 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L7_plain.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        90224        90224  1\n                    .....        11933        11933  2.zip\n                    .....         5647         5647  3.zip\n------------------- ----- ------------ ------------  ------------------------\n                                107804       107804  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 19080,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 20060,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 20060,
+          "members_seen": 0,
+          "tail": [
+            "---------                     -------",
+            "    17070                     3 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L7_plain.mp4.zip]:  102157 extra bytes at beginning or within zipfil",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L7_plain.mp4.zip]:  102157 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L7_plain.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n     5120  2026-10-16 12:00   second/s2.bin\n    10000  2026-10-16 12:00   second/second_pack.txt\n     1950  2026-10-16 12:00   second/第二个包_中文.txt\n---------                     -------\n    17070                     3 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L7_plain.mp4.zip]:  102157 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19080,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 107804"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19080,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 107804"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 107804,
+          "rss_kb": 19084,
+          "tail": [
+            "Files: 3",
+            "Size:       107804",
+            "Compressed: 107804"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L7_pwd": {
+      "layout": "L7",
+      "variant": "pwd",
+      "file": "L7_pwd.mp4",
+      "size": 140604,
+      "structure": "尾部追加两个独立 ZIP（ZIP1 再用 ZIP2 接在其后）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio"
+        ],
+        "rss_kb": 66196,
+        "sec": 0.194
+      },
+      "our": {
+        "file": "L7_pwd.mp4",
+        "channels": [
+          "zip"
+        ],
+        "archives": [
+          {
+            "channel": "zip-eocd",
+            "eocd": 140582,
+            "offset_from_eof": 22,
+            "entries_declared": 3,
+            "eocd_end": 140604,
+            "naive_start_guess": 123004,
+            "candidates": 3,
+            "solved": true,
+            "start": 123004,
+            "delta": 0,
+            "ranges": [
+              [
+                123004,
+                17600
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 17600,
+            "sha256": "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539",
+            "n": 3,
+            "ok": 3,
+            "names": [
+              "second/s2.bin",
+              "second/second_pack.txt",
+              "second/第二个包_中文.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          },
+          {
+            "channel": "zip-eocd",
+            "eocd": 122982,
+            "offset_from_eof": 17622,
+            "entries_declared": 4,
+            "eocd_end": 123004,
+            "naive_start_guess": 90224,
+            "candidates": 4,
+            "solved": true,
+            "start": 90224,
+            "delta": 0,
+            "ranges": [
+              [
+                90224,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 7,
+          "CDFH": 7,
+          "EOCD": 2
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true,
+        "4182306c2daea8863b84c9499ec194332ddf2dd438c67a5d00b7ddb7df490539": true
+      },
+      "our_sec": 0.016,
+      "tools": {
+        "unzip_l": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 20080,
+          "members_seen": 0,
+          "tail": [
+            "---------                     -------",
+            "    17070                     3 files",
+            "warning [/home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4]:  123004 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4]:  123004 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n     5120  2025-06-15 23:06   second/s2.bin\n    10000  2025-06-15 23:06   second/second_pack.txt\n     1950  2025-06-15 23:06   second/第二个包_中文.txt\n---------                     -------\n    17070                     3 files\nwarning [/home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4]:  123004 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "unzip_t": {
+          "rc": 81,
+          "sec": 0.011,
+          "rss_kb": 20080,
+          "members_seen": 0,
+          "tail": [
+            "   skipping: second/second_pack.txt  unsupported compression method 99",
+            "   skipping: second/第二个包_中文.txt  unsupported compression method 99",
+            "Caution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4.",
+            "3 files skipped because of unsupported compression or encoding."
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4\nwarning [/home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4]:  123004 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n   skipping: second/s2.bin           unsupported compression method 99\n   skipping: second/second_pack.txt  unsupported compression method 99\n   skipping: second/第二个包_中文.txt  unsupported compression method 99\nCaution:  zero files tested in /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4.\n3 files skipped because of unsupported compression or encoding.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 0,
+          "sec": 0.052,
+          "rss_kb": 19100,
+          "members_seen": 0,
+          "tail": [
+            "File Name                                             Modified             Size",
+            "second/s2.bin                                  2025-06-15 23:06:40         5120",
+            "second/second_pack.txt                         2025-06-15 23:06:40        10000",
+            "second/第二个包_中文.txt                             2025-06-15 23:06:40         1950"
+          ],
+          "err": "",
+          "full": "File Name                                             Modified             Size\nsecond/s2.bin                                  2025-06-15 23:06:40         5120\nsecond/second_pack.txt                         2025-06-15 23:06:40        10000\nsecond/第二个包_中文.txt                             2025-06-15 23:06:40         1950\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19100,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 140604 bytes (138 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 90224\nPhysical Size = 32780\nTail Size = 17600\nCharacteristics = Local Central\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload/中文名."
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.022,
+          "rss_kb": 19100,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        32780        32780  2.zip",
+            "                    .....        17600        17600  3.zip",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                140604       140604  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 140604 bytes (138 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L7_pwd.mp4\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....        90224        90224  1\n                    .....        32780        32780  2.zip\n                    .....        17600        17600  3.zip\n------------------- ----- ------------ ------------  ------------------------\n                                140604       140604  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 19100,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 20084,
+          "members_seen": 0,
+          "tail": [
+            "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]"
+          ],
+          "err": "",
+          "full": "ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 1,
+          "sec": 0.011,
+          "rss_kb": 20084,
+          "members_seen": 0,
+          "tail": [
+            "---------                     -------",
+            "    17070                     3 files",
+            "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L7_pwd.mp4.zip]:  123004 extra bytes at beginning or within zipfile",
+            "  (attempting to process anyway)"
+          ],
+          "err": "warning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L7_pwd.mp4.zip]:  123004 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L7_pwd.mp4.zip\n  Length      Date    Time    Name\n---------  ---------- -----   ----\n     5120  2025-06-15 23:06   second/s2.bin\n    10000  2025-06-15 23:06   second/second_pack.txt\n     1950  2025-06-15 23:06   second/第二个包_中文.txt\n---------                     -------\n    17070                     3 files\nwarning [/home/user/hermes/yshjy/tests/.work/pack/aszip/L7_pwd.mp4.zip]:  123004 extra bytes at beginning or within zipfile\n  (attempting to process anyway)\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 19104,
+          "tail": [
+            "Enter password (will not be echoed):",
+            "Warnings: 1",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19108,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 140604"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 140604,
+          "rss_kb": 19108,
+          "tail": [
+            "Files: 3",
+            "Size:       140604",
+            "Compressed: 140604"
+          ]
+        },
+        "_extracted_bytes": 32104
+      }
+    },
+    "L8_plain": {
+      "layout": "L8",
+      "variant": "plain",
+      "file": "L8_plain.mkv",
+      "size": 101594,
+      "structure": "MKV 外套：视频轨 = cover5 原样转封装，ZIP 作 MKV 附件轨（mimetype=application/zip）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio",
+          "attachment"
+        ],
+        "rss_kb": 67160,
+        "sec": 0.205
+      },
+      "our": {
+        "file": "L8_plain.mkv",
+        "channels": [
+          "mkv",
+          "zip"
+        ],
+        "archives": [
+          {
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false,
+            "channel": "mkv-attachment",
+            "start": 540,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "ranges": [
+              [
+                540,
+                11933
+              ]
+            ],
+            "solved": true
+          },
+          {
+            "channel": "zip-eocd",
+            "eocd": 12451,
+            "offset_from_eof": 89143,
+            "entries_declared": 4,
+            "eocd_end": 12473,
+            "naive_start_guess": 540,
+            "candidates": 4,
+            "solved": true,
+            "start": 540,
+            "delta": 0,
+            "ranges": [
+              [
+                540,
+                11933
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 11933,
+            "sha256": "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 8,
+            "flags": 0,
+            "encrypted": false,
+            "aes": false,
+            "needs_password": false
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "13584ee6101dce1b47eb02dec3d9e852bb9a43179ce34d3704720062f6763a58": true
+      },
+      "our_sec": 0.003,
+      "tools": {
+        "unzip_l": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20092,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/p"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv or\n        /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv or\n        /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.ZIP, period.\n"
+        },
+        "unzip_t": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20092,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/p"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv or\n        /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv.ZIP, period.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 1,
+          "sec": 0.062,
+          "rss_kb": 19052,
+          "members_seen": 0,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ],
+          "err": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self.",
+          "full": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self._RealGetContents()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents\n    raise BadZipFile(\"File is not a zip file\")\nzipfile.BadZipFile: File is not a zip file\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19052,
+          "members_seen": 4,
+          "tail": [
+            "2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2026-10-16 12:00:00              32104        11457  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 101594 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 540\nPhysical Size = 11933\nTail Size = 89121\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2026-10-16 12:00:00 .....        12740          111  payload/README.txt\n2026-10-16 12:00:00 .....         8192         8197  payload/data.bin\n2026-10-16 12:00:00 .....         3072         3077  payload/sub/nest.bin\n2026-10-16 12:00:00 .....         8100           72  payload/中文名.txt\n------------------- ----- "
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19052,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        11933        11933  2.zip",
+            "                    .....        89121        89121  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                101594       101594  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 101594 bytes (100 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L8_plain.mkv\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....          540          540  1\n                    .....        11933        11933  2.zip\n                    .....        89121        89121  3\n------------------- ----- ------------ ------------  ------------------------\n                                101594       101594  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 19052,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.023,
+          "rss_kb": 20092,
+          "members_seen": 0,
+          "tail": [
+            "Matroska data"
+          ],
+          "err": "",
+          "full": "Matroska data\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 9,
+          "sec": 0.012,
+          "rss_kb": 20092,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip or",
+            "        /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip.zip, and cannot find /home/user/hermes/yshjy/t"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip.zip, and cannot find /home/user/hermes/u",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip.zip, and cannot find /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_plain.mkv.zip.ZIP, period.\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19052,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 101594"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19080,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 101594"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 101594,
+          "rss_kb": 19052,
+          "tail": [
+            "Files: 3",
+            "Size:       101594",
+            "Compressed: 101594"
+          ]
+        },
+        "_extracted_bytes": 32104,
+        "ffmpeg_dump_attachment": {
+          "rc": 0,
+          "wrote": 11933,
+          "tail": []
+        },
+        "ffmpeg_dump_attachment_t": {
+          "rc": 0,
+          "wrote": 11933,
+          "tail": []
+        },
+        "ffprobe_streams": {
+          "rc": 0,
+          "tail": [
+            "DISPOSITION:metadata=0",
+            "DISPOSITION:dependent=0",
+            "DISPOSITION:still_image=0",
+            "DISPOSITION:multilayer=0",
+            "TAG:filename=payload.zip",
+            "TAG:mimetype=application/zip"
+          ]
+        }
+      }
+    },
+    "L8_pwd": {
+      "layout": "L8",
+      "variant": "pwd",
+      "file": "L8_pwd.mkv",
+      "size": 122445,
+      "structure": "MKV 外套：视频轨 = cover5 原样转封装，ZIP 作 MKV 附件轨（mimetype=application/zip）",
+      "video": {
+        "ffmpeg_rc": 0,
+        "ffmpeg_err": [],
+        "ffprobe_rc": 0,
+        "ffprobe_streams": [
+          "video",
+          "audio",
+          "attachment"
+        ],
+        "rss_kb": 67516,
+        "sec": 0.216
+      },
+      "our": {
+        "file": "L8_pwd.mkv",
+        "channels": [
+          "mkv",
+          "zip"
+        ],
+        "archives": [
+          {
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true,
+            "channel": "mkv-attachment",
+            "start": 543,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "ranges": [
+              [
+                543,
+                32780
+              ]
+            ],
+            "solved": true
+          },
+          {
+            "channel": "zip-eocd",
+            "eocd": 33301,
+            "offset_from_eof": 89144,
+            "entries_declared": 4,
+            "eocd_end": 33323,
+            "naive_start_guess": 543,
+            "candidates": 4,
+            "solved": true,
+            "start": 543,
+            "delta": 0,
+            "ranges": [
+              [
+                543,
+                32780
+              ]
+            ],
+            "skipped": 0,
+            "logical_len": 32780,
+            "sha256": "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5",
+            "n": 4,
+            "ok": 4,
+            "names": [
+              "payload/README.txt",
+              "payload/data.bin",
+              "payload/sub/nest.bin",
+              "payload/中文名.txt"
+            ],
+            "detail": [],
+            "method": 99,
+            "flags": 1,
+            "encrypted": true,
+            "aes": true,
+            "needs_password": true
+          }
+        ],
+        "sigs": {
+          "LFH": 4,
+          "CDFH": 4,
+          "EOCD": 1
+        },
+        "fake_sigs": {}
+      },
+      "our_expect_hits": {
+        "7dc85693723975771380551c871f9099242a2f775a0eb13686666b74aa04cbd5": true
+      },
+      "our_sec": 0.019,
+      "tools": {
+        "unzip_l": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20120,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pac"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv or\n        /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L8_pw",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv or\n        /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.ZIP, period.\n"
+        },
+        "unzip_t": {
+          "rc": 9,
+          "sec": 0.012,
+          "rss_kb": 20120,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv or",
+            "        /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pac"
+          ],
+          "err": "",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv or\n        /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.zip, and cannot find /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv.ZIP, period.\n"
+        },
+        "py_zipfile_l": {
+          "rc": 1,
+          "sec": 0.093,
+          "rss_kb": 19140,
+          "members_seen": 0,
+          "tail": [
+            "    ~~~~~~~~~~~~~~~~~~~~~^^",
+            "  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents",
+            "    raise BadZipFile(\"File is not a zip file\")",
+            "zipfile.BadZipFile: File is not a zip file"
+          ],
+          "err": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self.",
+          "full": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/lib/python3.13/zipfile/__main__.py\", line 4, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 2332, in main\n    with ZipFile(src, 'r', metadata_encoding=encoding) as zf:\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1401, in __init__\n    self._RealGetContents()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.13/zipfile/__init__.py\", line 1468, in _RealGetContents\n    raise BadZipFile(\"File is not a zip file\")\nzipfile.BadZipFile: File is not a zip file\n"
+        },
+        "7z_l": {
+          "rc": 0,
+          "sec": 0.022,
+          "rss_kb": 19140,
+          "members_seen": 4,
+          "tail": [
+            "2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "2025-06-15 23:06:40              32104        32216  4 files",
+            "Warnings: 1"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 122445 bytes (120 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv\nType = zip\nWARNINGS:\nThere are data after the end of archive\nOffset = 543\nPhysical Size = 32780\nTail Size = 89122\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n2025-06-15 23:06:40 .....        12740        12768  payload/README.txt\n2025-06-15 23:06:40 .....         8192         8220  payload/data.bin\n2025-06-15 23:06:40 .....         3072         3100  payload/sub/nest.bin\n2025-06-15 23:06:40 .....         8100         8128  payload/中文名.txt\n------------------- ----- ----"
+        },
+        "7z_l_t#": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 19144,
+          "members_seen": 0,
+          "tail": [
+            "                    .....        32780        32780  2.zip",
+            "                    .....        89122        89122  3",
+            "------------------- ----- ------------ ------------  ------------------------",
+            "                                122445       122445  3 files"
+          ],
+          "err": "",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\nScanning the drive for archives:\n1 file, 122445 bytes (120 KiB)\n\nListing archive: /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv\n\n--\nPath = /home/user/hermes/yshjy/tests/data/pack/L8_pwd.mkv\nType = #\n\n   Date      Time    Attr         Size   Compressed  Name\n------------------- ----- ------------ ------------  ------------------------\n                    .....          543          543  1\n                    .....        32780        32780  2.zip\n                    .....        89122        89122  3\n------------------- ----- ------------ ------------  ------------------------\n                                122445       122445  3 files\n"
+        },
+        "7z_l_t#a": {
+          "rc": 2,
+          "sec": 0.011,
+          "rss_kb": 19144,
+          "members_seen": 0,
+          "tail": [
+            "7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03",
+            " 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM",
+            "ERROR:",
+            "Unsupported archive type"
+          ],
+          "err": "\n\nERROR:\nUnsupported archive type\n",
+          "full": "\n7-Zip 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03\n 64-bit locale=zh_CN.UTF-8 Threads:8 OPEN_MAX:1024, ASM\n\n\n\nERROR:\nUnsupported archive type\n"
+        },
+        "file": {
+          "rc": 0,
+          "sec": 0.011,
+          "rss_kb": 20124,
+          "members_seen": 0,
+          "tail": [
+            "Matroska data"
+          ],
+          "err": "",
+          "full": "Matroska data\n"
+        },
+        "unzip_l_aszip": {
+          "rc": 9,
+          "sec": 0.011,
+          "rss_kb": 20124,
+          "members_seen": 0,
+          "tail": [
+            "  latter case the central directory and zipfile comment will be found on",
+            "  the last disk(s) of this archive.",
+            "unzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip or",
+            "        /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip.zip, and cannot find /home/user/hermes/yshjy/tes"
+          ],
+          "err": "  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip.zip, and cannot find /home/user/hermes/yshjy",
+          "full": "Archive:  /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip or\n        /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip.zip, and cannot find /home/user/hermes/yshjy/tests/.work/pack/aszip/L8_pwd.mkv.zip.ZIP, period.\n"
+        },
+        "7z_x_nopwd": {
+          "rc": 255,
+          "files": 1,
+          "bytes": 0,
+          "rss_kb": 19148,
+          "tail": [
+            "Enter password (will not be echoed):",
+            "Warnings: 1",
+            "Break signaled"
+          ]
+        },
+        "7z_x_pwd": {
+          "rc": 0,
+          "files": 4,
+          "bytes": 32104,
+          "rss_kb": 19148,
+          "tail": [
+            "Files: 4",
+            "Size:       32104",
+            "Compressed: 122445"
+          ]
+        },
+        "7z_x_scan": {
+          "rc": 0,
+          "files": 3,
+          "bytes": 122445,
+          "rss_kb": 19148,
+          "tail": [
+            "Files: 3",
+            "Size:       122445",
+            "Compressed: 122445"
+          ]
+        },
+        "_extracted_bytes": 32104,
+        "ffmpeg_dump_attachment": {
+          "rc": 0,
+          "wrote": 32780,
+          "tail": []
+        },
+        "ffmpeg_dump_attachment_t": {
+          "rc": 0,
+          "wrote": 32780,
+          "tail": []
+        },
+        "ffprobe_streams": {
+          "rc": 0,
+          "tail": [
+            "DISPOSITION:metadata=0",
+            "DISPOSITION:dependent=0",
+            "DISPOSITION:still_image=0",
+            "DISPOSITION:multilayer=0",
+            "TAG:filename=payload.zip",
+            "TAG:mimetype=application/zip"
+          ]
+        }
+      }
+    }
+  },
+  "fix_experiments": {
+    "L4_无修正": {
+      "file": ".work/pack/fixexp/l4_raw.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l4_raw.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 102157
+    },
+    "L4_只改mdat_size": {
+      "file": ".work/pack/fixexp/l4_mdatonly.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [
+        "[aist#0:1/aac @ 0x564547abcf00] [dec:aac @ 0x564547aeb640] Error submitting packet to decoder: Invalid data fo",
+        "[vist#0:0/mpeg4 @ 0x564547af2ac0] [dec:mpeg4 @ 0x564547af1d80] Decoding error: Invalid data found when process"
+      ],
+      "size": 102157
+    },
+    "L4_只改stco": {
+      "file": ".work/pack/fixexp/l4_stcoonly.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l4_stcoonly.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 102157
+    },
+    "L4_全修正(=正式L4)": {
+      "file": ".work/pack/fixexp/l4_full.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [],
+      "size": 102157
+    },
+    "L3_隐写者原版(bug)": {
+      "file": ".work/pack/fixexp/l3_bug.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l3_bug.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 157518
+    },
+    "L4_非chunk边界_全修正": {
+      "file": ".work/pack/fixexp/l4_notchunk.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [
+        "[mpeg4 @ 0x55e797991200] marker does not match f_code",
+        "    Last message repeated 10 times"
+      ],
+      "size": 102157
+    },
+    "L3_修正版(噪声在末尾)": {
+      "file": ".work/pack/fixexp/l3_fixed.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [],
+      "size": 114473
+    },
+    "L6_加stco补偿": {
+      "file": ".work/pack/fixexp/l6_stco.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l6_stco.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 10587917
+    },
+    "L6_加stco补偿_强制-f-mp4": {
+      "file": ".work/pack/fixexp/l6_stco.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l6_stco.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 10587917,
+      "ffmpeg_rc_forced_f_mp4": 183,
+      "ffmpeg_err_forced_f_mp4": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l6_stco.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ]
+    },
+    "L6_原样_强制-f-mp4": {
+      "file": ".work/pack/fixexp/l6_raw.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l6_raw.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 10587917,
+      "ffmpeg_rc_forced_f_mp4": 183,
+      "ffmpeg_err_forced_f_mp4": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l6_raw.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ]
+    },
+    "L5_无修正": {
+      "file": ".work/pack/fixexp/l5_raw.mp4",
+      "ffmpeg_rc": 183,
+      "ffmpeg_err": [
+        "Error opening input file /home/user/hermes/yshjy/tests/.work/pack/fixexp/l5_raw.mp4.",
+        "Error opening input files: Invalid data found when processing input"
+      ],
+      "size": 102157
+    },
+    "L5_全修正(=正式L5)": {
+      "file": ".work/pack/fixexp/l5_full.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [],
+      "size": 102157
+    },
+    "L4_faststart外壳_全修正": {
+      "file": ".work/pack/fixexp/l4_fast_full.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [],
+      "size": 102157
+    },
+    "L3_faststart外壳": {
+      "file": ".work/pack/fixexp/l3_fast.mp4",
+      "ffmpeg_rc": 0,
+      "ffmpeg_err": [],
+      "size": 102165
+    }
+  },
+  "eocd_window": [
+    {
+      "junk_after_zip": 0,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 1024,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 16384,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 32768,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 40960,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 49152,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 57344,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 61440,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 65536,
+      "unzip_l": {
+        "rc": 0,
+        "members_seen": 4
+      },
+      "py_zipfile_l": {
+        "rc": 1,
+        "members_seen": 0
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 98304,
+      "unzip_l": {
+        "rc": 9,
+        "members_seen": 0
+      },
+      "py_zipfile_l": {
+        "rc": 1,
+        "members_seen": 0
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 131072,
+      "unzip_l": {
+        "rc": 9,
+        "members_seen": 0
+      },
+      "py_zipfile_l": {
+        "rc": 1,
+        "members_seen": 0
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    },
+    {
+      "junk_after_zip": 1048576,
+      "unzip_l": {
+        "rc": 9,
+        "members_seen": 0
+      },
+      "py_zipfile_l": {
+        "rc": 1,
+        "members_seen": 0
+      },
+      "7z_l": {
+        "rc": 0,
+        "members_seen": 4
+      }
+    }
+  ],
+  "harness_peak_rss_kb": 28404
+}

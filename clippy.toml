@@ -1,0 +1,4 @@
+# 静态检查配置
+# 内存相关阈值（与安全设计一致：解 8GB 也不许超 64MiB）
+too-many-arguments-threshold = 8
+type-complexity-threshold = 300

@@ -1,0 +1,80 @@
+//! 归档结构解析：从文件里定位数据、反推真实偏移
+//!
+//! 这一层只做「读懂结构、算准偏移」，**不做解压**。
+//! 解压交给 `unpack` 层，两层分离便于各自测试。
+//!
+//! # 为什么必须自己解析（实测依据，见 03-技术验证.md）
+//! - `zip` crate 的自动检测要扫完整个 8.7 GB 文件：**113 秒**
+//! - 我们自己算出基准偏移后喂给它：**69 微秒**（快 1600 倍）
+//! - 结论：**定位自己做，解压交给库**
+
+pub mod zip;
+
+pub use zip::ZipLayout;
+
+/// 归档格式
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArchiveFormat {
+    /// ZIP / ZIP64
+    Zip,
+    /// 7-Zip
+    SevenZ,
+    /// RAR 1.5–4.x
+    Rar4,
+    /// RAR 5+
+    Rar5,
+    /// TAR
+    Tar,
+    /// gzip 单流
+    Gzip,
+    /// xz 单流
+    Xz,
+    /// zstd 单流
+    Zstd,
+    /// bzip2 单流
+    Bzip2,
+    /// 未知
+    Unknown,
+}
+
+impl ArchiveFormat {
+    /// 机器可读标识（日志/诊断用）
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Zip => "zip",
+            Self::SevenZ => "7z",
+            Self::Rar4 => "rar4",
+            Self::Rar5 => "rar5",
+            Self::Tar => "tar",
+            Self::Gzip => "gzip",
+            Self::Xz => "xz",
+            Self::Zstd => "zstd",
+            Self::Bzip2 => "bzip2",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// 条目信息（用于「解压前预览」，见 UI-SPEC §14.4）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntryInfo {
+    /// 条目在归档内的相对路径
+    pub path: String,
+    /// 是否为目录
+    pub is_dir: bool,
+    /// 原始大小（字节）
+    pub size: u64,
+    /// 压缩后大小（未知时为 None）
+    pub compressed_size: Option<u64>,
+    /// 是否加密 —— 界面上的 🔒 徽标就读这个字段
+    pub encrypted: bool,
+    /// CRC-32（校验用）
+    pub crc32: Option<u32>,
+}
+
+impl EntryInfo {
+    /// 文件名（去掉目录部分），用于界面显示
+    pub fn file_name(&self) -> &str {
+        self.path.rsplit(['/', '\\']).next().unwrap_or(&self.path)
+    }
+}
