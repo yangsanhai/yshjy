@@ -1,0 +1,113 @@
+# 繁體中文 —— yshjy 語言包
+#
+# ══════════════════════════════════════════════════════════════
+#  想加一種新語言？三個步驟，不用會寫程式：
+#    ① 複製本檔，改名成語言代碼（如 fr-FR.toml）
+#    ② 把 [meta] 的 code / name 改成你的語言
+#    ③ 逐條把等號右邊的文字翻譯過去
+#
+#  只想改幾條？放一份 ~/.config/yshjy/locales/你的語言.toml，
+#  裡面**只寫要覆蓋的條目**，其餘會自動用內建的。
+#
+#  注意：{name} 這種花括號是佔位符，翻譯時要原樣保留。
+# ══════════════════════════════════════════════════════════════
+
+[meta]
+code = "zh-TW"
+name = "繁體中文"
+translators = "yshjy 專案"
+
+[help]
+text = """
+楊三海解壓（yshjy） —— 專治「偽裝成影片/圖片的壓縮檔」
+
+用法：
+  yshjy <檔案>                    解壓縮（預設）
+  yshjy jy <檔案>                 解壓縮（完整寫法，腳本推薦）
+  yshjy ys <檔案或資料夾>          打包成偽裝檔
+  yshjy --list <檔案>             先看看裡面有什麼（不解壓縮）
+  yshjy --rescue <檔案>           檔案壞了也盡量救回來
+  yshjy --help                    看這份說明
+  yshjy -V, --version             看版本與版本檔次（常用版 / 全能版）
+
+常用選項：
+  -o, --dest <目錄>               解到哪（預設：目前目錄下的同名資料夾）
+  -p, --password <密碼>           解壓縮密碼 / 打包密碼
+  -j, --jobs <N>                  同時跑幾個（預設 1，依序最省磁碟）
+  --select <條件>                 只解一部分：
+                                    --select "*.exe"      只要 exe
+                                    --select "遊戲資料/**" 只要某個目錄
+                                    --select "1,3,5"      只要第 1、3、5 個
+                                    --select required     跳過 .DS_Store 之類的垃圾
+  --json                          逐行輸出事件流/結果（給腳本用）
+  --no-smart-dir                  關掉「智慧解壓縮」：預設會看壓縮檔裡有沒有單一頂層目錄來決定
+                                  要不要多套一層同名資料夾，加這個就永遠建同名資料夾
+  -q, --quiet                     只輸出結果（腳本用）
+  --lang <語言>                   切換介面語言（如 en、ja、ko、ru、es）
+  --tail                          打包用「附加到檔尾」佈局（預設藏進 free 原子）
+
+範例：
+  yshjy 魔女的侵襲.mp4            解開藏在影片裡的壓縮檔
+  yshjy 下載/                     整個目錄的壓縮檔排隊解（一個壞了不影響其他）
+  yshjy --list 電影.mp4           只看裡面有什麼
+  yshjy --select "*.exe" 遊戲.mp4  只要裡面的 exe
+  yshjy -p "解壓縮密碼" 遊戲.mp4   帶密碼解壓縮
+  yshjy ys 我的遊戲/               把資料夾打包成偽裝影片
+  yshjy --rescue 壞掉的.zip        檔案壞了也盡量救
+  yshjy --json 包.mp4 | jq .       給腳本/前端使用
+
+解不開？先試 yshjy --list 看能不能認出裡面有什麼。
+"""
+
+[tier]
+common = "常用版"
+full = "全能版"
+
+[version]
+line = "yshjy {version}（{tier}）—— 楊三海解壓"
+formats = "  支援的格式：ZIP（含分卷）/ 7z / RAR / TAR / gzip / xz / zstd / bzip2 / brotli / lz4"
+tier_common = "  常用版：日常下載會遇到的格式全都在（體積更小、相依更少）"
+tier_full = "  全能版：冷門格式（ISO/UDF、CAB、ARJ…）陸續補進來，目前涵蓋與常用版一致"
+
+[preview]
+title = "📦 {input}（{format}）"
+incomplete = "   ⚠ 這個格式只能列出部分資訊（大小未知）"
+empty = "   （列不出內容）"
+row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
+row_more = "   … 還有 {count} 個"
+total = "   合計 {size} / {count} 個檔案"
+password_hint = "   密碼：看旁邊的「說明.txt」，或 yshjy -p \"密碼\" \"{input}\""
+select_hint = "   只解一部分：yshjy --select \"1,3\" \"{input}\""
+risky = " ⚠可執行"
+unknown_size = "—"
+
+[preview.hint]
+volumes_merged = "偵測到 {count} 個分卷，解壓縮時會自動拼起來"
+nested_archive = "裡面還套了一層壓縮檔（{inner}）"
+needs_password = "其中 {count} 個有鎖 —— 解壓縮需要密碼"
+looks_truncated = "這個壓縮檔可能沒下載完（尾端資料缺失）"
+hidden_at = "壓縮檔藏在檔案中間（偏移 {offset}），已按真實位置定位"
+rebuilt_index = "索引壞了，清單是依檔案標頭重建的"
+video_unplayable = "封面影片本身有問題，但裡面的檔案還是能解"
+
+[result]
+ok = "✅ {input} —— 解開（{size}，耗時 {secs} 秒）"
+partial = "⚠ {input} —— 解了一部分（成功 {done} 個，跳過 {skipped} 個）"
+failed = "❌ {input} —— 沒解開：{reason}"
+cancelled = "⏹ {input} —— 已取消（已解出的檔案保留）"
+
+[error]
+not_archive = "這不是壓縮檔（找不到可辨識的壓縮資料）"
+password_wrong = "密碼不對"
+password_missing = "這個壓縮檔有鎖，需要密碼"
+path_not_found = "找不到檔案或目錄"
+no_space = "磁碟空間不足"
+cancel = "已取消"
+corrupt = "檔案損壞或資料不完整"
+unsupported = "這個格式暫時解不了"
+internal = "內部錯誤"
+
+[misc]
+file_missing = "❌ {input}：檔案不存在"
+lang_unknown = "⚠ 沒有 \"{lang}\" 這個語言包，改用 {fallback}（可用：{available}）"
+lang_switched = "介面語言：{name}（{code}）"

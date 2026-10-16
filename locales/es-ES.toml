@@ -1,0 +1,113 @@
+# Español —— paquete de idioma de yshjy
+#
+# ══════════════════════════════════════════════════════════════
+#  ¿Quieres añadir un idioma nuevo? Tres pasos, sin programar:
+#    ① Copia este archivo y renómbralo al código del idioma (p. ej. fr-FR.toml)
+#    ② Cambia code / name en [meta]
+#    ③ Traduce el texto a la derecha de cada `=`
+#
+#  ¿Solo quieres cambiar unas líneas? Coloca
+#  ~/.config/yshjy/locales/xx-XX.toml — lo que omitas se toma del paquete integrado.
+#
+#  Mantén los marcadores como {name} tal cual.
+# ══════════════════════════════════════════════════════════════
+
+[meta]
+code = "es-ES"
+name = "Español"
+translators = "proyecto yshjy"
+
+[help]
+text = """
+yshjy — la herramienta para «vídeos» que en realidad son archivos comprimidos
+
+USO:
+  yshjy <archivo>                 extraer (por defecto)
+  yshjy jy <archivo>              extraer (forma explícita, ideal para scripts)
+  yshjy ys <archivo o carpeta>    empaquetar en un archivo camuflado
+  yshjy --list <archivo>          ver el contenido sin extraer
+  yshjy --rescue <archivo>        rescatar lo máximo posible de un archivo dañado
+  yshjy --help                    esta ayuda
+  yshjy -V, --version             versión y edición (común / completa)
+
+OPCIONES HABITUALES:
+  -o, --dest <carpeta>            dónde extraer (por defecto: carpeta con el mismo nombre)
+  -p, --password <clave>          contraseña para extraer / empaquetar
+  -j, --jobs <N>                  cuántos a la vez (por defecto 1; secuencial es más suave con el disco)
+  --select <regla>                extraer solo una parte:
+                                    --select "*.exe"     solo .exe
+                                    --select "data/**"   solo esa carpeta
+                                    --select "1,3,5"     solo las entradas 1, 3 y 5
+                                    --select required    omitir basura como .DS_Store
+  --json                          emitir eventos y resultados como líneas JSON (para scripts)
+  --no-smart-dir                  desactivar la «extracción inteligente»: por defecto, si hay una sola
+                                  carpeta de primer nivel, se extrae directamente en el destino
+  -q, --quiet                     mostrar solo el resultado (para scripts)
+  --lang <idioma>                 cambiar el idioma (p. ej. zh-CN, en, ja, ko, ru)
+  --tail                          empaquetar «añadiendo al final» (por defecto: dentro de un free atom)
+
+EJEMPLOS:
+  yshjy movie.mp4                 extraer el archivo escondido dentro de un vídeo
+  yshjy downloads/                procesar todos los archivos de una carpeta (un fallo no detiene el resto)
+  yshjy --list movie.mp4          ver qué contiene
+  yshjy --select "*.exe" game.mp4 solo los .exe
+  yshjy -p "clave" game.mp4       extraer con contraseña
+  yshjy ys my-game/               empaquetar una carpeta en un vídeo camuflado
+  yshjy --rescue broken.zip       rescatar de un archivo dañado
+  yshjy --json pack.mp4 | jq .    para scripts o interfaces
+
+¿No se abre? Prueba primero `yshjy --list` para ver si se reconoce el contenido.
+"""
+
+[tier]
+common = "edición común"
+full = "edición completa"
+
+[version]
+line = "yshjy {version} ({tier}) —— 楊三海解壓"
+formats = "  Formatos: ZIP (con volúmenes) / 7z / RAR / TAR / gzip / xz / zstd / bzip2 / brotli / lz4"
+tier_common = "  Edición común: todos los formatos que encontrará en la vida real (más pequeña, menos dependencias)"
+tier_full = "  Edición completa: se van añadiendo formatos raros (ISO/UDF, CAB, ARJ…); por ahora igual cobertura"
+
+[preview]
+title = "📦 {input} ({format})"
+incomplete = "   ⚠ Este formato solo expone información parcial (tamaños desconocidos)"
+empty = "   (nada que listar)"
+row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
+row_more = "   … y {count} más"
+total = "   Total {size} / {count} archivos"
+password_hint = "   Contraseña: mire el archivo de notas de al lado, o yshjy -p \"la-clave\" \"{input}\""
+select_hint = "   Extraer solo una parte: yshjy --select \"1,3\" \"{input}\""
+risky = " ⚠ejecutable"
+unknown_size = "—"
+
+[preview.hint]
+volumes_merged = "Se detectaron {count} volúmenes — se unirán automáticamente"
+nested_archive = "Hay otro archivo comprimido dentro ({inner})"
+needs_password = "{count} de ellos están bloqueados — se necesita contraseña"
+looks_truncated = "Parece que este archivo está incompleto (faltan datos al final)"
+hidden_at = "El archivo está dentro del fichero (desplazamiento {offset}); localizado en su posición real"
+rebuilt_index = "El índice estaba dañado — este listado se reconstruyó desde las cabeceras"
+video_unplayable = "El vídeo de portada está dañado, pero los archivos de dentro sí se pueden extraer"
+
+[result]
+ok = "✅ {input} — extraído ({size} en {secs} s)"
+partial = "⚠ {input} — extraído parcialmente ({done} correctos, {skipped} omitidos)"
+failed = "❌ {input} — falló: {reason}"
+cancelled = "⏹ {input} — cancelado (se conservan los archivos ya extraídos)"
+
+[error]
+not_archive = "No es un archivo comprimido (no se encontraron datos comprimidos reconocibles)"
+password_wrong = "Contraseña incorrecta"
+password_missing = "Este archivo está bloqueado y necesita contraseña"
+path_not_found = "No se encuentra el archivo o la carpeta"
+no_space = "No hay suficiente espacio en disco"
+cancel = "Cancelado"
+corrupt = "El archivo está dañado o incompleto"
+unsupported = "Este formato aún no es compatible"
+internal = "Error interno"
+
+[misc]
+file_missing = "❌ {input}: archivo no encontrado"
+lang_unknown = "⚠ No hay paquete de idioma \"{lang}\" — se usa {fallback} (disponibles: {available})"
+lang_switched = "Idioma de la interfaz: {name} ({code})"

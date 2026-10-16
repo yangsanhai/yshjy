@@ -1,0 +1,113 @@
+# 日本語 —— yshjy 言語パック
+#
+# ══════════════════════════════════════════════════════════════
+#  新しい言語を追加したい？ コードを書かずに 3 ステップ：
+#    ① このファイルをコピーして言語コードに改名（例：fr-FR.toml）
+#    ② [meta] の code / name を自分の言語に変更
+#    ③ 各 `=` の右側を翻訳する
+#
+#  一部だけ上書きしたい場合は ~/.config/yshjy/locales/xx-XX.toml を置き、
+#  **書きたい項目だけ**書けば残りは内蔵パックが使われます。
+#
+#  {name} のような波括弧はプレースホルダです。そのまま残してください。
+# ══════════════════════════════════════════════════════════════
+
+[meta]
+code = "ja-JP"
+name = "日本語"
+translators = "yshjy プロジェクト"
+
+[help]
+text = """
+yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル」を一発で展開
+
+使い方：
+  yshjy <ファイル>                 展開（既定）
+  yshjy jy <ファイル>              展開（明示的な書き方、スクリプト向け）
+  yshjy ys <ファイル/フォルダ>      偽装ファイルに固める
+  yshjy --list <ファイル>          中身を見るだけ（展開しない）
+  yshjy --rescue <ファイル>        壊れた圧縮ファイルから可能な限り救出
+  yshjy --help                     このヘルプ
+  yshjy -V, --version              バージョンとエディション（常用版 / 全能版）
+
+よく使うオプション：
+  -o, --dest <フォルダ>            展開先（既定：同じ名前のフォルダ）
+  -p, --password <パスワード>      展開／圧縮のパスワード
+  -j, --jobs <N>                   同時に処理する数（既定 1、ディスクに優しい）
+  --select <条件>                  一部だけ展開：
+                                    --select "*.exe"       .exe だけ
+                                    --select "data/**"     そのフォルダ以下だけ
+                                    --select "1,3,5"       1・3・5 番目だけ
+                                    --select required      .DS_Store などを除外
+  --json                           イベント／結果を JSON 行で出力（スクリプト向け）
+  --no-smart-dir                   「スマート展開」を無効化：既定では最上位フォルダが 1 つだけなら
+                                   同名フォルダを重ねず展開先へ直接展開します
+  -q, --quiet                      結果だけ出力（スクリプト向け）
+  --lang <言語>                    表示言語を切り替え（例：zh-CN、en、ko、ru、es）
+  --tail                           末尾追加レイアウトで固める（既定：free アトム内）
+
+例：
+  yshjy movie.mp4                 動画に隠された圧縮ファイルを展開
+  yshjy downloads/                フォルダ内を順番に処理（1 つ失敗しても続行）
+  yshjy --list movie.mp4          中身を確認
+  yshjy --select "*.exe" game.mp4 .exe だけ取り出す
+  yshjy -p "パスワード" game.mp4   パスワード付きで展開
+  yshjy ys my-game/               フォルダを偽装動画に固める
+  yshjy --rescue broken.zip       壊れた圧縮ファイルから救出
+  yshjy --json pack.mp4 | jq .    スクリプトやフロントエンドへ
+
+開けない？ まず `yshjy --list` で中身を判別できるか試してください。
+"""
+
+[tier]
+common = "常用版"
+full = "全能版"
+
+[version]
+line = "yshjy {version}（{tier}）—— 楊三海解圧"
+formats = "  対応形式：ZIP（分割対応）/ 7z / RAR / TAR / gzip / xz / zstd / bzip2 / brotli / lz4"
+tier_common = "  常用版：普段出会う形式はすべて対応（サイズが小さく、依存も少なめ）"
+tier_full = "  全能版：珍しい形式（ISO/UDF、CAB、ARJ など）を順次追加中。現在は常用版と同じ範囲"
+
+[preview]
+title = "📦 {input}（{format}）"
+incomplete = "   ⚠ この形式では一部の情報しか取得できません（サイズ不明）"
+empty = "   （一覧を取得できません）"
+row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
+row_more = "   … 他 {count} 件"
+total = "   合計 {size} / {count} ファイル"
+password_hint = "   パスワード：隣の「説明.txt」を見るか yshjy -p \"パスワード\" \"{input}\""
+select_hint = "   一部だけ展開：yshjy --select \"1,3\" \"{input}\""
+risky = " ⚠実行可能"
+unknown_size = "—"
+
+[preview.hint]
+volumes_merged = "{count} 個の分割ファイルを検出 —— 展開時に自動で結合します"
+nested_archive = "中にもう一つ圧縮ファイルが入っています（{inner}）"
+needs_password = "{count} 件がロックされています —— パスワードが必要です"
+looks_truncated = "この圧縮ファイルは未完了の可能性があります（末尾のデータ欠落）"
+hidden_at = "圧縮ファイルはファイルの途中にあります（オフセット {offset}）。実際の位置で特定しました"
+rebuilt_index = "インデックスが壊れていたため、ヘッダーから一覧を再構築しました"
+video_unplayable = "カバー動画自体は壊れていますが、中のファイルは展開できます"
+
+[result]
+ok = "✅ {input} —— 展開完了（{size}、{secs} 秒）"
+partial = "⚠ {input} —— 一部のみ展開（成功 {done} 件、スキップ {skipped} 件）"
+failed = "❌ {input} —— 失敗：{reason}"
+cancelled = "⏹ {input} —— キャンセルしました（展開済みのファイルは保持されます）"
+
+[error]
+not_archive = "圧縮ファイルではありません（認識できる圧縮データが見つかりません）"
+password_wrong = "パスワードが違います"
+password_missing = "この圧縮ファイルはロックされており、パスワードが必要です"
+path_not_found = "ファイルまたはフォルダが見つかりません"
+no_space = "ディスクの空き容量が足りません"
+cancel = "キャンセルしました"
+corrupt = "ファイルが壊れているか、データが不完全です"
+unsupported = "この形式はまだ対応していません"
+internal = "内部エラー"
+
+[misc]
+file_missing = "❌ {input}：ファイルが存在しません"
+lang_unknown = "⚠ 言語パック \"{lang}\" がありません。{fallback} を使用します（利用可能：{available}）"
+lang_switched = "表示言語：{name}（{code}）"
