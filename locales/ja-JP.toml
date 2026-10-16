@@ -115,6 +115,35 @@ encrypted_unbreakable = "暗号化されています。配布者のパスワー�
 video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"
 
+[cli]
+no_target = "❌ 処理するファイルが指定されていません。\n\n   使い方：yshjy <ファイル>\n   詳細：yshjy --help"
+bad_jobs = "❌ --jobs には数値が必要です（例：--jobs 2）。受け取った値：{value}"
+bad_select = "❌ --select を解釈できません：{expr}\n   （{reason}）"
+select_examples = "   例：--select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
+interrupted = "⏹  Ctrl-C を受信 —— 終了処理中（展開済みファイルは保持。もう一度押すと強制終了）"
+interrupted_again = "⏹  もう一度押すと強制終了します"
+rescue_hint = "   ヒント：開けないときは --rescue を試してください。"
+nothing_found = "❌ 処理できるものが見つかりません：{targets}"
+queued = "📋 {count} 件をキューに追加（大きい順）"
+password_tried = "   🔒 この圧縮ファイルはロックされています（{count} 回試行）"
+
+[result.phrase]
+ok = "展開完了"
+partial = "{done}/{total} 件を展開"
+cancelled = "キャンセル（{done}/{total} 完了）"
+
+[diag]
+volumes_merged = "分割ファイルを自動で結合しました"
+layout_guessed = "レイアウトは推定です（正確でない可能性）"
+video_unplayable = "カバー動画自体は壊れていますが、中のファイルは展開できます"
+risky_entry = "実行ファイルを展開しました。実行前に入手元を確認してください"
+slow_path = "低速経路を使用（全ファイルスキャン）"
+password_from_notes = "パスワードは隣の説明ファイルから取得しました"
+partial_data = "データが不完全です"
+hidden_at = "圧縮ファイルはファイルの途中にあります。実際の位置で特定しました"
+rebuilt_index = "インデックスが壊れていたため、ヘッダーから一覧を再構築しました"
+offset_corrected = "オフセットが誤っていたため自動修正しました"
+
 [misc]
 file_missing = "❌ {input}：ファイルが存在しません"
 lang_unknown = "⚠ 言語パック \"{lang}\" がありません。{fallback} を使用します（利用可能：{available}）"

@@ -161,7 +161,7 @@ fn main() -> ExitCode {
     }
 
     if targets.is_empty() {
-        eprintln!("❌ 没告诉我要处理哪个文件。\n\n   用法：yshjy <文件>\n   更多：yshjy --help");
+        eprintln!("{}", 文案().t("cli.no_target", &[]));
         return ExitCode::from(code::USAGE);
     }
 
@@ -187,7 +187,7 @@ fn main() -> ExitCode {
         Some(s) => match s.parse() {
             Ok(n) => n,
             Err(_) => {
-                eprintln!("❌ --jobs 要写个数，比如 --jobs 2（收到 {s}）");
+                eprintln!("{}", 文案().t("cli.bad_jobs", &[("value", &s)]));
                 return ExitCode::from(code::USAGE);
             }
         },
@@ -197,8 +197,11 @@ fn main() -> ExitCode {
         Some(expr) => match yshjy::select::Selection::parse(&expr) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("❌ --select 看不懂：{expr}\n   （{e}）");
-                eprintln!("   例子：--select \"*.exe\" / --select \"游戏数据/**\" / --select 1,3 / --select required");
+                eprintln!(
+                    "{}",
+                    文案().t("cli.bad_select", &[("expr", &expr), ("reason", &e.to_string())])
+                );
+                eprintln!("{}", 文案().t("cli.select_examples", &[]));
                 return ExitCode::from(code::USAGE);
             }
         },
@@ -268,7 +271,7 @@ fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
                 eprintln!("❌ {t}：{}", 失败文案(e.code));
                 if !quiet {
                     eprintln!("   （{e}）");
-                    eprintln!("   提示：解不开时加 --rescue 试试救援模式。");
+                    eprintln!("{}", 文案().t("cli.rescue_hint", &[]));
                 }
                 if worst == code::OK {
                     worst = e.code.cli_exit_code().clamp(0, 255) as u8;
@@ -312,15 +315,19 @@ fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
         return;
     }
 
-    println!("📦 {t}（{}）", pv.format);
+    let 语 = 文案();
+    println!(
+        "{}",
+        语.t("preview.title", &[("input", t), ("format", pv.format)])
+    );
     for h in &pv.hints {
         println!("   ℹ {}", 预览提示文案(h));
     }
     if !pv.complete {
-        println!("   ⚠ 这个格式只能列出部分信息（大小未知）");
+        println!("{}", 语.t("preview.incomplete", &[]));
     }
     if pv.entries.is_empty() {
-        println!("   （列不出内容）");
+        println!("{}", 语.t("preview.empty", &[]));
         return;
     }
 
@@ -331,25 +338,53 @@ fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
         let size = if e.size > 0 {
             人类可读(e.size)
         } else {
-            "—".to_string()
+            语.t("preview.unknown_size", &[])
         };
-        let risk = if e.is_risky { " ⚠可执行" } else { "" };
-        println!("   {lock}{icon} {:>4}.  {size:>10}  {}{risk}", e.index, e.path);
+        let risk = if e.is_risky {
+            语.t("preview.risky", &[])
+        } else {
+            String::new()
+        };
+        println!(
+            "{}",
+            语.t(
+                "preview.row",
+                &[
+                    ("lock", lock),
+                    ("icon", icon),
+                    ("index", &e.index.to_string()),
+                    ("size", &size),
+                    ("path", &e.path),
+                    ("risk", &risk),
+                ]
+            )
+        );
     }
     if pv.entries.len() > 40 {
-        println!("   … 还有 {} 个", pv.entries.len() - 40);
+        println!(
+            "{}",
+            语.t(
+                "preview.row_more",
+                &[("count", &(pv.entries.len() - 40).to_string())]
+            )
+        );
     }
 
     println!();
     println!(
-        "   合计 {} / {} 个文件",
-        人类可读(pv.total_size),
-        pv.file_count()
+        "{}",
+        语.t(
+            "preview.total",
+            &[
+                ("size", &人类可读(pv.total_size)),
+                ("count", &pv.file_count().to_string()),
+            ]
+        )
     );
     if pv.encrypted_count > 0 {
-        println!("   解压码：看旁边的「说明.txt」，或 yshjy -p \"解压码\" \"{t}\"");
+        println!("{}", 语.t("preview.password_hint", &[("input", t)]));
     }
-    println!("   只解一部分：yshjy --select \"1,3\" \"{t}\"");
+    println!("{}", 语.t("preview.select_hint", &[("input", t)]));
 }
 
 /// 预览结果 → JSON（给脚本/前端消费）
@@ -458,11 +493,17 @@ fn do_extract(a: 解压参数) -> ExitCode {
     let paths: Vec<PathBuf> = targets.iter().map(PathBuf::from).collect();
     let expanded = batch::expand_inputs(&paths);
     if expanded.is_empty() {
-        eprintln!("❌ 没找到能处理的东西：{}", targets.join(" "));
+        eprintln!(
+            "{}",
+            文案().t("cli.nothing_found", &[("targets", &targets.join(" "))])
+        );
         return ExitCode::from(code::USAGE);
     }
     if !quiet && !json && expanded.len() > 1 {
-        println!("📋 排好 {} 个任务（大的先跑）", expanded.len());
+        println!(
+            "{}",
+            文案().t("cli.queued", &[("count", &expanded.len().to_string())])
+        );
     }
 
     let jobs = {
@@ -499,11 +540,11 @@ fn do_extract(a: 解压参数) -> ExitCode {
         let _ = ctrlc::set_handler(move || {
             if c.is_cancelled() {
                 // 第二次 Ctrl-C：用户等不及了，直接退
-                eprintln!("\n⏹  再按一次就强制退出");
+                eprintln!("\n{}", 文案().t("cli.interrupted_again", &[]));
                 std::process::exit(130);
             }
             c.cancel_with("user pressed ctrl-c");
-            eprintln!("\n⏹  收到 Ctrl-C —— 正在收尾（已解出的文件会保留，再按一次强制退出）");
+            eprintln!("\n{}", 文案().t("cli.interrupted", &[]));
         });
     }
 
@@ -596,7 +637,10 @@ impl yshjy::event::EventSink for 终端出口 {
             }
             Event::PasswordNeeded { attempts, .. } => {
                 self.清行();
-                eprintln!("   🔒 这个包有密码（已试 {} 次）", attempts);
+                eprintln!(
+                    "{}",
+                    文案().t("cli.password_tried", &[("count", &attempts.to_string())])
+                );
             }
             Event::JobFinished { .. } => {
                 self.清行();
@@ -612,29 +656,42 @@ impl yshjy::event::EventSink for 终端出口 {
 }
 
 /// 诊断码 → 中文一句话（UI-SPEC 的「说人话」原则）
-fn 诊断文案(code: yshjy::event::DiagnosticCode) -> &'static str {
+fn 诊断文案(code: yshjy::event::DiagnosticCode) -> String {
     use yshjy::event::DiagnosticCode as D;
-    match code {
-        D::HiddenAtOffset => "包藏在文件中间，已按真实位置定位",
-        D::RebuiltIndex => "索引坏了，已按文件头重建清单",
-        D::OffsetCorrected => "索引里的偏移是错的，已在内存里改对（没动你的文件）",
-        D::VolumesMerged => "分卷已自动拼起来",
-        D::LayoutGuessed => "布局是猜的，不一定准",
-        D::VideoUnplayable => "封面视频本身坏了，但里面的文件还能解",
-        D::RiskyEntry => "解出了可执行文件，运行前请确认来源",
-        D::SlowPath => "走了慢路（全文件扫描）",
-        D::PasswordFromNotes => "解压码是从旁边的说明里找到的",
-        D::PartialData => "数据不完整",
-    }
+    let key = match code {
+        D::VolumesMerged => "diag.volumes_merged",
+        D::LayoutGuessed => "diag.layout_guessed",
+        D::VideoUnplayable => "diag.video_unplayable",
+        D::RiskyEntry => "diag.risky_entry",
+        D::SlowPath => "diag.slow_path",
+        D::PasswordFromNotes => "diag.password_from_notes",
+        D::PartialData => "diag.partial_data",
+        D::HiddenAtOffset => "diag.hidden_at",
+        D::RebuiltIndex => "diag.rebuilt_index",
+        D::OffsetCorrected => "diag.offset_corrected",
+    };
+    文案().t(key, &[])
 }
 
 /// 任务结论 → 中文一句话 + 图标
 fn 结论文案(o: &yshjy::error::Outcome) -> (String, &'static str) {
     use yshjy::error::Outcome;
     match o {
-        Outcome::Success => ("解开".to_string(), "✅"),
-        Outcome::Partial { done, total } => (format!("解开 {done}/{total} 个"), "⚠️ "),
-        Outcome::Cancelled { done, total } => (format!("已取消（解出 {done}/{total}）"), "⏹ "),
+        Outcome::Success => (文案().t("result.phrase.ok", &[]), "✅"),
+        Outcome::Partial { done, total } => (
+            文案().t(
+                "result.phrase.partial",
+                &[("done", &done.to_string()), ("total", &total.to_string())],
+            ),
+            "⚠️ ",
+        ),
+        Outcome::Cancelled { done, total } => (
+            文案().t(
+                "result.phrase.cancelled",
+                &[("done", &done.to_string()), ("total", &total.to_string())],
+            ),
+            "⏹ ",
+        ),
         Outcome::Failed(code) => (失败文案(*code), "❌"),
     }
 }

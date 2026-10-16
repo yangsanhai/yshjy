@@ -119,6 +119,35 @@ encrypted_unbreakable = "Encrypted — the publisher must provide the password"
 video_unplayable = "The cover video itself is broken"
 internal = "Internal error"
 
+[cli]
+no_target = "❌ No file given.\n\n   Usage: yshjy <file>\n   More:  yshjy --help"
+bad_jobs = "❌ --jobs needs a number, e.g. --jobs 2 (got {value})"
+bad_select = "❌ --select can't parse: {expr}\n   ({reason})"
+select_examples = "   Examples: --select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
+interrupted = "⏹  Ctrl-C received — wrapping up (already extracted files are kept; press again to force quit)"
+interrupted_again = "⏹  Press again to force quit"
+rescue_hint = "   Tip: if it won't open, try --rescue."
+nothing_found = "❌ Nothing to process: {targets}"
+queued = "📋 Queued {count} job(s) (largest first)"
+password_tried = "   🔒 This archive is locked (tried {count} time(s))"
+
+[result.phrase]
+ok = "extracted"
+partial = "extracted {done}/{total}"
+cancelled = "cancelled ({done}/{total} done)"
+
+[diag]
+volumes_merged = "split volumes were joined automatically"
+layout_guessed = "layout was guessed — may not be exact"
+video_unplayable = "the cover video itself is broken, but files inside are fine"
+risky_entry = "executable files were extracted — check the source before running"
+slow_path = "took the slow path (full-file scan)"
+password_from_notes = "the password was found in the notes beside it"
+partial_data = "data is incomplete"
+hidden_at = "the archive sits inside the file; located at its real position"
+rebuilt_index = "the index was damaged; the listing was rebuilt from headers"
+offset_corrected = "the offsets were wrong; corrected automatically"
+
 [misc]
 file_missing = "❌ {input}: file not found"
 lang_unknown = "⚠ No \"{lang}\" language pack — using {fallback} (available: {available})"

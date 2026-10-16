@@ -115,6 +115,35 @@ encrypted_unbreakable = "Зашифровано — нужен пароль от
 video_unplayable = "Само видео-обложка повреждено"
 internal = "Внутренняя ошибка"
 
+[cli]
+no_target = "❌ Не указан файл для обработки.\n\n   Использование: yshjy <файл>\n   Подробнее: yshjy --help"
+bad_jobs = "❌ --jobs требует число, например --jobs 2 (получено {value})"
+bad_select = "❌ Не удалось разобрать --select: {expr}\n   ({reason})"
+select_examples = "   Примеры: --select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
+interrupted = "⏹  Получен Ctrl-C — завершаем (распакованные файлы сохранятся; ещё раз — принудительный выход)"
+interrupted_again = "⏹  Нажмите ещё раз для принудительного выхода"
+rescue_hint = "   Подсказка: если не открывается, попробуйте --rescue."
+nothing_found = "❌ Нечего обрабатывать: {targets}"
+queued = "📋 В очереди задач: {count} (сначала крупные)"
+password_tried = "   🔒 Архив зашифрован (попыток: {count})"
+
+[result.phrase]
+ok = "распаковано"
+partial = "распаковано {done}/{total}"
+cancelled = "отменено (готово {done}/{total})"
+
+[diag]
+volumes_merged = "тома объединены автоматически"
+layout_guessed = "раскладка угадана — может быть неточной"
+video_unplayable = "сама видео-обложка повреждена, но файлы внутри целы"
+risky_entry = "извлечены исполняемые файлы — проверьте источник перед запуском"
+slow_path = "использован медленный путь (сканирование всего файла)"
+password_from_notes = "пароль найден в описании рядом"
+partial_data = "данные неполные"
+hidden_at = "архив находится внутри файла; определён по реальной позиции"
+rebuilt_index = "индекс повреждён; список восстановлен по заголовкам"
+offset_corrected = "смещения были неверны; исправлено автоматически"
+
 [misc]
 file_missing = "❌ {input}: файл не найден"
 lang_unknown = "⚠ Нет языкового пакета \"{lang}\" — используется {fallback} (доступно: {available})"
