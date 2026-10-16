@@ -1,4 +1,4 @@
-//! 错误码体系
+//! 错误码体系（三层结果模型）
 //!
 //! # 设计原则（ARCHITECTURE.md §7 + 三层审查修正 1）
 //!
@@ -9,16 +9,53 @@
 //! - GUI → 界面组件（图标 + 标题 + 正文 + 按钮）
 //!
 //! 这样做的好处：引擎保持纯净可测；以后加英文只改外壳；手机端不必通过 FFI 传大段中文。
+//!
+//! # 三层结果模型（v0.5 补齐，见 `docs/V0.5-ENGINE.md` §4）
+//!
+//! 以前只有「一次操作一个错误码」，回答不了「这个包有毛病但能解出 340/351 个文件」这类问题。
+//! 仿 7-Zip 的三层（台账 `7zip-工程层.md` §5.2），但去掉它的字符串通道：
+//!
+//! | 层 | 类型 | 回答的问题 |
+//! |----|------|-----------|
+//! | 层1 调用级 | [`ErrorCode`] | 这次调用成了吗？ |
+//! | 层2 归档级 | [`ArchiveFlags`] | 这个包有什么毛病？（位图，可同时多个） |
+//! | 层3 条目级 | [`ItemResult`] | 第 47 个文件对不对？ |
+//!
+//! [`Outcome`] 把三层收敛成「这次任务算成功还是失败」的结论，并且
+//! **退出码只在引擎里算一次**（台账 §7.6：7-Zip 让两个壳各算一份，结果行为不一致）。
 
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// 统一结果类型
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// 对外退出码（唯一真源）
+///
+/// CLI 与 GUI 都从这里取，**不要各自硬编码**（台账 §7.6 的反面案例：7-Zip 的两个壳
+/// 各算一份退出码，行为不一致）。与 v0.4 的对外契约保持兼容。
+pub mod exit_code {
+    /// 成功
+    pub const OK: i32 = 0;
+    /// 一般错误（路径不对、没空间、没权限、内部错误）
+    pub const ERROR: i32 = 1;
+    /// 用法错误（参数不对）
+    pub const USAGE: i32 = 2;
+    /// 不是压缩包
+    pub const NOT_ARCHIVE: i32 = 3;
+    /// 密码问题（需要密码 / 密码不对）
+    pub const PASSWORD: i32 = 4;
+    /// 部分成功（如救出 340/351 个文件）
+    pub const PARTIAL: i32 = 5;
+    /// 用户取消（SIGINT 惯例）
+    pub const CANCELLED: i32 = 130;
+}
+
 /// 稳定的错误码（外壳据此渲染文案与界面，见 docs/UI-SPEC.md §10）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ErrorCode {
-    // ── 用户可自行解决（CLI 退出码 1）──
+    // ── 用户可自行解决 ──
     /// 路径不存在
     PathNotFound,
     /// 参数不合法
@@ -28,7 +65,7 @@ pub enum ErrorCode {
     /// 没有写入权限
     PermissionDenied,
 
-    // ── 文件本身的问题（CLI 退出码 2）──
+    // ── 文件本身的问题 ──
     /// 需要密码
     NeedPassword,
     /// 密码错误
@@ -46,26 +83,47 @@ pub enum ErrorCode {
     /// 封面视频本身损坏（不影响解压）
     VideoUnplayable,
 
-    // ── 内部问题（CLI 退出码 3）──
+    // ── 用户取消（不是错误，见台账 §5.8）──
+    /// 用户主动取消
+    Cancelled,
+
+    // ── 内部问题 ──
     /// 程序内部错误
     Internal,
 }
 
 impl ErrorCode {
-    /// 对应 CLI 退出码（见 docs/CLI-SPEC.md §7）
+    /// 粗档退出码（1 用户问题 / 2 文件问题 / 130 取消）
+    ///
+    /// 给「按大类分流」的场景用（如 GUI 决定弹哪种框）。
+    /// **对外的最终退出码请用 [`Outcome::exit_code`]** —— 它更精确（含 0/3/4/5/130）。
     pub fn exit_code(self) -> i32 {
         use ErrorCode::*;
         match self {
-            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied => 1,
+            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | Internal => 1,
             NeedPassword | WrongPassword | NotArchive | Truncated | MissingVolume | DataLost
             | EncryptedUnbreakable | VideoUnplayable => 2,
-            Internal => 3,
+            Cancelled => exit_code::CANCELLED,
+        }
+    }
+
+    /// 对外精确退出码（与 v0.4 契约兼容：3 = 不是压缩包，4 = 密码问题）
+    pub fn cli_exit_code(self) -> i32 {
+        use ErrorCode::*;
+        match self {
+            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | Internal => {
+                exit_code::ERROR
+            }
+            NotArchive => exit_code::NOT_ARCHIVE,
+            NeedPassword | WrongPassword | EncryptedUnbreakable => exit_code::PASSWORD,
+            Truncated | MissingVolume | DataLost | VideoUnplayable => exit_code::ERROR,
+            Cancelled => exit_code::CANCELLED,
         }
     }
 
     /// 稳定的机器可读标识（日志与诊断包用，见 BACKEND-SPEC §6.2）
     ///
-    /// 例：`WARN [PWD_REQUIRED] zip entries encrypted, flags=0x0001`
+    /// 例：`WARN [NEED_PASSWORD] zip entries encrypted, flags=0x0001`
     pub fn as_str(self) -> &'static str {
         use ErrorCode::*;
         match self {
@@ -81,6 +139,7 @@ impl ErrorCode {
             DataLost => "DATA_LOST",
             EncryptedUnbreakable => "ENCRYPTED_UNBREAKABLE",
             VideoUnplayable => "VIDEO_UNPLAYABLE",
+            Cancelled => "CANCELLED",
             Internal => "INTERNAL",
         }
     }
@@ -89,6 +148,247 @@ impl ErrorCode {
 impl fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+// ───────────────────────── 层2：归档级诊断位图 ─────────────────────────
+
+/// 归档级诊断位（层2）
+///
+/// 一个包可以「打开成功」但「尾部被截断」且「其中 3 个条目 CRC 错」——
+/// 位图能同时表达这些，不丢信息（台账 §5.3）。
+///
+/// 位定义抄 7-Zip `PropID.h:123-134` 的 11 位；**去掉它的 `kpidError` 字符串通道**，
+/// 因为字符串文案归外壳，引擎只发码。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ArchiveFlags(u16);
+
+impl ArchiveFlags {
+    /// 里面的东西根本不是压缩包
+    pub const IS_NOT_ARC: u16 = 1 << 0;
+    /// 目录/头部有不一致（多数是偏移写错，能修）
+    pub const HEADERS_ERROR: u16 = 1 << 1;
+    /// 头部被加密（`7z -mhe=on`）
+    pub const ENCRYPTED_HEADERS: u16 = 1 << 2;
+    /// 起点不完整（包从中间开始，前面缺数据）
+    pub const UNAVAILABLE_START: u16 = 1 << 3;
+    /// 起点不确定（嗅探出的候选，没把握）
+    pub const UNCONFIRMED_START: u16 = 1 << 4;
+    /// 意外结束（文件被截断）
+    pub const UNEXPECTED_END: u16 = 1 << 5;
+    /// 归档数据之后还有别的数据（伪装包的常态）
+    pub const DATA_AFTER_END: u16 = 1 << 6;
+    /// 用了我们不支持的压缩方法
+    pub const UNSUPPORTED_METHOD: u16 = 1 << 7;
+    /// 用了我们不支持的特性（如特殊加密）
+    pub const UNSUPPORTED_FEATURE: u16 = 1 << 8;
+    /// 数据本身坏了
+    pub const DATA_ERROR: u16 = 1 << 9;
+    /// 校验值不对
+    pub const CRC_ERROR: u16 = 1 << 10;
+
+    /// 值 → 名字（日志用，顺序与位定义一致）
+    const NAMES: &'static [(u16, &'static str)] = &[
+        (Self::IS_NOT_ARC, "IS_NOT_ARC"),
+        (Self::HEADERS_ERROR, "HEADERS_ERROR"),
+        (Self::ENCRYPTED_HEADERS, "ENCRYPTED_HEADERS"),
+        (Self::UNAVAILABLE_START, "UNAVAILABLE_START"),
+        (Self::UNCONFIRMED_START, "UNCONFIRMED_START"),
+        (Self::UNEXPECTED_END, "UNEXPECTED_END"),
+        (Self::DATA_AFTER_END, "DATA_AFTER_END"),
+        (Self::UNSUPPORTED_METHOD, "UNSUPPORTED_METHOD"),
+        (Self::UNSUPPORTED_FEATURE, "UNSUPPORTED_FEATURE"),
+        (Self::DATA_ERROR, "DATA_ERROR"),
+        (Self::CRC_ERROR, "CRC_ERROR"),
+    ];
+
+    /// 空的（没有任何毛病）
+    pub fn empty() -> Self {
+        Self(0)
+    }
+
+    /// 置位
+    pub fn insert(&mut self, bit: u16) {
+        self.0 |= bit;
+    }
+
+    /// 清位
+    pub fn remove(&mut self, bit: u16) {
+        self.0 &= !bit;
+    }
+
+    /// 是否置位
+    pub fn contains(&self, bit: u16) -> bool {
+        self.0 & bit != 0
+    }
+
+    /// 原始位
+    pub fn bits(&self) -> u16 {
+        self.0
+    }
+
+    /// 是否干净（没有任何毛病）
+    pub fn is_clean(&self) -> bool {
+        self.0 == 0
+    }
+
+    /// 名字列表（日志/诊断包用）
+    pub fn names(&self) -> Vec<&'static str> {
+        Self::NAMES
+            .iter()
+            .filter(|(bit, _)| self.contains(*bit))
+            .map(|(_, name)| *name)
+            .collect()
+    }
+}
+
+impl fmt::Display for ArchiveFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_clean() {
+            return f.write_str("CLEAN");
+        }
+        f.write_str(&self.names().join(","))
+    }
+}
+
+// ───────────────────────── 层3：条目级结果 ─────────────────────────
+
+/// 单个条目的处理结果（层3）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ItemResult {
+    /// 正常写出并校验通过
+    #[default]
+    Ok,
+    /// 用户挑选时被跳过（不是错误）
+    Skipped,
+    /// 校验值不对（内容可能仍是好的，但不敢保证）
+    CrcError,
+    /// 数据坏了
+    DataError,
+    /// 这个条目加密了，没有（正确的）密码
+    Encrypted,
+    /// 因为前面的错误没轮到它
+    NotExtracted,
+}
+
+impl ItemResult {
+    /// 是否算成功
+    pub fn is_ok(self) -> bool {
+        matches!(self, ItemResult::Ok | ItemResult::Skipped)
+    }
+
+    /// 稳定标识（日志用）
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ItemResult::Ok => "OK",
+            ItemResult::Skipped => "SKIPPED",
+            ItemResult::CrcError => "CRC_ERROR",
+            ItemResult::DataError => "DATA_ERROR",
+            ItemResult::Encrypted => "ENCRYPTED",
+            ItemResult::NotExtracted => "NOT_EXTRACTED",
+        }
+    }
+}
+
+impl fmt::Display for ItemResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// ───────────────────────── 任务结论 + 退出码 ─────────────────────────
+
+/// 一个任务的最终结论
+///
+/// 关键点：**「取消」和「部分成功」都不是「失败」**（台账 §5.1 / §5.8）。
+/// 外壳一处 match 就知道要不要弹错误框、退出码给多少。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Outcome {
+    /// 全部成功
+    Success,
+    /// 部分成功（救出 done/total 个条目）
+    Partial {
+        /// 成功条目数
+        done: u64,
+        /// 总条目数
+        total: u64,
+    },
+    /// 用户取消（已完成的保留）
+    Cancelled {
+        /// 已成功条目数
+        done: u64,
+        /// 总条目数
+        total: u64,
+    },
+    /// 失败
+    Failed(ErrorCode),
+}
+
+impl Outcome {
+    /// 是否完全成功
+    pub fn is_success(&self) -> bool {
+        matches!(self, Outcome::Success)
+    }
+
+    /// 是否真的是失败（部分成功与取消都不算）
+    pub fn is_failure(&self) -> bool {
+        matches!(self, Outcome::Failed(_))
+    }
+
+    /// 是否带警告（部分成功 / 取消）
+    pub fn has_warnings(&self) -> bool {
+        matches!(self, Outcome::Partial { .. } | Outcome::Cancelled { .. })
+    }
+
+    /// 对外退出码（**唯一真源**）
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Outcome::Success => exit_code::OK,
+            Outcome::Partial { .. } => exit_code::PARTIAL,
+            Outcome::Cancelled { .. } => exit_code::CANCELLED,
+            Outcome::Failed(code) => code.cli_exit_code(),
+        }
+    }
+
+    /// 稳定标识（日志用）
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Outcome::Success => "SUCCESS",
+            Outcome::Partial { .. } => "PARTIAL",
+            Outcome::Cancelled { .. } => "CANCELLED",
+            Outcome::Failed(_) => "FAILED",
+        }
+    }
+
+    /// 由一个错误构造（`Cancelled` 会被识别成取消语义，不是失败）
+    pub fn from_error(err: &Error) -> Self {
+        if err.is_cancelled() {
+            Outcome::Cancelled { done: 0, total: 0 }
+        } else {
+            Outcome::Failed(err.code)
+        }
+    }
+
+    /// 按「成功/总数」推断结论（全成功 → `Success`；有成功有失败 → `Partial`）
+    pub fn from_counts(done: u64, total: u64) -> Self {
+        if total > 0 && done == total {
+            Outcome::Success
+        } else if done > 0 {
+            Outcome::Partial { done, total }
+        } else {
+            Outcome::Failed(ErrorCode::DataLost)
+        }
+    }
+}
+
+impl fmt::Display for Outcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Outcome::Success => f.write_str("SUCCESS"),
+            Outcome::Partial { done, total } => write!(f, "PARTIAL {done}/{total}"),
+            Outcome::Cancelled { done, total } => write!(f, "CANCELLED {done}/{total}"),
+            Outcome::Failed(code) => write!(f, "FAILED {}", code.as_str()),
+        }
     }
 }
 
@@ -121,6 +421,11 @@ impl Error {
         }
     }
 
+    /// 用户取消的快捷构造
+    pub fn cancelled() -> Self {
+        Self::new(ErrorCode::Cancelled)
+    }
+
     /// 附加结构化参数（键值对）
     pub fn with(mut self, key: &str, value: impl fmt::Display) -> Self {
         self.detail.push((key.to_string(), value.to_string()));
@@ -146,6 +451,11 @@ impl Error {
             .find(|(k, _)| k == key)
             .map(|(_, v)| v.as_str())
     }
+
+    /// 是不是「用户取消」（不是错误）
+    pub fn is_cancelled(&self) -> bool {
+        self.code == ErrorCode::Cancelled
+    }
 }
 
 impl fmt::Display for Error {
@@ -170,10 +480,16 @@ impl fmt::Display for Error {
 impl From<std::io::Error> for Error {
     /// 让 `?` 能直接作用在 IO 操作上
     ///
-    /// 若底层是"用户取消"（`Interrupted`），保留该语义便于上层判断。
+    /// 若底层是"用户取消"（`Interrupted`），保留该语义便于上层判断（台账 §5.8）：
+    /// 取消不该显示成「操作失败」。
     fn from(e: std::io::Error) -> Self {
-        let code = ErrorCode::Internal;
-        Error::new(code)
+        if e.kind() == std::io::ErrorKind::Interrupted {
+            return Error::cancelled()
+                .with("io_kind", "Interrupted")
+                .context(format!("io error: {e}"))
+                .source(e);
+        }
+        Error::new(ErrorCode::Internal)
             .with("io_kind", format!("{:?}", e.kind()))
             .context(format!("io error: {e}"))
             .source(e)
@@ -196,7 +512,17 @@ mod tests {
     fn 错误码对应正确的退出码() {
         assert_eq!(ErrorCode::PathNotFound.exit_code(), 1);
         assert_eq!(ErrorCode::NeedPassword.exit_code(), 2);
-        assert_eq!(ErrorCode::Internal.exit_code(), 3);
+        assert_eq!(ErrorCode::Internal.exit_code(), 1);
+        assert_eq!(ErrorCode::Cancelled.exit_code(), 130);
+    }
+
+    #[test]
+    fn 对外退出码与_v04_契约兼容() {
+        assert_eq!(ErrorCode::NotArchive.cli_exit_code(), exit_code::NOT_ARCHIVE);
+        assert_eq!(ErrorCode::NeedPassword.cli_exit_code(), exit_code::PASSWORD);
+        assert_eq!(ErrorCode::WrongPassword.cli_exit_code(), exit_code::PASSWORD);
+        assert_eq!(ErrorCode::Truncated.cli_exit_code(), exit_code::ERROR);
+        assert_eq!(ErrorCode::PathNotFound.cli_exit_code(), exit_code::ERROR);
     }
 
     #[test]
@@ -219,5 +545,118 @@ mod tests {
         assert!(s.contains("tried=3"));
         // 引擎不产出用户文案：这里不该出现中文句子
         assert!(!s.contains("密码不对"));
+    }
+
+    #[test]
+    fn 中断的io错误被识别成取消() {
+        let io = std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled by user");
+        let e = Error::from(io);
+        assert!(e.is_cancelled(), "取消不该被当成内部错误");
+        assert_eq!(e.code, ErrorCode::Cancelled);
+    }
+
+    #[test]
+    fn 归档诊断位图可多位并存() {
+        let mut f = ArchiveFlags::empty();
+        assert!(f.is_clean());
+        f.insert(ArchiveFlags::UNEXPECTED_END);
+        f.insert(ArchiveFlags::DATA_AFTER_END);
+        assert!(f.contains(ArchiveFlags::UNEXPECTED_END));
+        assert!(!f.contains(ArchiveFlags::CRC_ERROR));
+        assert!(!f.is_clean());
+        assert_eq!(f.names(), vec!["UNEXPECTED_END", "DATA_AFTER_END"]);
+        assert_eq!(f.to_string(), "UNEXPECTED_END,DATA_AFTER_END");
+
+        f.remove(ArchiveFlags::UNEXPECTED_END);
+        assert_eq!(f.names(), vec!["DATA_AFTER_END"]);
+    }
+
+    #[test]
+    fn 条目结果区分成功与失败() {
+        assert!(ItemResult::Ok.is_ok());
+        assert!(ItemResult::Skipped.is_ok(), "用户自己跳过的不是错误");
+        assert!(!ItemResult::CrcError.is_ok());
+        assert!(!ItemResult::Encrypted.is_ok());
+        assert_eq!(ItemResult::NotExtracted.as_str(), "NOT_EXTRACTED");
+    }
+
+    #[test]
+    fn 部分成功不是失败() {
+        let o = Outcome::Partial {
+            done: 340,
+            total: 351,
+        };
+        assert!(!o.is_failure());
+        assert!(o.has_warnings());
+        assert_eq!(o.exit_code(), exit_code::PARTIAL);
+        assert_eq!(o.to_string(), "PARTIAL 340/351");
+    }
+
+    #[test]
+    fn 取消不是失败且退出码130() {
+        let o = Outcome::Cancelled {
+            done: 12,
+            total: 351,
+        };
+        assert!(!o.is_failure());
+        assert!(o.has_warnings());
+        assert_eq!(o.exit_code(), exit_code::CANCELLED);
+    }
+
+    #[test]
+    fn 失败按错误码映射退出码() {
+        assert_eq!(
+            Outcome::Failed(ErrorCode::NotArchive).exit_code(),
+            exit_code::NOT_ARCHIVE
+        );
+        assert_eq!(
+            Outcome::Failed(ErrorCode::NeedPassword).exit_code(),
+            exit_code::PASSWORD
+        );
+        assert_eq!(
+            Outcome::Failed(ErrorCode::PathNotFound).exit_code(),
+            exit_code::ERROR
+        );
+        assert!(Outcome::Failed(ErrorCode::Truncated).is_failure());
+    }
+
+    #[test]
+    fn 由错误构造结论时取消单独成档() {
+        assert_eq!(
+            Outcome::from_error(&Error::cancelled()),
+            Outcome::Cancelled { done: 0, total: 0 }
+        );
+        assert_eq!(
+            Outcome::from_error(&Error::new(ErrorCode::NotArchive)),
+            Outcome::Failed(ErrorCode::NotArchive)
+        );
+    }
+
+    #[test]
+    fn 按计数推断结论() {
+        assert_eq!(Outcome::from_counts(351, 351), Outcome::Success);
+        assert_eq!(
+            Outcome::from_counts(340, 351),
+            Outcome::Partial {
+                done: 340,
+                total: 351
+            }
+        );
+        assert_eq!(
+            Outcome::from_counts(0, 351),
+            Outcome::Failed(ErrorCode::DataLost)
+        );
+    }
+
+    #[test]
+    fn 三层结果可序列化给外壳() {
+        let o = Outcome::Partial { done: 1, total: 2 };
+        let j = serde_json::to_string(&o).unwrap();
+        assert_eq!(serde_json::from_str::<Outcome>(&j).unwrap(), o);
+
+        let mut f = ArchiveFlags::empty();
+        f.insert(ArchiveFlags::CRC_ERROR);
+        let j = serde_json::to_string(&f).unwrap();
+        assert_eq!(serde_json::from_str::<ArchiveFlags>(&j).unwrap(), f);
     }
 }
