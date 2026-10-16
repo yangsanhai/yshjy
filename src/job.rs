@@ -24,10 +24,9 @@ use crate::batch::{BatchOptions, Job, JobOutcome, JobStats};
 use crate::ctx::UnpackCtx;
 use crate::error::{ArchiveFlags, Error, ErrorCode, ItemResult, Outcome, Result};
 use crate::event::{DiagnosticCode, EventSink, Stage};
-use crate::extract::{ExtractOptions, ExtractReport};
-use crate::extract_rar::ExtractRarOptions;
-use crate::extract_stream::{self, ExtractStreamOptions};
-use crate::extract7z::Extract7zOptions;
+use crate::extract::ExtractReport;
+use crate::extract_stream;
+use crate::unpack;
 use crate::layout::ArchiveFormat;
 use crate::progress::CancelToken;
 
@@ -448,6 +447,41 @@ pub fn run_job(
     }
 }
 
+/// 打开输入文件（统一的错误码：路径问题就说路径问题）
+fn 打开输入(job: &Job) -> Result<std::fs::File> {
+    std::fs::File::open(&job.input)
+        .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))
+}
+
+/// 查注册表拿解压器 → 解 → 把「修过索引」折算成统计标志
+///
+/// **这是全项目唯一按格式取实现的地方**：加一个格式不用动这个函数，
+/// 只要改 `src/unpack.rs` 的注册表（那才是「加格式只改一处」的落点）。
+fn 走统一接口(
+    ctx: &UnpackCtx,
+    src: &mut unpack::Source<'_>,
+    uopts: &unpack::UnpackOptions,
+    格式: ArchiveFormat,
+    形状: unpack::Shape,
+    stats: &mut JobStats,
+) -> Result<ExtractReport> {
+    let handler = unpack::find_or_err(格式, 形状)?;
+    let rep = handler.unpack(src, uopts, ctx)?;
+    // 「索引坏了但救回来了」要**结构化**地报上去：批量汇总据此标 HEADERS_ERROR
+    if let Some(修法) = &rep.repaired {
+        ctx.diagnostic(DiagnosticCode::OffsetCorrected, 修法.clone());
+        stats.flags.insert(ArchiveFlags::HEADERS_ERROR);
+    }
+    Ok(rep)
+}
+
+/// 按目标类型把「源」准备好，然后**统一**交给 [`crate::unpack`] 的解压器
+///
+/// # 为什么不再是五段几乎一样的代码
+/// 原来每个分支各建一份参数结构体（四份 Options）、各调各自的函数、各写一遍
+/// 「修过索引」的后续处理 —— 加个格式就得在这个 match 里再抄一段，那正是
+/// 「加格式要改多处」里的那个「多处」。现在的分工是：
+/// **源怎么准备**（偏移 / 多卷拼接 / 单流）留在这里，**怎么解**交给 `impl InArchive`。
 fn extract_target(
     job: &Job,
     opts: &BatchOptions,
@@ -461,21 +495,26 @@ fn extract_target(
         None => probe_passwords(job, target, ctx),
     };
 
+    // 统一参数（原来四份 Options 各写一遍，现在一份）
+    let mut uopts = unpack::UnpackOptions::new(dest);
+    uopts.password = password;
+    uopts.selection = opts.selection.clone();
+    uopts.limits = opts.limits.clone();
+
     match target {
         Target::Zip { base, len } => {
-            let mut f = std::fs::File::open(&job.input)
-                .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
-            let mut eopts = ExtractOptions::new(dest);
-            eopts.password = password;
-            eopts.selection = opts.selection.clone();
-            eopts.limits = opts.limits.clone();
-            let (rep, repair_note) =
-                crate::extract::extract_zip_auto_ctx(&mut f, *base, *len, &eopts, ctx)?;
-            if let Some(note) = repair_note {
-                ctx.diagnostic(DiagnosticCode::OffsetCorrected, note);
-                stats.flags.insert(ArchiveFlags::HEADERS_ERROR);
-            }
-            Ok(rep)
+            let mut f = 打开输入(job)?;
+            let mut src = unpack::Source::new(&mut f)
+                .with_offset(*base, *len)
+                .with_packed_total(*len);
+            走统一接口(
+                ctx,
+                &mut src,
+                &uopts,
+                ArchiveFormat::Zip,
+                unpack::Shape::Plain,
+                stats,
+            )
         }
         Target::ZipSplit { volumes } => {
             // 拼成一条逻辑流 → 找中央目录 → 解（和普通 ZIP 同一条路）
@@ -485,83 +524,80 @@ fn extract_target(
                 Error::new(ErrorCode::NotArchive)
                     .context(format!("分卷里的中央目录没找到（是不是缺了一块？）: {e}"))
             })?;
-            let mut eopts = ExtractOptions::new(dest);
-            eopts.password = password;
-            eopts.selection = opts.selection.clone();
-            eopts.limits = opts.limits.clone();
-            let (rep, repair_note) =
-                crate::extract::extract_zip_auto_ctx(&mut mf, l.base, l.data_len(), &eopts, ctx)?;
-            if let Some(note) = repair_note {
-                ctx.diagnostic(DiagnosticCode::OffsetCorrected, note);
-                stats.flags.insert(ArchiveFlags::HEADERS_ERROR);
-            }
-            Ok(rep)
+            let mut src = unpack::Source::new(&mut mf)
+                .with_offset(l.base, l.data_len())
+                .with_packed_total(size);
+            走统一接口(
+                ctx,
+                &mut src,
+                &uopts,
+                ArchiveFormat::Zip,
+                unpack::Shape::Volumes,
+                stats,
+            )
         }
         Target::SevenZ { volumes } => {
-            let mut eopts = Extract7zOptions::new(dest);
-            eopts.password = password;
-            eopts.selection = opts.selection.clone();
-            eopts.limits = opts.limits.clone();
-            crate::extract7z::extract_7z_volumes_ctx(volumes, &eopts, ctx)
+            // 7z 的分卷是「裸字节切分」，拼接是编排层的事 —— handler 不该懂卷名规则
+            let mut mf = crate::extract7z::MultiFile::open(volumes)?;
+            let size = mf.total();
+            let mut src = unpack::Source::new(&mut mf).with_packed_total(size);
+            走统一接口(
+                ctx,
+                &mut src,
+                &uopts,
+                ArchiveFormat::SevenZ,
+                unpack::Shape::Volumes,
+                stats,
+            )
         }
         Target::Rar => {
-            let mut eopts = ExtractRarOptions::new(dest);
-            eopts.password = password;
-            eopts.selection = opts.selection.clone();
-            eopts.limits = opts.limits.clone();
-            crate::extract_rar::extract_rar_file_ctx(&job.input, &eopts, ctx)
+            let mut f = 打开输入(job)?;
+            // RAR 的炸弹防护分母由 handler 从流长度自己取（底层库要全量读进内存）
+            let mut src = unpack::Source::new(&mut f).with_packed_total(0);
+            走统一接口(
+                ctx,
+                &mut src,
+                &uopts,
+                ArchiveFormat::Rar4,
+                unpack::Shape::Plain,
+                stats,
+            )
         }
         Target::Stream {
             format,
             is_tar,
             packed,
         } => {
-            let mut eopts = ExtractStreamOptions::new(dest);
-            eopts.packed_hint = *packed;
-            eopts.selection = opts.selection.clone();
-            eopts.limits = opts.limits.clone();
-            eopts.out_name = extract_stream::strip_suffix(&job.input, *format)
-                .map(|x| x.to_string_lossy().to_string());
-
+            let mut f = 打开输入(job)?;
+            let mut src = unpack::Source::new(&mut f).with_packed_total(*packed);
             if *is_tar {
-                let outer = if *format == ArchiveFormat::Tar {
+                // tar 家族：裸 tar 没有外层；tar.gz 这类，外层就是那个压缩格式
+                uopts.outer = if *format == ArchiveFormat::Tar {
                     None
                 } else {
                     Some(*format)
                 };
-                let f = std::fs::File::open(&job.input).map_err(|e| {
-                    Error::new(ErrorCode::PathNotFound).context(format!("open: {e}"))
-                })?;
-                extract_stream::extract_tar_ctx(f, outer, &eopts, ctx)
-            } else {
-                let f = std::fs::File::open(&job.input).map_err(|e| {
-                    Error::new(ErrorCode::PathNotFound).context(format!("open: {e}"))
-                })?;
-                let out_name = eopts
-                    .out_name
-                    .clone()
-                    .unwrap_or_else(|| "解压结果".to_string());
-                let out_path = dest.join(&out_name);
-                let n = extract_stream::decompress_stream_ctx(
-                    *format,
-                    f,
-                    &out_path,
-                    &opts.limits,
-                    *packed,
+                走统一接口(
                     ctx,
-                )?;
-                // 单流只有一个产物，包装成统一报告
-                let mut rep = ExtractReport {
-                    bytes_written: n,
-                    ..Default::default()
-                };
-                rep.files.push(crate::extract::ExtractedFile {
-                    name: out_name,
-                    out_path,
-                    size: n,
-                    encrypted: false,
-                });
-                Ok(rep)
+                    &mut src,
+                    &uopts,
+                    ArchiveFormat::Tar,
+                    unpack::Shape::Tar,
+                    stats,
+                )
+            } else {
+                uopts.outer = Some(*format);
+                uopts.packed_hint = *packed;
+                uopts.out_name = extract_stream::strip_suffix(&job.input, *format)
+                    .map(|x| x.to_string_lossy().to_string());
+                走统一接口(
+                    ctx,
+                    &mut src,
+                    &uopts,
+                    *format,
+                    unpack::Shape::Single,
+                    stats,
+                )
             }
         }
     }

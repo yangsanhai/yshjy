@@ -49,7 +49,7 @@ use crate::layout::ArchiveFormat;
 use crate::safety::Limits;
 use crate::select::Selection;
 use std::io::{Read, Seek};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// 单流格式解出文件时的兜底名字
 ///
@@ -124,12 +124,6 @@ pub struct Source<'a> {
     pub base: u64,
     /// 这条流里可用的字节数（`None` = 用到流尾）
     pub len: Option<u64>,
-    /// 原始输入路径
-    ///
-    /// 有些底层库要路径（`rars` 会自己找归档起点），有些要从文件名推默认输出名
-    /// （Brotli 没有魔数，只能靠 `.br` 认）。**不要用它做格式判断** ——
-    /// 判断格式是 `scan` / `layout` 的活，DESIGN.md 16.1：「只看内容，不看名字」。
-    pub path: Option<&'a Path>,
     /// 分卷列表（只有 [`Shape::Volumes`] 用得上）
     ///
     /// 为什么不让 handler 自己去找卷（7-Zip 的 `IArchiveOpenVolumeCallback` 做法）：
@@ -151,7 +145,6 @@ impl<'a> Source<'a> {
             reader,
             base: 0,
             len: None,
-            path: None,
             volumes: &[],
             packed_total: 0,
         }
@@ -161,12 +154,6 @@ impl<'a> Source<'a> {
     pub fn with_offset(mut self, base: u64, len: u64) -> Self {
         self.base = base;
         self.len = Some(len);
-        self
-    }
-
-    /// 带上原始路径
-    pub fn with_path(mut self, path: &'a Path) -> Self {
-        self.path = Some(path);
         self
     }
 
@@ -397,7 +384,9 @@ impl InArchive for SevenZUnpacker {
         ctx: &UnpackCtx,
     ) -> Result<ExtractReport> {
         let eopts = opts.to_7z();
-        crate::extract7z::extract_7z_volumes_ctx(src.volumes, &eopts, ctx)
+        // 数据源只有「一条流」：多卷由编排层拼好（`MultiFile`）再喂进来
+        let reader: &mut dyn ReadSeek = &mut *src.reader;
+        crate::extract7z::extract_7z_stream_ctx(reader, src.packed_total, &eopts, ctx)
     }
 }
 
@@ -434,13 +423,10 @@ impl InArchive for RarUnpacker {
         ctx: &UnpackCtx,
     ) -> Result<ExtractReport> {
         let eopts = opts.to_rar();
-        // `rars` 目前只提供全量内存读接口，所以这条路上必须**有路径**
-        // （模块里会先做 256 MiB 上限检查再拒绝，见 extract_rar::MAX_SIZE）
-        let path = src.path.ok_or_else(|| {
-            Error::new(ErrorCode::Internal)
-                .context("RAR 解压需要输入路径（底层库只支持全量内存读）")
-        })?;
-        crate::extract_rar::extract_rar_file_ctx(path, &eopts, ctx)
+        // `rars` 只提供全量内存读接口，所以 `extract_rar_stream_ctx` 内部会把流读进内存
+        // （那里先做 256 MiB 上限检查再决定要不要拒绝，见 extract_rar::MAX_SIZE）
+        let mut reader: &mut dyn ReadSeek = &mut *src.reader;
+        crate::extract_rar::extract_rar_stream_ctx(&mut reader, &eopts, ctx)
     }
 }
 
