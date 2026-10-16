@@ -28,6 +28,7 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   yshjy --list <파일>             안을 보기만 하기 (풀지 않음)
   yshjy --rescue <파일>           손상된 압축 파일에서 최대한 복구
   yshjy --help                    이 도움말
+  yshjy --report <파일>           진단 패키지 생성 (--no-paths는 경로를 숨김)
   yshjy -V, --version             버전과 에디션 (common / full)
 
 자주 쓰는 옵션:
@@ -116,6 +117,8 @@ video_unplayable = "표지 동영상 자체가 손상되었습니다"
 internal = "내부 오류"
 
 [cli]
+report_done = "✅ 진단 패키지를 만들었습니다: {path}\n   (파일 내용과 비밀번호는 포함되지 않습니다. 공개할 때는 --no-paths를 붙이세요)"
+report_failed = "❌ 진단 패키지 생성 실패: {err}"
 no_target = "❌ 처리할 파일을 지정하지 않았습니다.\n\n   사용법: yshjy <파일>\n   자세히: yshjy --help"
 bad_jobs = "❌ --jobs 에는 숫자가 필요합니다 (예: --jobs 2). 받은 값: {value}"
 bad_select = "❌ --select 를 해석할 수 없습니다: {expr}\n   ({reason})"

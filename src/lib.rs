@@ -33,6 +33,7 @@ pub mod password_hint;
 pub mod preview;
 pub mod progress;
 pub mod repair;
+pub mod report;
 pub mod rescue;
 pub mod restore;
 pub mod safety;

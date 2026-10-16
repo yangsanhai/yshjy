@@ -47,6 +47,7 @@ text = """
   --lang <语言>                   切换界面语言（如 en、ja、ko、ru、es）
   --show-config                   看当前配置（配置文件在哪、各项现在是什么值）
   --import-passwords <文件>       导入密码本（每行一个解压码，# 开头是注释）
+  yshjy --report [包]             生成诊断包（报障用；加 --no-paths 脱敏路径）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
 
 例子：
@@ -119,6 +120,8 @@ video_unplayable = "封面视频本身有问题"
 internal = "内部错误"
 
 [cli]
+report_done = "✅ 诊断包已生成：{path}\n   （不含你的文件内容与任何密码；要贴到公开的地方，请加 --no-paths 重新生成一份）"
+report_failed = "❌ 生成诊断包失败：{err}"
 no_target = "❌ 没告诉我要处理哪个文件。\n\n   用法：yshjy <文件>\n   更多：yshjy --help"
 bad_jobs = "❌ --jobs 要写个数，比如 --jobs 2（收到 {value}）"
 bad_select = "❌ --select 看不懂：{expr}\n   （{reason}）"

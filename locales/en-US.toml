@@ -50,6 +50,7 @@ COMMON OPTIONS:
   --lang <lang>                   switch the UI language (e.g. zh-CN, ja, ko, ru, es)
   --show-config                   show current settings (where the config file is, and its values)
   --import-passwords <file>       import a password list (one per line, # starts a comment)
+  yshjy --report [package]        Create a diagnostic package (--no-paths hides paths)
   --tail                          pack with the "append to tail" layout (default: inside a free atom)
 
 EXAMPLES:
@@ -122,6 +123,8 @@ video_unplayable = "The cover video itself is broken"
 internal = "Internal error"
 
 [cli]
+report_done = "✅ Diagnostic package created: {path}\n   (It contains no file contents and no passwords. Add --no-paths before sharing it publicly.)"
+report_failed = "❌ Failed to create the diagnostic package: {err}"
 no_target = "❌ No file given.\n\n   Usage: yshjy <file>\n   More:  yshjy --help"
 bad_jobs = "❌ --jobs needs a number, e.g. --jobs 2 (got {value})"
 bad_select = "❌ --select can't parse: {expr}\n   ({reason})"
