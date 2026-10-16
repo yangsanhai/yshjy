@@ -28,64 +28,39 @@ mod code {
     pub const PARTIAL: u8 = yshjy::error::exit_code::PARTIAL as u8;
 }
 
-const HELP: &str = r#"杨三海解压（yshjy） —— 专治「伪装成视频/图片的压缩包」
-
-用法：
-  yshjy <文件>                    解压（默认）
-  yshjy jy <文件>                 解压（写法完整，脚本推荐）
-  yshjy ys <文件或文件夹>          打包成伪装文件
-  yshjy --list <文件>             先看看里面有什么（不解压）
-  yshjy --rescue <文件>           文件坏了也尽量救出来
-  yshjy --help                    看这份帮助
-  yshjy -V, --version             看版本和档位（常用版 / 全能版）
-
-常用选项：
-  -o, --dest <目录>               解压到哪（默认：当前目录下的同名文件夹）
-  -p, --password <密码>           解压码 / 打包密码
-  -j, --jobs <N>                  同时跑几个（默认 1，按顺序来最省磁盘）
-  --select <条件>                 只解一部分：
-                                    --select "*.exe"      只要 exe
-                                    --select "游戏数据/**" 只要某个目录
-                                    --select "1,3,5"      只要第 1、3、5 个
-                                    --select required     跳过 .DS_Store 之类的垃圾
-  --json                          按行输出事件流/结果（给脚本用）
-  --no-smart-dir                  关掉「智能解压」：默认会看包里有没有单一顶层目录来决定
-                                  要不要多套一层同名文件夹，加这个就永远建同名文件夹
-  -q, --quiet                     只输出结果（脚本用）
-  --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
-
-例子：
-  yshjy 示例视频.mp4            解开藏在视频里的压缩包
-  yshjy 下载/                     整个目录里的包排队解（一个坏了不影响其余）
-  yshjy --list 电影.mp4           只看里面有什么
-  yshjy --select "*.exe" 游戏.mp4  只要里面的 exe
-  yshjy -p "demo-password" 游戏.mp4   带解压码解压
-  yshjy ys 我的游戏/               把文件夹打包成伪装视频
-  yshjy --rescue 坏了的.zip        文件坏了也尽量救
-  yshjy --json 包.mp4 | jq .       给脚本/前端消费
-
-解不开？先试 yshjy --list 看能不能认出里面有什么。
-"#;
-
-/// `--version` 的输出
-///
-/// **档位是编译期定死的**：不带 `--features full` 编出来的就是「常用版」。
+/// `--version` 的输出（**文字来自语言包**，档位是编译期定死的）
 fn 版本信息() -> String {
-    let 档 = if cfg!(feature = "full") {
-        "全能版"
-    } else {
-        "常用版"
-    };
-    let mut s = format!("yshjy {}（{档}）—— 杨三海解压\n", env!("CARGO_PKG_VERSION"));
-    s.push_str(
-        "  支持的格式：ZIP（含分卷）/ 7z / RAR / TAR / gzip / xz / zstd / bzip2 / brotli / lz4\n",
+    let t = 文案();
+    let full = cfg!(feature = "full");
+    let 档 = t.t(if full { "tier.full" } else { "tier.common" }, &[]);
+    let mut s = t.t(
+        "version.line",
+        &[("version", env!("CARGO_PKG_VERSION")), ("tier", &档)],
     );
-    if cfg!(feature = "full") {
-        s.push_str("  全能版：冷门格式（ISO/UDF、CAB、ARJ…）陆续补进来，当前覆盖与常用版一致\n");
-    } else {
-        s.push_str("  常用版：日常下载会遇到的格式全都在（体积更小、依赖更少）\n");
-    }
+    s.push('\n');
+    s.push_str(&t.t("version.formats", &[]));
+    s.push('\n');
+    s.push_str(&t.t(
+        if full {
+            "version.tier_full"
+        } else {
+            "version.tier_common"
+        },
+        &[],
+    ));
+    s.push('\n');
     s
+}
+
+/// 进程级文案仓库
+///
+/// CLI 一次进程只跑一种语言，用单例最省事。**它放在外壳里** —— 引擎侧保持无全局状态，
+/// 这样 GUI / 手机端可以各持一份（比如界面里能实时切换语言）。
+static I18N: std::sync::OnceLock<yshjy::i18n::I18n> = std::sync::OnceLock::new();
+
+/// 取进程级文案仓库（`main` 开头已初始化）
+fn 文案() -> &'static yshjy::i18n::I18n {
+    I18N.get().expect("文案仓库应当在 main 开头初始化")
 }
 
 fn main() -> ExitCode {
@@ -100,12 +75,30 @@ fn main() -> ExitCode {
     };
     let has = |k: &str| argv.iter().any(|a| a == k || a == short_of(k));
 
+    // 多语言：`--lang xx` 优先，其次 YSHTY_LANG，再跟系统语言（见 i18n::detect）
+    let _ = I18N.set(yshjy::i18n::I18n::new(val_of("--lang").as_deref()));
+    if !文案().is_requested_ok() {
+        // 要的语言没有 → 用兜底语言提示一句（文案本身也走语言包）
+        let avail = 文案().available().join(", ");
+        eprintln!(
+            "{}",
+            文案().t(
+                "misc.lang_unknown",
+                &[
+                    ("lang", 文案().requested()),
+                    ("fallback", &文案().lang()),
+                    ("available", &avail),
+                ]
+            )
+        );
+    }
+
     if argv.len() < 2 {
-        eprint!("{HELP}");
+        eprint!("{}", 文案().t("help.text", &[]));
         return ExitCode::from(code::USAGE);
     }
     if has("--help") || has("-h") {
-        print!("{HELP}");
+        print!("{}", 文案().t("help.text", &[]));
         return ExitCode::from(code::OK);
     }
     if has("--version") || has("-V") {
@@ -280,19 +273,27 @@ fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
     ExitCode::from(worst)
 }
 
-/// 预览提示码 → 中文一句话（引擎只发码，文案归这里）
+/// 预览提示码 → 一句话（**引擎只发码，文案归外壳** —— 这里查语言包）
 fn 预览提示文案(h: &yshjy::event::PreviewHint) -> String {
     use yshjy::event::PreviewHint as H;
+    let t = 文案();
     match h {
-        H::VolumesMerged { count } => format!("检测到 {count} 个分卷，解压时会自动拼起来"),
-        H::NestedArchive { inner } => format!("里面还套了一层压缩包（{inner}）"),
-        H::NeedsPassword { entries } => format!("其中 {entries} 个带锁 —— 解压需要解压码"),
-        H::LooksTruncated => "这个包可能没下完（尾部数据缺失）".to_string(),
-        H::HiddenAt { offset } => {
-            format!("包藏在文件中间（偏移 {offset}），已按真实位置定位")
-        }
-        H::RebuiltIndex => "索引坏了，清单是按文件头重建的".to_string(),
-        H::VideoUnplayable => "封面视频本身有问题，但里面的文件还能解".to_string(),
+        H::VolumesMerged { count } => t.t(
+            "preview.hint.volumes_merged",
+            &[("count", &count.to_string())],
+        ),
+        H::NestedArchive { inner } => t.t("preview.hint.nested_archive", &[("inner", inner)]),
+        H::NeedsPassword { entries } => t.t(
+            "preview.hint.needs_password",
+            &[("count", &entries.to_string())],
+        ),
+        H::LooksTruncated => t.t("preview.hint.looks_truncated", &[]),
+        H::HiddenAt { offset } => t.t(
+            "preview.hint.hidden_at",
+            &[("offset", &offset.to_string())],
+        ),
+        H::RebuiltIndex => t.t("preview.hint.rebuilt_index", &[]),
+        H::VideoUnplayable => t.t("preview.hint.video_unplayable", &[]),
     }
 }
 
