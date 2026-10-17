@@ -252,7 +252,7 @@ fn hello() -> Value {
         "event_kinds": [
             "JOB_STARTED", "JOB_FINISHED", "STAGE_STARTED", "STAGE_FINISHED",
             "SCAN_PROGRESS", "PREVIEW_READY", "EXTRACT_PROGRESS", "ENTRY_FINISHED",
-            "PASSWORD_NEEDED", "SPACE_SHORTAGE", "DIAGNOSTIC"
+            "PASSWORD_NEEDED", "PASSWORD_TRY", "SPACE_SHORTAGE", "DIAGNOSTIC"
         ],
         "languages": ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "ru-RU", "es-ES"],
         // 前端据此决定要不要显示某些功能（新增能力只加不删）

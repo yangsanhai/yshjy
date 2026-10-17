@@ -77,6 +77,15 @@ class _HomePageState extends State<HomePage> {
   String? _password;
   /// 解压码是否显示明文（眼睛图标，调研 07:383「是标配，必须做」）
   bool _showPw = false;
+  /// 速度与 ETA（壳侧用两次 progress 的时间差自算，调研 07:248 要求超过 Bandizip）
+  DateTime? _lastTick;
+  int _lastBytes = 0;
+  double _speed = 0; // 字节/秒（滑动平均）
+  /// 自动试密码的进度（引擎 PASSWORD_TRY 事件）
+  int _pwTry = 0;
+  int _pwTotal = 0;
+  /// 密码本里的常用解压码（点一下填入）
+  List<String> _recentPw = [];
   final List<String> _notes = [];
 
   @override
@@ -85,6 +94,7 @@ class _HomePageState extends State<HomePage> {
     // 引擎没启动也别让界面崩：错误在点"选择文件"时才提示
     if (widget.autoStart) _client.start().catchError((_) {});
     _sub = _client.events.listen(_onEvent);
+    _loadRecentPasswords();
     // 从右键菜单带文件启动：等首帧画完再开，避免 setState 早于 build
     final f = widget.initialFile;
     if (f != null && f.isNotEmpty) {
@@ -120,15 +130,22 @@ class _HomePageState extends State<HomePage> {
       case 'STAGE_STARTED':
         setState(() => _stage = (e.data['stage'] as String?) ?? '');
       case 'EXTRACT_PROGRESS':
+        final p = e.progress;
         setState(() {
-          _progress = e.progress;
+          _progress = p;
           _current = e.current;
           _stage = 'EXTRACT';
+          if (p != null) _tickSpeed(p.doneBytes);
         });
       case 'DIAGNOSTIC':
         final code = e.data['code']?.toString() ?? '';
         final text = _diagText(code);
         if (!_notes.contains(text)) setState(() => _notes.add(text));
+      case 'PASSWORD_TRY':
+        setState(() {
+          _pwTry = (e.data['index'] as num?)?.toInt() ?? 0;
+          _pwTotal = (e.data['total'] as num?)?.toInt() ?? 0;
+        });
       case 'PASSWORD_NEEDED':
         if (!_notes.contains('需要解压码')) setState(() => _notes.add('需要解压码'));
       case 'SPACE_SHORTAGE':
@@ -1066,12 +1083,20 @@ class _HomePageState extends State<HomePage> {
                 Text(
                   p == null
                       ? ''
-                      : '${_size(p.doneBytes)} / ${p.totalBytes == 0 ? "?" : _size(p.totalBytes)}',
+                      : '${_size(p.doneBytes)} / ${p.totalBytes == 0 ? "?" : _size(p.totalBytes)}${_etaText(p)}',
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
             ),
             const SizedBox(height: 6),
+            if (_pwTry > 0 && _pwTotal > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '🔑 正在试第 $_pwTry/$_pwTotal 个解压码…',
+                  style: TextStyle(fontSize: 12, color: cs.primary),
+                ),
+              ),
             Text(
               _stage == 'LOCATE'
                   ? '第 1 步：在文件里找压缩包'
@@ -1287,6 +1312,34 @@ class _HomePageState extends State<HomePage> {
               ),
             if (_needsPassword) ...[
               const SizedBox(height: 18),
+              // 密码本里的常用解压码：点一下直接填入并重试（调研 07:874-878）
+              if (_recentPw.isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '常用解压码（来自密码本，点一下就用）',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final pw in _recentPw)
+                      ActionChip(
+                        avatar: const Icon(Icons.history, size: 14),
+                        label: Text(pw, style: const TextStyle(fontSize: 12)),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          _pwCtrl.text = pw;
+                          _retryWithPassword();
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
               TextField(
                 controller: _pwCtrl,
                 obscureText: !_showPw,
@@ -1340,6 +1393,56 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ───────────────────────── 小工具 ─────────────────────────
+
+  /// 读密码本，给密码框做「常用解压码」chips（只读，不回写）
+  ///
+  /// 路径与引擎一致：`$XDG_CONFIG_HOME/yshjy/passwords.txt`（回退 `~/.config`）。
+  Future<void> _loadRecentPasswords() async {
+    try {
+      final env = Platform.environment;
+      final base = env['XDG_CONFIG_HOME'] ?? '${env['HOME']}/.config';
+      final f = File('$base/yshjy/passwords.txt');
+      if (!await f.exists()) return;
+      final lines = await f.readAsLines();
+      final pws = <String>[];
+      for (final l in lines) {
+        final t = l.trim();
+        if (t.isEmpty || t.startsWith('#')) continue;
+        if (!pws.contains(t)) pws.add(t);
+        if (pws.length >= 6) break;
+      }
+      if (mounted && pws.isNotEmpty) setState(() => _recentPw = pws);
+    } catch (_) {
+      // 密码本读不出来不影响主流程
+    }
+  }
+
+  /// 用两次 progress 的时间差算速度（0.7/0.3 平滑，避免数字乱跳）
+  void _tickSpeed(int done) {
+    final now = DateTime.now();
+    final last = _lastTick;
+    if (last == null || done < _lastBytes) {
+      _lastTick = now;
+      _lastBytes = done;
+      return;
+    }
+    final dt = now.difference(last).inMilliseconds / 1000.0;
+    if (dt < 0.4) return; // 太密会抖
+    final inst = (done - _lastBytes) / dt;
+    _speed = _speed <= 0 ? inst : _speed * 0.7 + inst * 0.3;
+    _lastTick = now;
+    _lastBytes = done;
+  }
+
+  /// 「 · 12.3 MB/s · 剩 41 秒」；速度未知就返回空串
+  String _etaText(Progress p) {
+    if (_speed <= 0 || p.totalBytes <= 0) return '';
+    final left = p.totalBytes - p.doneBytes;
+    if (left <= 0) return '';
+    final sec = (left / _speed).round();
+    final eta = sec >= 60 ? '${sec ~/ 60} 分 ${sec % 60} 秒' : '$sec 秒';
+    return ' · ${_size(_speed.round())}/s · 剩 $eta';
+  }
 
   String _size(int bytes) {
     const k = 1024;

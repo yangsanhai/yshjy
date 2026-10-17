@@ -839,10 +839,18 @@ fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String
         .password
         .max_candidates
         .min(crate::config::候选数硬上限);
-    for the_hint in hints.iter().take(试几个) {
+    let 总数 = hints.iter().take(试几个).count() as u32;
+    for (i, the_hint) in hints.iter().take(试几个).enumerate() {
         if ctx.is_cancelled() {
             break;
         }
+        // 让界面能显示「正在试第 3/12 个」：大包试密码时进度条不动，
+        // 没有这个事件用户会以为程序死了（DESIGN §17.6）
+        ctx.emit(&crate::event::Event::PasswordTry {
+            job: job.id,
+            index: i as u32 + 1,
+            total: 总数,
+        });
         let ok = match std::fs::File::open(&job.input) {
             Ok(f) => crate::extract::verify_password_at(f, *base, *len, &the_hint.password),
             Err(_) => false,
@@ -887,13 +895,22 @@ fn outcome_from(res: Result<ExtractReport>, stats: &mut JobStats, ctx: &UnpackCt
                 };
             }
             if rep.files.is_empty() {
-                // 一个都没解出来：说清是「缺密码」还是「数据坏了」
-                let pw_issue = rep
+                // 一个都没解出来：分清三种情况（D14）
+                //   没给密码 → NeedPassword（「这个包带锁」）
+                //   给了但错了 → WrongPassword（「解压码不对」，别让用户以为没输）
+                //   数据坏了 → DataLost / NotArchive
+                let 密码错 = rep
                     .skipped
                     .iter()
-                    .any(|(_, why)| why.contains("密码") || why.contains("解密"));
-                return Outcome::Failed(if pw_issue {
+                    .any(|(_, why)| why.contains("密码可能不对") || why.contains("解密失败"));
+                let 没给密码 = rep
+                    .skipped
+                    .iter()
+                    .any(|(_, why)| why.contains("没有提供密码"));
+                return Outcome::Failed(if 没给密码 {
                     ErrorCode::NeedPassword
+                } else if 密码错 {
+                    ErrorCode::WrongPassword
                 } else if rep.skipped.is_empty() {
                     ErrorCode::NotArchive
                 } else {
