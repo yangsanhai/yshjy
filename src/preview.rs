@@ -245,45 +245,46 @@ fn 列清单(
 ///
 /// `pub(crate)`：统一接口（[`crate::unpack::ZipUnpacker`] 的 `list`）也调它 ——
 /// 一份实现两处用，别再抄第二份。
-pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Result<Preview> {
-    let mut archive = crate::layout::zip::打开已知偏移(src)
-        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip open: {e}")))?;
+pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(mut src: R) -> Result<Preview> {
+    // 用**我们自己的中央目录解析器**（而不是 `zip` crate 的 by_index_raw）：
+    // 它读 extra field —— Info-ZIP Unicode Path(0x7075) 能把「本地编码 + UTF-8 双写」
+    // 的中文名救回来，WinZip AES 强度(0x9901) 也在里面。
+    // 代价只是多扫一次尾部窗口（分块倒扫，通常第一块就命中）。
+    let size = src
+        .seek(std::io::SeekFrom::End(0))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek end: {e}")))?;
+    let layout = crate::layout::zip::locate(&mut src, size)
+        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip locate: {e}")))?;
+    let infos = crate::layout::zip::list_entries(&mut src, &layout)
+        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip list: {e}")))?;
 
-    let mut entries = Vec::with_capacity(archive.len());
+    let mut entries = Vec::with_capacity(infos.len());
     let mut total = 0u64;
     let mut enc = 0u64;
     let mut enc_kind: Option<&'static str> = None;
-    for i in 0..archive.len() {
-        let Ok(raw) = archive.by_index_raw(i) else {
-            continue;
-        };
-        // 用我们自己的四级回退解码（库的 name() 会按 CP437 把中文解成乱码）
-        let path = crate::layout::zip::decode_name(raw.name_raw(), false);
-        let is_dir = raw.is_dir();
-        let size = raw.size();
-        let encrypted = raw.encrypted();
-        if !is_dir {
-            total += size;
+    for (i, e) in infos.iter().enumerate() {
+        if !e.is_dir {
+            total += e.size;
         }
-        if encrypted {
+        if e.encrypted {
             enc += 1;
-            // 方法 99 = WinZip AES；否则是传统 ZipCrypto。
-            // 强度（AES-128/192/256）要从 extra 0x9901 读，zip crate 的 ZipFile
-            // 没暴露 extra —— 细分见 GUI-PLAN D15（第 21 批统一到 list_entries 后接）。
-            enc_kind = Some(if raw.compression() == zip::CompressionMethod::Aes {
-                "aes"
-            } else {
-                "zipcrypto"
+            enc_kind = Some(match (e.enc_kind, e.aes_strength) {
+                (Some("zipcrypto"), _) => "zipcrypto",
+                (Some("aes"), Some(1)) => "aes128",
+                (Some("aes"), Some(2)) => "aes192",
+                (Some("aes"), Some(3)) => "aes256",
+                (Some("aes"), _) => "aes",
+                _ => "unknown",
             });
         }
         entries.push(EntryView {
             index: i as u64 + 1,
-            is_risky: !is_dir && safety::is_risky_executable(&path),
-            path,
-            size,
-            packed: Some(raw.compressed_size()),
-            encrypted,
-            is_dir,
+            is_risky: !e.is_dir && safety::is_risky_executable(&e.path),
+            path: e.path.clone(),
+            size: e.size,
+            packed: e.compressed_size,
+            encrypted: e.encrypted,
+            is_dir: e.is_dir,
             modified: None,
         });
     }
