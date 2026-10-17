@@ -64,6 +64,12 @@ class Preview {
   final List<EntryItem> entries;
   final List<String> hints;
 
+  /// 伪装封面（`list` 结果里的 `cover`）：`{size, kind, ext}`；普通压缩包为 null
+  ///
+  /// 用户在验收里要求「封面和压缩包内容上下并列、各自带勾选」（GUI-PLAN §5.2①），
+  /// 界面要靠这个字段决定要不要显示「伪装封面」那一行。
+  final Map<String, dynamic>? cover;
+
   Preview({
     required this.format,
     required this.complete,
@@ -72,7 +78,11 @@ class Preview {
     required this.encKind,
     required this.entries,
     required this.hints,
+    this.cover,
   });
+
+  /// 有封面区（= 这是个伪装包）
+  bool get hasCover => cover != null;
 
   factory Preview.fromJson(Map<String, dynamic> j) => Preview(
         format: j['format'] as String? ?? '?',
@@ -84,6 +94,7 @@ class Preview {
             .map((e) => EntryItem.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),
         hints: (j['hints'] as List? ?? []).map((e) => e.toString()).toList(),
+        cover: (j['cover'] as Map?)?.cast<String, dynamic>(),
       );
 
   int get fileCount => entries.where((e) => !e.isDir).length;
@@ -353,17 +364,29 @@ class EngineClient {
     String path, {
     String? dest,
     String? password,
+    bool cover = true,
+    bool wantExtract = true,
+    bool drill = false,
+    bool ask = true,
   }) async {
     final r = await _call({
       'cmd': 'extract',
       'path': path,
       if (dest != null) 'dest': dest,
       if (password != null) 'password': password,
+      // GUI-PLAN §5.2①：封面和内容是两件事，各自带勾选
+      'cover': cover,
+      'extract': wantExtract,
+      if (drill) 'drill': true,
+      // 声明「我能处理 ASK_USER」—— 不写的话引擎遇到限额直接失败（协议设计如此）
+      if (ask) 'ask': true,
     });
     return ExtractResult.fromJson(_unwrap(r));
   }
 
-  /// 打包成伪装文件（大包可能很慢，超时放宽到 2 小时）
+  /// 打包（`mode: plain` = 普通 ZIP；`disguise` = 伪装成视频/图片）
+  ///
+  /// 普通压缩是默认语义（GUI-PLAN §5.2②）；伪装是特殊功能，要显式选。
   Future<Map<String, dynamic>> pack({
     required List<String> inputs,
     required String out,
@@ -371,11 +394,13 @@ class EngineClient {
     int? splitBytes,
     bool checksum = true,
     bool readme = true,
+    String mode = 'disguise',
   }) async {
     final r = await _call({
       'cmd': 'pack',
       'inputs': inputs,
       'out': out,
+      'mode': mode,
       if (password != null) 'password': password,
       if (splitBytes != null) 'split': splitBytes,
       'checksum': checksum,
@@ -391,6 +416,9 @@ class EngineClient {
       );
 
   /// 批量解压：引擎内部逐个跑，一个坏了不影响其余（S13）
+  ///
+  /// `ask:true` 让限额命中时走 ASK_USER 询问（否则整批直接失败）；
+  /// 批量里选「跳过」只跳过当前这一项（组 B 的 `skip` 语义）。
   Future<Map<String, dynamic>> batch({
     required List<String> paths,
     String? dest,
@@ -401,7 +429,17 @@ class EngineClient {
         'paths': paths,
         if (dest != null) 'dest': dest,
         if (password != null) 'password': password,
+        'ask': true,
       }, timeout: const Duration(hours: 6)));
+
+  /// 回答引擎的 ASK_USER：continue / skip / cancel
+  Future<Map<String, dynamic>> answer(String value) async =>
+      _unwrap(await _call({'cmd': 'answer', 'value': value},
+          timeout: const Duration(seconds: 10)));
+
+  /// 批量里只跳过当前这一项，下一项继续（不是整批取消）
+  Future<Map<String, dynamic>> skipCurrent() async =>
+      _unwrap(await _call({'cmd': 'skip'}, timeout: const Duration(seconds: 10)));
 
   /// 生成诊断包（报障用）。默认**路径脱敏**，方便直接贴到群里。
   Future<Map<String, dynamic>> report({String? path}) async {

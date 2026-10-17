@@ -353,6 +353,10 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
         .and_then(|e| e.to_str())
         .unwrap_or("mp4")
         .to_ascii_lowercase();
+
+    // 打包模式（GUI-PLAN §5.2②）：普通压缩是默认语义，伪装是特殊功能。
+    // 协议默认仍是 disguise —— 「只加不删」：老前端不传 mode，行为不能变。
+    let 普通压缩 = 参数.get("mode").and_then(|v| v.as_str()) == Some("plain");
     let 素材 = crate::pack::cover::BuiltinCover::for_extension(&扩展名);
 
     let mut opts = crate::pack::PackOptions {
@@ -372,19 +376,29 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     let 文件 = std::fs::File::create(输出)
         .map_err(|e| 错误值("PERMISSION_DENIED", &format!("建不了输出文件: {e}")))?;
     let mut bw = std::io::BufWriter::new(文件);
-    let rep = crate::pack::build(&opts, &mut bw).map_err(错误对象)?;
+    let rep = if 普通压缩 {
+        crate::pack::build_plain(&opts, &mut bw)
+    } else {
+        crate::pack::build(&opts, &mut bw)
+    }
+    .map_err(错误对象)?;
     use std::io::Write;
     let _ = bw.flush();
 
     // 交付形态（DESIGN §14.2 / §17.8）：分卷 / 校验和 / 说明书。
     // 失败不改判 —— 包已经打好了。
+    // 普通压缩默认不写说明书（用户验收 2026-10-17：普通压缩不写视频封面、不写说明书），
+    // 但调用方显式要 readme:true 时照做；校验和默认开（这是通用的，不是伪装包专属）。
     let post = crate::pack_post::PostOptions {
         split: 参数.get("split").and_then(|v| v.as_u64()),
         checksum: 参数
             .get("checksum")
             .and_then(|v| v.as_bool())
             .unwrap_or(true),
-        readme: 参数.get("readme").and_then(|v| v.as_bool()).unwrap_or(true),
+        readme: 参数
+            .get("readme")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(!普通压缩),
         password: 参数
             .get("password")
             .and_then(|v| v.as_str())
@@ -393,6 +407,7 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     let post_rep = crate::pack_post::postprocess(Path::new(输出), &post).ok();
 
     Ok(json!({
+        "mode": if 普通压缩 { "plain" } else { "disguise" },
         "total_size": rep.total_size,
         "zip_size": rep.zip_size,
         "cover_size": rep.cover_size,

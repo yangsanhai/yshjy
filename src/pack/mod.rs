@@ -186,6 +186,50 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
     })
 }
 
+/// 普通压缩：只产出一个标准 ZIP，不写封面、不藏任何东西（GUI-PLAN §5.2②）
+///
+/// 与 [`build`] 共用 `write_zip`，差别只有「不写封面」这一步。
+///
+/// 为什么单独开一个函数而不是给 [`PackOptions`] 加 `plain: bool`：
+/// 那个结构体在测试里有十几处**逐字段**构造，加一个字段就得把所有测试一起改，
+/// 而且改漏一处就是编译错误（HANDOFF「给广泛构造的结构体加字段」那条教训）。
+pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    if opts.inputs.is_empty() {
+        return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
+    }
+
+    let tmp = std::env::temp_dir().join(format!(
+        "yshjy_plain_{}_{}.zip",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let zip_size = fs::metadata(&tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
+        .len();
+
+    {
+        let mut f = fs::File::open(&tmp)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
+        std::io::copy(&mut f, out)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+    }
+    let _ = fs::remove_file(&tmp);
+
+    Ok(PackReport {
+        total_size: zip_size,
+        zip_size,
+        cover_size: 0,
+        entries,
+        // 普通压缩没有「布局」概念；字段保留给协议兼容，对外由 `mode` 区分
+        layout: PackLayout::TailAppend,
+        warnings: Vec::new(),
+    })
+}
+
 /// 造随机 pad
 ///
 /// 用系统时间做种子（避免为这点小事拖进 `rand` 依赖，也符合"依赖最小"原则）。
@@ -488,6 +532,33 @@ mod tests {
         build(&opts, &mut out).unwrap();
         // 前 8 字节应是内置素材（MP4 头）
         assert_eq!(&out[4..8], b"ftyp", "外壳必须是合法 MP4");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 普通压缩是标准zip没有封面() {
+        let dir = scratch("plain");
+        fs::write(dir.join("x.txt"), b"plain mode").unwrap();
+        let opts = PackOptions {
+            inputs: vec![dir.join("x.txt")],
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        let rep = build_plain(&opts, &mut out).unwrap();
+
+        // 1) 产物开头就是 ZIP 本地文件头 —— 不是「MP4 头 + 后缀」
+        assert_eq!(&out[..4], b"PK\x03\x04", "普通压缩必须就是标准 ZIP");
+        // 2) 没有封面区
+        assert_eq!(rep.cover_size, 0);
+        assert_eq!(rep.total_size, out.len() as u64);
+
+        // 3) 标准解码库能直接读（不需要任何「定位」逻辑）
+        let mut ar = zip::ZipArchive::new(std::io::Cursor::new(out)).unwrap();
+        assert_eq!(ar.len(), 1);
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut ar.by_index(0).unwrap(), &mut s).unwrap();
+        assert_eq!(s, "plain mode");
+
         let _ = fs::remove_dir_all(&dir);
     }
 
