@@ -193,3 +193,10 @@ line = "   {key}: {value}"
 file_missing = "❌ {input}: 파일이 없습니다"
 lang_unknown = "⚠ \"{lang}\" 언어 팩이 없습니다. {fallback} 사용 (사용 가능: {available})"
 lang_switched = "인터페이스 언어: {name} ({code})"
+
+[crash]
+saved = "💥 프로그램이 비정상 종료되었습니다. 기록 저장 위치: {path}"
+report_hint = "   보고: yshjy --report 를 실행하면 진단 패키지(이 기록 포함)가 생성됩니다. zip 을 보내 주세요"
+not_your_fault = "   참고: 조작 실수가 아닙니다. 파일은 변경되지 않았습니다."
+save_failed = "💥 프로그램이 비정상 종료되었고 기록을 저장하지 못했습니다 ({err})"
+task_saved = "   ⚠ 이 파일에서 오류가 발생해 건너뛰었습니다 (기록: {path})"

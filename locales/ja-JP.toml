@@ -193,3 +193,10 @@ line = "   {key}：{value}"
 file_missing = "❌ {input}：ファイルが存在しません"
 lang_unknown = "⚠ 言語パック \"{lang}\" がありません。{fallback} を使用します（利用可能：{available}）"
 lang_switched = "表示言語：{name}（{code}）"
+
+[crash]
+saved = "💥 プログラムが異常終了しました。記録を保存しました：{path}"
+report_hint = "   報告：yshjy --report を実行すると診断パッケージ（この記録も自動で同梱）ができます。zip を送ってください"
+not_your_fault = "   補足：操作ミスではありません。ファイルは変更されていません。"
+save_failed = "💥 プログラムが異常終了し、記録を保存できませんでした（{err}）"
+task_saved = "   ⚠ このファイルでエラーが発生したため、スキップしました（記録：{path}）"

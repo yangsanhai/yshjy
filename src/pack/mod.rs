@@ -136,11 +136,23 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
 
     // ③ 拼装
     let cover_size = cover.len() as u64;
+
+    // 防呆：`free` 原子是 MP4 的 ISO 盒子结构，塞进图片/文本里会**直接损坏封面**
+    // （实测：`ys -o 图.png` 以前就是 MP4 头 + .png 后缀，看图软件一认魔数就露馅）。
+    // 这里按**封面魔数**判断，而不是看扩展名 —— 调用方传错 cover_ext 也拦得住。
+    let 封面是mp4 = cover.len() > 8 && &cover[4..8] == b"ftyp";
+    let mut layout = opts.layout;
+    let mut warnings: Vec<String> = Vec::new();
+    if layout == PackLayout::FreeAtom && !封面是mp4 {
+        layout = PackLayout::TailAppend;
+        warnings.push("封面不是 MP4，已自动改用「尾部追加」布局（free 原子只适合 MP4）".into());
+    }
+
     out.write_all(&cover)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover: {e}")))?;
 
     let mut atom_overhead = 0u64;
-    match opts.layout {
+    match layout {
         PackLayout::TailAppend => {
             let mut f = fs::File::open(&tmp)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
@@ -168,8 +180,9 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
         zip_size,
         cover_size,
         entries,
-        layout: opts.layout,
-        warnings: Vec::new(),
+        // 报告**实际用的**布局（可能被上面降级过），不是 opts 里那个
+        layout,
+        warnings,
     })
 }
 
@@ -299,7 +312,7 @@ fn 条目选项<'a>(
 /// 让它保持默认 —— 硬塞上去会得到一个荒唐的日期。
 fn 系统时间转_zip_时间(t: std::time::SystemTime) -> Option<zip::DateTime> {
     let secs = t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs() as i64;
-    let (y, m, d, hh, mm, ss) = crate::restore::unix_to_civil(secs);
+    let (y, m, d, hh, mm, ss) = crate::restore::unix_to_civil_本地(secs);
     if !(1980..=2107).contains(&y) {
         return None;
     }
@@ -555,5 +568,73 @@ mod tests {
         );
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&dest);
+    }
+
+    /// 造一个只有一个文件的小输入目录
+    fn 小输入(tag: &str) -> (PathBuf, PathBuf) {
+        let dir = scratch(tag);
+        let f = dir.join("a.txt");
+        fs::write(&f, b"hello").unwrap();
+        (dir, f)
+    }
+
+    #[test]
+    fn png_封面必须产出真_png_而不是假图片() {
+        // v0.9 修的真 bug：`ys -o 图.png` 曾产出「MP4 头 + .png 后缀」，
+        // 因为外壳从没把扩展名传进来。这条测试钉死：封面格式必须跟着扩展名走。
+        let (dir, f) = 小输入("cover_png");
+        let opts = PackOptions {
+            inputs: vec![f],
+            cover_ext: "png".into(),
+            ..Default::default() // 默认是 FreeAtom —— 必须被自动降级
+        };
+        let mut out = Vec::new();
+        let rep = build(&opts, &mut out).unwrap();
+
+        assert_eq!(&out[..8], b"\x89PNG\r\n\x1a\n", "产物必须以 PNG 魔数开头");
+        assert_eq!(
+            rep.layout,
+            PackLayout::TailAppend,
+            "PNG 封面不能走 MP4 的 free 原子布局"
+        );
+        assert!(!rep.warnings.is_empty(), "降级必须如实报告，不能悄悄改");
+        // 而且还能被我们自己解回来
+        let size = out.len() as u64;
+        let mut cur = Cursor::new(out);
+        let l = crate::layout::zip::locate(&mut cur, size).unwrap();
+        assert_eq!(l.base as usize, rep.cover_size as usize, "ZIP 应紧跟在封面之后");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jpg_封面必须产出真_jpeg() {
+        let (dir, f) = 小输入("cover_jpg");
+        let opts = PackOptions {
+            inputs: vec![f],
+            cover_ext: "jpg".into(),
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        let rep = build(&opts, &mut out).unwrap();
+        assert_eq!(&out[..3], &[0xFF, 0xD8, 0xFF], "产物必须以 JPEG 魔数开头");
+        assert_eq!(rep.layout, PackLayout::TailAppend);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mp4_封面仍然用_free_原子() {
+        // 反向保险：别为了修图片把视频的默认行为也改了
+        let (dir, f) = 小输入("cover_mp4");
+        let opts = PackOptions {
+            inputs: vec![f],
+            cover_ext: "mp4".into(),
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        let rep = build(&opts, &mut out).unwrap();
+        assert_eq!(&out[4..8], b"ftyp", "MP4 封面的 ftyp 要在");
+        assert_eq!(rep.layout, PackLayout::FreeAtom, "MP4 仍走 free 原子");
+        assert!(rep.warnings.is_empty(), "正常路径不该有降级警告");
+        let _ = fs::remove_dir_all(&dir);
     }
 }
