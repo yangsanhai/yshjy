@@ -331,6 +331,28 @@ fn read_full<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<usize> {
     Ok(total)
 }
 
+/// 从 WinZip AES extra field（0x9901）里取强度
+///
+/// 结构（APPNOTE 4.4.8）：`tag(2) size(2) version(2) "AE"(2) strength(1) method(2)`
+/// strength：1=AES-128 / 2=AES-192 / 3=AES-256。
+/// extra 区可能同时有 ZIP64(0x0001) 等多个字段，所以按 tag 逐块跳。
+fn aes_strength(extra: &[u8]) -> Option<u8> {
+    let mut p = 0usize;
+    while p + 4 <= extra.len() {
+        let tag = u16le(extra, p);
+        let size = u16le(extra, p + 2) as usize;
+        let body = p + 4;
+        if body + size > extra.len() {
+            break;
+        }
+        if tag == 0x9901 && size >= 7 {
+            return Some(extra[body + 4]);
+        }
+        p = body + size;
+    }
+    None
+}
+
 /// 解析中央目录，列出条目（用于「解压前预览」）
 ///
 /// 返回的每条 [`EntryInfo`] 都带 `encrypted` 标志 —— 界面上的 🔒 徽标就读它。
@@ -421,6 +443,15 @@ pub fn list_entries<R: Read + Seek>(r: &mut R, layout: &ZipLayout) -> Result<Vec
             compressed_size: Some(csize),
             // 加密标志：bit 0（传统加密）/ 方法 99（WinZip AES）
             encrypted: (flags & 1) != 0 || method == 99,
+            // 强度只有 AES 才有，藏在 extra field 0x9901 里（WinZip AES 规范）
+            enc_kind: if method == 99 {
+                Some("aes")
+            } else if (flags & 1) != 0 {
+                Some("zipcrypto")
+            } else {
+                None
+            },
+            aes_strength: if method == 99 { aes_strength(&extra) } else { None },
             crc32: Some(crc),
         });
 

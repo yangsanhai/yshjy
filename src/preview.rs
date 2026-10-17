@@ -37,6 +37,11 @@ pub struct Preview {
     pub total_size: u64,
     /// 带锁的条目数
     pub encrypted_count: u64,
+    /// 整包的加密方式（None = 没加密；`unknown` = 加密但算法未知）
+    ///
+    /// 取值：`zipcrypto` / `aes128` / `aes192` / `aes256` / `unknown`。
+    /// 界面据此提示风险：ZipCrypto 有 1/256 概率误判，AES-256 校验可靠。
+    pub enc_kind: Option<&'static str>,
     /// 格式名（中性，日志用）
     pub format: &'static str,
     /// 预览是否完整（`false` = 某种格式只能给出部分信息）
@@ -247,6 +252,7 @@ pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Re
     let mut entries = Vec::with_capacity(archive.len());
     let mut total = 0u64;
     let mut enc = 0u64;
+    let mut enc_kind: Option<&'static str> = None;
     for i in 0..archive.len() {
         let Ok(raw) = archive.by_index_raw(i) else {
             continue;
@@ -261,6 +267,14 @@ pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Re
         }
         if encrypted {
             enc += 1;
+            // 方法 99 = WinZip AES；否则是传统 ZipCrypto。
+            // 强度（AES-128/192/256）要从 extra 0x9901 读，zip crate 的 ZipFile
+            // 没暴露 extra —— 细分见 GUI-PLAN D15（第 21 批统一到 list_entries 后接）。
+            enc_kind = Some(if raw.compression() == zip::CompressionMethod::Aes {
+                "aes"
+            } else {
+                "zipcrypto"
+            });
         }
         entries.push(EntryView {
             index: i as u64 + 1,
@@ -278,6 +292,7 @@ pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(src: R) -> Re
         hints: Vec::new(),
         total_size: total,
         encrypted_count: enc,
+        enc_kind,
         format: "zip",
         complete: true,
     })
@@ -306,20 +321,47 @@ pub(crate) fn preview_7z<R: std::io::Read + std::io::Seek>(
         Error::new(code).context(format!("7z 读头失败: {msg}"))
     })?;
 
+    // 7z 的加密是**块级**的：AES-256 作为 coder 挂在压缩链上（方法 ID 0x06F10701）。
+    // 先算出哪些块加密，再用 `stream_map.file_block_index` 把条目映射回块——
+    // 这样「内容加密」的包在预览里就能如实显示「N 个加密」，而不是写死 false。
+    // 参考：sevenz-rust2 `archive.rs:357`（ID_AES256_SHA256）、`block.rs:78`（Coder）。
+    const AES256_SHA256: &[u8] = &[0x06, 0xF1, 0x07, 0x01];
+    let 加密块: Vec<bool> = reader
+        .archive()
+        .blocks
+        .iter()
+        .map(|b| {
+            b.coders
+                .iter()
+                .any(|c| c.encoder_method_id() == AES256_SHA256)
+        })
+        .collect();
+    let 文件所在块 = &reader.archive().stream_map.file_block_index;
+
     let mut entries = Vec::with_capacity(reader.archive().files.len());
     let mut total = 0u64;
+    let mut encrypted_count = 0u64;
     for (i, f) in reader.archive().files.iter().enumerate() {
         let is_dir = f.is_directory();
         let size = if is_dir { 0 } else { f.size() };
         if !is_dir {
             total += size;
         }
+        let encrypted = 文件所在块
+            .get(i)
+            .copied()
+            .flatten()
+            .map(|bi| 加密块.get(bi).copied().unwrap_or(false))
+            .unwrap_or(false);
+        if encrypted && !is_dir {
+            encrypted_count += 1;
+        }
         entries.push(EntryView {
             index: i as u64 + 1,
             path: f.name().to_string(),
             size,
             packed: None,
-            encrypted: false, // 7z 的条目级加密标记要先解密头才知道，这里保守报 false
+            encrypted,
             is_dir,
             modified: None,
             is_risky: !is_dir && safety::is_risky_executable(f.name()),
@@ -329,7 +371,9 @@ pub(crate) fn preview_7z<R: std::io::Read + std::io::Seek>(
         entries,
         hints: Vec::new(),
         total_size: total,
-        encrypted_count: 0,
+        encrypted_count,
+        // 7z 规范只有 AES-256（SHA-256 派生），没有 128/192
+        enc_kind: if encrypted_count > 0 { Some("aes256") } else { None },
         format: "7z",
         complete: true,
     })
@@ -388,6 +432,8 @@ pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Resu
         hints: Vec::new(),
         total_size: 0,
         encrypted_count: 0,
+        // rars 不暴露「这条是否加密」，所以预览里连加密数都给不出（complete=false）
+        enc_kind: None,
         format: "rar",
         complete: false,
     })
@@ -419,6 +465,8 @@ pub(crate) fn preview_single_stream(
         hints: Vec::new(),
         total_size: 0,
         encrypted_count: 0,
+        // 单流格式（gz/xz/zstd/bz2/lz4/br）本身不带加密
+        enc_kind: None,
         // 显示具体格式名（brotli / lz4 / gzip…）比笼统的 "stream" 有用得多
         format: format.as_str(),
         complete: true,

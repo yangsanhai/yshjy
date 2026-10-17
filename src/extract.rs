@@ -140,6 +140,43 @@ impl ExtractReport {
     }
 }
 
+/// 同一个密码的字节候选，按「现代工具 → 中文 Windows → 7z/老实现」排序
+///
+/// 由来（DESIGN §17.1 / 台账 `对比-测试构建与编码.md` 2.1.13）：
+/// ZIP 的密码是**任意字节**，格式本身没有编码标准 ——
+///
+/// - Linux / 现代工具（7-Zip CLI、Python zipfile）：UTF-8 字节
+/// - 中文 Windows 的 WinRAR / Bandizip / 好压：CP936（GBK）
+/// - 7z 规范：UTF-16LE（`refs/sevenz-rust/src/encryption/password.rs:52-61`）；
+///   7z 侧由 `sevenz-rust2` 自己转，这里备一份给 ZIP / RAR 的老实现
+///
+/// 顺序不影响正确性：错密码会被 CRC / 校验块挡住，只是白试一次；
+/// 影响的是命中速度 —— 现代包占多数，所以 UTF-8 先试。
+pub fn 密码候选(pw: &str) -> Vec<Vec<u8>> {
+    let mut out = Vec::with_capacity(3);
+    out.push(pw.as_bytes().to_vec());
+
+    // 纯 ASCII 密码：GBK 字节与 UTF-8 完全相同，UTF-16LE 变体在实践中不存在
+    // （7z 自己会转），所以不必多试 —— 保持改动前的一次尝试，零性能退化。
+    if pw.is_ascii() {
+        return out;
+    }
+
+    // GBK（encoding_rs 的 GBK 编码器；纯中文时字节与 CP936 完全一致）
+    let (gbk, _, had_errors) = encoding_rs::GBK.encode(pw);
+    if !had_errors && !gbk.is_empty() {
+        out.push(gbk.into_owned());
+    }
+
+    // UTF-16LE（7z 规范；少数 ZIP 实现也这么存）
+    let mut u16le = Vec::with_capacity(pw.len() * 2);
+    for u in pw.encode_utf16() {
+        u16le.extend_from_slice(&u.to_le_bytes());
+    }
+    out.push(u16le);
+    out
+}
+
 /// **快速验证密码：只读第一个加密条目的开头，不解整个包**
 ///
 /// # 为什么必须有它（三层审查 B2 的落地）
@@ -169,11 +206,17 @@ pub fn verify_password_at<R: Read + Seek>(r: R, base: u64, len: u64, pw: &str) -
         return true; // 压根没有加密条目 → 不需要密码
     };
 
-    let Ok(mut entry) = archive.by_index_decrypt(idx, pw.as_bytes()) else {
-        return false;
-    };
-    let mut buf = [0u8; 4096];
-    matches!(entry.read(&mut buf), Ok(n) if n > 0)
+    // 多编码逐个试（UTF-8 → GBK → UTF-16LE，见 `密码候选`）
+    for cand in 密码候选(pw) {
+        let Ok(mut entry) = archive.by_index_decrypt(idx, &cand) else {
+            continue;
+        };
+        let mut buf = [0u8; 4096];
+        if matches!(entry.read(&mut buf), Ok(n) if n > 0) {
+            return true;
+        }
+    }
+    false
 }
 
 /// 同名时生成不冲突的名字：`a.txt` → `a (1).txt`
@@ -345,9 +388,35 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         // ── 真正解码 ──
         let mut file = match if encrypted {
             match &opts.password {
-                Some(pw) => archive
-                    .by_index_decrypt(i, pw.as_bytes())
-                    .map_err(|e| format!("解密失败（密码可能不对）: {e}")),
+                Some(pw) => {
+                    // 多编码逐个试（UTF-8 → GBK → UTF-16LE）。
+                    // 注意：不能把 ZipFile 带出循环（它可变借用 archive，下一次迭代
+                    // 再借就会 E0499），所以先用「读一小段」验证候选，再正式打开一次。
+                    let mut 命中: Option<Vec<u8>> = None;
+                    let mut 最后错误 = String::new();
+                    for cand in 密码候选(pw) {
+                        match archive.by_index_decrypt(i, &cand) {
+                            Ok(mut probe) => {
+                                let mut buf = [0u8; 4096];
+                                match probe.read(&mut buf) {
+                                    Ok(n) if n > 0 || probe.size() == 0 => {
+                                        命中 = Some(cand);
+                                        break;
+                                    }
+                                    Ok(_) => 最后错误 = "读不到数据".to_string(),
+                                    Err(e) => 最后错误 = e.to_string(),
+                                }
+                            }
+                            Err(e) => 最后错误 = e.to_string(),
+                        }
+                    }
+                    match 命中 {
+                        Some(cand) => archive
+                            .by_index_decrypt(i, &cand)
+                            .map_err(|e| format!("解密失败（密码可能不对）: {e}")),
+                        None => Err(format!("解密失败（密码可能不对）: {最后错误}")),
+                    }
+                }
                 None => Err("条目已加密，但没有提供密码".to_string()),
             }
         } else {
@@ -531,6 +600,23 @@ fn 还原条目属性<R: std::io::Read>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 「密码」这个中文密码的三种字节形态（2026-10-17 实测值）
+    #[test]
+    fn 密码候选_中文给出_utf8_gbk_utf16le() {
+        let c = 密码候选("密码");
+        assert_eq!(c.len(), 3, "中文密码应有 3 个候选: {c:?}");
+        assert_eq!(c[0], "密码".as_bytes(), "① UTF-8");
+        assert_eq!(c[1], vec![0xC3, 0xDC, 0xC2, 0xEB], "② GBK（CP936）");
+        assert_eq!(c[2], vec![0xC6, 0x5B, 0x01, 0x78], "③ UTF-16LE");
+    }
+
+    /// 纯 ASCII 不许多试：改动前只试一次，现在也必须只试一次（零性能退化）
+    #[test]
+    fn 密码候选_ascii只有一份() {
+        assert_eq!(密码候选("secret").len(), 1);
+    }
+
     use std::io::Cursor;
 
     #[test]

@@ -25,6 +25,8 @@ class _PackPageState extends State<PackPage> {
   String? _out;
   String _coverExt = 'mp4';
   final TextEditingController _pwCtrl = TextEditingController();
+  /// 解压码是否显示明文（眼睛图标）
+  bool _showPw = false;
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _result;
@@ -224,12 +226,20 @@ class _PackPageState extends State<PackPage> {
           const SizedBox(height: 10),
           TextField(
             controller: _pwCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(
+            obscureText: !_showPw,
+            decoration: InputDecoration(
               labelText: '解压码（可选，留空就不加密）',
               isDense: true,
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.lock_outline, size: 18),
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.lock_outline, size: 18),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _showPw ? Icons.visibility_off : Icons.visibility,
+                  size: 18,
+                ),
+                tooltip: _showPw ? '隐藏解压码' : '显示解压码',
+                onPressed: () => setState(() => _showPw = !_showPw),
+              ),
             ),
           ),
           const SizedBox(height: 12),

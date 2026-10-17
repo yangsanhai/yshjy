@@ -153,7 +153,6 @@ fn 处理命令(
                 Ok(p) => 写行(出, &ok(id, json!({"path": p.display().to_string()}))),
                 Err(e) => 写行(出, &json!({"id": id, "ok": false, "error": 错误对象(e)})),
             }
-            return;
         }
         // 扫一批路径（S13 队列 / S10 多候选的数据源）：
         // 展开目录 → 归并分卷 → 逐个认类型。只读文件头，不解压任何东西。
@@ -213,7 +212,6 @@ fn 处理命令(
                     json!({"items": items, "expanded": 展开.len(), "given": paths.len()}),
                 ),
             );
-            return;
         }
         "list" | "extract" | "pack" | "batch" => {
             let 参数 = 值.clone();
@@ -286,6 +284,8 @@ fn 做list(
         "complete": pv.complete,
         "total_size": pv.total_size,
         "encrypted": pv.encrypted_count,
+        // 加密方式与强度：zipcrypto / aes / aes256 / unknown（DESIGN §17.4）
+        "enc_kind": pv.enc_kind,
         // EntryView 原样序列化：字段名以 src/event.rs 为准（契约里写了）
         "entries": pv.entries,
         "hints": pv.hints,
@@ -456,62 +456,6 @@ fn 结果json(out: &JobOutcome) -> Value {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn 响应信封形状稳定() {
-        let v = ok(7, json!({"x": 1}));
-        assert_eq!(v["id"], 7);
-        assert_eq!(v["ok"], true);
-        assert_eq!(v["result"]["x"], 1);
-
-        let e = 错误响应(8, "NOT_ARCHIVE", "note");
-        assert_eq!(e["id"], 8);
-        assert_eq!(e["ok"], false);
-        assert_eq!(e["error"]["code"], "NOT_ARCHIVE");
-    }
-
-    #[test]
-    fn hello_带协议版本() {
-        let h = hello();
-        assert_eq!(h["protocol"], 协议版本);
-        assert_eq!(h["engine"], yshjy::VERSION);
-        assert!(h["features"].as_array().unwrap().contains(&json!("extract")));
-    }
-
-    #[test]
-    fn 非压缩包的错误里带着真实类型() {
-        // 造一个"名字是 .mp4、内容其实是 ZIP"的文件 —— 伪装包的典型样子
-        let dir = std::env::temp_dir().join(format!("yshjy_serve_mis_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let 假 = dir.join("伪装.mp4");
-        std::fs::write(&假, b"PK\x03\x04not a real zip but signature is enough").unwrap();
-
-        let 事件 = ChannelSink::new(64);
-        let 取消 = CancelToken::new();
-        let e = 做list(&json!({"path": 假.to_str().unwrap()}), &事件, &取消).unwrap_err();
-        assert_eq!(e["code"], "NOT_ARCHIVE", "{e}");
-        let d = &e["detail"];
-        assert_eq!(d["looks_like"], "zip", "要认出内容其实是 ZIP：{d}");
-        assert_eq!(d["ext"], "mp4");
-        assert_eq!(d["ext_mismatch"], "true", "名字与内容不符必须标出来：{d}");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn 缺参数报_bad_param_而不是崩() {
-        let 事件 = ChannelSink::new(16);
-        let 取消 = CancelToken::new();
-        let e = 做list(&json!({}), &事件, &取消).unwrap_err();
-        assert_eq!(e["code"], "BAD_PARAM");
-    }
-}
-
-// ───────────────────────── 批量 ─────────────────────────
-
 /// 批量执行：展开目录/归并分卷 → 排队 → 逐个跑（S13）
 ///
 /// 为什么放在**一个** `batch` 命令里而不是前端循环调 `extract`：
@@ -592,3 +536,59 @@ fn 做batch(
         })).collect::<Vec<_>>(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn 响应信封形状稳定() {
+        let v = ok(7, json!({"x": 1}));
+        assert_eq!(v["id"], 7);
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["result"]["x"], 1);
+
+        let e = 错误响应(8, "NOT_ARCHIVE", "note");
+        assert_eq!(e["id"], 8);
+        assert_eq!(e["ok"], false);
+        assert_eq!(e["error"]["code"], "NOT_ARCHIVE");
+    }
+
+    #[test]
+    fn hello_带协议版本() {
+        let h = hello();
+        assert_eq!(h["protocol"], 协议版本);
+        assert_eq!(h["engine"], yshjy::VERSION);
+        assert!(h["features"].as_array().unwrap().contains(&json!("extract")));
+    }
+
+    #[test]
+    fn 非压缩包的错误里带着真实类型() {
+        // 造一个"名字是 .mp4、内容其实是 ZIP"的文件 —— 伪装包的典型样子
+        let dir = std::env::temp_dir().join(format!("yshjy_serve_mis_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let 假 = dir.join("伪装.mp4");
+        std::fs::write(&假, b"PK\x03\x04not a real zip but signature is enough").unwrap();
+
+        let 事件 = ChannelSink::new(64);
+        let 取消 = CancelToken::new();
+        let e = 做list(&json!({"path": 假.to_str().unwrap()}), &事件, &取消).unwrap_err();
+        assert_eq!(e["code"], "NOT_ARCHIVE", "{e}");
+        let d = &e["detail"];
+        assert_eq!(d["looks_like"], "zip", "要认出内容其实是 ZIP：{d}");
+        assert_eq!(d["ext"], "mp4");
+        assert_eq!(d["ext_mismatch"], "true", "名字与内容不符必须标出来：{d}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 缺参数报_bad_param_而不是崩() {
+        let 事件 = ChannelSink::new(16);
+        let 取消 = CancelToken::new();
+        let e = 做list(&json!({}), &事件, &取消).unwrap_err();
+        assert_eq!(e["code"], "BAD_PARAM");
+    }
+}
+
+// ───────────────────────── 批量 ─────────────────────────
