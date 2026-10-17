@@ -48,8 +48,35 @@
 // 取消当前任务（立即返回，真正停下要等引擎看到取消标志）
 {"id": 5, "cmd": "cancel"}
 
+// 扫一批路径（队列 / 多候选的数据源）：展开目录 → 归并分卷 → 只读文件头认类型
+{"id": 6, "cmd": "scan", "paths": ["/home/me/下载", "/home/me/游戏.mp4"]}
+
+// 批量解压（界面自己排队也用它；进度与单文件同一套事件）
+{"id": 7, "cmd": "batch", "paths": ["/home/me/下载/"],
+ "dest": "/home/me/解压结果", "password": null, "smart_dir": true}
+
+// 生成诊断包（报障用；`no_paths: true` 脱敏路径）
+{"id": 8, "cmd": "report", "path": "/home/me/游戏.mp4",
+ "no_paths": false, "out_dir": "/home/me/桌面"}
+
 // （config 命令留到 v1.1：先把主流程跑通，不做半成品接口）
 ```
+
+## 命令能力表（`hello.features` 的权威来源）
+
+| cmd | 参数 | 说明 |
+|---|---|---|
+| `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
+| `list` | `path`, `password?` | 只列内容，不解压 |
+| `extract` | `path`, `dest?`, `password?`, `force?` | 解压单个目标；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
+| `pack` | `inputs[]`, `out`, `password?`, `tail?` | 打包成伪装文件 |
+| `cancel` | — | 取消当前任务 |
+| `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` |
+| `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?` | 顺序批量解压，返回逐项结果 |
+| `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
+| `bulk` 以外的新命令 | — | **只加不删**，前端忽略不认识的 |
+
+（最后一行示例：以后新增命令照这个原则 —— **只加不删**，老前端忽略即可。）
 
 ## 响应（引擎 → 前端）
 
@@ -89,7 +116,8 @@
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.0.19", "features": ["list", "extract", "pack", "cancel"],
+{"protocol": 1, "engine": "0.9.19-c",
+ "features": ["list", "extract", "pack", "cancel", "report", "scan", "batch"],
  "event_kinds": ["JOB_STARTED", "..."], "languages": ["zh-CN", "..."]}
 ```
 
@@ -113,6 +141,32 @@
 ```json
 {"total_size": 2048, "zip_size": 120, "cover_size": 1688,
  "entries": 1, "layout": "FreeAtom", "warnings": []}
+```
+
+`scan`（只读文件头，不解压）：
+```json
+{"given": 1, "expanded": 3,
+ "items": [{"path": "/home/me/下载/游戏.mp4", "name": "游戏.mp4", "size": 12345,
+            "kind": "Zip", "volumes": 1, "looks_like": "Zip",
+            "mime": "application/zip", "archive": true}]}
+```
+`archive: false` 表示识别不出压缩格式（`kind == "UNKNOWN"`），界面上应显示成
+「认不出，但可以拖进去试」，不要直接说失败。
+
+`batch`：
+```json
+{"total": 3, "ok": 2, "partial": 0, "failed": 1, "cancelled": 0,
+ "bytes": 20480, "elapsed_ms": 1234,
+ "jobs": [{"id": 1, "path": "/home/me/a.mp4", "outcome": "ok",
+           "bytes": 1024, "entries": 3, "elapsed_ms": 400, "dest": "/home/me/a"}]}
+```
+⚠️ `jobs[].outcome` 目前是**裸标识**：`ok` / `partial` / `cancelled` / 错误码的
+Debug 名（如 `CrcError`）。前端**必须**按 `outcome` 走错误码映射（`_errText`），
+不能直接 `toLowerCase()` 显示给用户（GUI-PLAN 组 4 待修）。
+
+`report`：
+```json
+{"path": "/home/me/桌面/yshjy-report-20261017.zip"}
 ```
 
 ## 错误里的 `detail`（前端拼人话用）
