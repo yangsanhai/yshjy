@@ -3,11 +3,29 @@
 ## GUI 完整化计划（2026-10-17）
 
 **完整计划表见 `docs/GUI-PLAN.md`**（P1–P12，每项都带参考项目出处 / 实现落点 / 验收标准）。
-已交付到第 17 批：应用外壳（导航+状态栏）、解压/打包/历史/设置/关于五页、拖放、一键诊断包。
-下一步从 **P1 批量队列**（协议 `scan` + `batch`）开始，别跳过。
+已交付到 **第 19 批**（提交 768aa5a）：
 
+    第16批 拖放 + 一键诊断包 + 解压后提示启动入口
+    第17批 应用外壳：左侧导航 + 解压/打包/历史/设置/关于五页 + 状态栏
+    第18批 P1 批量队列（协议 scan/batch + 队列 UI + Sunpack 三段式汇总卡）D1–D6 已记录
+    第19批 P3 缺分卷检测 + P2 智能解压上屏（修掉死错误码 MissingVolume）D7–D9
 
-> 最后更新：2026-10-17（v0.9 第 2 批；重开对话先看「当前进度」和「下一步」）
+下一步 **第 20 批：P5 设置页能真改 + P4 密码管理**（密码本打码显示 / 试到第几个 /
+不保存本次密码），顺带补 D1（大文件识别没进度）。批次顺序见 docs/GUI-PLAN.md §5。
+
+⚠️ **GUI 产物还是旧版**：`gui/build/linux/x64/release/bundle/yshjy_gui` 时间戳 19:30，
+而源码 `home_page.dart` 已改到 19:53 —— 第 18/19 批的界面改动**不在现有 bundle 里**。
+动界面或给人演示前先 `cd gui && flutter build linux --release`。
+
+⚠️ **bundle 里没有引擎**（这是「引擎未就绪 ProcessException」的真因，别再误判成崩溃）：
+`engine.dart` 找引擎的顺序是 ① `YSHJY_BIN` 环境变量 → ② **跟界面同目录的 `yshjy`**
+→ ③ PATH 里的 `yshjy`。本机三条全落空：bundle 只有 `yshjy_gui` / `data/` / `lib/`，
+系统里也没装 `yshjy`（`which yshjy` 空）。所以界面能画出来、但连不上引擎。
+修法（任选一）：`cp target/release/yshjy gui/build/linux/x64/release/bundle/` 再重开界面；
+或跑 `bash scripts/install-gui.sh`（装到 `~/.local/opt/yshjy` 并建菜单项，它会把
+`target/release/yshjy` 一起拷过去）。**别用「双击 bundle 里的 yshjy_gui」当发布验证**。
+
+> 最后更新：2026-10-17（GUI 第 19 批；重开对话先看「GUI 完整化计划」和「下一步」）
 > 项目路径：`/home/user/hermes/yshjy/`
 
 ---
@@ -194,12 +212,13 @@ yshjy --json 包.mp4             # 事件流按行输出（脚本/前端消费�
 ## 下一步（按用户"做到完全完整能用"的目标排）
 
 ```
-0. 界面（第 1 批已跑通）协议层 `--serve`：完成 + 7 组冒烟全过（docs/PROTOCOL.md）
-                     GUI：`gui/`（Flutter 3.44.9）**已编译并实机启动验证** ——
-                     空状态 / 预览 / 进度 / 完成 / 失败 / 诊断提醒；窗口标题「杨三海解压」
-                     产物：gui/build/linux/x64/release/bundle/（内含引擎 yshjy，双击即用）
-                     技术：Process.start + NDJSON（不是 FFI），见 gui/README.md
-                     第 2 批待做：拖放入口 / 密码框 / 空间不足确认 / 条目勾选 / 批量队列 / 打包面板 / 设置页
+0. 界面 → **已推进到第 19 批**（拖放/密码框/诊断包/批量队列/缺卷卡片/智能解压都上了）。
+                     **下一步第 20 批**：P5 设置页能真改 + P4 密码管理（密码本打码 /
+                     试到第几个 / 不保存本次密码）+ D1 大文件识别进度。
+                     ⚠️ 动手前先重新编译 GUI（现有 bundle 是 19:30 的，不含 18/19 批改动）：
+                     `cd gui && flutter build linux --release`
+                     GUI 技术：Process.start + NDJSON（不是 FFI），见 gui/README.md
+                     协议层 `--serve` 已完成 + 7 组冒烟全过（docs/PROTOCOL.md）
 1. 打发布包           bash scripts/release.sh（一次出常用版 + 全能版）+ scripts/build-deb.sh
                      —— v0.8 / v0.9 的包都还没打，攒一起发更省事
 2. fuzz 跑久一点（可选）60 秒只算"初步体检"：认真跑用 -max_total_time=600 以上，
