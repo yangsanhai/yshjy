@@ -177,10 +177,22 @@
   找不到会让你输 ③ 解完点「接下来点这个」
 - **验收**：首次启动出现，点「知道了」后不再出现（写 `~/.config/yshjy/onboarded`）
 
-### P12 · 手机端（Flutter Android 复用）【大 · 最后】
+### P12 · 全平台（Windows / macOS / Android / iOS）【大 · 最后】
+
+- **平台顺序（用户 2026-10-17 明确「全平台都要做」）**：
+  Linux（当前开发/测试机）→ Windows → macOS → Android → iOS
 - **参考**：`07-竞品界面调研.md` 第 11 章 10 条建议（ZArchiver 骨架 + 我们的一键按钮）
-- **前置**：协议 v1 不用改（本来就是为了手机端设计的）；需验证 Rust → Android 构建链
-  （`refs/analysis/08-三层贯通审查.md` 问题 3 指出从未验证过 + Android 存储不支持随机定位）
+- **前置（建议第 21 批先做，各半天，不影响桌面，越晚越贵）**：
+  1. `Cargo.toml` 加 `[lib] crate-type = ["rlib", "cdylib", "staticlib"]`
+     —— 现在产不出 `.so`/`.a`，FFI 无从谈起
+  2. Dart 抽 `EngineTransport` 接口，把现在的 `Process.start` 装进 `ProcessTransport`
+     —— 否则界面死绑子进程，iOS 上永远跑不了
+- **Android**：可复用 `ProcessTransport`（引擎随包分发）；`flutter_rust_bridge` 是更优解；
+  存储走 SAF，随机定位按 `ARCHITECTURE.md` F1 的三档方案
+- **iOS**：子进程**物理不可用**（iOS 禁止 fork/exec 任意可执行文件）→ 必须 `FfiTransport`
+  （静态库进 Xcode）；文件必须经 document picker 导入沙箱再解，输出到沙箱后分享
+- **桌面**：Windows / macOS 各补构建链；路径、回收站、内存与磁盘探测按平台分支（DESIGN §18.3）
+- **验收**：每个平台都能安装/双击启动 → 解一个伪装包 → 出一份诊断包
 - **不做**：不做广告、不做在线破解（合规红线）
 
 ---

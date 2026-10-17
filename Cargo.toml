@@ -9,6 +9,14 @@ readme = "README.md"
 keywords = ["archive", "extract", "zip", "7z", "rar", "steganography"]
 categories = ["command-line-utilities", "compression"]
 
+# 引擎同时要作为**库**被 GUI / 手机端调用（全平台：桌面子进程、iOS 走 FFI）
+# rlib   → Rust 内部用（现有测试）
+# cdylib → Android / Linux / Windows / macOS 动态库
+# staticlib → iOS（App Store 要求静态库，且禁止 fork/exec）
+[lib]
+name = "yshjy"
+crate-type = ["rlib", "cdylib", "staticlib"]
+
 [features]
 # 默认 = **常用版**：日常下载会遇到的格式全都在，体积小、依赖少、攻击面小
 default = []

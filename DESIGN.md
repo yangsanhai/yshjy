@@ -8,7 +8,7 @@
 
 ## 一、一句话定位
 
-**把「伪装成视频/图片的压缩包」一键还原成能用的文件 —— Linux / Windows / macOS / Android 全平台。**
+**把「伪装成视频/图片的压缩包」一键还原成能用的文件 —— Linux / Windows / macOS / Android / iOS 全平台。**
 
 不只是"能解压"，而是**小白也能用、不会卡、不用查教程**。
 
@@ -546,6 +546,60 @@ CLI-SPEC §3.6 待实现。详见 GUI-PLAN 的 **P2b**。
 
 - **批次**：第 20 批 第 5 组做「分卷 + 说明书 + 校验和」，其余排第 22 批
 
+## 十八、全平台架构（用户 2026-10-17 明确：**全平台都要做**）
+
+> 用户原话：「我要全平台」「ios 做啊，我只是现在版本用 linux 为了好测试，
+> 因为这个电脑就是 Linux」。所以：**Linux / Windows / macOS / Android / iOS 全部在目标内**，
+> 现在只在 Linux 上跑是开发机限制，不是产品定位。
+
+**平台顺序**：Linux（当前）→ Windows → macOS → Android → iOS。
+iOS 排最后是因为沙箱与构建门槛最高，不是不做。
+
+#### 18.1 传输层必须抽象（当前是架构债）
+
+现状：`gui/lib/engine.dart:242` 死绑 `Process.start('yshjy --serve')` + NDJSON。
+桌面三平台可用；Android 可用（可执行文件随包分发）；**iOS 完全不可用**
+——iOS 禁止 fork/exec 任意可执行文件，子进程方案在 iOS 上物理上跑不了。
+
+而 `docs/BACKEND-SPEC.md` §1.2 早就规划了三层：
+`yshjy-core`（Rust API）→ `yshjy-ffi`（C ABI）→ `yshjy-json`（事件/结果序列化）。
+实现只走了最外层 json（通过子进程），FFI 层一行没写。
+
+**设计决策**：Dart 侧抽出 `EngineTransport` 接口（`start / send / events / cancel`），
+两个实现共用同一套业务代码：
+
+| 实现 | 用在哪 | 说明 |
+|---|---|---|
+| `ProcessTransport` | Linux / Windows / macOS / Android | 现状方案，引擎崩溃不拖垮界面 |
+| `FfiTransport` | **iOS**（Android 可选，性能更好） | flutter_rust_bridge 或手写 C ABI，静态库进 Xcode |
+
+界面只依赖接口 → 换平台不改业务代码。
+
+#### 18.2 引擎要产库，不能只产 bin
+
+- `Cargo.toml` 增加 `[lib] crate-type = ["rlib", "cdylib", "staticlib"]`
+  （现在只有隐式 rlib：`src/lib.rs` 存在但没声明 crate-type → 产不出 `.so` / `.a`）
+- 导出稳定 C ABI，约束照 `BACKEND-SPEC.md` §1.3：只用简单类型、数据是 serde 结构、
+  进度走事件流、取消用 `TaskHandle`、不假设文件系统
+
+#### 18.3 路径与平台能力（现在写死 Linux 的地方）
+
+| 项 | 现状 | 全平台要求 |
+|---|---|---|
+| 配置目录 | `XDG_CONFIG_HOME` + `$HOME` 回退（`src/config.rs:41-57`） | Windows `%APPDATA%`；macOS `~/Library/Application Support`；移动端 app 私有目录 |
+| 状态/历史 | GUI **3 处硬编码** `$HOME/.local/state`（`app_shell.dart:159`、`history_store.dart:51`、`about_page.dart:40`） | 统一走 `path_provider` 之类平台 API |
+| 内存/磁盘探测 | 读 `/proc/meminfo`、`/proc/mounts`（`src/hardware.rs:181,198`） | 各平台 API；取不到就降级放行（现状已是 `ok()?`，不会崩） |
+| 回收站 | 计划走 XDG 回收站 | Windows 回收站 / macOS 废纸篓；移动端"移出沙箱" |
+| 文件访问 | 直接给路径 | Android SAF / iOS document picker：先导入沙箱再解，`ARCHITECTURE.md` F1 的 seek 三档方案 |
+
+#### 18.4 排期
+
+- **第 20 批不受影响**（继续 Linux 上把功能做完整）
+- 第 24 批起：Windows 构建链 → macOS 构建链 → Android（P12）→ iOS（P12b）
+- **但两件事建议提到第 21 批做**（各半天，不影响桌面，且越晚越贵）：
+  1. `[lib] crate-type` 加 cdylib/staticlib（只为产库，不改逻辑）
+  2. Dart 侧抽 `EngineTransport`（把现在的 `Process.start` 装进 `ProcessTransport`）
+
 ---
 
 ## 五、架构（三层）
@@ -646,8 +700,9 @@ GUI          Flutter（一套代码覆盖 Linux/Windows/macOS/Android/iOS）
 - ✅ 目标平台：桌面（Linux/Windows/macOS）+ 手机（Android 优先）
 
 ### 待定 → 已结案（2026-10-17）
-- ✅ GUI 框架：**Flutter 3.44.9**（已跑到第 19 批，代码在 `gui/`）
+- ✅ GUI 框架：**Flutter 3.44.9**（一套代码覆盖 5 个平台，已跑到第 19 批）
 - ✅ 打包功能：v0.4 起就有（`ys` 命令 + 打包页）
 - ✅ 开源协议：**MIT**（见 `LICENSE`）
-- ⏳ iOS：仍不做（沙箱限制大，Android 优先；先把桌面做完整）
+- ✅ **iOS：要做**（用户 2026-10-17 明确「全平台」）。现在只在 Linux 上跑是开发机限制，
+  不是平台定位。iOS 排在最后一站（沙箱与构建门槛最高），架构约束见 §十八
 
