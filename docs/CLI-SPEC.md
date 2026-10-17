@@ -120,14 +120,24 @@ yshjy --select required 包.mp4       # 只要必需的：跳过目录与 .DS_St
 **进度条**：只在真终端上画（管道/重定向不吐控制字符）；
 事件在引擎侧按 100 ms 合并，外壳再节流到 200 ms 重画。
 
-### 3.6 待实现（v0.6 起）
+### 3.6 已实现（第 21 批组 E，0.9.21-c）
 
-`--config`（指定配置文件路径；注意 `--show-config` 已实现，不是一回事）、
-`--layout`、`--split`、`--cover`、`--password-file`、
-`--no-auto-password`、`-v` / `-vv`、`--log`、`--no-color`、`--extract-cover`、`--keep`
+- `--config <文件>`：指定配置文件（跟 `--show-config` 不是一回事；文件不存在会警告并回退默认）
+- `--layout L1|L2`：L1 尾部追加 / L2 free 原子（默认）。**L5/L6 明确拒绝并解释**
+  （实测 L5 解压残废、L6 视频播不了），L3/L4 报「未实现」
+- `--cover <文件>`：自定义封面（读不到直接报错，不静默换内置素材）
+- `--password-file <文件>`：本次命令的密码本（每行一个、`#` 注释、兼容 `密码<Tab>备注`）
+- `--no-auto-password`：不自动从说明文件 / 密码本找（显式 `-p` 不受影响）
+- `-v` / `-vv`：详细 / 调试（事件、诊断、条目失败原因进 stderr）
+- `--log <文件>`：日志写文件（终端级别按 `-v`，文件里始终写全）
+- `--no-color`：不上色（非终端也自动关）
+- `--keep`：打包时保留中间 ZIP，并打印路径
 
-> **已从本清单移出**（v0.8 / v0.9 做掉了）：`--report`、`-f --force`、
-> Ctrl-C 接管（取消令牌 + 退出码 130）、`--lang`、`--show-config`、`--import-passwords`。
+> **更早从本清单移出**（v0.8 / v0.9 做掉了）：`--report`、`-f --force`、
+> Ctrl-C 接管（取消令牌 + 退出码 130）、`--lang`、`--show-config`、`--import-passwords`、
+> `--split`、`--extract-cover`、`--encoding`。
+>
+> 实测脚本：`~/.hermes/cache/scratch/cli_e_probe.py`（16 项断言，全过）。
 
 ---
 
