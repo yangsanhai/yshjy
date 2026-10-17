@@ -106,12 +106,12 @@ pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
         Target::ZipSplit { volumes } => Some(volumes),
         _ => None,
     };
-    if let Some(v) = vols {
-        if let Some(缺) = 缺卷信息(v) {
-            return Err(Error::new(ErrorCode::MissingVolume)
-                .with("missing", &缺)
-                .with("found", v.len().to_string()));
-        }
+    if let Some(v) = vols
+        && let Some(缺) = 缺卷信息(v)
+    {
+        return Err(Error::new(ErrorCode::MissingVolume)
+            .with("missing", &缺)
+            .with("found", v.len().to_string()));
     }
     Ok(t)
 }

@@ -56,6 +56,8 @@ class Preview {
   final bool complete;
   final int totalSize;
   final int encryptedCount;
+  /// 加密方式：zipcrypto / aes / aes128 / aes192 / aes256 / unknown（null = 没加密）
+  final String? encKind;
   final List<EntryItem> entries;
   final List<String> hints;
 
@@ -64,6 +66,7 @@ class Preview {
     required this.complete,
     required this.totalSize,
     required this.encryptedCount,
+    required this.encKind,
     required this.entries,
     required this.hints,
   });
@@ -73,6 +76,7 @@ class Preview {
         complete: j['complete'] != false,
         totalSize: (j['total_size'] as num?)?.toInt() ?? 0,
         encryptedCount: (j['encrypted'] as num?)?.toInt() ?? 0,
+        encKind: j['enc_kind'] as String?,
         entries: (j['entries'] as List? ?? [])
             .map((e) => EntryItem.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),

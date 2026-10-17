@@ -157,7 +157,10 @@ pub fn extract_rar_ctx(
     fs::create_dir_all(&opts.dest)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建输出目录失败: {e}")))?;
 
-    let pw_bytes = opts.password.as_ref().map(|p| p.as_bytes().to_vec());
+    // 密码候选（UTF-8 → GBK → UTF-16LE）：RAR 与 ZIP 一样，密码只是任意字节，
+    // 中文 Windows 的 WinRAR 写的是 CP936 —— 单用 UTF-8 必然报「密码错」。
+    let 候选 = opts.password.as_ref().map(|p| crate::extract::密码候选(p));
+    let mut pw_bytes: Option<Vec<u8>> = None;
     let dest = opts.dest.clone();
     let overwrite = opts.overwrite;
     let limits = opts.limits.clone();
@@ -173,8 +176,29 @@ pub fn extract_rar_ctx(
     // ── 先验证密码 ──
     // 重要：`rars` 在解密失败时**不报错**，只是静默不写数据（会产出空文件）。
     // 所以必须先主动 test 一遍，否则用户会得到一堆 0 字节的"成功"产物。
-    if let Err(e) = archive.test(pw_bytes.as_deref()) {
-        let msg = e.to_string();
+    // test 对每个编码候选各跑一次，命中就用它去 extract。
+    let mut 校验错误: Option<String> = None;
+    match &候选 {
+        Some(list) => {
+            for cand in list {
+                match archive.test(Some(cand)) {
+                    Ok(()) => {
+                        pw_bytes = Some(cand.clone());
+                        break;
+                    }
+                    Err(e) => 校验错误 = Some(e.to_string()),
+                }
+            }
+        }
+        None => {
+            if let Err(e) = archive.test(None) {
+                校验错误 = Some(e.to_string());
+            }
+        }
+    }
+    if pw_bytes.is_none()
+        && let Some(msg) = 校验错误
+    {
         let low = msg.to_lowercase();
         let is_pw = low.contains("password")
             || low.contains("crypto")

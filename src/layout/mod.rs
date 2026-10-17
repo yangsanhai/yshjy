@@ -74,6 +74,12 @@ pub struct EntryInfo {
     pub compressed_size: Option<u64>,
     /// 是否加密 —— 界面上的 🔒 徽标就读这个字段
     pub encrypted: bool,
+    /// 加密方式：`Some("zipcrypto")` / `Some("aes")`；未加密为 `None`
+    ///
+    /// ZIP 用「通用标志 bit0」表示传统 ZipCrypto、「压缩方法 99」表示 WinZip AES。
+    pub enc_kind: Option<&'static str>,
+    /// AES 强度（1=AES-128 / 2=AES-192 / 3=AES-256），来自 extra field 0x9901
+    pub aes_strength: Option<u8>,
     /// CRC-32（校验用）
     pub crc32: Option<u32>,
 }

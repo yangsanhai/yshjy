@@ -75,6 +75,8 @@ class _HomePageState extends State<HomePage> {
   List<String> _batchOrder = [];
   Map<String, dynamic>? _batch;
   String? _password;
+  /// 解压码是否显示明文（眼睛图标，调研 07:383「是标配，必须做」）
+  bool _showPw = false;
   final List<String> _notes = [];
 
   @override
@@ -922,6 +924,22 @@ class _HomePageState extends State<HomePage> {
               style: TextStyle(color: cs.error),
             ),
           ),
+        // 加密方式提示（DESIGN §17.4）：ZipCrypto 有 1/256 误判概率，
+        // 是「密码像是对的、文件却全坏」的唯一解释路径。
+        if (pv.encryptedCount > 0 && pv.encKind != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              switch (pv.encKind) {
+                'zipcrypto' => '🔓 老式加密（ZipCrypto）：密码可能蒙对，但解出的文件可能是坏的',
+                'aes256' => '🔐 AES-256 加密：密码校验可靠',
+                'aes128' || 'aes192' => '🔐 AES 加密：密码校验可靠',
+                'aes' => '🔐 AES 加密',
+                _ => '🔐 加密方式未知',
+              },
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ),
         if (_notes.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -1257,16 +1275,25 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 18),
               TextField(
                 controller: _pwCtrl,
-                obscureText: true,
+                obscureText: !_showPw,
                 autofocus: true,
                 onSubmitted: (_) => _retryWithPassword(),
                 textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '解压码',
                   hintText: '一般写在群公告、文件名里，或旁边的 txt',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   isDense: true,
-                  prefixIcon: Icon(Icons.key),
+                  prefixIcon: const Icon(Icons.key),
+                  // 眼睛：点一下看明文，再点回密文（打错一个字符不用整段重输）
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPw ? Icons.visibility_off : Icons.visibility,
+                      size: 18,
+                    ),
+                    tooltip: _showPw ? '隐藏解压码' : '显示解压码',
+                    onPressed: () => setState(() => _showPw = !_showPw),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
