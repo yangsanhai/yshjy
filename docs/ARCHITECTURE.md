@@ -85,7 +85,7 @@ yshjy/                       (workspace)
 │   │       └── shell/          外壳文件处理（MP4 atom / MKV EBML / 图片 trailer）
 │   ├── yshjy-cli/           CLI 外壳
 │   │   └── src/main.rs        参数解析 → 调 core → 渲染进度与报告
-│   └── yshjy-gui/           （v0.3+）Flutter 前端 + FFI/服务桥
+│   └── gui/                 Flutter 前端 + `--serve` 协议（见 docs/PROTOCOL.md）
 └── tests/                   集成测试（跑 tests/data 全样本）
 ```
 
@@ -350,3 +350,21 @@ pub enum Error {
 ### 待验证（不阻塞 v0.1）
 - [ ] **Rust → Android 构建链**最小验证（返回字符串 → 编译 .so → Flutter 调用），v0.1 后尽快做
 - [ ] 实测"百度网盘 App 分享过来的文件能否 seek"
+
+
+---
+
+## GUI 选型：为什么是「Flutter + 协议」而不是 FFI
+
+| 维度 | 协议（`--serve`，本项目选它） | FFI（flutter_rust_bridge / cbindgen） |
+|---|---|---|
+| 引擎改接口后要做什么 | 不用动前端（只加不删） | 重新生成绑定、重编前端 |
+| 换前端框架（Flutter→Tauri） | 前端重写，引擎一行不动 | 绑定全废 |
+| 跨平台（桌面/手机） | 同一套标准流 | 每平台编动态库 + 打包 |
+| 调试 | `yshjy --serve` 手喂 JSON，一眼看出是哪边的锅 | 需要原生调试器 |
+| 性能 | 一次系统调用级开销（事件 ≤10 次/秒，可忽略） | 略快（差异在纳秒级） |
+
+结论：解压工具是 **I/O 密集**不是调用密集，协议的开销可以忽略；
+换来的是"前后端各自升级"的自由度 —— 这正是用户明确要的。
+
+契约细节见 `docs/PROTOCOL.md`；界面实现见 `gui/`。
