@@ -334,6 +334,22 @@ fn 做extract(
 
     let sink: Arc<dyn EventSink> = 事件.clone();
     let out: JobOutcome = yshjy::job::run_job(&job, &opts, &sink, 取消);
+
+    // 失败时返回 ok:false，并**带上结构化 detail**（如缺分卷的 missing/found）。
+    //
+    // 为什么重新识别一次：`JobOutcome` 只带 `Outcome::Failed(code)`，刻意不背 detail
+    // （批量场景传不动）。identify 是纯读文件头，几毫秒，换来界面能说"缺 xxx.7z.003"。
+    if let yshjy::error::Outcome::Failed(code) = &out.outcome {
+        let sink2: Arc<dyn EventSink> = Arc::new(yshjy::event::NullSink);
+        let ctx2 = UnpackCtx::new(1, sink2);
+        if let Err(e) = yshjy::job::identify(Path::new(路径), &ctx2) {
+            return Err(错误对象(e));
+        }
+        return Err(json!({
+            "code": code.as_str(),
+            "note": out.note,
+        }));
+    }
     Ok(结果json(&out))
 }
 
