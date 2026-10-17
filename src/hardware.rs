@@ -176,6 +176,11 @@ impl Hardware {
     }
 }
 
+/// 可用内存（MiB）—— 解压前预检用
+pub fn available_mem_mib() -> Option<u64> {
+    read_available_mem_mib()
+}
+
 /// 读可用内存（Linux: /proc/meminfo 的 MemAvailable）
 fn read_available_mem_mib() -> Option<u64> {
     let s = std::fs::read_to_string("/proc/meminfo").ok()?;

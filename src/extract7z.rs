@@ -203,9 +203,78 @@ pub fn extract_7z_stream_ctx<R: Read + Seek>(
     extract_7z_with_hint_ctx(src, packed_total, opts, ctx)
 }
 
+/// LZMA2 字典大小（coder properties[0] 的官方算法）
+fn lzma2_dict_size(prop: u8) -> u64 {
+    if prop > 40 {
+        return 0;
+    }
+    if prop == 40 {
+        return 4 * 1024 * 1024 * 1024;
+    }
+    (2 | (u64::from(prop) & 1)) << (prop / 2 + 11)
+}
+
+/// 从 7z 头估算解码峰值内存：LZMA / LZMA2 的字典基本就是解码器要吃的内存
+fn 估算解码内存(archive: &sevenz_rust2::Archive) -> Option<u64> {
+    let mut max_dict: u64 = 0;
+    for block in &archive.blocks {
+        for coder in &block.coders {
+            let id = coder.encoder_method_id();
+            let props = coder.properties();
+            let dict = if id == [0x21u8] && !props.is_empty() {
+                // LZMA2
+                lzma2_dict_size(props[0])
+            } else if id == [0x03u8, 0x01, 0x01] && props.len() >= 5 {
+                // LZMA：props[1..5] 是小端 u32 字典大小
+                u32::from_le_bytes([props[1], props[2], props[3], props[4]]) as u64
+            } else {
+                0
+            };
+            max_dict = max_dict.max(dict);
+        }
+    }
+    (max_dict > 0).then_some(max_dict)
+}
+
+/// 解压前的内存预检
+///
+/// 7z 用的是**流式**解压，正常路径拿不到字典大小就先开跑了；大字典（1 GB+）的包
+/// 会被内核 OOM 直接杀掉整个引擎，界面只看到「引擎断开」，比报错难懂得多。
+/// 这里先单独读一遍文件头（只读头，不碰数据），读完把读指针退回去。
+fn 内存预检<R: std::io::Read + std::io::Seek>(
+    src: &mut R,
+    password: &sevenz_rust2::Password,
+) -> Result<()> {
+    let 起点 = src.stream_position().unwrap_or(0);
+    let 需要 = match sevenz_rust2::ArchiveReader::new(&mut *src, password.clone()) {
+        Ok(reader) => 估算解码内存(reader.archive()),
+        Err(_) => None, // 读头失败就让后面的正常流程去报真正的错
+    };
+    let _ = src.seek(std::io::SeekFrom::Start(起点));
+    let (Some(need), Some(avail_mib)) = (需要, crate::hardware::available_mem_mib()) else {
+        return Ok(());
+    };
+    let avail = avail_mib * 1024 * 1024;
+    // 留 256 MB 给系统和其他程序，别把机器榨干
+    let 预留 = 256 * 1024 * 1024;
+    if need + 预留 > avail {
+        return Err(Error::new(ErrorCode::NotEnoughSpace)
+            .with("kind", "memory")
+            .with("need_mib", (need / 1048576).to_string())
+            .with("available_mib", avail_mib.to_string())
+            .context(format!(
+                "这个 7z 的压缩字典约 {} MB，解压至少要 {} MB 空闲内存，现在只有 {} MB —— 先关几个程序再试",
+                need / 1048576,
+                need / 1048576 + 256,
+                avail_mib
+            )));
+    }
+    Ok(())
+}
+
 /// 内部实现（带上下文）：`packed_total` 是"压缩包多大"，用于算压缩比
 fn extract_7z_with_hint_ctx<R: Read + Seek>(
-    src: R,
+    mut src: R,
     packed_total: u64,
     opts: &Extract7zOptions,
     ctx: &UnpackCtx,
@@ -220,6 +289,9 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
         Some(p) => sevenz_rust2::Password::new(p),
         None => sevenz_rust2::Password::empty(),
     };
+
+    // 解压前先估算内存（只读头），不够就提前说清楚，别被 OOM 打死
+    内存预检(&mut src, &password)?;
 
     let mut report = crate::extract::ExtractReport::default();
     // 以"压缩包体积"为分母算压缩比，防解压炸弹（比率为 0 表示不做比率检查）
@@ -435,6 +507,16 @@ fn unique_path(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn lzma2字典大小_官方公式() {
+        // 官方算法：(2 | (p & 1)) << (p / 2 + 11)
+        assert_eq!(super::lzma2_dict_size(0), 4 << 10); // 4 KB
+        assert_eq!(super::lzma2_dict_size(16), 1 << 20); // 1 MB
+        assert_eq!(super::lzma2_dict_size(32), 256 << 20); // 256 MB
+        assert_eq!(super::lzma2_dict_size(40), 4u64 << 30); // 4 GB
+        assert_eq!(super::lzma2_dict_size(41), 0); // 非法值
+    }
+
     use super::*;
     use std::io::Cursor;
 
