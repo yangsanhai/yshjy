@@ -86,6 +86,8 @@ pub struct PackReport {
     pub layout: PackLayout,
     /// 自检发现的问题（空 = 全好）
     pub warnings: Vec<String>,
+    /// `--keep` 时保留的中间 ZIP（默认已删除，这里是 None）
+    pub intermediate: Option<PathBuf>,
 }
 
 impl PackReport {
@@ -100,6 +102,22 @@ impl PackReport {
     // 违反了本项目的分层约定（见 src/i18n.rs 模块头：引擎只给结构化数据，
     // 句子归外壳）。结果是：英文/日文界面下面这句永远中文，翻译不了。
     // v0.9 第 10 批把它挪到外壳（main::do_pack）查语言包渲染 —— 别再加回来。
+}
+
+/// `--keep`：保留打包的中间 ZIP（默认删掉）
+///
+/// 放全局开关而不是 [`PackOptions`] 的字段：那个结构体测试里有十几处逐字段构造，
+/// 加字段会把测试一起改坏（同 [`build_plain`] 的注释）。
+static 保留中间产物: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 设定是否保留中间产物（`--keep`）
+pub fn 设定保留中间产物(b: bool) {
+    保留中间产物.store(b, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 是否保留中间产物
+pub fn 保留中间产物已开启() -> bool {
+    保留中间产物.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// **把输入打成伪装包**
@@ -173,7 +191,11 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
         }
     }
 
-    let _ = fs::remove_file(&tmp);
+    if 保留中间产物已开启() {
+        // `--keep`：留着中间 ZIP（外壳会把路径打出来）
+    } else {
+        let _ = fs::remove_file(&tmp);
+    }
 
     Ok(PackReport {
         total_size: cover_size + zip_size + atom_overhead,
@@ -183,6 +205,7 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
         // 报告**实际用的**布局（可能被上面降级过），不是 opts 里那个
         layout,
         warnings,
+        intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
 }
 
@@ -217,7 +240,11 @@ pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackRepo
         std::io::copy(&mut f, out)
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
     }
-    let _ = fs::remove_file(&tmp);
+    if 保留中间产物已开启() {
+        // `--keep`：留着中间 ZIP
+    } else {
+        let _ = fs::remove_file(&tmp);
+    }
 
     Ok(PackReport {
         total_size: zip_size,
@@ -227,6 +254,7 @@ pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackRepo
         // 普通压缩没有「布局」概念；字段保留给协议兼容，对外由 `mode` 区分
         layout: PackLayout::TailAppend,
         warnings: Vec::new(),
+        intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
 }
 
