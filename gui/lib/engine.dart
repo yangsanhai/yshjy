@@ -181,9 +181,21 @@ class EngineClient {
   int _nextId = 1;
   bool _started = false;
 
-  /// 引擎路径：优先环境变量 `YSHJY_BIN`（打包后指向随包带的二进制），否则走 PATH
-  static String get executable =>
-      Platform.environment['YSHJY_BIN'] ?? 'yshjy';
+  /// 引擎路径（按优先级查找）
+  ///
+  /// 1. 环境变量 `YSHJY_BIN`（开发时指到 target/release/yshjy）
+  /// 2. **跟界面放在同一个目录的 `yshjy`** —— 发布包就是这样摆的，
+  ///    用户双击就能用，不需要装 PATH
+  /// 3. PATH 里的 yshjy（系统安装版）
+  static String get executable {
+    final env = Platform.environment['YSHJY_BIN'];
+    if (env != null && env.isNotEmpty) return env;
+    try {
+      final beside = File(Platform.resolvedExecutable).parent.path + Platform.pathSeparator + 'yshjy';
+      if (File(beside).existsSync()) return beside;
+    } catch (_) {}
+    return 'yshjy';
+  }
 
   Stream<EngineEvent> get events => _events.stream;
 
