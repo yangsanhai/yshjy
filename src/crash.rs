@@ -221,20 +221,13 @@ fn 写到目录(dir: &Path, 文本: &str) -> std::io::Result<PathBuf> {
     Ok(路径)
 }
 
-/// 状态目录：`$XDG_STATE_HOME/yshjy`，没有就 `~/.local/state/yshjy`
+/// 状态目录：平台惯例见 [`crate::paths::state_dir`]
 ///
 /// 为什么不放 `$XDG_CONFIG_HOME`：配置是"用户的选择"，崩溃日志是"运行产物"，
-/// 按 XDG 规范后者属于 state。
+/// 按 XDG 规范后者属于 state。Windows / macOS 各走自己的惯例（不再假设 HOME）。
 fn 状态目录() -> std::io::Result<PathBuf> {
-    if let Some(d) = std::env::var_os("XDG_STATE_HOME") {
-        let p = PathBuf::from(d);
-        if p.is_absolute() {
-            return Ok(p.join("yshjy"));
-        }
-    }
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| std::io::Error::other("HOME 环境变量没设置"))?;
-    Ok(PathBuf::from(home).join(".local/state/yshjy"))
+    yshjy::paths::state_dir()
+        .ok_or_else(|| std::io::Error::other("找不到状态目录：HOME/LOCALAPPDATA 都没设置"))
 }
 
 /// 只留最近 [`保留份数`] 份崩溃日志

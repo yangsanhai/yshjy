@@ -70,7 +70,7 @@
 | 说明书 + 校验和 | §14.2 | `analysis/steganographier-hide.md` §Q6 | 输出命名 / 说明书 / 大小-时长校验 | 部分 | 🟡 第20批 |
 | 改 MP4 atom 保证封面可播 | §14.1 | `analysis/steganographier-hide.md` §Q3 | 改 atom 的具体做法 | `src/pack/` | ✅ |
 | 干扰数据 / 假签名 | §14.2 | `analysis/05` §1.3（资源红线）、隐写者 §八 | 垃圾段、伪特征码 | 无 | ❌ 第22批 |
-| **封面分离（解压侧）** | §3 / §17.5 | `tech/README.md:109`（同一套封面知识） | 反着切：`[0, 压缩层起点)` 写成可播文件 | 无 | ❌ 第20批 P2b |
+| **封面分离（解压侧）** | §3 / §17.5 | `tech/README.md:109`（同一套封面知识） | 反着切：`[0, 压缩层起点)` 写成可播文件 | `src/cover_extract.rs` | ✅ 解压侧 + 21批加 `list.cover` 预探 |
 
 ---
 
@@ -91,12 +91,12 @@
 
 | 项 | 参考锚点 | 抄什么 | 落点 | 状态 |
 |---|---|---|---|---|
-| 三层暴露（core/ffi/json） | `docs/BACKEND-SPEC.md` §1.2 | 结构分层 | 已有 core/json，ffi 未做 | 🟡 |
-| FFI 约束（简单类型/事件流/TaskHandle） | `docs/BACKEND-SPEC.md` §1.3 | 接口草案 | 待实现 | ❌ |
-| Android 桥接 | `BACKEND-SPEC:29`（flutter_rust_bridge） | 编译 `.so` | 产库已就绪 | 🟡 |
-| iOS 桥接 | `BACKEND-SPEC:30`（静态库） | 静态库进 Xcode | `libyshjy.a` 已产出 | 🟡 |
+| 三层暴露（core/ffi/json） | `docs/BACKEND-SPEC.md` §1.2 | 结构分层 | core/json ✅ + ffi ✅（`ffi/`） | ✅ |
+| FFI 约束（简单类型/事件流/TaskHandle） | `docs/BACKEND-SPEC.md` §1.3 | 接口草案 | `ffi/src/lib.rs` + `include/yshjy.h`（JSON 进出、事件回调、Job 句柄） | ✅ 21批组D |
+| Android 桥接 | `BACKEND-SPEC:29`（flutter_rust_bridge） | 编译 `.so` | `libyshjy_ffi.so` 可出；桥接层待接 | 🟡 地基已就绪 |
+| iOS 桥接 | `BACKEND-SPEC:30`（静态库） | 静态库进 Xcode | `libyshjy_ffi.a` 可出；`FfiTransport` 待写 | 🟡 地基已就绪 |
 | 移动端 seek 三档 | `docs/ARCHITECTURE.md` F1 | 直接 fd / 块缓存 / 先复制 | 待做 | ❌ |
-| 传输层抽象 | DESIGN §18.1 | `EngineTransport` 接口 | `gui/lib/engine.dart` 死绑 Process | ❌ 第21批 |
+| 传输层抽象 | DESIGN §18.1 | `EngineTransport` 接口 | `gui/lib/transport/engine_transport.dart`（ProcessTransport 已实现） | ✅ 21批组D |
 
 ---
 

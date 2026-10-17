@@ -72,6 +72,40 @@ pub fn cover_path(input: &Path) -> PathBuf {
     first
 }
 
+/// 封面区的「体检结果」：只算大小和类型，**不落盘**
+///
+/// 界面要在预览阶段就把「伪装封面」当成清单里一行（带大小），但预览绝不能
+/// 顺手切出一个几百 MB 的文件 —— 所以先只回答「有多大、是什么」。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoverInfo {
+    /// 封面区字节数
+    pub size: u64,
+    /// `video` / `image` / `other`
+    pub kind: &'static str,
+    /// 扩展名（小写，不含点）
+    pub ext: String,
+}
+
+/// 探一下封面区（`base == 0` 或越界 → 没有封面）
+pub fn probe_zip_cover(input: &Path, base: u64) -> Option<CoverInfo> {
+    if base == 0 {
+        return None;
+    }
+    let total = std::fs::metadata(input).ok()?.len();
+    if base > total {
+        return None;
+    }
+    let ext = input
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    Some(CoverInfo {
+        size: base,
+        kind: cover_kind(&ext),
+        ext,
+    })
+}
+
 /// 切出封面区 `[0, base)`
 ///
 /// - `base == 0` → 没有封面区（包就在文件开头），返回 `Ok(None)`

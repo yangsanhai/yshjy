@@ -1,0 +1,18 @@
+[package]
+name = "yshjy-ffi"
+version = "0.9.20"
+edition = "2024"
+publish = false
+description = "杨三海解压引擎的稳定 C ABI（iOS / Android / 其它外壳用）"
+
+[lib]
+name = "yshjy_ffi"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+yshjy = { path = "..", default-features = true }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"

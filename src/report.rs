@@ -106,15 +106,9 @@ pub fn 生成(opts: &ReportOptions, ctx: &UnpackCtx) -> Result<PathBuf> {
     Ok(目标路径)
 }
 
-/// 状态目录（与崩溃日志一致：`$XDG_STATE_HOME/yshjy`，默认 `~/.local/state/yshjy`）
+/// 状态目录（与崩溃日志一致：见 [`crate::paths::state_dir`]）
 fn 状态目录() -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os("XDG_STATE_HOME") {
-        let p = PathBuf::from(d);
-        if p.is_absolute() {
-            return Some(p.join("yshjy"));
-        }
-    }
-    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state/yshjy"))
+    crate::paths::state_dir()
 }
 
 /// 最近一份崩溃日志（`crash-*.log`），返回（文件名, 内容）

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../platform_paths.dart';
 import '../theme_mode.dart';
 
 /// 设置页（可写）
@@ -18,19 +19,11 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String get _home => Platform.environment['HOME'] ?? '.';
-
-  String get _configDir {
-    final xdg = Platform.environment['XDG_CONFIG_HOME'];
-    return '${xdg ?? '$_home/.config'}/yshjy';
-  }
+  String get _configDir => configDir;
 
   String get _configPath => '$_configDir/config.toml';
 
-  String get _stateDir {
-    final xdg = Platform.environment['XDG_STATE_HOME'];
-    return '${xdg ?? '$_home/.local/state'}/yshjy';
-  }
+  String get _stateDir => stateDir;
 
   final _outDirCtrl = TextEditingController();
   String _conflict = 'rename';
@@ -180,10 +173,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _open(String path) async {
-    try {
-      await Directory(path).create(recursive: true);
-      await Process.run('xdg-open', [path]);
-    } catch (_) {}
+    await Directory(path).create(recursive: true);
+    await openDirectory(path);
   }
 
   @override

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'platform_paths.dart';
+
 /// 一条处理记录（本地保存，不上传）
 class HistoryEntry {
   final String time;
@@ -47,11 +49,7 @@ class HistoryEntry {
 class HistoryStore {
   static const int maxEntries = 200;
 
-  static File get _file {
-    final home = Platform.environment['HOME'] ?? '.';
-    final state = Platform.environment['XDG_STATE_HOME'] ?? '$home/.local/state';
-    return File('$state/yshjy/gui-history.json');
-  }
+  static File get _file => File('$stateDir/gui-history.json');
 
   static Future<List<HistoryEntry>> load() async {
     try {

@@ -2,6 +2,23 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.21-c] · 进行中（第 21 批 · 组 D 平台地基已完成）
+
+- **跨平台路径**：新增 `src/paths.rs`（Windows `LOCALAPPDATA` / macOS
+  `Application Support` / Unix `XDG_STATE_HOME`），崩溃日志与诊断包不再各写一份
+  Unix 假设；`YSHJY_STATE_DIR` 可覆盖（测试/便携版）
+- **命令语义抽成 `src/api.rs`**：`--serve` 与 C ABI 共用同一份 list/extract/pack/
+  batch/scan/report 实现，两个传输不会各走各的
+- **稳定 C ABI v1**：新增独立 crate `ffi/`（`cdylib` + `staticlib`）、
+  `ffi/include/yshjy.h`、`docs/FFI.md`。JSON 进 JSON 出，事件走回调，
+  panic 被 `catch_unwind` 拦住不穿 FFI。实测（ctypes 直调 `.so`）通过
+- **封面预探**：`list` 结果新增 `cover{size,kind,ext}`（只读 metadata，不落盘）；
+  `extract` 新增 `extract:false`（只提封面、不解压、不建输出目录）
+- **界面传输层抽象**：`gui/lib/transport/engine_transport.dart`（`EngineTransport`
+  + `ProcessTransport`），`EngineClient` 不再死绑 `Process.start`，iOS 可换 FFI 实现
+- **界面路径跨平台**：`gui/lib/platform_paths.dart` 统一状态/配置目录；5 处写死
+  `$HOME/.local/state` 与 4 处 `xdg-open` 全部替换（Windows/macOS 走各自 API）
+
 ## [0.0.19] · 2026-10-17（版本号规则变更 + GUI 更新）
 
 **版本号规则（用户 2026-10-17 定）**：批次号与版本号对齐 —— 第 19 批 = `0.0.19`，

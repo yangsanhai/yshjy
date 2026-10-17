@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../history_store.dart';
+import '../platform_paths.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
@@ -566,9 +567,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openFolder(String? dir) async {
     if (dir == null) return;
-    try {
-      await Process.run('xdg-open', [dir]);
-    } catch (_) {
+    final ok = await openDirectory(dir);
+    if (!ok) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('打不开文件管理器：$dir')));
@@ -1393,7 +1393,7 @@ class _HomePageState extends State<HomePage> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
-                    color: hint!.warn ? cs.error : null,
+                    color: hint.warn ? cs.error : null,
                     height: 1.5,
                   ),
                 ),
@@ -1554,9 +1554,7 @@ class _HomePageState extends State<HomePage> {
   /// 在文件管理器里定位某个文件（失败项用）
   Future<void> _revealInFolder(String path) async {
     if (path.isEmpty) return;
-    try {
-      await Process.run('xdg-open', [File(path).parent.path]);
-    } catch (_) {}
+    await openDirectory(File(path).parent.path);
   }
 
   /// 智能解压的结果预告（与引擎的三条规则对齐）

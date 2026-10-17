@@ -1,7 +1,22 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **第 20 批已收尾**（2026-10-17，24 个提交，版本 `0.9.20-c`）。
-> 下一批清单见 `docs/GUI-PLAN.md §5.3`（0.9.21-c）：用户验收两条 + 双向协议两项 + 自动下钻 + 平台地基 + CLI 扫尾。
+> **第 21 批进行中**（目标 `0.9.21-c`，做完整批再统一抬版本号）。组 D「平台地基」已完成，
+> 下一组按 §5.3 顺序做引擎（C 自动下钻 + A 引擎部分已完成 → 剩 C）+ 协议（B）。
+
+## 第 21 批进度（0.9.21-c 目标）
+
+    ✅ 组D-1 引擎路径跨平台：src/paths.rs（Windows LOCALAPPDATA / macOS Application Support /
+       Unix XDG），crash.rs + report.rs 共用；3 个单测
+    ✅ 组D-2 命令实现抽成 src/api.rs（serve 与 C ABI 共用一份命令语义）
+    ✅ 组D-3 稳定 C ABI：ffi/ 独立 crate（cdylib+staticlib）+ include/yshjy.h + docs/FFI.md
+       实测：ctypes 直调 .so，hello/list/extract/事件回调/取消 全 PASS
+    ✅ 组D-4 Dart EngineTransport + ProcessTransport（gui/lib/transport/engine_transport.dart）
+    ✅ 组D-5 gui/lib/platform_paths.dart：5 处写死 state 路径 + 4 处 xdg-open 全部跨平台
+    ✅ 组A-引擎部分 list 结果带 cover{size,kind,ext}；extract 支持 extract:false（只提封面）
+    ⬜ 组C 嵌套包自动下钻一层
+    ⬜ 组B 双向协议：ASK_USER / answer / skip（限额询问 + 单行取消）
+    ⬜ 组A-界面 封面勾选行 / 打包模式二选一
+    ⬜ 组E CLI 扫尾（--config / --keep / --no-color / -v / --log / --password-file 等）
 
 ## 第 20 批进度（0.9.20-c 目标）
 

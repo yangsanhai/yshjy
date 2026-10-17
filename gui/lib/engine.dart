@@ -6,13 +6,16 @@
 //! - 错误只拿 `code` 查文案；`note` 只用于日志/反馈。
 //!
 //! 这个文件同时是「Flutter 怎么接 Rust 引擎」的参考实现：
-//! `Process.start` + 逐行 JSON，没有 FFI、没有平台插件、Windows/macOS/Android 同样可用。
+//! 默认传输是 `Process.start` + 逐行 JSON（桌面/Android）；
+//! iOS 换成 `FfiTransport`（同一个 `EngineTransport` 接口，见 docs/FFI.md）。
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+
+import 'transport/engine_transport.dart';
 
 // ───────────────────────── 数据模型 ─────────────────────────
 
@@ -209,8 +212,12 @@ class EngineClient {
   /// 全局单例：整个应用只有**一个**引擎进程（多页面共用，事件流广播给所有订阅者）
   static final EngineClient instance = EngineClient();
 
-  Process? _proc;
+  EngineTransport? _proc;
   final _events = StreamController<EngineEvent>.broadcast();
+
+  /// 传输工厂：默认起子进程。iOS / 测试可以换成别的实现（DESIGN §18.1）。
+  static EngineTransportFactory transportFactory =
+      (exe, args) => ProcessTransport(exe, args);
   final Map<int, Completer<Map<String, dynamic>>> _pending = {};
   int _nextId = 1;
   bool _started = false;
@@ -250,18 +257,15 @@ class EngineClient {
   Future<void> _doStart() async {
     if (_started) return;
     try {
-      _proc = await Process.start(executable, ['--serve']);
-      _proc!.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(_onLine, onDone: _onClosed);
+      final t = transportFactory(executable, const ['--serve']);
+      _proc = t;
+      await t.start();
+      t.stdoutLines.listen(_onLine, onDone: _onClosed);
       // 引擎的 stderr 只有崩溃/调试信息，不打扰用户，但留着便于排查
-      _proc!.stderr
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen((l) => debugPrint('[engine] $l'));
+      t.stderrLines.listen((l) => debugPrint('[engine] $l'));
       _started = true;
     } catch (_) {
+      _proc = null;
       _starting = null;
       rethrow;
     }
@@ -312,8 +316,7 @@ class EngineClient {
     final c = Completer<Map<String, dynamic>>();
     _pending[id] = c;
     final payload = jsonEncode({...cmd, 'id': id});
-    _proc!.stdin.writeln(payload);
-    await _proc!.stdin.flush();
+    await _proc!.writeLine(payload);
     return c.future.timeout(
       timeout,
       onTimeout: () => {
@@ -419,7 +422,7 @@ class EngineClient {
   }
 
   void dispose() {
-    _proc?.stdin.close();
+    _proc?.closeInput();
     _proc?.kill();
     _events.close();
   }
