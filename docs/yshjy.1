@@ -1,0 +1,160 @@
+.\" yshjy 的 man 手册页
+.\" 查看：man ./docs/yshjy.1    安装：install.sh 会装到 ~/.local/share/man/man1
+.TH YSHJY 1 "2026-10-17" "yshjy 0.9.0" "用户命令"
+.SH 名称
+yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件，也能反向打包
+.SH 概要
+.B yshjy
+[\fI选项\fR] \fI文件或目录\fR...
+.br
+.B yshjy ys
+[\fI选项\fR] \fI文件或目录\fR...
+.br
+.B yshys
+[\fI选项\fR] \fI文件或目录\fR...
+.SH 描述
+.B yshjy
+用来处理「网盘下载下来、扩展名是 .mp4 / .zip / .png，但用普通工具打不开」的压缩包。
+它会在文件里定位真正的归档起点（伪装包往往藏在视频数据中间），再用成熟的解码库解压。
+.PP
+默认行为是最省事的：\fByshjy 包.mp4\fR 就够了 —— 自动定位、自动识别格式、
+自动尝试说明文件里写的解压码（只试不存）。
+.PP
+反向也支持：\fByshjy ys 某个目录/\fR 把目录打包成一个能播放的「伪装视频」。
+.SH 用法
+.TP
+.B yshjy \fI文件\fR
+解压（自动定位 + 自动找密码）。
+.TP
+.B yshjy jy \fI文件\fR
+同上，写法完整，脚本里推荐用这个。
+.TP
+.B yshjy ys \fI文件或目录\fR
+打包成伪装文件；默认 MP4 封面 + free 原子布局。
+.TP
+.B yshjy --list \fI文件\fR
+只列出内容，不解压、不写盘。
+.TP
+.B yshjy --rescue \fI文件\fR
+救援模式：中央目录坏了也按每个文件的头逐个抢救。
+.SH 选项
+.TP
+.B \-h, --help
+显示帮助。
+.TP
+.B --version
+显示版本、档位（常用版/全能版）与支持的格式。
+.TP
+.B \-q, --quiet
+安静模式：只输出结果路径（给脚本用）。
+.TP
+.B \-l, --list
+列出包里的内容（ZIP / 7z / RAR / TAR / 单流都支持）。
+.TP
+.B --rescue
+救援模式。
+.TP
+.B --report
+生成诊断包（报障用）。包里不含文件内容，命令行里的密码会被抹掉。
+.TP
+.B --no-paths
+配合 \fB--report\fR：把路径换成占位符，可以直接贴到公开的地方。
+.TP
+.B --json
+事件流按行输出（JSON），给脚本或其它前端消费。
+.TP
+.B --show-config
+显示配置文件路径与当前生效的配置项。
+.TP
+.B --tail
+打包时用「尾部追加」布局（默认是 free 原子；图片/文本封面会自动用它）。
+.TP
+.B --force
+跳过安全预检（压缩比、磁盘余量）。请确认你清楚后果。
+.TP
+.B --no-smart-dir
+关掉「智能解压」的目录规则（默认：单一顶层目录就直接解，散文件就建同名目录）。
+.TP
+.B \-o, --dest \fI目录\fR
+输出到指定目录。
+.TP
+.B \-p, --password \fI解压码\fR
+手动给解压码。注意：命令行参数在 \fBps\fR 里对同机其他用户可见；
+更安全的做法是写进密码本（见 \fB--import-passwords\fR）或用配置文件。
+.TP
+.B \-j, --jobs \fIN\fR
+并行任务数（默认 1，对机械盘最友好）。
+.TP
+.B --select \fI表达式\fR
+只解一部分：序号（\fB1,3\fR）、通配（\fB"*.exe"\fR）、\fBrequired\fR。
+.TP
+.B --lang \fI语言\fR
+界面语言：zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES。
+.TP
+.B --import-passwords \fI文件\fR
+把「一行一个」的密码本导入配置目录。
+.SH 退出码
+.TP
+.B 0
+成功。
+.TP
+.B 1
+一般错误（读写失败、参数冲突等）。
+.TP
+.B 2
+用法错误。
+.TP
+.B 3
+不是压缩包（没找到归档痕迹）。
+.TP
+.B 4
+密码问题（需要密码 / 密码不对）。
+.TP
+.B 5
+部分成功（解出了一部分）。
+.TP
+.B 130
+被 Ctrl-C 取消（已解出的文件保留）。
+.SH 文件
+.TP
+.I ~/.config/yshjy/config.toml
+配置文件（XDG 路径；逐字段宽容，写错了只忽略那一项）。
+.TP
+.I ~/.config/yshjy/passwords.txt
+密码本（一行一个；导入时自动去重）。
+.TP
+.I ~/.config/yshjy/locales/*.toml
+外部语言包（只写要覆盖的条目即可）。
+.TP
+.I ~/.local/state/yshjy/crash/
+崩溃日志（panic 时自动生成，只保留最近 10 份，权限 0600）。
+.SH 环境变量
+.TP
+.B YSHTY_LANG
+界面语言（同 \fB--lang\fR，优先级更低）。
+.TP
+.B XDG_CONFIG_HOME
+配置目录的基准（默认 \fB~/.config\fR）。
+.TP
+.B XDG_STATE_HOME
+状态目录的基准（默认 \fB~/.local/state\fR）。
+.TP
+.B TMPDIR
+临时文件目录（打包、tar.xz 需要；启动时会清理 24 小时前的残骸）。
+.SH 示例
+.nf
+    yshjy 游戏.mp4                    # 一句话解压
+    yshjy --list 电影.mp4             # 先看看里面有什么
+    yshjy -p "解压码" 包.mp4          # 手动给密码
+    yshjy ys 我的游戏/                # 反向：打包成伪装视频
+    yshjy ys -o 截图.png 我的资料/    # 打包成 PNG 伪装图
+    yshjy --rescue 坏掉的包.zip       # 索引全坏也按文件头救
+    yshjy 下载/                       # 整个目录排队解
+    yshjy --select "*.exe" 包.mp4     # 只解一部分
+.SH 说明
+本工具\fB不联网\fR、\fB不做字典/爆破\fR、\fB不内置密码表\fR，抓到的解压码只试不存。
+详细说明见项目目录下的 README.md 与「本工具不做的事」一节。
+.SH 另见
+.BR unzip (1),
+.BR 7z (1),
+.BR tar (1)

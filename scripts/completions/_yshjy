@@ -1,0 +1,35 @@
+#compdef yshjy yshys
+# zsh 补全 —— yshjy（杨三海解压）
+#
+# 装法（用户级，不用 sudo）：
+#   cp scripts/completions/_yshjy ~/.local/share/zsh/site-functions/_yshjy
+#   （确保 fpath 里有那个目录，多数发行版默认有）
+
+_yshjy() {
+    local -a 语言
+    语言=(zh-CN zh-TW en-US ja-JP ko-KR ru-RU es-ES)
+
+    _arguments -s -S \
+        '(-h --help)'{-h,--help}'[显示帮助]' \
+        '--version[显示版本与支持的格式]' \
+        '(-q --quiet)'{-q,--quiet}'[安静模式：只输出结果路径（脚本用）]' \
+        '(-l --list)'{-l,--list}'[只列出包里有什么，不解压]:包:_files' \
+        '--rescue[救援模式：索引坏了也按文件头抢救]' \
+        '--report[生成报障用的诊断包]' \
+        '--no-paths[诊断包里的路径脱敏（要贴到公开地方时用）]' \
+        '--json[事件流按行输出（给脚本/其它前端消费）]' \
+        '--show-config[显示当前配置文件和生效值]' \
+        '--tail[打包：用「尾部追加」布局（默认是 free 原子）]' \
+        '--force[跳过安全预检（压缩比 / 磁盘余量）]' \
+        '--no-smart-dir[关掉智能解压的目录规则]' \
+        '(-o --dest)'{-o,--dest}'[输出目录]:目录:_directories' \
+        '(-p --password)'{-p,--password}'[解压码（不回显）]:密码:' \
+        '(-j --jobs)'{-j,--jobs}'[并行任务数]:数量:(1 2 4 8)' \
+        '--select[只解一部分（序号/通配/required）]:选择:' \
+        '--lang[界面语言]:语言:(${语言[@]})' \
+        '--import-passwords[导入密码本（一行一个）]:文件:_files' \
+        '1:要处理的文件或目录（jy=解压 / ys=打包）:_files' \
+        '*:更多文件或目录:_files'
+}
+
+_yshjy "$@"
