@@ -665,7 +665,19 @@ class _HomePageState extends State<HomePage> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final q = _queue[i];
-                return ListTile(
+                return Focus(
+                  autofocus: i == 0,
+                  // Del / Backspace 移出队列（D4：以前只能整队清空）
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        (event.logicalKey == LogicalKeyboardKey.delete ||
+                            event.logicalKey == LogicalKeyboardKey.backspace)) {
+                      setState(() => _queue.removeAt(i));
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: ListTile(
                   dense: true,
                   leading: Icon(
                     q.archive ? Icons.inventory_2_outlined : Icons.help_outline,
@@ -700,7 +712,19 @@ class _HomePageState extends State<HomePage> {
                         : '看起来不是压缩包 · ${_size(q.size)}',
                     style: const TextStyle(fontSize: 11),
                   ),
-                  trailing: _queueStatusChip(q),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _queueStatusChip(q),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 16),
+                        tooltip: '移出队列（或按 Del）',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() => _queue.removeAt(i)),
+                      ),
+                    ],
+                  ),
+                ),
                 );
               },
             ),
@@ -945,6 +969,22 @@ class _HomePageState extends State<HomePage> {
                 visualDensity: VisualDensity.compact,
               ),
           ],
+        ),
+        // 智能解压的结果预告（调研 07:864-865）：点「开始解压」之前就知道会多出什么
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            children: [
+              Icon(Icons.auto_awesome, size: 15, color: cs.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _smartDirHint(pv),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
         ),
         if (!pv.complete)
           Padding(
@@ -1459,6 +1499,22 @@ class _HomePageState extends State<HomePage> {
     try {
       await Process.run('xdg-open', [File(path).parent.path]);
     } catch (_) {}
+  }
+
+  /// 智能解压的结果预告（与引擎的三条规则对齐）
+  ///
+  /// 单文件 → 直接解；包里只有一个顶层目录 → 解到那个目录；散文件 → 新建同名文件夹。
+  /// 说清楚这句，用户点「开始解压」前就知道磁盘上会多出什么。
+  String _smartDirHint(Preview pv) {
+    final files = pv.entries.where((e) => !e.isDir).toList();
+    if (files.isEmpty) return '包里没有文件';
+    if (files.length == 1) return '会直接解出这 1 个文件';
+    final roots = files.map((e) => e.path.split('/').first).toSet();
+    final allNested = files.every((e) => e.path.contains('/'));
+    if (roots.length == 1 && allNested) {
+      return '会解到「${roots.first}/」里（包里本来就有这个目录，不会多套一层）';
+    }
+    return '会新建一个同名文件夹，把 ${files.length} 个文件放进去（散文件）';
   }
 
   /// 读密码本，给密码框做「常用解压码」chips（只读，不回写）
