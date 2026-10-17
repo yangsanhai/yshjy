@@ -362,12 +362,18 @@ class EngineClient {
     required List<String> inputs,
     required String out,
     String? password,
+    int? splitBytes,
+    bool checksum = true,
+    bool readme = true,
   }) async {
     final r = await _call({
       'cmd': 'pack',
       'inputs': inputs,
       'out': out,
       if (password != null) 'password': password,
+      if (splitBytes != null) 'split': splitBytes,
+      'checksum': checksum,
+      'readme': readme,
     }, timeout: const Duration(hours: 2));
     return _unwrap(r);
   }

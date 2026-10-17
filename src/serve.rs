@@ -419,6 +419,19 @@ fn 做pack(参数: &Value) -> Result<Value, Value> {
     use std::io::Write;
     let _ = bw.flush();
 
+    // 交付形态（DESIGN §14.2 / §17.8）：分卷 / 校验和 / 说明书。
+    // 失败不改判 —— 包已经打好了。
+    let post = yshjy::pack_post::PostOptions {
+        split: 参数.get("split").and_then(|v| v.as_u64()),
+        checksum: 参数.get("checksum").and_then(|v| v.as_bool()).unwrap_or(true),
+        readme: 参数.get("readme").and_then(|v| v.as_bool()).unwrap_or(true),
+        password: 参数
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+    };
+    let post_rep = yshjy::pack_post::postprocess(Path::new(输出), &post).ok();
+
     Ok(json!({
         "total_size": rep.total_size,
         "zip_size": rep.zip_size,
@@ -426,6 +439,9 @@ fn 做pack(参数: &Value) -> Result<Value, Value> {
         "entries": rep.entries,
         "layout": format!("{:?}", rep.layout),
         "warnings": rep.warnings,
+        "volumes": post_rep.as_ref().map(|p| p.volumes.iter().map(|x| x.display().to_string()).collect::<Vec<_>>()).unwrap_or_default(),
+        "checksum": post_rep.as_ref().and_then(|p| p.checksum.as_ref()).map(|x| x.display().to_string()),
+        "readme": post_rep.as_ref().and_then(|p| p.readme.as_ref()).map(|x| x.display().to_string()),
     }))
 }
 

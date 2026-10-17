@@ -27,6 +27,11 @@ class _PackPageState extends State<PackPage> {
   final TextEditingController _pwCtrl = TextEditingController();
   /// 解压码是否显示明文（眼睛图标）
   bool _showPw = false;
+  /// 交付选项（DESIGN §17.8）：分卷 / 校验和 / 说明书
+  bool _split = false;
+  bool _checksum = true;
+  bool _readme = true;
+  final _splitCtrl = TextEditingController(text: '2G');
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _result;
@@ -88,6 +93,9 @@ class _PackPageState extends State<PackPage> {
         inputs: _inputs,
         out: _out!,
         password: _pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim(),
+        splitBytes: _split ? _parseSize(_splitCtrl.text) : null,
+        checksum: _checksum,
+        readme: _readme,
       );
       if (!mounted) return;
       setState(() => _result = r);
@@ -99,6 +107,22 @@ class _PackPageState extends State<PackPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 解析「2G / 500M / 1048576」为字节数（看不懂返回 null = 不分卷）
+  int? _parseSize(String s) {
+    final m = RegExp(r'^([0-9.]+)\s*(GB|G|MB|M|KB|K|B)?$')
+        .firstMatch(s.trim().toUpperCase());
+    if (m == null) return null;
+    final v = double.tryParse(m.group(1)!);
+    if (v == null || v <= 0) return null;
+    final mult = switch (m.group(2)) {
+      'GB' || 'G' => 1024 * 1024 * 1024,
+      'MB' || 'M' => 1024 * 1024,
+      'KB' || 'K' => 1024,
+      _ => 1,
+    };
+    return (v * mult).toInt();
   }
 
   @override
@@ -243,6 +267,47 @@ class _PackPageState extends State<PackPage> {
             ),
           ),
           const SizedBox(height: 12),
+          // 交付选项：默认「校验和 + 说明书」开（DESIGN §14.2），分卷按需
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _split,
+            onChanged: _busy ? null : (v) => setState(() => _split = v),
+            title: const Text('分成多个卷（大于 4 GB 建议开）', style: TextStyle(fontSize: 13)),
+            subtitle: _split
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: TextField(
+                      controller: _splitCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '每卷大小',
+                        hintText: '2G / 500M',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _checksum,
+            onChanged: _busy ? null : (v) => setState(() => _checksum = v),
+            title: const Text('生成 SHA-256 校验和', style: TextStyle(fontSize: 13)),
+            subtitle: const Text('对方可以 sha256sum -c 验证没下坏',
+                style: TextStyle(fontSize: 11)),
+          ),
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _readme,
+            onChanged: _busy ? null : (v) => setState(() => _readme = v),
+            title: const Text('生成说明.txt', style: TextStyle(fontSize: 13)),
+            subtitle: const Text('告诉对方这不是视频、怎么打开（有密码会写进去）',
+                style: TextStyle(fontSize: 11)),
+          ),
+          const SizedBox(height: 8),
           if (_error != null)
             Text(
               '打包失败（${_error}）',
