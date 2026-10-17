@@ -18,7 +18,8 @@
 //! - `FindDescriptor`（L1463）的**双重验证**：找到 `PK\x07\x08` 还要满足
 //!   ① 其后 4 字节是 `PK\x03\x04` 或 `PK\x01\x02`；② 描述符里记的 packSize == 实际位置。
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::ctx::UnpackCtx;
+use crate::error::{Error, ErrorCode, ItemResult, Result};
 use std::io::{Read, Seek, SeekFrom};
 
 const SIG_LOCAL: [u8; 4] = *b"PK\x03\x04";
@@ -401,6 +402,22 @@ pub fn extract_by_locals<R: Read + Seek>(
     file_size: u64,
     opts: &crate::extract::ExtractOptions,
 ) -> Result<crate::extract::ExtractReport> {
+    // 不带事件通道的旧入口：行为与 v0.9 之前完全一致（测试/内部调用用）
+    extract_by_locals_ctx(r, base, file_size, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_by_locals`]，但带事件 / 进度 / 取消上下文
+///
+/// 为什么要有带 ctx 的版本：救援路径解出来的东西同样可能**含可执行文件**，
+/// 而"解出了可执行文件"这条提醒如果只塞进内部 `warnings`，外壳（CLI/GUI）
+/// 根本看不见 —— 等于没提醒。UI-SPEC §9.3 要求这条提醒必须到用户眼前。
+pub fn extract_by_locals_ctx<R: Read + Seek>(
+    r: &mut R,
+    base: u64,
+    file_size: u64,
+    opts: &crate::extract::ExtractOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
     use crate::safety::{self, ExtractBudget};
     use std::io::Write;
 
@@ -437,6 +454,7 @@ pub fn extract_by_locals<R: Read + Seek>(
                     .skipped
                     .push((item.path.clone(), "条目已加密，但没有提供密码".into())),
             }
+            ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::Encrypted, 0);
             continue;
         }
 
@@ -445,6 +463,7 @@ pub fn extract_by_locals<R: Read + Seek>(
             if let Ok(d) = safety::resolve_safe(&opts.dest, &item.path) {
                 let _ = std::fs::create_dir_all(&d);
             }
+            ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::Skipped, 0);
             continue;
         }
 
@@ -478,13 +497,11 @@ pub fn extract_by_locals<R: Read + Seek>(
                 .push((item.path.clone(), format!("建父目录失败: {e}")));
             continue;
         }
-        // 注：救援路径的函数签名里没有 ctx（没有事件通道），所以"解出了可执行文件"
-        // 这条提醒暂时只进内部 warnings、到不了外壳。救援本来就是"包已经坏了"的
-        // 兜底路径，优先级低；等给救援接上事件再说。
         if safety::should_warn_executable(&opts.limits, &item.path) {
-            report
-                .warnings
-                .push(format!("{}：可执行文件，已解出但请谨慎运行", item.path));
+            // 走**事件**而不是往内部列表里塞字符串（v0.9 第 10 批接通）：
+            // ① 事件外壳才看得见（否则这条提醒等于没发）
+            // ② 文案由外壳查语言包渲染（引擎不产句子）
+            ctx.diagnostic(crate::event::DiagnosticCode::RiskyEntry, item.path.clone());
         }
 
         // ── 定位数据并解码 ──
@@ -627,6 +644,7 @@ pub fn extract_by_locals<R: Read + Seek>(
                 report.skipped.push((item.path.clone(), msg));
                 let _ = std::fs::remove_file(&out_path);
             }
+            ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::DataError, written);
             continue;
         }
 
@@ -641,10 +659,12 @@ pub fn extract_by_locals<R: Read + Seek>(
                 ),
             ));
             report.bytes_written += written;
+            ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::CrcError, written);
             continue;
         }
 
         report.bytes_written += written;
+        ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::Ok, written);
         report.files.push(crate::extract::ExtractedFile {
             name: item.path.clone(),
             out_path,
@@ -962,6 +982,61 @@ mod tests {
             rep.skipped[0].1.contains("校验"),
             "要如实报告校验失败: {:?}",
             rep.skipped
+        );
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn 救援路径的可执行提醒走事件() {
+        // 这条测的是「提醒到不到得了用户眼前」：塞进内部 warnings 等于没提醒，
+        // 外壳（CLI/GUI）只认事件流。v0.9 第 10 批之前这里是断的。
+        use crate::ctx::UnpackCtx;
+        use crate::event::{ChannelSink, DiagnosticCode, Event, EventSink};
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let data = b"MZ fake exe".to_vec();
+        let mut z = Vec::new();
+        z.extend_from_slice(&SIG_LOCAL);
+        z.extend_from_slice(&[20, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        z.extend_from_slice(&crc32(&data).to_le_bytes());
+        z.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        z.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        z.extend_from_slice(&(b"setup.exe".len() as u16).to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(b"setup.exe");
+        z.extend_from_slice(&data);
+
+        let len = z.len() as u64;
+        let dest = std::env::temp_dir().join(format!("yshjy_rescue_ev_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dest);
+
+        let sink = ChannelSink::new(256);
+        let ctx = UnpackCtx::new(1, sink.clone() as Arc<dyn EventSink>);
+        let mut cur = Cursor::new(z);
+        let opts = crate::extract::ExtractOptions::new(&dest);
+        let rep = extract_by_locals_ctx(&mut cur, 0, len, &opts, &ctx).unwrap();
+        assert_eq!(rep.files.len(), 1, "数据本身应当救出来: {:?}", rep.skipped);
+        assert!(
+            !rep.warnings.iter().any(|w| w.contains("可执行")),
+            "可执行提醒不该再塞进内部 warnings（外壳看不见）: {:?}",
+            rep.warnings
+        );
+
+        let events = sink.drain();
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                Event::Diagnostic { code: DiagnosticCode::RiskyEntry, note, .. } if note == "setup.exe"
+            )),
+            "「解出了可执行文件」必须走事件: {events:?}"
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                Event::EntryFinished { index: 1, result: ItemResult::Ok, .. }
+            )),
+            "救援路径也要报条目结果（进度/明细）: {events:?}"
         );
         let _ = std::fs::remove_dir_all(&dest);
     }
