@@ -28,8 +28,11 @@ git 提交       782817d（v0.9 共 10 批 + 3 次文档收口；每批一个提
                85e710b  第8批 诊断包 --report（报障用；含隐私红线）
                b1f32c4  第9批 诊断包实测逮到并修掉三个问题
                782817d  第10批 tar 列清单 + 救援接事件 + 打包/救援文案归语言包
+               fa9be88  第11批 崩溃兜底 + 单任务隔离 + 本地时区 + 图像封面 + 诊断包带崩溃记录
+               83e098f  分发层：shell 补全 / man / deb 脚本
+               （第12批）契约服务 --serve + docs/PROTOCOL.md（提交见 git log 顶部）
 源码           17915 行 / 35 个文件（另有 fuzz/ 三个目标）
-测试           262 单元 + 25 冒烟（全过）
+测试           268 单元 + 25 冒烟 + 7 组协议冒烟（全过）
                fuzz 首次体检：2787 万次畸形输入，**零 crash**
 代码规范       clippy -D warnings 零警告
 语言包         7 种（zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES），中文包 116 条键
@@ -184,7 +187,11 @@ yshjy --json 包.mp4             # 事件流按行输出（脚本/前端消费�
 ## 下一步（按用户"做到完全完整能用"的目标排）
 
 ```
-1. 打发布包           bash scripts/release.sh（一次出常用版 + 全能版）
+0. 界面（进行中）      协议层 `--serve` 已完成并实测（docs/PROTOCOL.md）；
+                     GUI 计划 = Flutter 一套 UI（Linux 桌面 + Android）走同一协议。
+                     第 1 批：空状态 → 拖入 → 预览 → 解压进度 → 完成
+                     注意：Flutter 还没装（约 1 GB，用户目录即可，不需要 sudo）
+1. 打发布包           bash scripts/release.sh（一次出常用版 + 全能版）+ scripts/build-deb.sh
                      —— v0.8 / v0.9 的包都还没打，攒一起发更省事
 2. fuzz 跑久一点（可选）60 秒只算"初步体检"：认真跑用 -max_total_time=600 以上，
                      corpus 会累积（越跑越深）。nightly + cargo-fuzz 都已就位
