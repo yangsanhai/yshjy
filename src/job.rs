@@ -524,14 +524,27 @@ pub fn decide_dest(job: &Job, opts: &BatchOptions, pv: Option<&crate::preview::P
     }
     let legacy = || match &opts.dest {
         Some(d) => d.clone(),
-        None => PathBuf::from(output_dir_name(&job.input)),
+        // 没指定 -o：解到**包所在目录**下的同名文件夹（跟界面一致）。
+        // 以前这里是相对当前目录的裸名字 —— 站在 ~ 下解别处的包，
+        // 8 GB 的产物会直接铺在家目录里（用户实测踩到，找不到）。
+        None => {
+            let name = output_dir_name(&job.input);
+            match job.input.parent() {
+                Some(p) if !p.as_os_str().is_empty() => p.join(name),
+                _ => PathBuf::from(name),
+            }
+        }
     };
     if !opts.smart_dir {
         return legacy();
     }
     let base = match &opts.dest {
         Some(d) => d.clone(),
-        None => PathBuf::from("."),
+        // 同上：默认基准是包所在的目录，而不是进程的当前目录
+        None => match job.input.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+            _ => PathBuf::from("."),
+        },
     };
     match pv {
         Some(p) => crate::preview::smart_dest(&base, p, &output_dir_name(&job.input)),
@@ -1227,9 +1240,15 @@ mod tests {
     fn 输出目录默认用去掉外壳扩展名的同名文件夹() {
         let opts = BatchOptions::default();
         let j = Job::new(1, "/下载/示例视频.mp4", 0);
-        assert_eq!(resolve_dest(&j, &opts), PathBuf::from("示例视频"));
+        // 默认落在**包所在目录**（不是进程当前目录）—— 用户实测：站在 ~ 下解
+        // 别处的包，产物不该铺在家目录里
+        assert_eq!(resolve_dest(&j, &opts), PathBuf::from("/下载/示例视频"));
         let j2 = Job::new(2, "/下载/包.mp4.zip", 0);
-        assert_eq!(resolve_dest(&j2, &opts), PathBuf::from("包"));
+        assert_eq!(resolve_dest(&j2, &opts), PathBuf::from("/下载/包"));
+
+        // 相对文件名（没有父目录）时退回当前目录
+        let bare = Job::new(3, "裸文件名.mp4", 0);
+        assert_eq!(resolve_dest(&bare, &opts), PathBuf::from("裸文件名"));
 
         let with_dest = BatchOptions {
             encoding: None,
