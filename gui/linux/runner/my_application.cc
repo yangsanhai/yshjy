@@ -52,7 +52,38 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "杨三海解压");
   }
 
-  gtk_window_set_default_size(window, 1120, 780);
+  // 窗口尺寸：**纯比例自适应**，不给任何屏幕写死数字。
+  //
+  // 为什么这么算：
+  // 1. 用 `gdk_monitor_get_workarea` 而不是整块屏幕 —— 自动扣掉顶栏和 Dock，
+  //    拿到的是"真正能用的区域"（GTK 返回的已是逻辑像素，HiDPI 下也正确）
+  // 2. 宽 45%、高 66%（约 30% 面积）：小到能看见旁边的文件管理器（拖拽要用），
+  //    又不至于连清单都放不下
+  // 3. 上下限**也按比例算**，只有"内容放得下的物理最小值"才用绝对数（520×400），
+  //    而且还要受屏幕限制（不能比屏幕还大）
+  GdkDisplay *display = gdk_display_get_default();
+  GdkMonitor *monitor = display ? gdk_display_get_primary_monitor(display) : nullptr;
+  GdkRectangle work = {0, 0, 1280, 720};
+  if (monitor != nullptr) {
+    gdk_monitor_get_workarea(monitor, &work);
+  }
+  if (work.width < 320) work.width = 320;   // 极端情况兜底，防止算出负数
+  if (work.height < 240) work.height = 240;
+
+  // 内容能放下的最小尺寸（逻辑像素），但不能超过工作区的 85%
+  int min_w = MIN(520, (int)(work.width * 0.85));
+  int min_h = MIN(400, (int)(work.height * 0.85));
+  // 上限同样按比例收，避免超宽屏上拉成一整条
+  int max_w = MIN(1000, (int)(work.width * 0.85));
+  int max_h = MIN(800, (int)(work.height * 0.90));
+  if (max_w < min_w) max_w = min_w;
+  if (max_h < min_h) max_h = min_h;
+
+  int win_w = CLAMP((int)(work.width * 0.45), min_w, max_w);
+  int win_h = CLAMP((int)(work.height * 0.66), min_h, max_h);
+  gtk_window_set_default_size(window, win_w, win_h);
+  // 用户手动拖小时也别小到布局散架
+  gtk_widget_set_size_request(GTK_WIDGET(window), min_w, min_h);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
