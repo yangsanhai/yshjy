@@ -798,8 +798,10 @@ class _HomePageState extends State<HomePage> {
                     dense: true,
                     leading: Icon(Icons.error_outline, size: 18, color: cs.error),
                     title: Text(name, style: const TextStyle(fontSize: 12)),
-                    subtitle: Text((j['outcome'] as String? ?? '').toLowerCase(),
+                    subtitle: Text(_batchOutcomeText(j['outcome'] as String? ?? ''),
                         style: const TextStyle(fontSize: 11)),
+                    // 失败项点一下在文件管理器里定位（调研 07:135：静默隔离是反面教材）
+                    onTap: () => _revealInFolder(j['path'] as String? ?? ''),
                   );
                 },
               ),
@@ -1393,6 +1395,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ───────────────────────── 小工具 ─────────────────────────
+
+  /// 批量结果里的 `outcome` 是 Rust 的 Debug 名（`WrongPassword` / `CrcError`），
+  /// 直接 toLowerCase 会把英文裸奔给用户 —— 转成错误码再查人话。
+  String _batchOutcomeText(String oc) {
+    if (oc == 'ok') return '完成';
+    if (oc == 'partial') return '部分完成';
+    if (oc == 'cancelled') return '已取消';
+    final b = StringBuffer();
+    for (var i = 0; i < oc.length; i++) {
+      final c = oc[i];
+      if (i > 0 && c.toUpperCase() == c && c.toLowerCase() != c) b.write('_');
+      b.write(c.toUpperCase());
+    }
+    return _errText(b.toString());
+  }
+
+  /// 在文件管理器里定位某个文件（失败项用）
+  Future<void> _revealInFolder(String path) async {
+    if (path.isEmpty) return;
+    try {
+      await Process.run('xdg-open', [File(path).parent.path]);
+    } catch (_) {}
+  }
 
   /// 读密码本，给密码框做「常用解压码」chips（只读，不回写）
   ///

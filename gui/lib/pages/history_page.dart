@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../history_store.dart';
@@ -45,6 +47,13 @@ class _HistoryPageState extends State<HistoryPage> {
     if (bytes >= k * k) return '${(bytes / (k * k)).toStringAsFixed(1)} MB';
     if (bytes >= k) return '${(bytes / k).toStringAsFixed(0)} KB';
     return '$bytes B';
+  }
+
+  /// 打开某个解压目录（历史条目点一下就走这里）
+  Future<void> _reveal(String path) async {
+    try {
+      await Process.run('xdg-open', [path]);
+    } catch (_) {}
   }
 
   @override
@@ -118,6 +127,8 @@ class _HistoryPageState extends State<HistoryPage> {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 11),
                               ),
+                              // 点一下打开解压目录（调研 07:135：找不到解到哪是反面教材）
+                              onTap: e.dest == null ? null : () => _reveal(e.dest!),
                             );
                           },
                         ),
