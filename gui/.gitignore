@@ -1,0 +1,16 @@
+# Flutter 构建产物（都不入库）
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# 各平台的临时目录
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+macos/Flutter/ephemeral/
+android/.gradle/
+android/local.properties
+ios/Flutter/ephemeral/
+ios/Pods/
+
+*.iml

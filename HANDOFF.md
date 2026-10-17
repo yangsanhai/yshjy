@@ -187,10 +187,10 @@ yshjy --json 包.mp4             # 事件流按行输出（脚本/前端消费�
 ## 下一步（按用户"做到完全完整能用"的目标排）
 
 ```
-0. 界面（进行中）      协议层 `--serve` 已完成并实测（docs/PROTOCOL.md）；
-                     GUI 计划 = Flutter 一套 UI（Linux 桌面 + Android）走同一协议。
-                     第 1 批：空状态 → 拖入 → 预览 → 解压进度 → 完成
-                     注意：Flutter 还没装（约 1 GB，用户目录即可，不需要 sudo）
+0. 界面（第 1 批已写） 协议层 `--serve`：完成 + 7 组冒烟全过（docs/PROTOCOL.md）
+                     GUI：`gui/`（Flutter）—— 空状态 / 预览 / 进度 / 完成 / 失败 / 诊断提醒
+                     技术：Process.start + NDJSON（不是 FFI），见 gui/README.md
+                     第 2 批待做：拖放入口 / 密码框 / 空间不足确认 / 条目勾选 / 批量队列 / 打包面板 / 设置页
 1. 打发布包           bash scripts/release.sh（一次出常用版 + 全能版）+ scripts/build-deb.sh
                      —— v0.8 / v0.9 的包都还没打，攒一起发更省事
 2. fuzz 跑久一点（可选）60 秒只算"初步体检"：认真跑用 -max_total_time=600 以上，

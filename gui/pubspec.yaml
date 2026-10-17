@@ -1,0 +1,21 @@
+name: yshjy_gui
+description: 杨三海解压 —— 桌面界面（Flutter）
+publish_to: "none"
+version: 0.9.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 官方文件选择器（Linux 用 GTK，Windows/macOS/移动端都有实现）
+  file_selector: ^1.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
