@@ -446,6 +446,10 @@
 
 ### E. CLI 扫尾
 7. `--config` / `--keep` / `--no-color` / `-v` / `--log` / `--password-file` / `--no-auto-password` / `--layout`
+   - ✅ **已完成（21 批组 E，0.9.21-c）**：9 个参数全部接线并实测 16 项断言；
+     7 种语言包 `--help` 同步；`--layout L5/L6` 明确拒绝、L3/L4 报未实现；
+     `--keep` 保留并打印中间 ZIP。见 `docs/CLI-SPEC.md` §3.6 与
+     `~/.hermes/cache/scratch/cli_e_probe.py`。
 
 > 顺序建议（按上面的排批原则重排；**2026-10-17 用户指定：平台地基提到第一项**）：
 > **① 平台地基**（D：`EngineTransport` + 稳定 C ABI + 4 处硬编码路径）——单独一轮，先做

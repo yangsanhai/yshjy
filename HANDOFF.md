@@ -1,10 +1,11 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **第 21 批进行中**（目标 `0.9.21-c`，做完整批再统一抬版本号）。组 D「平台地基」/ 组 C 自动下钻 /
-> 组 B 双向协议 / 组 A-界面 都已完成，**只剩组 E（CLI 扫尾）**。收尾顺序：
-> 组 E → 抬版本号 0.9.21-c → `cargo test` + `flutter build` + 两个真实包复验 → 统一提交。
+> **第 21 批已完成（v0.9.21-c）**：组 D 平台地基 / 组 C 自动下钻 / 组 B 双向协议 /
+> 组 A-界面 / 组 E CLI 扫尾 全部落地并提交（每组一个提交，可单独回滚）。
+> 下一批 0.9.22-c 的候选：D16（`--serve` 一次性喂多条会丢结果）、D18（7z 写包评估）、
+> 发布前安全自查（`refs/` 第三方源码副本、git 历史里的个人路径）。
 
-## 第 21 批进度（0.9.21-c 目标）
+## 第 21 批进度（0.9.21-c 已完成）
 
     ✅ 组D-1 引擎路径跨平台：src/paths.rs（Windows LOCALAPPDATA / macOS Application Support /
        Unix XDG），crash.rs + report.rs 共用；3 个单测
@@ -26,7 +27,10 @@
        · pack_page 模式二选一，默认普通压缩（.zip），伪装是特殊功能
        · 引擎 pack 加 mode:"plain"（build_plain），协议实测 17 项全过
        · 顺带修 D17：小包压缩比误报（64 MiB 起检）
-    ⬜ 组E CLI 扫尾（--config / --keep / --no-color / -v / --log / --password-file 等）
+    ✅ 组E CLI 扫尾（--config / --layout / --cover / --password-file / --no-auto-password /
+       -v / -vv / --log / --no-color / --keep）
+       · 实测 16 项断言全过（cli_e_probe.py）；7 种语言包 --help 同步
+       · --layout L5/L6 明确拒绝、L3/L4 报未实现；--keep 打印中间 ZIP 路径
 
 ## 第 20 批进度（0.9.20-c 目标）
 
@@ -101,7 +105,7 @@
   反了就是「引擎未就绪 (ProcessException)」。引擎查找顺序：`YSHJY_BIN` →
   同目录 `yshjy` → PATH（本机 PATH 里没装 yshjy，所以只能靠前两条）。
 
-> 最后更新：2026-10-17（**v0.9.19-c**；重开对话先看「GUI 完整化计划」和「下一步」）
+> 最后更新：2026-10-17（**v0.9.21-c**，第 21 批完成；重开对话先看顶部进度块和「GUI 完整化计划」）
 >
 > **版本号规则（用户定，2026-10-17 晚修订）**：批次号 = 版本号，**内测期加 `-c`**
 > —— 第 19 批 `0.9.19-c`，第 20 批 `0.9.20-c`，依次类推。
