@@ -1000,11 +1000,19 @@ fn 文件类型提示(path: &std::path::Path) -> Option<String> {
 }
 
 /// 打印每个任务的结果
+///
+/// **失败项不在这个循环里逐条打**：目录里 50 个文件只有 2 个是包时，
+/// 逐条打会刷出几十行"这不是压缩包"，用户根本看不见成功的那两个。
+/// 失败统一到下面「按原因合并」，同一种原因只占一行。
 fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
+    use yshjy::error::Outcome;
+
     for j in &report.jobs {
+        if matches!(j.outcome, Outcome::Failed(_)) {
+            continue; // 留给后面的合并汇报
+        }
         let (txt, icon) = 结论文案(&j.outcome);
         if quiet {
-            // 脚本模式：只吐解出来的文件路径
             println!("{}", j.stats.dest.as_deref().unwrap_or(&j.input).display());
             continue;
         }
@@ -1023,24 +1031,19 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
                 ]
             )
         );
-        // 失败时那个目录只是"准备落盘"时建的，里面是空的 —— 别让用户以为有东西
-        if !matches!(j.outcome, yshjy::error::Outcome::Failed(_))
-            && let Some(d) = &j.stats.dest
-        {
+        if let Some(d) = &j.stats.dest {
             println!("     📁 {}", d.display());
         }
         for (name, res) in j.stats.failed.iter().take(5) {
             println!("     ⚠ {name}（{}）", res.as_str());
         }
-        if matches!(j.outcome, yshjy::error::Outcome::Failed(_)) {
-            if let Some(提示) = 文件类型提示(&j.input) {
-                println!("   ℹ {提示}");
-            }
-            if let Some(note) = &j.note {
-                println!("     ({note})");
-            }
-        }
     }
+
+    let 失败: Vec<&yshjy::batch::JobOutcome> = report
+        .jobs
+        .iter()
+        .filter(|j| matches!(j.outcome, Outcome::Failed(_)))
+        .collect();
 
     if report.len() > 1 {
         println!(
@@ -1050,9 +1053,58 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
             report.failed(),
             report.cancelled()
         );
-        for f in report.failures().iter().take(10) {
-            let (txt, _) = 结论文案(&f.outcome);
-            println!("   ❌ {}：{txt}", f.input.display());
+        // 同原因合并：20 个 png → 一行「20 个文件：这不是压缩包」
+        let mut 按原因: Vec<(String, Vec<&yshjy::batch::JobOutcome>)> = Vec::new();
+        for j in &失败 {
+            let 原因 = 结论文案(&j.outcome).0;
+            match 按原因.iter_mut().find(|(r, _)| *r == 原因) {
+                Some((_, v)) => v.push(j),
+                None => 按原因.push((原因, vec![*j])),
+            }
+        }
+        for (原因, 项) in 按原因 {
+            if 项.len() == 1 {
+                println!("   ❌ {}：{原因}", 项[0].input.display());
+                if let Some(提示) = 文件类型提示(&项[0].input) {
+                    println!("      ℹ {提示}");
+                }
+            } else {
+                println!("   ❌ {} 个文件：{原因}", 项.len());
+                for j in 项.iter().take(3) {
+                    let 名 = j
+                        .input
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    println!("        · {名}");
+                }
+                if 项.len() > 3 {
+                    println!("        … 还有 {} 个", 项.len() - 3);
+                }
+            }
+        }
+    } else if let Some(j) = 失败.first() {
+        // 单任务：先把「❌ 文件 —— 原因」那行打出来（循环里为了合并汇报跳过了失败项）
+        let (txt, icon) = 结论文案(&j.outcome);
+        println!(
+            "{}",
+            文案().t(
+                "result.line",
+                &[
+                    ("icon", icon),
+                    ("input", &j.input.display().to_string()),
+                    ("text", &txt),
+                    ("size", &人类可读(j.stats.bytes_written)),
+                    ("secs", &format!("{:.1}", j.stats.millis as f64 / 1000.0)),
+                ]
+            )
+        );
+        // 再说清楚"你给的是啥"
+        if let Some(提示) = 文件类型提示(&j.input) {
+            println!("   ℹ {提示}");
+        }
+        if let Some(note) = &j.note {
+            println!("     ({note})");
         }
     }
 }

@@ -300,7 +300,65 @@ pub fn expand_inputs(paths: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
     out.sort_by_key(|p| std::cmp::Reverse(file_size(p)));
+    归并分卷(out)
+}
+
+/// 分卷归并：同一组 `x.7z.001/.002/…`、`x.z01/z02`、`x.part1.rar/part2` 只保留一块
+///
+/// 为什么必须做：目录里有 `.001/.002/.003` 时，逐个展开会让**同一个包被解三遍**
+/// （每一块都能认出整组），用户白等三倍时间、还看到三份结果。
+/// 归并后交给引擎的那一块，`as_7z_volumes` / `as_zip_volumes` 会自动把整组找齐。
+fn 归并分卷(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut 已见组: HashSet<String> = HashSet::new();
+    let mut out: Vec<PathBuf> = Vec::new();
+    for p in paths {
+        match 分卷组键(&p) {
+            Some(组键) => {
+                if 已见组.insert(组键) {
+                    out.push(p);
+                }
+            }
+            None => out.push(p),
+        }
+    }
     out
+}
+
+/// 若这个文件是「分卷命名」，返回整组的键（目录 + 主干名）
+///
+/// 认这三种写法（都是实际下载会遇到的）：
+/// - `x.7z.001` / `x.zip.001` / `x.001`（三位以上数字）
+/// - `x.z01` / `x.z02`（ZIP 分卷）
+/// - `x.part1.rar` / `x.part01.rar`（RAR 分卷）
+fn 分卷组键(p: &Path) -> Option<String> {
+    let name = p.file_name()?.to_string_lossy().to_string();
+    let lower = name.to_ascii_lowercase();
+    let dir = p.parent().unwrap_or_else(|| Path::new("."));
+    let 组 = |主干: &str| format!("{}/{}", dir.display(), 主干);
+
+    // .partN.rar / .partN
+    if let Some(pos) = lower.rfind(".part") {
+        let rest = &lower[pos + 5..];
+        let num: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if !num.is_empty() && rest[num.len()..].starts_with(".rar") {
+            return Some(组(&name[..pos]));
+        }
+    }
+    // .zNN（ZIP 分卷）
+    if let Some(pos) = lower.rfind(".z") {
+        let rest = &lower[pos + 2..];
+        if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+            return Some(组(&name[..pos]));
+        }
+    }
+    // .NNN（三位以上数字；两位的 .01 也可能是分卷，但太容易误伤，不认）
+    if let Some(pos) = lower.rfind('.') {
+        let rest = &lower[pos + 1..];
+        if rest.len() >= 3 && rest.chars().all(|c| c.is_ascii_digit()) {
+            return Some(组(&name[..pos]));
+        }
+    }
+    None
 }
 
 fn collect_dir(dir: &Path, depth: usize, out: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>) {
