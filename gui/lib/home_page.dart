@@ -11,7 +11,10 @@ import 'engine.dart';
 enum Phase { empty, listing, preview, extracting, done, error }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  /// 启动时要直接打开的文件（右键菜单传进来的），可能为空
+  final String? initialFile;
+
+  const HomePage({super.key, this.initialFile});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -31,6 +34,8 @@ class _HomePageState extends State<HomePage> {
   String? _errorCode;
   String? _errorNote;
   EngineError? _error;
+  final TextEditingController _pwCtrl = TextEditingController();
+  String? _password;
   final List<String> _notes = [];
 
   @override
@@ -39,10 +44,16 @@ class _HomePageState extends State<HomePage> {
     // 引擎没启动也别让界面崩：错误在点"选择文件"时才提示
     _client.start().catchError((_) {});
     _sub = _client.events.listen(_onEvent);
+    // 从右键菜单带文件启动：等首帧画完再开，避免 setState 早于 build
+    final f = widget.initialFile;
+    if (f != null && f.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _open(f));
+    }
   }
 
   @override
   void dispose() {
+    _pwCtrl.dispose();
     _sub?.cancel();
     _client.dispose();
     super.dispose();
@@ -155,7 +166,7 @@ class _HomePageState extends State<HomePage> {
       _current = null;
     });
     try {
-      final r = await _client.extract(path);
+      final r = await _client.extract(path, password: _password);
       if (!mounted) return;
       setState(() {
         _result = r;
@@ -174,6 +185,32 @@ class _HomePageState extends State<HomePage> {
       _errorNote = note;
       _error = e;
     });
+  }
+
+  /// 这次失败是不是"缺解压码"（资源分享里最常见的情况）
+  bool get _needsPassword =>
+      _errorCode == 'PASSWORD_REQUIRED' || _errorCode == 'PASSWORD_WRONG';
+
+  /// 用用户输入的密码再试一次
+  Future<void> _retryWithPassword() async {
+    final pw = _pwCtrl.text.trim();
+    if (pw.isEmpty || _file == null) return;
+    setState(() {
+      _password = pw;
+      _phase = Phase.extracting;
+      _progress = null;
+      _current = null;
+    });
+    try {
+      final r = await _client.extract(_file!, password: pw);
+      if (!mounted) return;
+      setState(() {
+        _result = r;
+        _phase = Phase.done;
+      });
+    } on EngineError catch (e) {
+      _showError(e.code, e.note, e);
+    }
   }
 
   /// 文件类型 → 人话（与 CLI 同一张表；将来抽成语言包）
@@ -669,12 +706,40 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ],
-            if ((_errorNote ?? '').isNotEmpty) ...[
+            // 技术详情（`Error { code: … }`）对新手是噪音，默认收起来：
+            // 需要报障时一键复制，而不是糊在脸上
+            if ((_errorNote ?? '').isNotEmpty)
+              TextButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _errorNote!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已复制错误详情 —— 报障时贴给我就行')),
+                  );
+                },
+                icon: const Icon(Icons.copy, size: 15),
+                label: const Text('复制错误详情', style: TextStyle(fontSize: 12)),
+              ),
+            if (_needsPassword) ...[
+              const SizedBox(height: 18),
+              TextField(
+                controller: _pwCtrl,
+                obscureText: true,
+                autofocus: true,
+                onSubmitted: (_) => _retryWithPassword(),
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  labelText: '解压码',
+                  hintText: '一般写在群公告、文件名里，或旁边的 txt',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  prefixIcon: Icon(Icons.key),
+                ),
+              ),
               const SizedBox(height: 10),
-              SelectableText(
-                _errorNote!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              FilledButton.icon(
+                onPressed: _retryWithPassword,
+                icon: const Icon(Icons.lock_open),
+                label: const Text('用这个解压码重试'),
               ),
             ],
             const SizedBox(height: 24),
