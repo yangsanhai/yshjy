@@ -63,6 +63,8 @@ fn 版本信息() -> String {
 /// —— `--lang en 包.mp4` 会把 `en` 当成要解压的文件（多语言上线时正好踩到）。
 const 带值的选项: &[&str] = &[
     "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang", "--split", "--encoding",
+    // 第 21 批组 E（CLI 扫尾）新增
+    "--config", "--layout", "--cover", "--password-file", "--log",
 ];
 
 /// 进程级文案仓库
@@ -75,6 +77,86 @@ static I18N: std::sync::OnceLock<yshjy::i18n::I18n> = std::sync::OnceLock::new()
 fn 文案() -> &'static yshjy::i18n::I18n {
     I18N.get().expect("文案仓库应当在 main 开头初始化")
 }
+
+// ───────────────────────── 终端日志与颜色（组 E）─────────────────────────
+
+/// 日志器：`-v` 详细 / `-vv` 调试；`--log <文件>` 同时写文件
+///
+/// 为什么不用 `log` / `env_logger`：这个项目的依赖是**刻意最小**的
+/// （少一个依赖就少一个被投毒的面），而且我们只需要「往 stderr / 文件写一行」。
+struct 日志器 {
+    级别: u8,
+    文件: std::sync::Mutex<Option<std::fs::File>>,
+}
+
+static 日志: std::sync::OnceLock<日志器> = std::sync::OnceLock::new();
+
+/// 初始化日志（`-v` / `-vv` / `--log`）
+fn 初始化日志(级别: u8, 路径: Option<&str>) -> Result<(), String> {
+    let f = match 路径 {
+        Some(p) => Some(
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(p)
+                .map_err(|e| format!("日志文件打不开（{p}）：{e}"))?,
+        ),
+        None => None,
+    };
+    let _ = 日志.set(日志器 {
+        级别,
+        文件: std::sync::Mutex::new(f),
+    });
+    Ok(())
+}
+
+fn 记日志(级别: u8, msg: &str) {
+    let Some(l) = 日志.get() else { return };
+    // 终端只显示到用户要的级别；文件里永远写全（--log 就是给排错用的）
+    if 级别 <= l.级别 {
+        use std::io::Write;
+        let _ = writeln!(std::io::stderr(), "{msg}");
+    }
+    if let Ok(mut guard) = l.文件.try_lock()
+        && let Some(f) = guard.as_mut()
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "{msg}");
+    }
+}
+
+/// 详细（`-v`）
+fn 详细(msg: impl AsRef<str>) {
+    记日志(1, msg.as_ref());
+}
+
+/// 调试（`-vv`）
+fn 调试(msg: impl AsRef<str>) {
+    记日志(2, msg.as_ref());
+}
+
+/// `--no-color` / 输出不是终端 → 不上色
+static 颜色关闭: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn 设定颜色(开: bool) {
+    颜色关闭.store(!开, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 上色（只在终端 + 没关颜色时生效）
+fn 上色(s: &str, 码: &str) -> String {
+    use std::io::IsTerminal;
+    if 颜色关闭.load(std::sync::atomic::Ordering::Relaxed)
+        || !std::io::stdout().is_terminal()
+    {
+        return s.to_string();
+    }
+    format!("\x1b[{码}m{s}\x1b[0m")
+}
+
+/// 红（失败）/ 绿（成功）/ 黄（警告）
+const 红: &str = "31";
+const 绿: &str = "32";
+const 黄: &str = "33";
 
 fn main() -> ExitCode {
     // 时区要最先注入：崩溃日志、诊断包、ZIP 条目时间全都靠它显示成"本地时间"
@@ -111,8 +193,60 @@ fn main() -> ExitCode {
     };
     let has = |k: &str| argv.iter().any(|a| a == k || a == short_of(k));
 
+    // ── 组 E 的 CLI 参数：必须在读配置之前处理 ──
+    // ① `--config <文件>`：指定配置文件（跟 `--show-config` 不是一回事）
+    if let Some(p) = val_of("--config") {
+        yshjy::config::指定配置文件路径(std::path::Path::new(&p));
+        if !yshjy::config::指定配置文件存在() {
+            // 读配置的原则是「宽容」：文件不在就用默认值，但必须让用户知道
+            eprintln!("⚠ --config 指定的文件不存在：{p}（这次用默认配置）");
+        }
+    }
+    // ② `--password-file <文件>`：本次命令的密码本（每行一个，# 注释）
+    if let Some(p) = val_of("--password-file") {
+        let path = std::path::PathBuf::from(&p);
+        if !path.exists() {
+            eprintln!("❌ --password-file 指定的文件不存在：{p}");
+            return ExitCode::from(code::USAGE);
+        }
+        let list = yshjy::config::读密码本(&path);
+        if list.is_empty() {
+            eprintln!("❌ --password-file 里没有可用的密码（空行和 # 注释不算）：{p}");
+            return ExitCode::from(code::USAGE);
+        }
+        yshjy::config::设定额外密码(list);
+    }
+    // ③ `--no-auto-password`：不自动从说明/密码本找（显式 -p 不受影响）
+    if has("--no-auto-password") {
+        yshjy::config::关闭自动密码();
+    }
+    // ④ `-v` / `-vv` / `--log` / `--no-color` / `--keep`
+    let 日志级别 = if has("-vv") {
+        2
+    } else if has("-v") || has("--verbose") {
+        1
+    } else {
+        0
+    };
+    if let Err(e) = 初始化日志(日志级别, val_of("--log").as_deref()) {
+        eprintln!("❌ {e}");
+        return ExitCode::from(code::USAGE);
+    }
+    if has("--no-color") {
+        设定颜色(false);
+    }
+    if has("--keep") {
+        yshjy::pack::设定保留中间产物(true);
+        详细("--keep：打包的中间 ZIP 会保留");
+    }
+
     // 配置（读一次就够；文件不在就用默认值 —— 见 config 模块的"读的时候宽容"）
     let cfg = yshjy::config::全局配置();
+    详细(format!(
+        "配置：{} 个任务上限 · 密码本 {} 条",
+        cfg.general.jobs,
+        cfg.passwords().len()
+    ));
 
     // 多语言：`--lang` > 配置文件里的 language > 系统语言（见 i18n::detect）
     let _ = I18N.set(yshjy::i18n::I18n::new(
@@ -302,16 +436,25 @@ fn main() -> ExitCode {
         return do_extract_cover(&targets, quiet);
     }
     if cmd == "ys" {
-        return do_pack(
-            &targets,
-            &val_of("--dest"),
-            &val_of("--password"),
-            has("--tail"),
+        // 先把 Option 绑定成变量再取引用：`&val_of(...)` 直接塞进结构体会拿到
+        // 临时值的引用，编译器虽然可能放行，但读代码的人会以为它活得更久。
+        let dest_o = val_of("--dest");
+        let pw_o = val_of("--password");
+        let split_o = val_of("--split");
+        let layout_o = val_of("--layout");
+        let cover_o = val_of("--cover");
+        return do_pack(打包参数 {
+            targets: &targets,
+            dest_opt: &dest_o,
+            password: &pw_o,
+            tail: has("--tail"),
             quiet,
-            &val_of("--split"),
-            !has("--no-checksum"),
-            !has("--no-readme"),
-        );
+            split: &split_o,
+            checksum: !has("--no-checksum"),
+            readme: !has("--no-readme"),
+            layout: &layout_o,
+            cover: &cover_o,
+        });
     }
 
     // ── 解压（v0.5：多目标 / 批量 / 挑选 / 进度事件）──
@@ -798,6 +941,19 @@ impl yshjy::event::EventSink for 终端出口 {
     fn emit(&self, ev: &yshjy::event::Event) {
         use yshjy::event::Event;
 
+        // `-v` / `-vv` / `--log`：事件进日志（quiet 也记，--log 本来就是给排错用的）
+        if !ev.is_progress() {
+            调试(format!("事件 {ev:?}"));
+        }
+        if let Event::Diagnostic { code, note, .. } = ev {
+            详细(format!("诊断 {code:?}：{note}"));
+        }
+        if let Event::EntryFinished { path, result, .. } = ev
+            && !result.is_ok()
+        {
+            详细(format!("条目失败 {path}：{}", result.as_str()));
+        }
+
         // `--json`：原样把事件按行吐出去（脚本/其它前端消费）
         if self.json {
             if let Ok(s) = serde_json::to_string(ev) {
@@ -1047,18 +1203,20 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
         }
         let 耗时 = format!("{:.1}", j.stats.millis as f64 / 1000.0);
         let 大小 = 人类可读(j.stats.bytes_written);
+        let 行 = 文案().t(
+            "result.line",
+            &[
+                ("icon", icon),
+                ("input", &j.input.display().to_string()),
+                ("text", &txt),
+                ("size", &大小),
+                ("secs", &耗时),
+            ],
+        );
+        // 成功绿 / 部分成功黄（--no-color 或非终端时原样输出）
         println!(
             "{}",
-            文案().t(
-                "result.line",
-                &[
-                    ("icon", icon),
-                    ("input", &j.input.display().to_string()),
-                    ("text", &txt),
-                    ("size", &大小),
-                    ("secs", &耗时),
-                ]
-            )
+            上色(&行, if matches!(j.outcome, Outcome::Success) { 绿 } else { 黄 })
         );
         if let Some(d) = &j.stats.dest {
             println!("     📁 {}", d.display());
@@ -1115,19 +1273,18 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
     } else if let Some(j) = 失败.first() {
         // 单任务：先把「❌ 文件 —— 原因」那行打出来（循环里为了合并汇报跳过了失败项）
         let (txt, icon) = 结论文案(&j.outcome);
-        println!(
-            "{}",
-            文案().t(
-                "result.line",
-                &[
-                    ("icon", icon),
-                    ("input", &j.input.display().to_string()),
-                    ("text", &txt),
-                    ("size", &人类可读(j.stats.bytes_written)),
-                    ("secs", &format!("{:.1}", j.stats.millis as f64 / 1000.0)),
-                ]
-            )
+        let 行 = 文案().t(
+            "result.line",
+            &[
+                ("icon", icon),
+                ("input", &j.input.display().to_string()),
+                ("text", &txt),
+                ("size", &人类可读(j.stats.bytes_written)),
+                ("secs", &format!("{:.1}", j.stats.millis as f64 / 1000.0)),
+            ],
         );
+        // 失败红（--no-color 或非终端时原样）
+        println!("{}", 上色(&行, 红));
         // 再说清楚"你给的是啥"
         if let Some(提示) = 文件类型提示(&j.input) {
             println!("   ℹ {提示}");
@@ -1188,16 +1345,39 @@ fn 人类可读(n: u64) -> String {
     }
 }
 
-fn do_pack(
-    targets: &[String],
-    dest_opt: &Option<String>,
-    password: &Option<String>,
+/// 打包参数
+///
+/// 参数已经涨到 10 个了 —— 继续用位置参数，两个 `bool` 传反了编译器不会报错
+/// （v0.8 的 `do_extract` 就栽在这上面，后来改成参数结构体）。
+struct 打包参数<'a> {
+    targets: &'a [String],
+    dest_opt: &'a Option<String>,
+    password: &'a Option<String>,
+    /// `--tail`（等价于 `--layout L1`）
     tail: bool,
     quiet: bool,
-    split: &Option<String>,
+    split: &'a Option<String>,
     checksum: bool,
     readme: bool,
-) -> ExitCode {
+    /// `--layout L1|L2|…`
+    layout: &'a Option<String>,
+    /// `--cover <文件>`
+    cover: &'a Option<String>,
+}
+
+fn do_pack(a: 打包参数<'_>) -> ExitCode {
+    let 打包参数 {
+        targets,
+        dest_opt,
+        password,
+        tail,
+        quiet,
+        split,
+        checksum,
+        readme,
+        layout,
+        cover,
+    } = a;
     // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
     // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
     let 语 = 文案();
@@ -1241,6 +1421,42 @@ fn do_pack(
     // 只有 MP4 才有 `free` 原子（ISO 盒子）；图片/文本用它会直接把封面写坏
     if tail || !素材.is_video() {
         opts.layout = yshjy::pack::PackLayout::TailAppend;
+    }
+    // `--layout`：显式指定优先（L1 尾部追加 / L2 free 原子）
+    if let Some(l) = layout {
+        match l.to_ascii_lowercase().as_str() {
+            "l1" => opts.layout = yshjy::pack::PackLayout::TailAppend,
+            "l2" => opts.layout = yshjy::pack::PackLayout::FreeAtom,
+            "l5" | "l6" => {
+                eprintln!(
+                    "❌ --layout {l} 不做：实测 L5 解压残废、L6 视频播不了 —— \
+                     这两种「看起来更隐蔽、实际把用户坑了」的布局不提供"
+                );
+                return ExitCode::from(code::USAGE);
+            }
+            "l3" | "l4" => {
+                eprintln!("❌ --layout {l} 还没实现（假签名 / 干扰数据排在 0.9.22-c 评估）");
+                return ExitCode::from(code::USAGE);
+            }
+            _ => {
+                eprintln!("❌ --layout 只认 L1（尾部追加）/ L2（free 原子），收到 {l}");
+                return ExitCode::from(code::USAGE);
+            }
+        }
+    }
+    // `--cover <文件>`：用户自己的封面。读不到就报错 —— 静默换内置素材
+    // 等于「以为用了自己的图，实际没有」
+    if let Some(c) = cover {
+        match std::fs::read(c) {
+            Ok(bytes) => {
+                opts.cover = Some(bytes);
+                详细(format!("封面：{c}（{} 字节）", opts.cover.as_ref().map_or(0, |b| b.len())));
+            }
+            Err(e) => {
+                eprintln!("❌ --cover 读不了 {c}：{e}");
+                return ExitCode::from(code::ERR);
+            }
+        }
     }
 
     if !quiet {
@@ -1295,6 +1511,12 @@ fn do_pack(
                 for w in &rep.warnings {
                     println!("{}", 语.t("cli.pack_warn", &[("warn", w)]));
                 }
+            }
+            // `--keep`：把中间 ZIP 的位置告诉用户（不然「保留了」等于没说）
+            if !quiet
+                && let Some(tmp) = &rep.intermediate
+            {
+                println!("中间文件（--keep 保留）：{}", tmp.display());
             }
             // 自检 —— 不能"以为成功就完事"
             match yshjy::pack::self_check(&out, rep.entries) {

@@ -340,7 +340,53 @@ impl Config {
 /// 系统调用。CLI 一次进程用一个配置，正是 `OnceLock` 的用武之地。
 pub fn 全局配置() -> &'static Config {
     static C: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
-    C.get_or_init(Config::load)
+    C.get_or_init(|| match 指定配置文件.get() {
+        // `--config <路径>`：给了就用它，文件不在就退回默认路径
+        Some(p) if p.exists() => Config::load_from(p),
+        _ => Config::load(),
+    })
+}
+
+/// 命令行 `--config` 指定的配置文件（必须在第一次 [`全局配置`] 之前设定）
+static 指定配置文件: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// 指定配置文件（`--config`）
+pub fn 指定配置文件路径(p: &std::path::Path) {
+    let _ = 指定配置文件.set(展开波浪号(&p.to_string_lossy()));
+}
+
+/// [config] 命令行指定的配置文件是否真的存在（`--show-config` / 排错提示用）
+pub fn 指定配置文件存在() -> bool {
+    指定配置文件.get().map(|p| p.exists()).unwrap_or(false)
+}
+
+/// `--password-file` 给出的候选密码
+///
+/// 与配置文件里的密码本分开存：命令行是**这次**的意图，优先级更高，
+/// 也不该影响配置文件里用户长期维护的那份。
+static 额外密码: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+/// 设定命令行带来的候选密码（`--password-file`）
+pub fn 设定额外密码(v: Vec<String>) {
+    let _ = 额外密码.set(v);
+}
+
+/// 取命令行带来的候选密码
+pub fn 额外密码候选() -> &'static [String] {
+    额外密码.get().map(|v| v.as_slice()).unwrap_or(&[])
+}
+
+/// `--no-auto-password` 的开关
+static 自动密码关闭: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 关闭「自动找密码」（说明文件 + 密码本）；用户显式 `-p` 不受影响
+pub fn 关闭自动密码() {
+    自动密码关闭.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 是否已关闭自动找密码
+pub fn 自动密码已关闭() -> bool {
+    自动密码关闭.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// 读密码本

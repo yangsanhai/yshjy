@@ -51,6 +51,15 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   -q, --quiet                     결과만 출력 (스크립트용)
   --lang <언어>                   인터페이스 언어 변경 (예: zh-CN, en, ja, ru, es)
   --tail                          '끝에 덧붙이기' 레이아웃으로 묶기 (기본: free atom 안)
+  --config <파일>                 설정 파일 지정 (기본: ~/.config/yshjy/config.toml)
+  --layout L1|L2                  패키지 배치: L1 끝에 추가 / L2 free atom (기본)
+  --cover <파일>                  직접 만든 이미지/영상을 표지로 사용
+  --password-file <파일>          비밀번호 목록 (한 줄에 하나, # 주석)
+  --no-auto-password              설명 파일/목록에서 비밀번호를 자동으로 찾지 않음
+  -v, -vv                         상세 / 디버그 출력 (--log 와 함께)
+  --log <파일>                    로그를 파일로 저장 (버그 신고용)
+  --no-color                      색상 없이 출력 (파이프/로그용)
+  --keep                          패키징 중간 ZIP 보관 (조사용)
 
 예시:
   yshjy movie.mp4                 동영상 속에 숨은 압축 파일 풀기

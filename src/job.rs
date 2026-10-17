@@ -822,8 +822,23 @@ fn extract_target(
 fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String> {
     // 候选来源：① 用户的密码本（自己维护的常用解压码）② 旁边的「说明.txt」
     // 密码本放在前面 —— 那是用户**主动**记下来的，可信度比从说明里现抓的高
+    // `--no-auto-password`：用户明确说不要自动找，就一个候选都别试。
+    // 注意这**不影响** `-p` 显式给的密码（那条路根本不进这里）。
+    if crate::config::自动密码已关闭() {
+        return None;
+    }
+
     let cfg = crate::config::全局配置();
     let mut hints: Vec<crate::password_hint::PasswordHint> = Vec::new();
+    // `--password-file` 是**这次命令**给的，优先于配置里的密码本
+    for pw in crate::config::额外密码候选() {
+        hints.push(crate::password_hint::PasswordHint {
+            password: pw.clone(),
+            source: PathBuf::from("--password-file"),
+            line: String::new(),
+            confidence: 255, // 命令行显式给的，最高优先级
+        });
+    }
     let 密码本 = cfg.passwords();
     if !密码本.is_empty() {
         let src = cfg.passwords_path();

@@ -51,6 +51,15 @@ text = """
   -q, --quiet                     只輸出結果（腳本用）
   --lang <語言>                   切換介面語言（如 en、ja、ko、ru、es）
   --tail                          打包用「附加到檔尾」佈局（預設藏進 free 原子）
+  --config <檔案>                 用指定的設定檔（預設 ~/.config/yshjy/config.toml）
+  --layout L1|L2                  打包佈局：L1 附加到檔尾 / L2 藏進 free 原子（預設）
+  --cover <檔案>                  用自己的圖片/影片當封面（預設用內建素材）
+  --password-file <檔案>          密碼本：每行一個（# 註解），只對這次指令有效
+  --no-auto-password              不自動從「說明.txt」和密碼本找解壓碼
+  -v, -vv                         詳細 / 偵錯輸出（配合 --log 排錯）
+  --log <檔案>                    把日誌寫進檔案（報錯時發給開發者）
+  --no-color                      不上色（管線 / 日誌友善）
+  --keep                          打包時保留中間 ZIP（排錯用）
 
 範例：
   yshjy 魔女的侵襲.mp4            解開藏在影片裡的壓縮檔

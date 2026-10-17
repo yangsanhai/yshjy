@@ -51,6 +51,15 @@ OPCIONES HABITUALES:
   -q, --quiet                     mostrar solo el resultado (para scripts)
   --lang <idioma>                 cambiar el idioma (p. ej. zh-CN, en, ja, ko, ru)
   --tail                          empaquetar «añadiendo al final» (por defecto: dentro de un free atom)
+  --config <archivo>              usar este archivo de configuración
+  --layout L1|L2                  diseño: L1 al final / L2 dentro de un free atom (por defecto)
+  --cover <archivo>               usar tu propia imagen/vídeo como portada
+  --password-file <archivo>       lista de contraseñas (una por línea, # comentarios)
+  --no-auto-password              no buscar contraseñas en notas ni en la lista
+  -v, -vv                         salida detallada / depuración (con --log)
+  --log <archivo>                 escribir un registro en archivo (para reportes)
+  --no-color                      sin colores (para tuberías/registros)
+  --keep                          conservar el ZIP intermedio al empaquetar
 
 EJEMPLOS:
   yshjy movie.mp4                 extraer el archivo escondido dentro de un vídeo
