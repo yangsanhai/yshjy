@@ -49,6 +49,9 @@ text = """
   --show-config                   看当前配置（配置文件在哪、各项现在是什么值）
   --import-passwords <文件>       导入密码本（每行一个解压码，# 开头是注释）
   yshjy --report [包]             生成诊断包（报障用；加 --no-paths 脱敏路径）
+  --split <大小>                  打包时分卷（如 2G / 500M）
+  --no-checksum                   不生成 .sha256 校验和（默认生成）
+  --no-readme                     不生成 .说明.txt（默认生成）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
 
 例子：

@@ -30,6 +30,9 @@ USO:
   yshjy --extract-cover <archivo> extraer solo el vídeo/imagen original (sin descomprimir)
   yshjy --help                    esta ayuda
   yshjy --report <archivo>        crear un paquete de diagnóstico (--no-paths oculta rutas)
+  --split <tamaño>                dividir el paquete (ej. 2G / 500M)
+  --no-checksum                   no generar .sha256 (se genera por defecto)
+  --no-readme                     no generar 说明.txt (se genera por defecto)
   yshjy -V, --version             versión y edición (común / completa)
 
 OPCIONES HABITUALES:

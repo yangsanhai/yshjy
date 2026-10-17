@@ -30,6 +30,9 @@ text = """
   yshjy --extract-cover <檔案>    只把偽裝包裡的原版影片/圖片拿出來（不解壓）
   yshjy --help                    看這份說明
   yshjy --report <檔案>           產生診斷包（報障用；--no-paths 去識別路徑）
+  --split <大小>                  打包時分卷（如 2G / 500M）
+  --no-checksum                   不生成 .sha256 校驗和（預設生成）
+  --no-readme                     不生成 .說明.txt（預設生成）
   yshjy -V, --version             看版本與版本檔次（常用版 / 全能版）
 
 常用選項：

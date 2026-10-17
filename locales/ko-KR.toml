@@ -30,6 +30,9 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   yshjy --extract-cover <파일>    위장 패키지의 원본 영상/이미지만 추출 (압축 해제 안 함)
   yshjy --help                    이 도움말
   yshjy --report <파일>           진단 패키지 생성 (--no-paths는 경로를 숨김)
+  --split <크기>                  분할 출력 (예: 2G / 500M)
+  --no-checksum                   .sha256 생성 안 함 (기본 생성)
+  --no-readme                     说明.txt 생성 안 함 (기본 생성)
   yshjy -V, --version             버전과 에디션 (common / full)
 
 자주 쓰는 옵션:
