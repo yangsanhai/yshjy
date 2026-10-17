@@ -118,6 +118,11 @@ fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     if let Some(volumes) = as_7z_volumes(path) {
         return Ok(Target::SevenZ { volumes });
     }
+    // ①' 被改过名的分卷：`视频1.mp4` `视频2.mp4` 其实是同一份 7z 的切片
+    //     （网盘分享经常被改名成视频，躲审核）
+    if let Some(volumes) = guess_renamed_volumes(path) {
+        return Ok(Target::SevenZ { volumes });
+    }
     // ② RAR
     if is_rar(path) {
         return Ok(Target::Rar);
@@ -336,6 +341,84 @@ pub fn as_7z_volumes(path: &Path) -> Option<Vec<PathBuf>> {
         }
     }
     if vols.is_empty() { None } else { Some(vols) }
+}
+
+/// 猜「被改过名的分卷」—— `视频1.mp4` `视频2.mp4` 其实是同一份 7z 的切片
+///
+/// 判定（**全部满足才认**，宁可漏认也不误伤）：
+/// 1. 名字 = 前缀 + 末尾数字（+ 可选扩展名），如 `视频1.mp4` → 前缀 `视频`
+/// 2. 同目录存在 `前缀1`、`前缀2`… 连续编号，至少 2 块
+/// 3. **第 1 块的文件头是 7z 魔数** —— 7z 分卷是裸字节切分，只有第一块有头
+/// 4. 各块大小一致（最后一块可以更小）—— 这是"切分"和"一堆同名文件"的硬区别
+///
+/// 为什么值得做：改名分卷在网盘分享里很常见（原名带 .001 会被当成压缩包拦），
+/// 而按文件名规则（`.001`）永远认不出来。
+pub fn guess_renamed_volumes(path: &Path) -> Option<Vec<PathBuf>> {
+    const 七Z魔数: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
+
+    let name = path.file_name()?.to_string_lossy().to_string();
+    // 拆出 (主干, 扩展名带点)
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => (&name[..i], &name[i..]),
+        _ => (name.as_str(), ""),
+    };
+    // 主干末尾的数字（按字符边界，中文名不会切坏）
+    let 数字起点 = stem
+        .char_indices()
+        .rev()
+        .find(|(_, c)| !c.is_ascii_digit())
+        .map(|(i, c)| i + c.len_utf8())?;
+    if 数字起点 >= stem.len() {
+        return None; // 主干不以数字结尾，不像分卷
+    }
+    let base = &stem[..数字起点];
+    if base.is_empty() {
+        return None; // 纯数字文件名（0001.jpg），不猜
+    }
+    let width = (stem.len() - 数字起点).max(1);
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let 候选 = |i: usize| dir.join(format!("{base}{i:0width$}{ext}", width = width));
+
+    // ③ 第一块必须有 7z 头，否则一律不认（防止把 "IMG1.jpg IMG2.jpg" 当分卷）
+    let 第一 = 候选(1);
+    let mut head = [0u8; 6];
+    {
+        use std::io::Read;
+        let mut f = std::fs::File::open(&第一).ok()?;
+        f.read_exact(&mut head).ok()?;
+    }
+    if head != 七Z魔数 {
+        return None;
+    }
+
+    // ② 连续编号收集（断号就停）
+    let mut vols: Vec<PathBuf> = Vec::new();
+    for i in 1..=9999usize {
+        let p = 候选(i);
+        if !p.exists() {
+            break;
+        }
+        vols.push(p);
+    }
+    if vols.len() < 2 {
+        return None;
+    }
+
+    // ④ 大小校验：中间块必须一样大，最后一块不能更大
+    let 第一块 = std::fs::metadata(&vols[0]).ok()?.len();
+    if 第一块 == 0 {
+        return None;
+    }
+    for (i, p) in vols.iter().enumerate() {
+        let sz = std::fs::metadata(p).ok()?.len();
+        if sz > 第一块 {
+            return None; // 一块比第一块还大 → 不是同一次切分
+        }
+        if i + 1 < vols.len() && sz != 第一块 {
+            return None; // 中间块大小不齐 → 不是分卷
+        }
+    }
+    Some(vols)
 }
 
 /// 从 `x.7z.001` 这样的名字里拆出 (前缀, 序号, 序号宽度)
