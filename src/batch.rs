@@ -140,6 +140,8 @@ pub struct BatchOptions {
     pub force: bool,
     /// 安全限值（来自配置文件：压缩比上限、单次写出上限等）
     pub limits: crate::safety::Limits,
+    /// 手动指定文件名编码（`gbk`/`big5`/`sjis`/`utf-8`；`None` = 自动链）
+    pub encoding: Option<String>,
 }
 
 impl Default for BatchOptions {
@@ -153,6 +155,7 @@ impl Default for BatchOptions {
             smart_dir: true,
             force: false,
             limits: crate::safety::Limits::default(),
+            encoding: None,
         }
     }
 }
@@ -632,6 +635,7 @@ mod tests {
         let sink = 空出口();
         let token = CancelToken::new();
         let opts = BatchOptions {
+            encoding: None,
             continue_on_error: false,
             ..Default::default()
         };
@@ -683,6 +687,7 @@ mod tests {
         let token = CancelToken::new();
         let counter = AtomicU64::new(0);
         let opts = BatchOptions {
+            encoding: None,
             jobs: 3,
             ..Default::default()
         };

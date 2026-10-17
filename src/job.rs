@@ -562,7 +562,9 @@ pub fn run_job(
     sink: &Arc<dyn EventSink>,
     cancel: &CancelToken,
 ) -> JobOutcome {
-    let ctx = UnpackCtx::new(job.id, sink.clone()).with_cancel(cancel.clone());
+    let ctx = UnpackCtx::new(job.id, sink.clone())
+        .with_cancel(cancel.clone())
+        .with_encoding(opts.encoding.clone());
     let started = Instant::now();
 
     // ① 识别 + 预览
@@ -1047,6 +1049,7 @@ mod tests {
         std::fs::write(&whole, &bytes).unwrap();
         let out_w = scratch("zipvol_whole");
         let opts_w = BatchOptions {
+            encoding: None,
             dest: Some(out_w.clone()),
             smart_dir: false,
             ..Default::default()
@@ -1079,6 +1082,7 @@ mod tests {
         // ③ 真解一遍：拼接后的内容和原 ZIP 一致
         let out = scratch("zipvol_out");
         let opts = BatchOptions {
+            encoding: None,
             dest: Some(out.clone()),
             smart_dir: false,
             ..Default::default()
@@ -1114,6 +1118,7 @@ mod tests {
         // 注意：ChannelSink::new 返回的就是 Arc<ChannelSink>，别再套一层 Arc
         let sink: Arc<dyn EventSink> = ChannelSink::new(512);
         let opts = BatchOptions {
+            encoding: None,
             dest: Some(out.clone()),
             // 这个用例测「基本解压」，关掉智能目录，保持断言直白
             smart_dir: false,
@@ -1140,6 +1145,7 @@ mod tests {
         // 默认 smart_dir = true：这个包有两个顶层条目（「游戏」和「说明.txt」）
         // → 不是单一顶层目录 → 自动建同名子目录（包名 = 去掉 .mp4 后的名字）
         let opts = BatchOptions {
+            encoding: None,
             dest: Some(out.clone()),
             ..Default::default()
         };
@@ -1165,6 +1171,7 @@ mod tests {
 
         let sink: Arc<dyn EventSink> = Arc::new(NullSink);
         let opts = BatchOptions {
+            encoding: None,
             dest: Some(out.clone()),
             selection: crate::select::Selection::matching("*.txt"),
             smart_dir: false,
@@ -1189,6 +1196,7 @@ mod tests {
         let cancel = CancelToken::new();
         cancel.cancel();
         let opts = BatchOptions {
+            encoding: None,
             dest: Some(out.clone()),
             ..Default::default()
         };
@@ -1209,6 +1217,7 @@ mod tests {
         assert_eq!(resolve_dest(&j2, &opts), PathBuf::from("包"));
 
         let with_dest = BatchOptions {
+            encoding: None,
             dest: Some(PathBuf::from("/tmp/out")),
             ..Default::default()
         };

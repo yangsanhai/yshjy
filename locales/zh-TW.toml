@@ -33,6 +33,7 @@ text = """
   --split <大小>                  打包時分卷（如 2G / 500M）
   --no-checksum                   不生成 .sha256 校驗和（預設生成）
   --no-readme                     不生成 .說明.txt（預設生成）
+  --encoding <編碼>              手動指定壓縮檔裡的檔名編碼（big5 / sjis / gbk）
   yshjy -V, --version             看版本與版本檔次（常用版 / 全能版）
 
 常用選項：

@@ -276,7 +276,9 @@ fn 做list(
         .ok_or_else(|| 错误值("BAD_PARAM", "缺少 path"))?;
     let 密码 = 参数.get("password").and_then(|v| v.as_str());
     let sink: Arc<dyn EventSink> = 事件.clone();
-    let ctx = UnpackCtx::new(1, sink).with_cancel(取消.clone());
+    let ctx = UnpackCtx::new(1, sink)
+        .with_cancel(取消.clone())
+        .with_encoding(参数.get("encoding").and_then(|v| v.as_str()).map(str::to_string));
 
     let (_目标, pv) = yshjy::preview::preview(Path::new(路径), &ctx, 密码).map_err(错误对象)?;
     Ok(json!({
@@ -319,6 +321,7 @@ fn 做extract(
     }
 
     let opts = BatchOptions {
+        encoding: 参数.get("encoding").and_then(|v| v.as_str()).map(str::to_string),
         jobs: 1, // 界面这边自己排队，引擎一次跑一个就够了
         continue_on_error: true,
         password: 参数
@@ -529,6 +532,7 @@ fn 做batch(
     let 任务 = yshjy::batch::make_jobs(&展开);
     let cfg = yshjy::config::全局配置();
     let opts = yshjy::batch::BatchOptions {
+        encoding: 参数.get("encoding").and_then(|v| v.as_str()).map(str::to_string),
         jobs: 1, // 顺序跑：队列的进度才有意义，也不会把机械盘打成碎片
         continue_on_error: true,
         password,

@@ -425,6 +425,31 @@ pub fn decode_name_with_extra(bytes: &[u8], is_utf8: bool, extra: &[u8]) -> Stri
     decode_name(bytes, is_utf8)
 }
 
+/// 带**手动代码页**的解码：`--encoding gbk|big5|sjis|utf-8`
+///
+/// 自动链对 Big5 / Shift-JIS 名字经常「合法但解错」（静默乱码，不报错），
+/// 只有用户手动指定能救。指定了就不再猜，也不再读 0x7075（用户说了算）。
+pub fn decode_name_forced(
+    bytes: &[u8],
+    is_utf8: bool,
+    extra: &[u8],
+    forced: Option<&str>,
+) -> String {
+    let Some(enc) = forced else {
+        return decode_name_with_extra(bytes, is_utf8, extra);
+    };
+    match enc.to_ascii_lowercase().as_str() {
+        "utf-8" | "utf8" => String::from_utf8_lossy(bytes).into_owned(),
+        "gbk" | "gb18030" | "cp936" => encoding_rs::GBK.decode(bytes).0.into_owned(),
+        "big5" | "cp950" => encoding_rs::BIG5.decode(bytes).0.into_owned(),
+        "sjis" | "shift-jis" | "shift_jis" | "cp932" => {
+            encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned()
+        }
+        // 认不出的写法当 auto（CLI 层会先把值校验一遍）
+        _ => decode_name_with_extra(bytes, is_utf8, extra),
+    }
+}
+
 /// 从 WinZip AES extra field（0x9901）里取强度
 ///
 /// 结构（APPNOTE 4.4.8）：`tag(2) size(2) version(2) "AE"(2) strength(1) method(2)`
@@ -451,6 +476,15 @@ fn aes_strength(extra: &[u8]) -> Option<u8> {
 ///
 /// 返回的每条 [`EntryInfo`] 都带 `encrypted` 标志 —— 界面上的 🔒 徽标就读它。
 pub fn list_entries<R: Read + Seek>(r: &mut R, layout: &ZipLayout) -> Result<Vec<EntryInfo>> {
+    list_entries_enc(r, layout, None)
+}
+
+/// 同 [`list_entries`]，但可以手动指定文件名编码（`--encoding`）
+pub fn list_entries_enc<R: Read + Seek>(
+    r: &mut R,
+    layout: &ZipLayout,
+    encoding: Option<&str>,
+) -> Result<Vec<EntryInfo>> {
     let mut out = Vec::new();
     r.seek(SeekFrom::Start(layout.cd_at))
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek cd: {e}")))?;
@@ -523,9 +557,10 @@ pub fn list_entries<R: Read + Seek>(r: &mut R, layout: &ZipLayout) -> Result<Vec
             }
         }
 
-        // 文件名编码：见 decode_name 的四级回退链；0x7075 extra 优先（验 CRC）
+        // 文件名编码：见 decode_name 的四级回退链；0x7075 extra 优先（验 CRC）；
+        // `--encoding` 手动指定时以用户为准
         let is_utf8 = flags & (1 << 11) != 0;
-        let path = decode_name_with_extra(&name_bytes, is_utf8, &extra);
+        let path = decode_name_forced(&name_bytes, is_utf8, &extra, encoding);
 
         let is_dir = path.ends_with('/') || path.ends_with('\\');
 
