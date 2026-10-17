@@ -196,3 +196,10 @@ line = "   {key}：{value}"
 file_missing = "❌ {input}：文件不存在"
 lang_unknown = "⚠ 没有 \"{lang}\" 这个语言包，改用 {fallback}（可用：{available}）"
 lang_switched = "界面语言：{name}（{code}）"
+
+[crash]
+saved = "💥 程序出了意外，现场已保存到：{path}"
+report_hint = "   报障：运行 yshjy --report 生成诊断包（会自动带上这份崩溃记录），把 zip 发给我"
+not_your_fault = "   说明：这不是你操作错了 —— 你的文件没有被改动过。"
+save_failed = "💥 程序出了意外，而且现场没能保存（{err}）"
+task_saved = "   ⚠ 这个文件出错了，已跳过（现场：{path}）"

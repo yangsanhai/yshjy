@@ -91,6 +91,34 @@ pub fn unix_to_civil(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
     )
 }
 
+/// 进程的本地时区偏移（秒，东八区 = +28800）
+///
+/// # 为什么是一个全局量而不是参数
+/// [`unix_to_civil`] 是纯 UTC 换算（好测试、零依赖），但**给用户看的时间必须是本地时间**。
+/// 算本地偏移要调 `localtime_r`（unsafe），而引擎 crate 是 `#![forbid(unsafe_code)]` ——
+/// 所以由外壳在启动时算一次、注入进来（`restore::设置本地偏移`），之后全项目的时间显示都对。
+///
+/// 没注入过就是 0（按 UTC），行为与 v0.9 之前一致，不会因为漏注入而崩。
+static 本地偏移: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// 由外壳注入本地时区偏移（秒）
+pub fn 设置本地偏移(秒: i64) {
+    本地偏移.store(秒, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 当前注入的本地偏移（秒）
+pub fn 本地偏移秒() -> i64 {
+    本地偏移.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Unix 秒 → **本地**年月日时分秒
+///
+/// 给用户看的一切时间（崩溃日志、诊断包、ZIP 条目时间）都该走这个，
+/// 而不是 [`unix_to_civil`]（那是 UTC，会和中国用户差 8 小时）。
+pub fn unix_to_civil_本地(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
+    unix_to_civil(secs.saturating_add(本地偏移秒()))
+}
+
 /// 公历年月日时分秒 → Unix 秒（UTC）
 ///
 /// 用 Howard Hinnant 的 `days_from_civil` 算法 —— 被广泛使用、验证充分，
@@ -156,6 +184,16 @@ mod tests {
         // 抽一个具体值核对（免得两个方向一起错、还互相"对上"）
         assert_eq!(unix_to_civil(1_602_936_000), (2020, 10, 17, 12, 0, 0));
         assert_eq!(unix_to_civil(0), (1970, 1, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn 注入时区后按本地时间显示() {
+        let 旧 = 本地偏移秒();
+        // 东八区：UTC 1970-01-01 00:00 → 本地 08:00
+        设置本地偏移(8 * 3600);
+        assert_eq!(unix_to_civil_本地(0), (1970, 1, 1, 8, 0, 0));
+        设置本地偏移(旧); // 复位，别影响别的测试
+        assert_eq!(unix_to_civil_本地(0), unix_to_civil(0));
     }
 
     #[test]

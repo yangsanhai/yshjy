@@ -193,3 +193,10 @@ line = "   {key}: {value}"
 file_missing = "❌ {input}: archivo no encontrado"
 lang_unknown = "⚠ No hay paquete de idioma \"{lang}\" — se usa {fallback} (disponibles: {available})"
 lang_switched = "Idioma de la interfaz: {name} ({code})"
+
+[crash]
+saved = "💥 El programa se cerró inesperadamente; informe guardado en: {path}"
+report_hint = "   Para informar: ejecuta `yshjy --report` (incluye este informe automáticamente) y envía el zip"
+not_your_fault = "   Nota: no es un error tuyo — tus archivos no se han modificado."
+save_failed = "💥 El programa se cerró inesperadamente y no se pudo guardar el informe ({err})"
+task_saved = "   ⚠ Este archivo falló y se omitió (informe: {path})"

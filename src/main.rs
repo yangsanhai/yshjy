@@ -11,6 +11,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// 崩溃兜底（panic 时把现场写进 state 目录，并告诉用户怎么报障）
+mod crash;
+
 /// 退出码常量 —— **全部从引擎取**，外壳不许自己定数
 ///
 /// 台账 `7zip-工程层.md` §7.6 的反面案例：7-Zip 的命令行壳和 GUI 壳各算一份退出码，
@@ -72,6 +75,15 @@ fn 文案() -> &'static yshjy::i18n::I18n {
 }
 
 fn main() -> ExitCode {
+    // 时区要最先注入：崩溃日志、诊断包、ZIP 条目时间全都靠它显示成"本地时间"
+    // （引擎自己碰不了 localtime_r，这一步只能外壳做）
+    crash::注入本地时区();
+    // 崩溃兜底要**最早装**：后面每一步（读配置、解析语言包、扫目录）都可能炸，
+    // 装晚了那几秒里的崩溃就没有现场了。
+    crash::装兜底();
+    // 顺手清掉上次崩溃 / 被 kill 留下的临时文件（只清 24 小时前的，不误伤正在跑的实例）
+    crash::清理临时残骸();
+
     // 修一个"用起来正常、但报错很吓人"的毛病：
     // Rust 默认会**忽略 SIGPIPE**，于是「管道对端关掉」变成「写 stdout 失败」，
     // 而 `println!` 遇到写失败会 **panic** —— 用户跑
@@ -106,6 +118,14 @@ fn main() -> ExitCode {
             .or_else(|| cfg.general.language.clone())
             .as_deref(),
     ));
+
+    // 开发自检用：手动触发一次崩溃，验证「崩溃日志 + 用户提示」这条链路是通的。
+    // 放在语言包初始化**之后**，所以它会走真实的多语言文案（而不是兜底那套中英双语）。
+    // ⚠️ 只在 debug 构建里存在（release 编译时这段根本不会被编进去），不是后门。
+    #[cfg(debug_assertions)]
+    if argv.iter().any(|a| a == "--debug-crash") {
+        panic!("--debug-crash：手动触发的测试崩溃");
+    }
     if !文案().is_requested_ok() {
         // 要的语言没有 → 用兜底语言提示一句（文案本身也走语言包）
         let avail = 文案().available().join(", ");
@@ -676,7 +696,21 @@ fn do_extract(a: 解压参数) -> ExitCode {
         });
     }
 
-    let report = batch::run_batch(jobs, &opts, &sink, &cancel, yshjy::job::run_job);
+    let report = batch::run_batch(jobs, &opts, &sink, &cancel, |job, opts, sink, cancel| {
+        // **一个坏包不该带走整批**：解压库碰到畸形数据时有可能 panic（自家 fuzz
+        // 2800 万次没抓到，但第三方库的 panic 不该让用户来承受）。这里只隔离「单个任务」；
+        // main 自己的 bug 仍然是致命的 —— 带着不确定状态继续跑，可能写出坏文件。
+        let _隔离 = crash::隔离标记::进入();
+        let 跑 = || yshjy::job::run_job(job, opts, sink, cancel);
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(跑)) {
+            Ok(o) => o,
+            Err(_) => batch::JobOutcome::minimal(
+                job.id,
+                &job.input,
+                yshjy::error::Outcome::Failed(yshjy::error::ErrorCode::Internal),
+            ),
+        }
+    });
 
     if json {
         println!("{}", 汇总_json(&report));
@@ -987,12 +1021,24 @@ fn do_pack(
         }
     };
 
+    // 输出扩展名决定封面素材：.png → 内置 PNG、.jpg → 内置 JPEG、.mp4 → 内置小视频。
+    // 以前这里**从没传过** cover_ext，一律用小视频 —— 于是 `ys -o 图.png` 产出的
+    // 是「MP4 头 + .png 后缀」的假图片，看图软件一认魔数就露馅（v0.9 修）。
+    let 扩展名 = out
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("mp4")
+        .to_ascii_lowercase();
+    let 素材 = yshjy::pack::cover::BuiltinCover::for_extension(&扩展名);
+
     let mut opts = yshjy::pack::PackOptions {
         inputs: inputs.clone(),
         password: password.clone(),
+        cover_ext: 扩展名,
         ..Default::default()
     };
-    if tail {
+    // 只有 MP4 才有 `free` 原子（ISO 盒子）；图片/文本用它会直接把封面写坏
+    if tail || !素材.is_video() {
         opts.layout = yshjy::pack::PackLayout::TailAppend;
     }
 

@@ -199,3 +199,10 @@ line = "   {key}: {value}"
 file_missing = "❌ {input}: file not found"
 lang_unknown = "⚠ No \"{lang}\" language pack — using {fallback} (available: {available})"
 lang_switched = "UI language: {name} ({code})"
+
+[crash]
+saved = "💥 The program crashed; details saved to: {path}"
+report_hint = "   To report: run `yshjy --report` (it bundles this crash log automatically) and send me the zip"
+not_your_fault = "   Note: this is not your mistake — your files were not modified."
+save_failed = "💥 The program crashed, and the details could not be saved ({err})"
+task_saved = "   ⚠ This file failed and was skipped (details: {path})"

@@ -86,9 +86,66 @@ pub fn 生成(opts: &ReportOptions, ctx: &UnpackCtx) -> Result<PathBuf> {
         选项,
     )?;
 
+    // ⑤ 最近的崩溃记录 —— 报障时**最有用的一件东西**，别让用户自己去找
+    //
+    // 为什么放在诊断包里：崩溃提示只能给一个绝对路径，普通用户要么找不到、
+    // 要么复制粘贴丢细节。跟着 --report 一起走，一条命令就能把现场交出来。
+    // --no-paths 时把家目录换成 <home>（日志里的路径是自由文本，套不了逐条映射）。
+    let 崩溃 = 最近崩溃日志();
+    if let Some((文件名, 内容)) = &崩溃 {
+        let 内容 = if opts.hide_paths {
+            抹掉家目录(内容)
+        } else {
+            内容.clone()
+        };
+        写一个(&mut zip, &format!("crash/{文件名}"), &内容, 选项)?;
+    }
+
     zip.finish()
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("收尾失败: {e}")))?;
     Ok(目标路径)
+}
+
+/// 状态目录（与崩溃日志一致：`$XDG_STATE_HOME/yshjy`，默认 `~/.local/state/yshjy`）
+fn 状态目录() -> Option<PathBuf> {
+    if let Some(d) = std::env::var_os("XDG_STATE_HOME") {
+        let p = PathBuf::from(d);
+        if p.is_absolute() {
+            return Some(p.join("yshjy"));
+        }
+    }
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state/yshjy"))
+}
+
+/// 最近一份崩溃日志（`crash-*.log`），返回（文件名, 内容）
+///
+/// 找不到就返回 `None` —— 诊断包照样生成，不因为"没有崩溃记录"而失败。
+fn 最近崩溃日志() -> Option<(String, String)> {
+    let dir = 状态目录()?.join("crash");
+    let mut 候选: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("crash-") && n.ends_with(".log"))
+        })
+        .collect();
+    // 文件名带时间戳 → 排序即时间顺序，最后一份最新
+    候选.sort();
+    let 最新 = 候选.pop()?;
+    let 内容 = std::fs::read_to_string(&最新).ok()?;
+    let 名 = 最新.file_name()?.to_string_lossy().to_string();
+    Some((名, 内容))
+}
+
+/// 把家目录换成 `<home>`（`--no-paths` 时用）
+fn 抹掉家目录(文本: &str) -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() => 文本.replace(&home, "<home>"),
+        _ => 文本.to_string(),
+    }
 }
 
 /// 往包里塞一个文本文件（统一入口：自动处理错误信息）
@@ -142,34 +199,54 @@ impl 脱敏器 {
     /// 命令行脱敏：`-p xxx` / `--password xxx` / `--password=xxx` 的值一律抹掉
     ///
     /// 这是**最关键的一条**：完整命令行可能就是明文密码（见模块头那段说明）。
+    /// 密码规则走 [`抹掉密码`]（与崩溃报告共用一份），这里只补上路径脱敏。
     fn 命令行(&mut self, argv: &[String]) -> Vec<String> {
-        let mut 出 = Vec::with_capacity(argv.len());
-        let mut 吃掉下一个 = false;
-        for a in argv {
-            if 吃掉下一个 {
-                出.push("<已抹掉>".to_string());
-                吃掉下一个 = false;
-                continue;
-            }
-            if a == "-p" || a == "--password" {
-                出.push(a.clone());
-                吃掉下一个 = true;
-                continue;
-            }
-            if a.starts_with("--password=") {
-                出.push("--password=<已抹掉>".to_string());
+        let 已抹密码 = 抹掉密码(argv);
+        let mut 出 = Vec::with_capacity(已抹密码.len());
+        for a in 已抹密码 {
+            // 这几种是占位符 / 选项名 / 语言代码，原样保留（它们不敏感）
+            if a == "<已抹掉>" || a.starts_with('-') || a.starts_with('<') || a == "已抹掉" {
+                出.push(a);
                 continue;
             }
             // 看着像路径的（含分隔符或带扩展名）→ 走脱敏；
-            // 其余（选项名、语言代码 `zh-CN`、序号 `1,3`）原样保留 —— 它们不敏感。
-            if !a.starts_with('-') && (a.contains('/') || a.contains('\\') || a.contains('.')) {
-                出.push(self.路径(Path::new(a)));
+            // 其余（语言代码 `zh-CN`、序号 `1,3`）原样保留。
+            if a.contains('/') || a.contains('\\') || a.contains('.') {
+                出.push(self.路径(Path::new(&a)));
                 continue;
             }
-            出.push(a.clone());
+            出.push(a);
         }
         出
     }
+}
+
+/// 只做「密码抹掉」的命令行脱敏 —— 崩溃报告与诊断包共用同一条红线
+///
+/// 与 [`脱敏器::命令行`] 的区别：这里**不脱路径**（崩溃报告要能看出是在哪个包上崩的），
+/// 但 `-p` / `--password` 的值一律换成 `<已抹掉>`。
+/// `脱敏器::命令行` 内部也调它 —— 密码规则只有一份，改一次两边都生效。
+pub fn 抹掉密码(argv: &[String]) -> Vec<String> {
+    let mut 出 = Vec::with_capacity(argv.len());
+    let mut 吃掉下一个 = false;
+    for a in argv {
+        if 吃掉下一个 {
+            出.push("<已抹掉>".to_string());
+            吃掉下一个 = false;
+            continue;
+        }
+        if a == "-p" || a == "--password" {
+            出.push(a.clone());
+            吃掉下一个 = true;
+            continue;
+        }
+        if a.starts_with("--password=") {
+            出.push("--password=<已抹掉>".to_string());
+            continue;
+        }
+        出.push(a.clone());
+    }
+    出
 }
 
 /// 生成时间戳（本地时间，`YYYYMMDD-HHMMSS`）
@@ -181,7 +258,7 @@ fn 时间戳() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil(秒);
+    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil_本地(秒);
     format!("{年:04}{月:02}{日:02}-{时:02}{分:02}{秒数:02}")
 }
 
@@ -194,7 +271,7 @@ fn zip时间() -> zip::DateTime {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil(秒);
+    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil_本地(秒);
     zip::DateTime::from_date_and_time(年 as u16, 月 as u8, 日 as u8, 时 as u8, 分 as u8, 秒数 as u8)
         .unwrap_or_default()
 }
@@ -205,7 +282,7 @@ fn 可读时间() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil(秒);
+    let (年, 月, 日, 时, 分, 秒数) = crate::restore::unix_to_civil_本地(秒);
     format!("{年:04}-{月:02}-{日:02} {时:02}:{分:02}:{秒数:02}")
 }
 
@@ -232,6 +309,8 @@ fn readme(时间: &str, 已脱敏: bool) -> String {
          \x20 - findings.json        如果给了包：识别结果（外壳类型、格式、偏移、\n\
          \x20                          条目数量、有几条加密）—— **不含文件名清单**\n\
          \x20 - config.snapshot.toml 当时生效的配置（**不含密码本内容**，只记几行）\n\
+         \x20 - crash/               最近一次崩溃的现场（**只有崩溃过才有**；\n\
+         \x20                          含崩溃位置与调用栈，密码已抹掉）\n\
          \x20 - 本文件\n\
          \n\
          ❌ 里面**不包含**：\n\
