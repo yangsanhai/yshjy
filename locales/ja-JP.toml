@@ -30,6 +30,9 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
   yshjy --extract-cover <ファイル>  偽装パッケージ内の元動画/画像だけを取り出す（解凍しない）
   yshjy --help                     このヘルプ
   yshjy --report <ファイル>        診断パッケージを作成（--no-paths でパスを伏せる）
+  --split <サイズ>                分割して出力（例: 2G / 500M）
+  --no-checksum                   .sha256 を生成しない（既定は生成）
+  --no-readme                     説明.txt を生成しない（既定は生成）
   yshjy -V, --version              バージョンとエディション（常用版 / 全能版）
 
 よく使うオプション：

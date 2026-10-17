@@ -30,6 +30,7 @@ pub mod io;
 pub mod job;
 pub mod layout;
 pub mod pack;
+pub mod pack_post;
 pub mod password_hint;
 pub mod preview;
 pub mod probe;

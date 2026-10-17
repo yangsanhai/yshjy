@@ -62,7 +62,7 @@ fn 版本信息() -> String {
 /// 抽成常量而不是散在 `matches!` 里：**漏登记一个就会出真事故**
 /// —— `--lang en 包.mp4` 会把 `en` 当成要解压的文件（多语言上线时正好踩到）。
 const 带值的选项: &[&str] = &[
-    "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang",
+    "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang", "--split",
 ];
 
 /// 进程级文案仓库
@@ -291,6 +291,9 @@ fn main() -> ExitCode {
             &val_of("--password"),
             has("--tail"),
             quiet,
+            &val_of("--split"),
+            !has("--no-checksum"),
+            !has("--no-readme"),
         );
     }
 
@@ -1169,6 +1172,9 @@ fn do_pack(
     password: &Option<String>,
     tail: bool,
     quiet: bool,
+    split: &Option<String>,
+    checksum: bool,
+    readme: bool,
 ) -> ExitCode {
     // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
     // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
@@ -1273,6 +1279,43 @@ fn do_pack(
                 Ok(warns) if warns.is_empty() => {
                     if !quiet {
                         println!("{}", 语.t("cli.pack_selfcheck_ok", &[]));
+                    }
+                    // 交付形态：分卷 / 校验和 / 说明书（DESIGN §14.2 / §17.8）
+                    let post = yshjy::pack_post::PostOptions {
+                        split: match split.as_deref() {
+                            Some(s) => match yshjy::pack_post::parse_size(s) {
+                                Some(n) => Some(n),
+                                None => {
+                                    eprintln!("--split 的大小看不懂：{s}（写法如 2G / 500M / 1048576）");
+                                    return ExitCode::from(code::USAGE);
+                                }
+                            },
+                            None => None,
+                        },
+                        checksum,
+                        readme,
+                        password: password.clone(),
+                    };
+                    match yshjy::pack_post::postprocess(&out, &post) {
+                        Ok(p) => {
+                            if !quiet {
+                                if !p.volumes.is_empty() {
+                                    println!(
+                                        "已分卷：{} 个文件（{}.001 起）",
+                                        p.volumes.len(),
+                                        out.display()
+                                    );
+                                }
+                                if let Some(c) = &p.checksum {
+                                    println!("校验和：{}", c.display());
+                                }
+                                if let Some(r) = &p.readme {
+                                    println!("说明书：{}", r.display());
+                                }
+                            }
+                        }
+                        // 后处理失败不改判：包已经打好了，只是少了附赠文件
+                        Err(e) => eprintln!("交付处理失败（包本身没问题）：{e}"),
                     }
                     ExitCode::from(code::OK)
                 }
