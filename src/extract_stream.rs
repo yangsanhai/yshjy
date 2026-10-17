@@ -544,7 +544,11 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 Ok(0) => break,
                 Ok(n) => {
                     if let Err(e) = budget.record(n as u64) {
-                        err = Some(format!("安全限额中止: {e}"));
+                        if e.is_cancelled() {
+                            cancelled_now = true;
+                        } else {
+                            err = Some(format!("安全限额中止: {e}"));
+                        }
                         break;
                     }
                     if let Err(e) = out.write_all(&buf[..n]) {

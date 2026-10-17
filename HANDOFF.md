@@ -15,8 +15,12 @@
     ✅ 组A-引擎部分 list 结果带 cover{size,kind,ext}；extract 支持 extract:false（只提封面）
     ✅ 组C 嵌套包自动下钻一层：src/drill.rs + extract.drill（默认关；最多 8 个；
        跳过输入自身；失败只记 nested[].outcome）—— 协议实测 mp4→zip→文件 全通
-    ⬜ 组B 双向协议：ASK_USER / answer / skip（限额询问 + 单行取消）
-    ⬜ 组A-界面 封面勾选行 / 打包模式二选一
+    ✅ 组B 双向协议：src/ask.rs（ASK_USER / answer / skip）
+       · extract/batch 的 ask:true 才启用询问；60 秒不答=跳过；一次任务只问一次
+       · 取消/跳过改走 Cancelled 语义（ZIP/7z/单流三个循环都修了）
+       · 实测：continue→Success / skip→Cancelled / batch 只跳一项下一项照跑 /
+         不带 ask:true 仍 0.03s 硬失败
+    ⬜ 组A-界面 封面勾选行 / 打包模式二选一 / ASK_USER 弹窗 + 跳过按钮
     ⬜ 组E CLI 扫尾（--config / --keep / --no-color / -v / --log / --password-file 等）
 
 ## 第 20 批进度（0.9.20-c 目标）

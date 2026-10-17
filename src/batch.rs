@@ -434,6 +434,11 @@ where
     let mut out = Vec::with_capacity(tasks.len());
     let mut stopped = false;
     for job in tasks {
+        // 「跳过」在排队时按下 → 这一项直接跳过（还没开始跑）
+        if cancel.take_skip() {
+            out.push(skipped(job, "skipped by user (before start)"));
+            continue;
+        }
         if cancel.is_cancelled() {
             out.push(skipped(job, "cancelled before start"));
             continue;
@@ -448,7 +453,12 @@ where
             path: job.input.to_string_lossy().to_string(),
             size: job.size,
         });
-        let result = run_one(job, opts, sink, cancel);
+        let mut result = run_one(job, opts, sink, cancel);
+        // 「跳过当前」在跑的时候按下：这一项已按取消收尾，把标记清掉，
+        // **不要让下一项也被跳过**（skip 只影响它按下的那一刻）
+        if cancel.take_skip() {
+            result.note = Some("skipped by user".to_string());
+        }
         sink.emit(&Event::JobFinished {
             job: job.id,
             outcome: result.outcome.clone(),

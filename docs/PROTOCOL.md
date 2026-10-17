@@ -64,6 +64,12 @@
 {"id": 8, "cmd": "report", "path": "/home/me/游戏.mp4",
  "no_paths": false, "out_dir": "/home/me/桌面"}
 
+// 回答引擎的询问（收到 ASK_USER 之后发；value 只能是三种）
+{"id": 9, "cmd": "answer", "value": "continue"}   // continue / skip / cancel
+
+// 批量里跳过当前这一项，继续下一个（不是整批取消）
+{"id": 10, "cmd": "skip"}
+
 // （config 命令留到 v1.1：先把主流程跑通，不做半成品接口）
 ```
 
@@ -73,11 +79,13 @@
 |---|---|---|
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
 | `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
-| `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?`, `drill?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
+| `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?`, `drill?`, `ask?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`ask:true` 表示前端能处理 `ASK_USER`（不写 = 限额命中直接失败）；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
 | `pack` | `inputs[]`, `out`, `password?`, `tail?` | 打包成伪装文件 |
-| `cancel` | — | 取消当前任务 |
+| `cancel` | — | 取消当前任务（整批停） |
+| `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
+| `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |
 | `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` |
-| `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?` | 顺序批量解压，返回逐项结果 |
+| `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `ask?` | 顺序批量解压，返回逐项结果；`ask` 同 extract |
 | `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
 | `bulk` 以外的新命令 | — | **只加不删**，前端忽略不认识的 |
 
@@ -112,6 +120,7 @@
 | `PASSWORD_NEEDED` | 需要密码 | 弹密码框（S4） |
 | `SPACE_SHORTAGE` | 空间可能不够 | 提示（S5） |
 | `DIAGNOSTIC` | 不打断的提醒 | 小提示条（如 `RISKY_ENTRY` = 解出可执行文件） |
+| `ASK_USER` | 限额命中、需要用户决定 | 弹窗三选一（继续 / 跳过 / 取消），用 `answer` 回答；**60 秒不答按跳过** |
 | `JOB_FINISHED` | 任务结束 | 收尾：成功/部分成功/失败/取消 |
 
 事件字段的权威定义在 `src/event.rs`（`pub enum Event`），**那是唯一真源**。
@@ -121,10 +130,12 @@
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.9.19-c",
- "features": ["list", "extract", "pack", "cancel", "report", "scan", "batch"],
- "event_kinds": ["JOB_STARTED", "..."], "languages": ["zh-CN", "..."]}
+{"protocol": 1, "engine": "0.9.20-c",
+ "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip"],
+ "event_kinds": ["JOB_STARTED", "STAGE_STARTED", "STAGE_FINISHED", "...", "ASK_USER"],
+ "languages": ["zh-CN", "..."]}
 ```
+（`event_kinds` 的完整真值在 `src/api.rs` 的 `事件种类` 常量 —— 以代码为准。）
 
 `list`：
 ```json
@@ -138,9 +149,13 @@
 `extract`：
 ```json
 {"outcome": "Success", "entries_done": 4, "entries_total": 4,
- "bytes_written": 20480, "dest": "/home/me/解压结果", "millis": 1234}
+ "bytes_written": 20480, "dest": "/home/me/解压结果", "millis": 1234,
+ "cover": {"path": "/home/me/游戏.封面.mp4", "size": 125829120, "kind": "video"},
+ "nested": [{"path": "/home/me/解压结果/示例包.7z.001", "dest": ".../示例包", "outcome": "ok"}],
+ "note": null}
 ```
 `outcome` 取值：`Success` / `Partial{...}` / `Cancelled{...}` / `Failed("CODE")`（原样序列化）。
+**取消/跳过**走 `Cancelled` 且 `ok:true`（不是失败）；`cover` / `nested` 只在真产生时出现。
 
 `pack`：
 ```json

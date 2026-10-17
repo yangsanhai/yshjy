@@ -12,6 +12,9 @@
 
 use crate::error::{Error, ErrorCode, Result};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+
+use crate::ask::{AskGate, 答案};
 
 /// 安全限制（默认值见 docs/BACKEND-SPEC.md §2.2 配置示例）
 #[derive(Debug, Clone)]
@@ -24,6 +27,11 @@ pub struct Limits {
     pub max_path_len: usize,
     /// 解出的可执行文件是否要提醒（外壳据此高亮）
     pub warn_executables: bool,
+    /// 超过限额时「问用户」（`None` = 直接失败：测试 / 无人值守）
+    ///
+    /// 有闸门时：命中限额 → 发 `ASK_USER` 事件并阻塞等答案（超时按跳过）。
+    /// 一次任务只问一次，答案「继续」后本次任务不再检查这条限额。
+    pub ask: Option<Arc<AskGate>>,
 }
 
 impl Default for Limits {
@@ -33,6 +41,7 @@ impl Default for Limits {
             max_ratio: 100,
             max_path_len: 512,
             warn_executables: true,
+            ask: None,
         }
     }
 }
@@ -243,6 +252,8 @@ pub struct ExtractBudget {
     limits: Limits,
     written: u64,
     packed_total: u64,
+    /// 本次任务是否已经问过用户（问过就不再问，避免每 1 MB 弹一次）
+    已问: bool,
 }
 
 impl ExtractBudget {
@@ -252,31 +263,69 @@ impl ExtractBudget {
             limits,
             written: 0,
             packed_total,
+            已问: false,
         }
     }
 
-    /// 记录写入，超限即报错
+    /// 记录写入，超限即报错（有询问闸门时先问用户）
     pub fn record(&mut self, bytes: u64) -> Result<()> {
         self.written = self.written.saturating_add(bytes);
 
         if self.limits.max_extract_bytes > 0 && self.written > self.limits.max_extract_bytes {
-            return Err(Error::new(ErrorCode::DataLost)
-                .with("reason", "extract_size_limit_exceeded")
-                .with("written", self.written)
-                .with("limit", self.limits.max_extract_bytes));
+            let 上限 = self.limits.max_extract_bytes;
+            self.问用户("extract_size_limit_exceeded", 上限)?;
+            // 用户说继续 → 本次任务解除这条限制（问过一次就不再打扰）
+            self.limits.max_extract_bytes = 0;
         }
 
         if self.limits.max_ratio > 0 && self.packed_total > 0 {
             let ratio = self.written / self.packed_total.max(1);
             if ratio > self.limits.max_ratio {
-                return Err(Error::new(ErrorCode::DataLost)
-                    .with("reason", "possible_zip_bomb")
-                    .with("ratio", ratio)
-                    .with("limit", self.limits.max_ratio));
+                let 上限 = self.limits.max_ratio;
+                self.问用户("possible_zip_bomb", 上限)?;
+                self.limits.max_ratio = 0;
             }
         }
 
         Ok(())
+    }
+
+    /// 超过限额：有闸门就问，没有就按原来的硬失败
+    ///
+    /// - 继续 → `Ok(())`，调用方放宽对应限额
+    /// - 跳过 → 取消语义（批量里继续下一个）
+    /// - 取消 → 同上，但 reason 不同（外壳可区分文案）
+    /// - 超时 / 前端断开 → 闸门返回「跳过」（`AskGate` 内部保证）
+    fn 问用户(&mut self, 原因: &str, 上限: u64) -> Result<()> {
+        let 硬失败 = |b: &Self| {
+            if 原因 == "possible_zip_bomb" {
+                Error::new(ErrorCode::DataLost)
+                    .with("reason", 原因)
+                    .with("ratio", (b.written / b.packed_total.max(1)).to_string())
+                    .with("limit", 上限)
+            } else {
+                Error::new(ErrorCode::DataLost)
+                    .with("reason", 原因)
+                    .with("written", b.written)
+                    .with("limit", 上限)
+            }
+        };
+        let Some(门) = self.limits.ask.clone() else {
+            return Err(硬失败(self));
+        };
+        if self.已问 {
+            return Err(硬失败(self));
+        }
+        self.已问 = true;
+        match 门.问(原因, self.written, 上限) {
+            答案::继续 => Ok(()),
+            答案::跳过 => Err(Error::new(ErrorCode::Cancelled)
+                .with("reason", "skipped_by_user")
+                .with("written", self.written)),
+            答案::取消 => Err(Error::new(ErrorCode::Cancelled)
+                .with("reason", "cancelled_by_user")
+                .with("written", self.written)),
+        }
     }
 
     /// 已写出总量

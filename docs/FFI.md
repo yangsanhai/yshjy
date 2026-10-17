@@ -90,7 +90,9 @@ int main(void) {
 
 ## 5. 实测记录
 
-2026-10-17，Linux x86_64，Python `ctypes` 直调 `libyshjy_ffi.so`：
+2026-10-17，Linux x86_64，Python `ctypes` 直调 `libyshjy_ffi.so`
+（组 D 时点；之后 `hello.features` 又加了 `answer` / `skip`，但它们在 C ABI 上会返回
+`UNSUPPORTED` —— 见下一节）：
 
 ```
 abi = 1
@@ -102,3 +104,12 @@ events = 8 kinds = [ENTRY_FINISHED, EXTRACT_PROGRESS, STAGE_FINISHED, STAGE_STAR
 files = [a/一.txt, b/二.txt]
 cancel rc = 0，wait 返回合法 JSON 错误码 PATH_NOT_FOUND
 ```
+
+## 6. 能力边界（v1 明确的「不做」）
+
+- **没有交互式询问**：C ABI 里 `api::执行` 的 ask 参数固定为 `None`；
+  限额命中按硬失败返回（`DATA_LOST` + `detail.reason`）。
+  需要「问用户」请用 `--serve`（`ASK_USER` → `answer`）。
+- **没有 `answer` / `skip`**：两者是 `--serve` 的状态机，C ABI 直接返回
+  `UNSUPPORTED`；宿主想中止请调 `yshjy_job_cancel`。
+- **一次只能跑一个任务**：第二次 `submit` 立刻返回 `BUSY`，排队由宿主负责。

@@ -466,7 +466,12 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 Ok(0) => break,
                 Ok(n) => {
                     if let Err(e) = budget.record(n as u64) {
-                        read_err = Some(format!("安全限额中止: {e}"));
+                        // 「跳过 / 取消」是控制流，不是坏数据：走取消收尾（保留已解文件）
+                        if e.is_cancelled() {
+                            cancelled_now = true;
+                        } else {
+                            read_err = Some(format!("安全限额中止: {e}"));
+                        }
                         break;
                     }
                     if let Err(e) = std::io::Write::write_all(&mut out, &buf[..n]) {

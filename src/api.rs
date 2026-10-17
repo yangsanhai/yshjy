@@ -25,7 +25,7 @@ pub const 协议版本: u64 = 1;
 
 /// 引擎认识的全部命令（`hello.features` 与 PROTOCOL 命令表都从这里取）
 pub const 命令列表: &[&str] = &[
-    "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch",
+    "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "answer", "skip",
 ];
 
 /// 引擎会发出的事件种类（`hello.event_kinds` 从这里取）
@@ -41,6 +41,7 @@ pub const 事件种类: &[&str] = &[
     "PASSWORD_NEEDED",
     "PASSWORD_TRY",
     "SPACE_SHORTAGE",
+    "ASK_USER",
     "DIAGNOSTIC",
 ];
 
@@ -50,15 +51,21 @@ pub fn 执行(
     参数: &Value,
     事件: &Arc<dyn EventSink>,
     取消: &CancelToken,
+    ask: Option<&Arc<crate::ask::AskGate>>,
 ) -> Result<Value, Value> {
     match 命令 {
         "hello" => Ok(hello()),
         "scan" => 扫描(参数),
         "list" => 列表(参数, 事件, 取消),
-        "extract" => 解压(参数, 事件, 取消),
+        "extract" => 解压(参数, 事件, 取消, ask),
         "pack" => 打包(参数),
-        "batch" => 批量(参数, 事件, 取消),
+        "batch" => 批量(参数, 事件, 取消, ask),
         "report" => 诊断(参数, 事件),
+        // 这两条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令
+        "answer" | "skip" => Err(错误值(
+            "UNSUPPORTED",
+            "answer / skip 需要交互式传输（--serve），C ABI 请直接取消",
+        )),
         other => Err(错误值("UNKNOWN_COMMAND", &format!("不认识的 cmd: {other}"))),
     }
 }
@@ -185,6 +192,7 @@ pub fn 解压(
     参数: &Value,
     事件: &Arc<dyn EventSink>,
     取消: &CancelToken,
+    ask: Option<&Arc<crate::ask::AskGate>>,
 ) -> Result<Value, Value> {
     let 路径 = 参数
         .get("path")
@@ -227,7 +235,10 @@ pub fn 解压(
         dest: job.dest.clone(),
         smart_dir: true,
         force: 参数.get("force").and_then(|v| v.as_bool()).unwrap_or(false),
-        limits: crate::safety::Limits::default(),
+        limits: crate::safety::Limits {
+            ask: ask.cloned(),
+            ..Default::default()
+        },
     };
 
     let mut 结果 = if 要解压 {
@@ -248,6 +259,12 @@ pub fn 解压(
                 "code": code.as_str(),
                 "note": out.note,
             }));
+        }
+        // 取消 / 跳过不是失败：如实回「Cancelled」，让外壳显示"已停止"而不是"出错"
+        if matches!(out.outcome, crate::error::Outcome::Cancelled { .. }) {
+            let mut r = 结果json(&out);
+            r["note"] = json!(out.note);
+            return Ok(r);
         }
         结果json(&out)
     } else {
@@ -424,6 +441,7 @@ pub fn 批量(
     参数: &Value,
     事件: &Arc<dyn EventSink>,
     取消: &CancelToken,
+    ask: Option<&Arc<crate::ask::AskGate>>,
 ) -> Result<Value, Value> {
     let paths: Vec<PathBuf> = 参数
         .get("paths")
@@ -469,6 +487,7 @@ pub fn 批量(
         limits: crate::safety::Limits {
             max_ratio: cfg.safety.zip_bomb_ratio,
             warn_executables: cfg.safety.warn_executables,
+            ask: ask.cloned(),
             ..Default::default()
         },
     };

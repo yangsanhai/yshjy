@@ -28,6 +28,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub struct CancelToken {
     flag: Arc<AtomicBool>,
+    /// 「只跳过当前这个」—— 与取消分开：跳过后批量继续跑下一个
+    skip: Arc<AtomicBool>,
     reason: Arc<Mutex<Option<String>>>,
 }
 
@@ -42,6 +44,7 @@ impl CancelToken {
     pub fn new() -> Self {
         Self {
             flag: Arc::new(AtomicBool::new(false)),
+            skip: Arc::new(AtomicBool::new(false)),
             reason: Arc::new(Mutex::new(None)),
         }
     }
@@ -59,9 +62,22 @@ impl CancelToken {
         self.cancel();
     }
 
-    /// 是否已被请求取消
+    /// 请求「只跳过当前任务」（批量里继续下一个）
+    ///
+    /// 与 [`Self::cancel`] 的区别：取消是整批停下，跳过只影响正在跑的这个。
+    /// 生效点：下一次 `is_cancelled()` 检查（每个条目/数据块一次）。
+    pub fn skip(&self) {
+        self.skip.store(true, Ordering::Relaxed);
+    }
+
+    /// 取走并清掉「跳过」标记（批量循环在每个任务结束时调一次）
+    pub fn take_skip(&self) -> bool {
+        self.skip.swap(false, Ordering::Relaxed)
+    }
+
+    /// 是否已被请求停下（**包含**「跳过当前」——对解压循环来说都是停下）
     pub fn is_cancelled(&self) -> bool {
-        self.flag.load(Ordering::Relaxed)
+        self.flag.load(Ordering::Relaxed) || self.skip.load(Ordering::Relaxed)
     }
 
     /// 取消原因（如果有）

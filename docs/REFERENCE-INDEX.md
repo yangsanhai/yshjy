@@ -32,9 +32,9 @@
 | **结构校验防假签名** | §13 武器④ | `tech/7zip-工程层.md:50,54`（1.11/1.15） | `CPP/7zip/UI/Common/OpenArchive.cpp` | 1 MiB 头缓冲 → 候选队列 → 实际解析验证 | `src/scan.rs` | ✅ |
 | **7z 头加密 vs 内容加密** | §17.4 | `tech/sevenz-rust+steganographier.md:51`（J-15） | `sevenz-rust/src/reader.rs:381-423` | 内容加密头明文可列表；头加密直接要密码 | `src/preview.rs:322`（现硬编码 `false`） | 🟡 第20批 |
 | **双维度识别进度** | §17.6（D1） | `tech/7zip-工程层.md:91`（3.3） | `CPP/7zip/Archive/IArchive.h:177-181` | `SetTotal(files, bytes)` 两个维度 | `src/scan.rs`（无 ctx） | ❌ 第21批 |
-| **嵌套包下钻一层** | §17.6 | `tech/xadmaster.md:91,92`（③-09/③-10） | XADMaster 递归解压 | 继承父级密码与编码，只下一层 | `src/event.rs` `NestedArchive`（已留未用） | ❌ 第22批 |
+| **嵌套包下钻一层** | §17.6 | `tech/xadmaster.md:91,92`（③-09/③-10） | XADMaster 递归解压 | 继承父级密码与编码，只下一层 | `src/drill.rs`（`extract.drill`） | ✅ 21批组C |
 | **解压前内存预检** | §17.6 | `tech/对比-同名技术择优.md:306` | 7-Zip `MemoryRequest` | 按字典×块×线程估峰值，跟可用内存比 | `src/hardware.rs` | ❌ 第22批 |
-| **炸弹限额改成询问** | §17.7 | `tech/7zip-工程层.md:77`（2.9） | 7-Zip 的预算协商 | 抛结构化请求（required/allowed），界面问一句 | `src/safety.rs`、`src/extract.rs:390` | ❌ 第21批 |
+| **炸弹限额改成询问** | §17.7 | `tech/7zip-工程层.md:77`（2.9） | 7-Zip 的预算协商 | 抛结构化请求（required/allowed），界面问一句 | `src/ask.rs` + `src/safety.rs` + `serve.rs` 的 answer | ✅ 21批组B |
 | **条目 packSize 校验** | AUDIT §3-12 | `tech/7zip.md:68`（3.5） | 7-Zip 的 dataAfterEnd 判定 | 读满判定，多出/不足都报「拼接错位」 | `src/layout/zip.rs:58` | ❌ 第22批 |
 
 ---

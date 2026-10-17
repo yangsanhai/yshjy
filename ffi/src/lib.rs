@@ -265,7 +265,9 @@ fn 跑一条(值: &Value, 事件: &Arc<dyn EventSink>, 取消: &CancelToken) -> 
         取消.cancel_with("ffi cancel");
         return json!({"id": id, "ok": true, "result": {"cancelled": true}});
     }
-    match api::执行(cmd, 值, 事件, 取消) {
+    // C ABI v1 不做交互式询问：超过限额按硬失败处理（宿主可自行取消后重试）。
+    // 要「问用户」请用 --serve（ASK_USER/answer）。
+    match api::执行(cmd, 值, 事件, 取消, None) {
         Ok(v) => json!({"id": id, "ok": true, "result": v}),
         Err(e) => json!({"id": id, "ok": false, "error": e}),
     }
