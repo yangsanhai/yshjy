@@ -89,6 +89,8 @@ class _HomePageState extends State<HomePage> {
   int _scanTotal = 0;
   /// 密码本里的常用解压码（点一下填入）
   List<String> _recentPw = [];
+  /// 解压产物里还套着的压缩包（嵌套包下钻：先问，再解一层）
+  List<String> _nestedArchives = [];
   final List<String> _notes = [];
 
   @override
@@ -270,6 +272,32 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 解压完扫一眼产物：里面若还套着压缩包，在完成卡上问一句「继续解压」
+  ///
+  /// 不自动下钻 —— 大包解出来的 7z 再解一层可能又跑十几分钟，
+  /// 让用户点一下更稳妥（DESIGN §17.6 的自动下钻留到下一批）。
+  Future<void> _probeNested() async {
+    final dest = _result?.dest;
+    if (dest == null) return;
+    try {
+      final r = await _client.scan([dest]);
+      if (!mounted) return;
+      final items = (r['items'] as List?) ?? const [];
+      final nested = <String>[];
+      for (final raw in items) {
+        final i = (raw as Map).cast<String, dynamic>();
+        if (i['archive'] == true) {
+          final p = i['path'] as String?;
+          if (p != null) nested.add(p);
+        }
+      }
+      setState(() => _nestedArchives = nested.take(20).toList());
+    } catch (_) {
+      // 探测失败就当没有，绝不影响解压结果
+      if (mounted) setState(() => _nestedArchives = []);
+    }
+  }
+
   /// 开始批量解压（走引擎 `batch`，一次调用跑完整个队列）
   Future<void> _startQueue() async {
     final ready = _queue.where((q) => q.archive).toList();
@@ -369,6 +397,7 @@ class _HomePageState extends State<HomePage> {
       _phase = Phase.extracting;
       _progress = null;
       _current = null;
+      _nestedArchives = [];
     });
     try {
       widget.onStatus?.call('正在解压…');
@@ -379,6 +408,8 @@ class _HomePageState extends State<HomePage> {
         _phase = Phase.done;
       });
       widget.onStatus?.call(r.ok ? '完成：${r.entriesDone} 个文件' : '部分完成');
+      // 产物里若还套着压缩包，问一句要不要再解一层（不自动，免得大包解到天荒地老）
+      _probeNested();
       // 记一条历史（历史页读它）
       await HistoryStore.add(HistoryEntry(
         time: DateTime.now().toIso8601String(),
@@ -1214,6 +1245,33 @@ class _HomePageState extends State<HomePage> {
               r.dest!,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 12),
+            ),
+          ],
+          // 嵌套包（产物里还套着压缩包）：问一句，不自动解
+          if (_nestedArchives.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              decoration: BoxDecoration(
+                color: cs.secondaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.inventory_2_outlined,
+                      size: 16, color: cs.onSecondaryContainer),
+                  const SizedBox(width: 8),
+                  Text(
+                    '里面还有 ${_nestedArchives.length} 个压缩包',
+                    style: TextStyle(fontSize: 12, color: cs.onSecondaryContainer),
+                  ),
+                  TextButton(
+                    onPressed: () => _scan(_nestedArchives),
+                    child: const Text('继续解压'),
+                  ),
+                ],
+              ),
             ),
           ],
           // 封面分离结果（DESIGN §17.5）：伪装包里的原版视频/图片
