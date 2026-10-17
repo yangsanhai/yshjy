@@ -40,6 +40,10 @@ pub struct UnpackCtx {
     pub progress: Arc<ProgressSnapshot>,
     /// 取消令牌
     pub cancel: CancelToken,
+    /// 手动指定文件名编码（`gbk`/`big5`/`sjis`/`utf-8`；`None` = 自动链）
+    ///
+    /// 自动链对 Big5/SJIS 名字常常「合法但解错」（静默乱码），只能让用户手动指定。
+    pub encoding: Option<String>,
     /// 上次发进度事件的时间（节流用）
     last_emit: Arc<Mutex<Instant>>,
 }
@@ -52,6 +56,7 @@ impl UnpackCtx {
             sink,
             progress: ProgressSnapshot::new(),
             cancel: CancelToken::new(),
+            encoding: None,
             // 初始时间戳往前推一个间隔，保证**第一条进度就能发出去**
             // （否则小任务会一条进度事件都没有，界面看起来像卡住了）
             last_emit: Arc::new(Mutex::new(
@@ -60,6 +65,12 @@ impl UnpackCtx {
                     .unwrap_or_else(Instant::now),
             )),
         }
+    }
+
+    /// 手动指定文件名编码（见 [`UnpackCtx::encoding`]）
+    pub fn with_encoding(mut self, encoding: Option<String>) -> Self {
+        self.encoding = encoding;
+        self
     }
 
     /// 什么都不报告的上下文（测试、内部调用、纯批量模式）

@@ -376,7 +376,7 @@ impl InArchive for ZipUnpacker {
         &self,
         src: &mut Source<'_>,
         _opts: &UnpackOptions,
-        _ctx: &UnpackCtx,
+        ctx: &UnpackCtx,
     ) -> Result<Preview> {
         // ZIP 的文件名**不加密**，所以无密码也能列出清单（这也是它能当"预览主力"的原因）。
         // `_pw` / `_ctx` 暂时用不上，写成 `_` 是为了让 clippy 的未使用检查闭嘴，
@@ -401,7 +401,7 @@ impl InArchive for ZipUnpacker {
         };
         let window = crate::io::Window::new(&mut *src.reader, src.base, len)
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
-        crate::preview::preview_zip_reader(window)
+        crate::preview::preview_zip_reader(window, ctx.encoding.as_deref())
     }
 }
 

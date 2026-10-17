@@ -245,7 +245,10 @@ fn 列清单(
 ///
 /// `pub(crate)`：统一接口（[`crate::unpack::ZipUnpacker`] 的 `list`）也调它 ——
 /// 一份实现两处用，别再抄第二份。
-pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(mut src: R) -> Result<Preview> {
+pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(
+    mut src: R,
+    encoding: Option<&str>,
+) -> Result<Preview> {
     // 用**我们自己的中央目录解析器**（而不是 `zip` crate 的 by_index_raw）：
     // 它读 extra field —— Info-ZIP Unicode Path(0x7075) 能把「本地编码 + UTF-8 双写」
     // 的中文名救回来，WinZip AES 强度(0x9901) 也在里面。
@@ -255,7 +258,7 @@ pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(mut src: R) -
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek end: {e}")))?;
     let layout = crate::layout::zip::locate(&mut src, size)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip locate: {e}")))?;
-    let infos = crate::layout::zip::list_entries(&mut src, &layout)
+    let infos = crate::layout::zip::list_entries_enc(&mut src, &layout, encoding)
         .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip list: {e}")))?;
 
     let mut entries = Vec::with_capacity(infos.len());

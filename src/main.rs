@@ -62,7 +62,7 @@ fn 版本信息() -> String {
 /// 抽成常量而不是散在 `matches!` 里：**漏登记一个就会出真事故**
 /// —— `--lang en 包.mp4` 会把 `en` 当成要解压的文件（多语言上线时正好踩到）。
 const 带值的选项: &[&str] = &[
-    "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang", "--split",
+    "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang", "--split", "--encoding",
 ];
 
 /// 进程级文案仓库
@@ -273,9 +273,26 @@ fn main() -> ExitCode {
         return ExitCode::from(code::USAGE);
     }
 
+    // 文件名编码（--encoding）：非法值直接拒绝，别让用户以为生效了
+    let 编码: Option<String> = match val_of("--encoding") {
+        None => None,
+        Some(v) => {
+            let low = v.to_ascii_lowercase();
+            let ok = matches!(
+                low.as_str(),
+                "auto" | "gbk" | "gb18030" | "big5" | "sjis" | "shift-jis" | "utf-8"
+            );
+            if !ok {
+                eprintln!("--encoding 只认 auto / gbk / big5 / sjis / utf-8（收到 {v}）");
+                return ExitCode::from(code::USAGE);
+            }
+            if low == "auto" { None } else { Some(low) }
+        }
+    };
+
     let json = has("--json");
     if has("--list") || has("-l") {
-        return do_list(&targets, quiet, json);
+        return do_list(&targets, quiet, json, 编码.as_deref());
     }
     if has("--rescue") {
         return do_rescue(&targets, &val_of("--dest"), quiet);
@@ -334,6 +351,7 @@ fn main() -> ExitCode {
         json,
         smart_dir: !has("--no-smart-dir"),
         force: has("--force"),
+        encoding: 编码.clone(),
     })
 }
 
@@ -360,7 +378,7 @@ fn mask(pw: &str) -> String {
 ///
 /// 和 v0.4 的区别：以前只有 ZIP 能列，现在 ZIP / 7z / RAR / 单流都能列；
 /// 并且会发出 `PreviewReady` 事件 —— 这就是界面 S3「列出内容 → 勾选」的数据源。
-fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
+fn do_list(targets: &[String], quiet: bool, json: bool, encoding: Option<&str>) -> ExitCode {
     use std::sync::Arc;
     use yshjy::ctx::UnpackCtx;
     use yshjy::event::EventSink;
@@ -369,7 +387,7 @@ fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
     for t in targets {
         let path = PathBuf::from(t);
         let sink: Arc<dyn EventSink> = Arc::new(终端出口::new(quiet, json));
-        let ctx = UnpackCtx::new(1, sink);
+        let ctx = UnpackCtx::new(1, sink).with_encoding(encoding.map(str::to_string));
 
         match yshjy::preview::preview(&path, &ctx, None) {
             Ok((_target, pv)) => {
@@ -630,6 +648,8 @@ struct 解压参数 {
     json: bool,
     smart_dir: bool,
     force: bool,
+    /// 文件名编码（--encoding）
+    encoding: Option<String>,
 }
 
 fn do_extract(a: 解压参数) -> ExitCode {
@@ -644,6 +664,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
         json,
         smart_dir,
         force,
+        encoding,
     } = a;
     use std::sync::Arc;
     use yshjy::batch;
@@ -694,6 +715,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
         dest: dest_opt.clone().map(PathBuf::from),
         smart_dir,
         force,
+        encoding,
         limits: yshjy::safety::Limits {
             max_ratio: cfg.safety.zip_bomb_ratio,
             warn_executables: cfg.safety.warn_executables,

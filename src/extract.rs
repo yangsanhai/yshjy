@@ -284,7 +284,12 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         let mut files = 0u64;
         for i in 0..archive.len() {
             if let Ok(f) = archive.by_index_raw(i) {
-                let nm = crate::layout::zip::decode_name(f.name_raw(), false);
+                let nm = crate::layout::zip::decode_name_forced(
+                    f.name_raw(),
+                    false,
+                    &[],
+                    ctx.encoding.as_deref(),
+                );
                 if opts.selection.matches(i as u64 + 1, &nm, f.is_dir()) {
                     bytes += f.size();
                     files += 1;
@@ -319,7 +324,12 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             };
             // 用我们自己的四级回退链解码 —— 不能直接用 zip 的 `name()`：
             // 它在没有 UTF-8 标志位时会按 CP437 解，中文名会变成乱码
-            let raw_name = crate::layout::zip::decode_name(f.name_raw(), false);
+            let raw_name = crate::layout::zip::decode_name_forced(
+                f.name_raw(),
+                false,
+                &[],
+                ctx.encoding.as_deref(),
+            );
             let is_dir = f.is_dir();
             let _size = f.size();
             let encrypted = f.encrypted();

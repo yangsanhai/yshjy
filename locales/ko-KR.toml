@@ -33,6 +33,7 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   --split <크기>                  분할 출력 (예: 2G / 500M)
   --no-checksum                   .sha256 생성 안 함 (기본 생성)
   --no-readme                     说明.txt 생성 안 함 (기본 생성)
+  --encoding <이름>              파일명 인코딩 지정 (big5 / sjis / gbk)
   yshjy -V, --version             버전과 에디션 (common / full)
 
 자주 쓰는 옵션:
