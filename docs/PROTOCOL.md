@@ -73,7 +73,7 @@
 |---|---|---|
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
 | `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
-| `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
+| `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?`, `drill?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
 | `pack` | `inputs[]`, `out`, `password?`, `tail?` | 打包成伪装文件 |
 | `cancel` | — | 取消当前任务 |
 | `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` |

@@ -13,7 +13,8 @@
     ✅ 组D-4 Dart EngineTransport + ProcessTransport（gui/lib/transport/engine_transport.dart）
     ✅ 组D-5 gui/lib/platform_paths.dart：5 处写死 state 路径 + 4 处 xdg-open 全部跨平台
     ✅ 组A-引擎部分 list 结果带 cover{size,kind,ext}；extract 支持 extract:false（只提封面）
-    ⬜ 组C 嵌套包自动下钻一层
+    ✅ 组C 嵌套包自动下钻一层：src/drill.rs + extract.drill（默认关；最多 8 个；
+       跳过输入自身；失败只记 nested[].outcome）—— 协议实测 mp4→zip→文件 全通
     ⬜ 组B 双向协议：ASK_USER / answer / skip（限额询问 + 单行取消）
     ⬜ 组A-界面 封面勾选行 / 打包模式二选一
     ⬜ 组E CLI 扫尾（--config / --keep / --no-color / -v / --log / --password-file 等）

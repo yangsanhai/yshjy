@@ -18,6 +18,9 @@
   + `ProcessTransport`），`EngineClient` 不再死绑 `Process.start`，iOS 可换 FFI 实现
 - **界面路径跨平台**：`gui/lib/platform_paths.dart` 统一状态/配置目录；5 处写死
   `$HOME/.local/state` 与 4 处 `xdg-open` 全部替换（Windows/macOS 走各自 API）
+- **嵌套包自动下钻（组 C）**：新增 `src/drill.rs`，`extract` 加 `drill:true`。
+  只下一层、最多 8 个、跳过输入包自身（dest==源目录不会自我递归）、失败只记
+  `nested[].outcome=failed`；协议实测 外层 mp4 → 内层 zip → 深层文件 全通
 
 ## [0.0.19] · 2026-10-17（版本号规则变更 + GUI 更新）
 

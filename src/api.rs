@@ -279,6 +279,35 @@ pub fn 解压(
             });
         }
     }
+    // 嵌套包自动下钻（组 C，只一层）：默认**关**，参数 `drill: true` 才做。
+    // 为什么默认关：多解一层就是多写一倍的盘；用户没要求时不该替他做主。
+    // 界面侧用「☑ 解完后自动继续解里面的包」控制。
+    if 要解压
+        && 参数.get("drill").and_then(|v| v.as_bool()).unwrap_or(false)
+        && !取消.is_cancelled()
+        && let Some(root) = 结果
+            .get("dest")
+            .and_then(|v| v.as_str())
+            .map(PathBuf::from)
+    {
+        let sink: Arc<dyn EventSink> = 事件.clone();
+        let 内层 = crate::drill::drill_once(
+            &root,
+            Some(Path::new(路径)),
+            opts.password.as_deref(),
+            opts.encoding.as_deref(),
+            &sink,
+            取消,
+        );
+        结果["nested"] = json!(内层
+            .iter()
+            .map(|d| json!({
+                "path": d.path.display().to_string(),
+                "dest": d.dest.as_ref().map(|p| p.display().to_string()),
+                "outcome": d.outcome,
+            }))
+            .collect::<Vec<_>>());
+    }
     Ok(结果)
 }
 
