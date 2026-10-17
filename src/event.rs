@@ -235,6 +235,15 @@ pub enum Event {
         /// 还剩几个候选可以试
         candidates: u32,
     },
+    /// 正在试第 N 个密码候选（S4：让用户看见「在动」，不是卡死）
+    PasswordTry {
+        /// 任务号
+        job: u64,
+        /// 第几个（1-based）
+        index: u32,
+        /// 一共几个
+        total: u32,
+    },
     /// 空间可能不够（S5）
     SpaceShortage {
         /// 任务号
@@ -270,6 +279,7 @@ impl Event {
             | Event::ExtractProgress { job, .. }
             | Event::EntryFinished { job, .. }
             | Event::PasswordNeeded { job, .. }
+            | Event::PasswordTry { job, .. }
             | Event::SpaceShortage { job, .. }
             | Event::Diagnostic { job, .. } => *job,
         }
@@ -297,6 +307,7 @@ impl Event {
             Event::ExtractProgress { .. } => "EXTRACT_PROGRESS",
             Event::EntryFinished { .. } => "ENTRY_FINISHED",
             Event::PasswordNeeded { .. } => "PASSWORD_NEEDED",
+            Event::PasswordTry { .. } => "PASSWORD_TRY",
             Event::SpaceShortage { .. } => "SPACE_SHORTAGE",
             Event::Diagnostic { .. } => "DIAGNOSTIC",
         }
