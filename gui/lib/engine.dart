@@ -240,6 +240,9 @@ class EngineClient {
 
   Stream<EngineEvent> get events => _events.stream;
 
+  /// 是否有正在跑的请求（关闭窗口时用来决定要不要先问一句）
+  bool get busy => _pending.isNotEmpty;
+
   /// 起引擎（幂等）。并发的多次调用共用同一个 Future —— 只会起一个进程；
   /// 启动失败时清掉缓存，允许下次重试。
   Future<void> start() => _starting ??= _doStart();

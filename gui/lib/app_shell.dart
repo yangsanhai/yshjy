@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'dart:ui' show AppExitResponse;
 
 import 'engine.dart';
 import 'history_store.dart';
@@ -30,7 +31,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final EngineClient _client = EngineClient.instance;
   int _index = 0;
   String _engineVersion = '…';
@@ -39,7 +40,47 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.bootstrapEngine) _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 关闭窗口时（D13）：正在处理就先问一句，确定后让引擎**优雅取消**。
+  ///
+  /// 以前是直接断管道、引擎读 stdin 碰到 EOF 自己退出 —— 正在解的那个包会被硬中断，
+  /// 半成品留在那里也没人知道。现在先 cancel，让引擎在数据块级停下并保留已解出的部分。
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    if (!_client.busy) return AppExitResponse.exit;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('还在处理中，确定关闭？'),
+        content: const Text('已经解出来的文件会保留；正在解的那一个会停下，不会继续写。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('继续处理'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return AppExitResponse.cancel;
+    try {
+      await _client.cancel();
+    } catch (_) {}
+    // 给引擎一点时间在数据块边界收尾（它在每 64 KiB 检查一次取消）
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    return AppExitResponse.exit;
   }
 
   Future<void> _bootstrap() async {
