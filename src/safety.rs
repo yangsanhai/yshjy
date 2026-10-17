@@ -46,6 +46,11 @@ impl Default for Limits {
     }
 }
 
+/// 压缩比检查的起检门槛：本次任务写出 ≥ 64 MiB 之后才判比例。
+///
+/// 小包的比例没有统计意义（见 [`ExtractBudget::record`] 里的实测例子）。
+pub const RATIO_CHECK_MIN_WRITTEN: u64 = 64 * 1024 * 1024;
+
 /// 磁盘空间的检查结论
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpaceCheck {
@@ -278,7 +283,19 @@ impl ExtractBudget {
             self.limits.max_extract_bytes = 0;
         }
 
-        if self.limits.max_ratio > 0 && self.packed_total > 0 {
+        // 压缩比只对**够大的样本**有意义。
+        //
+        // 分母是整包压缩总量，小包里一个高压缩比条目会让比例瞬间爆表：
+        // 实测 `a.txt`(11 B) + `b.bin`(5000 个相同字节)，整包压缩后约 40 B，
+        // 解 b.bin 时 5000/40 = 125 > 100 → 被当成炸弹、报 DATA_ERROR，
+        // 而 `unzip -t` 完全正常 —— 这是纯误报（用户会以为包坏了）。
+        //
+        // 真正的压缩炸弹解出的是 GB 级数据，等到 64 MiB 再判照样拦得住；
+        // 「拿不准就放行」的项目原则也指向这个阈值。
+        if self.limits.max_ratio > 0
+            && self.packed_total > 0
+            && self.written >= RATIO_CHECK_MIN_WRITTEN
+        {
             let ratio = self.written / self.packed_total.max(1);
             if ratio > self.limits.max_ratio {
                 let 上限 = self.limits.max_ratio;
@@ -427,8 +444,20 @@ mod tests {
             },
             100,
         );
-        assert!(b.record(500).is_ok()); // 比值 5
-        assert!(b.record(600).is_err()); // 比值 11 > 10
+        // 起检门槛之前不判比例：小样本的比值没有统计意义
+        assert!(b.record(500).is_ok());
+        assert!(b.record(600).is_ok());
+        // 过了 64 MiB 门槛，累计/压缩总量远超 10 倍 → 必须拦
+        assert!(b.record(RATIO_CHECK_MIN_WRITTEN).is_err());
+    }
+
+    #[test]
+    fn 小包的高压缩比不算炸弹() {
+        // 回归：a.txt(11 B) + b.bin(5000 个相同字节)，整包压缩总量约 40 B。
+        // 旧逻辑在 5000/40=125 > 100 时误报 DATA_ERROR（unzip -t 全好）。
+        let mut b = ExtractBudget::new(Limits::default(), 40);
+        assert!(b.record(11).is_ok(), "小文件正常");
+        assert!(b.record(5000).is_ok(), "小包不该被判成压缩炸弹");
     }
 
     #[test]

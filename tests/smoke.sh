@@ -41,7 +41,9 @@ head_line "═══ 1. 帮助与用法 ═══"
 head_line "═══ 2. 打包 ═══"
 "$BIN" ys -o plain.mp4 src >/dev/null 2>&1;  check "打包（默认 free 原子布局）" 0 $?
 "$BIN" ys -o tail.mp4 --tail src >/dev/null 2>&1; check "打包（尾部追加布局）" 0 $?
-"$BIN" ys -o pw.mp4 -p '密码123' src >/dev/null 2>&1; check "打包（带中文密码）" 0 $?
+# 加 --no-readme：否则生成的「说明.txt」里写着解压码，后面的「不带密码应失败」用例
+# 会被自动抓密码的功能解出来（这是功能正常，不是失败 —— 测试要把变量隔离掉）
+"$BIN" ys -o pw.mp4 -p '密码123' --no-readme src >/dev/null 2>&1; check "打包（带中文密码）" 0 $?
 
 if [ -f plain.mp4 ]; then
   # 产物必须是合法 MP4（第 4..8 字节是 ftyp）

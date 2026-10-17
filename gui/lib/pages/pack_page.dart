@@ -23,6 +23,8 @@ class _PackPageState extends State<PackPage> {
 
   final List<String> _inputs = [];
   String? _out;
+  /// 打包模式（GUI-PLAN §5.2②）：普通压缩是默认，伪装是特殊功能
+  String _mode = 'plain';
   String _coverExt = 'mp4';
   final TextEditingController _pwCtrl = TextEditingController();
   /// 解压码是否显示明文（眼睛图标）
@@ -63,20 +65,27 @@ class _PackPageState extends State<PackPage> {
     });
   }
 
+  /// 当前模式对应的输出扩展名（普通 = .zip）
+  String get _ext => _mode == 'plain' ? 'zip' : _coverExt;
+
   String _suggestOut(String first) {
     final base = first.split('/').last;
     final stem = base.contains('.') ? base.substring(0, base.lastIndexOf('.')) : base;
     final dir = first.substring(0, first.lastIndexOf('/') + 1);
-    return '$dir$stem.$_coverExt';
+    return '$dir$stem.$_ext';
   }
 
   Future<void> _pickOut() async {
-    final loc = await getSaveLocation(suggestedName: _out?.split('/').last ?? 'packed.$_coverExt');
+    final loc = await getSaveLocation(
+        suggestedName: _out?.split('/').last ?? 'packed.$_ext');
     if (loc == null) return;
     setState(() {
       _out = loc.path;
-      final dot = loc.path.lastIndexOf('.');
-      if (dot > 0) _coverExt = loc.path.substring(dot + 1).toLowerCase();
+      // 普通模式下输出必须是 .zip；伪装模式下扩展名决定封面素材
+      if (_mode == 'disguise') {
+        final dot = loc.path.lastIndexOf('.');
+        if (dot > 0) _coverExt = loc.path.substring(dot + 1).toLowerCase();
+      }
     });
   }
 
@@ -95,7 +104,9 @@ class _PackPageState extends State<PackPage> {
         password: _pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim(),
         splitBytes: _split ? _parseSize(_splitCtrl.text) : null,
         checksum: _checksum,
-        readme: _readme,
+        // 普通压缩不写「这不是视频」的说明书（用户验收 2026-10-17）
+        readme: _mode == 'disguise' ? _readme : false,
+        mode: _mode,
       );
       if (!mounted) return;
       setState(() => _result = r);
@@ -133,13 +144,47 @@ class _PackPageState extends State<PackPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('打包成伪装文件', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            _mode == 'plain' ? '压缩文件' : '打包成伪装文件',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 4),
           Text(
-            '把文件夹/文件做成一个「能播放/能看」的文件，再传给别人',
+            _mode == 'plain'
+                ? '把文件夹/文件压成一个 .zip，任何解压工具都能打开'
+                : '把文件夹/文件做成一个「能播放/能看」的文件，再传给别人',
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          // 模式二选一（GUI-PLAN §5.2②）：普通压缩是默认，伪装是特殊功能
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'plain',
+                icon: Icon(Icons.folder_zip_outlined, size: 16),
+                label: Text('普通压缩（.zip）'),
+              ),
+              ButtonSegment(
+                value: 'disguise',
+                icon: Icon(Icons.movie_outlined, size: 16),
+                label: Text('伪装成视频/图片'),
+              ),
+            ],
+            selected: {_mode},
+            onSelectionChanged: _busy
+                ? null
+                : (s) {
+                    setState(() {
+                      _mode = s.first;
+                      // 输出名跟着换扩展名（普通 = .zip）
+                      if (_out != null) {
+                        final dot = _out!.lastIndexOf('.');
+                        if (dot > 0) _out = '${_out!.substring(0, dot)}.$_ext';
+                      }
+                    });
+                  },
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               OutlinedButton.icon(
@@ -221,32 +266,34 @@ class _PackPageState extends State<PackPage> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('伪装成：', style: TextStyle(fontSize: 13)),
-              const SizedBox(width: 8),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'mp4', label: Text('视频')),
-                  ButtonSegment(value: 'png', label: Text('图片')),
-                  ButtonSegment(value: 'txt', label: Text('文本')),
-                ],
-                selected: {_coverExt == 'jpg' ? 'png' : _coverExt},
-                onSelectionChanged: _busy
-                    ? null
-                    : (s) {
-                        setState(() {
-                          _coverExt = s.first;
-                          if (_out != null) {
-                            final dot = _out!.lastIndexOf('.');
-                            if (dot > 0) _out = '${_out!.substring(0, dot)}.$_coverExt';
-                          }
-                        });
-                      },
-              ),
-            ],
-          ),
+          if (_mode == 'disguise') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Text('伪装成：', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'mp4', label: Text('视频')),
+                    ButtonSegment(value: 'png', label: Text('图片')),
+                    ButtonSegment(value: 'txt', label: Text('文本')),
+                  ],
+                  selected: {_coverExt == 'jpg' ? 'png' : _coverExt},
+                  onSelectionChanged: _busy
+                      ? null
+                      : (s) {
+                          setState(() {
+                            _coverExt = s.first;
+                            if (_out != null) {
+                              final dot = _out!.lastIndexOf('.');
+                              if (dot > 0) _out = '${_out!.substring(0, dot)}.$_coverExt';
+                            }
+                          });
+                        },
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           TextField(
             controller: _pwCtrl,
@@ -298,19 +345,21 @@ class _PackPageState extends State<PackPage> {
             subtitle: const Text('对方可以 sha256sum -c 验证没下坏',
                 style: TextStyle(fontSize: 11)),
           ),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            value: _readme,
-            onChanged: _busy ? null : (v) => setState(() => _readme = v),
-            title: const Text('生成说明.txt', style: TextStyle(fontSize: 13)),
-            subtitle: const Text('告诉对方这不是视频、怎么打开（有密码会写进去）',
-                style: TextStyle(fontSize: 11)),
-          ),
+          // 说明书是给「伪装包」用的（告诉对方这不是视频）；普通压缩不需要
+          if (_mode == 'disguise')
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              value: _readme,
+              onChanged: _busy ? null : (v) => setState(() => _readme = v),
+              title: const Text('生成说明.txt', style: TextStyle(fontSize: 13)),
+              subtitle: const Text('告诉对方这不是视频、怎么打开（有密码会写进去）',
+                  style: TextStyle(fontSize: 11)),
+            ),
           const SizedBox(height: 8),
           if (_error != null)
             Text(
-              '打包失败（${_error}）',
+              '打包失败（$_error）',
               style: TextStyle(color: cs.error, fontSize: 12),
             ),
           if (_result != null) _resultCard(cs),
@@ -324,7 +373,11 @@ class _PackPageState extends State<PackPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.archive),
-            label: Text(_busy ? '打包中…' : '开始打包'),
+            label: Text(
+              _busy
+                  ? (_mode == 'plain' ? '压缩中…' : '打包中…')
+                  : (_mode == 'plain' ? '开始压缩' : '开始打包（伪装）'),
+            ),
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
           ),
         ],
@@ -337,6 +390,8 @@ class _PackPageState extends State<PackPage> {
     final size = (r['total_size'] as num?)?.toInt() ?? 0;
     final entries = (r['entries'] as num?)?.toInt() ?? 0;
     final layout = r['layout']?.toString() ?? '';
+    final mode = r['mode']?.toString() ?? 'disguise';
+    final plain = mode == 'plain';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       margin: const EdgeInsets.only(bottom: 8),
@@ -345,9 +400,12 @@ class _PackPageState extends State<PackPage> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        '✅ 打包完成：${_size(size)}，$entries 个条目，'
-        '${layout == 'FreeAtom' ? 'free 原子布局（推荐）' : '尾部追加布局'}\n'
-        '这个文件能正常播放/打开，对方拖进解压工具也能还原。',
+        plain
+            ? '✅ 压缩完成：${_size(size)}，$entries 个条目\n'
+                '这是一个标准 ZIP，任何解压工具都能直接打开。'
+            : '✅ 打包完成：${_size(size)}，$entries 个条目，'
+                '${layout == 'FreeAtom' ? 'free 原子布局（推荐）' : '尾部追加布局'}\n'
+                '这个文件能正常播放/打开，对方拖进解压工具也能还原。',
         style: const TextStyle(fontSize: 12, height: 1.5),
       ),
     );

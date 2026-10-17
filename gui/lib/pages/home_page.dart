@@ -94,6 +94,12 @@ class _HomePageState extends State<HomePage> {
   List<String> _nestedArchives = [];
   final List<String> _notes = [];
 
+  /// 解压页那两个勾选（GUI-PLAN §5.2①）：封面和内容各管各的
+  bool _wantCover = true;
+  bool _wantExtract = true;
+  /// 引擎的 ASK_USER 已经在弹窗里等答案（防止重复弹）
+  bool _askOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -168,9 +174,78 @@ class _HomePageState extends State<HomePage> {
         if (!_notes.contains('磁盘可能不够')) {
           setState(() => _notes.add('磁盘可能不够（需要 ${_size((need as num?)?.toInt() ?? 0)}）'));
         }
+      case 'ASK_USER':
+        // 限额命中（压缩炸弹 / 解压体积超限）：引擎在等工作线程里等我们回答，
+        // 60 秒不答它就自己按「跳过」往下走（USER，2026-10-17 定的交互）。
+        _askUser(e);
       // 不认识的 kind 一律忽略 —— 后端加新事件不会弄坏旧界面
       default:
         break;
+    }
+  }
+
+  /// 引擎反问：限额命中要不要继续。三选一 → answer: continue / skip / cancel
+  Future<void> _askUser(EngineEvent e) async {
+    if (_askOpen) return;
+    _askOpen = true;
+    final reason = e.data['reason']?.toString() ?? '';
+    final written = (e.data['written'] as num?)?.toInt() ?? 0;
+    final limit = (e.data['limit'] as num?)?.toInt() ?? 0;
+    final why = switch (reason) {
+      'possible_zip_bomb' => '这个包解开后可能非常大（压缩比异常，像压缩炸弹）',
+      'extract_size_limit_exceeded' => '解压出来的文件超过安全限额',
+      _ => '这次解压超过了安全限额',
+    };
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: false, // 误点外面 = 不回答，等于让用户白等 60 秒
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, size: 32),
+        title: const Text('要继续解压吗？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(why, style: const TextStyle(fontSize: 13, height: 1.5)),
+            const SizedBox(height: 10),
+            Text(
+              '已经写出 ${_size(written)}'
+              '${limit > 0 ? '，限额 ${_size(limit)}' : ''}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '60 秒不选会按「跳过」处理。',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: const Text('取消整个任务'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'skip'),
+            child: const Text('跳过这一个'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'continue'),
+            child: const Text('继续解压'),
+          ),
+        ],
+      ),
+    );
+    _askOpen = false;
+    // 关窗/超时都按「跳过」，与引擎的 60 秒默认一致
+    final value = choice ?? 'skip';
+    try {
+      await _client.answer(value);
+    } catch (_) {
+      // 迟到答案会被引擎丢掉；这里不该因为「引擎已经在跑了」而炸界面
     }
   }
 
@@ -384,6 +459,9 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _preview = pv;
         _phase = Phase.preview;
+        // 有封面区才默认勾「伪装封面」；普通 zip 不显示那一行，也不提取
+        _wantCover = pv.hasCover;
+        _wantExtract = true;
       });
       widget.onStatus?.call('已识别：${pv.fileCount} 个文件');
     } on EngineError catch (e) {
@@ -402,7 +480,12 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       widget.onStatus?.call('正在解压…');
-      final r = await _client.extract(path, password: _password);
+      final r = await _client.extract(
+        path,
+        password: _password,
+        cover: _wantCover,
+        wantExtract: _wantExtract,
+      );
       if (!mounted) return;
       setState(() {
         _result = r;
@@ -577,6 +660,16 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _cancel() async {
     await _client.cancel();
+  }
+
+  /// 批量里只跳过当前这一项（引擎的 skip 命令；整批继续跑）
+  Future<void> _skipCurrent() async {
+    try {
+      await _client.skipCurrent();
+    } catch (_) {
+      // 引擎刚好已经切到下一项时 skip 会返回 skipped:false —— 不算错误
+    }
+    if (mounted) widget.onStatus?.call('已跳过这一项');
   }
 
   // ───────────────────────── 界面 ─────────────────────────
@@ -1062,6 +1155,48 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         const SizedBox(height: 12),
+        // 封面与内容上下并列、各自带勾选（GUI-PLAN §5.2①，用户验收原话）
+        Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              if (pv.hasCover)
+                CheckboxListTile(
+                  key: const ValueKey('want-cover'),
+                  dense: true,
+                  value: _wantCover,
+                  onChanged: (v) => setState(() => _wantCover = v ?? false),
+                  secondary: const Icon(Icons.movie_outlined, size: 20),
+                  title: Text(
+                    '伪装封面（${_size((pv.cover!['size'] as num?)?.toInt() ?? 0)}'
+                    '${pv.cover!['ext'] != null ? ' · ${pv.cover!['ext']}' : ''}）',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: const Text(
+                    '勾上就把里面的原视频/图片切出来',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              CheckboxListTile(
+                key: const ValueKey('want-extract'),
+                dense: true,
+                value: _wantExtract,
+                onChanged: (v) => setState(() => _wantExtract = v ?? false),
+                secondary: const Icon(Icons.folder_zip_outlined, size: 20),
+                title: Text(
+                  '压缩包内容（${pv.fileCount} 个文件 · ${_size(pv.totalSize)}）',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text(
+                  '勾上就解压里面的文件',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
@@ -1120,9 +1255,15 @@ class _HomePageState extends State<HomePage> {
             ),
             const Spacer(),
             FilledButton.icon(
-              onPressed: _extract,
-              icon: const Icon(Icons.download),
-              label: Text('开始解压（${pv.fileCount} 个文件）'),
+              onPressed: (_wantExtract || (pv.hasCover && _wantCover)) ? _extract : null,
+              icon: Icon(_wantExtract ? Icons.download : Icons.movie_outlined),
+              label: Text(
+                _wantExtract
+                    ? ((pv.hasCover && _wantCover)
+                        ? '开始解压 + 提取封面'
+                        : '开始解压（${pv.fileCount} 个文件）')
+                    : (pv.hasCover && _wantCover ? '只提取封面' : '请勾选要提取的内容'),
+              ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),
@@ -1200,13 +1341,24 @@ class _HomePageState extends State<HomePage> {
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed: _cancel,
-                icon: const Icon(Icons.stop_circle_outlined),
-                label: const Text('取消'),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // 批量里跳过当前这一个（组 B 的 skip 语义：不是整批取消）
+                if (_batchOrder.length > 1) ...[
+                  OutlinedButton.icon(
+                    onPressed: _skipCurrent,
+                    icon: const Icon(Icons.skip_next_outlined),
+                    label: const Text('跳过这项'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                OutlinedButton.icon(
+                  onPressed: _cancel,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: Text(_batchOrder.length > 1 ? '取消整批' : '取消'),
+                ),
+              ],
             ),
           ],
         ),
@@ -1218,6 +1370,8 @@ class _HomePageState extends State<HomePage> {
     final r = _result!;
     final cs = Theme.of(context).colorScheme;
     final ok = r.ok;
+    // 只勾了「伪装封面」那一项：解出 0 个文件是正常的，别吓用户
+    final onlyCover = r.entriesDone == 0 && r.cover != null;
     final seconds = (r.millis / 1000).toStringAsFixed(1);
     return Center(
       key: const ValueKey('done'),
@@ -1231,7 +1385,11 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            ok ? '解开了 ${r.entriesDone} 个文件' : '只解出了一部分（${r.entriesDone}/${r.entriesTotal}）',
+            ok
+                ? (onlyCover
+                    ? '封面已提取出来'
+                    : '解开了 ${r.entriesDone} 个文件')
+                : '只解出了一部分（${r.entriesDone}/${r.entriesTotal}）',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
