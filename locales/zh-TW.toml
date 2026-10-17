@@ -27,6 +27,7 @@ text = """
   yshjy ys <檔案或資料夾>          打包成偽裝檔
   yshjy --list <檔案>             先看看裡面有什麼（不解壓縮）
   yshjy --rescue <檔案>           檔案壞了也盡量救回來
+  yshjy --extract-cover <檔案>    只把偽裝包裡的原版影片/圖片拿出來（不解壓）
   yshjy --help                    看這份說明
   yshjy --report <檔案>           產生診斷包（報障用；--no-paths 去識別路徑）
   yshjy -V, --version             看版本與版本檔次（常用版 / 全能版）

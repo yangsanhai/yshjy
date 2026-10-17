@@ -144,6 +144,8 @@ class ExtractResult {
   final int bytesWritten;
   final String? dest;
   final int millis;
+  /// 分离出来的封面（DESIGN §17.5）：{path, size, kind}；没有则为 null
+  final Map<String, dynamic>? cover;
 
   ExtractResult({
     required this.outcome,
@@ -152,6 +154,7 @@ class ExtractResult {
     required this.bytesWritten,
     required this.dest,
     required this.millis,
+    this.cover,
   });
 
   factory ExtractResult.fromJson(Map<String, dynamic> j) => ExtractResult(
@@ -161,6 +164,7 @@ class ExtractResult {
         bytesWritten: (j['bytes_written'] as num?)?.toInt() ?? 0,
         dest: j['dest'] as String?,
         millis: (j['millis'] as num?)?.toInt() ?? 0,
+        cover: (j['cover'] as Map?)?.cast<String, dynamic>(),
       );
 
   bool get ok => outcome.startsWith('Success');

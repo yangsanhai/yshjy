@@ -28,6 +28,7 @@ USAGE:
   yshjy ys <file or folder>       pack into a disguised file
   yshjy --list <file>             list what's inside, without extracting
   yshjy --rescue <file>           salvage as much as possible from a broken archive
+  yshjy --extract-cover <file>    extract just the cover video/image (no unpack)
   yshjy --help                    show this help
   yshjy -V, --version             show version and edition (common / full)
 

@@ -1128,6 +1128,20 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(fontSize: 12),
             ),
           ],
+          // 封面分离结果（DESIGN §17.5）：伪装包里的原版视频/图片
+          if (r.cover != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '🎬 视频已分离：${(r.cover!['path'] as String).split('/').last}'
+              '（${_size((r.cover!['size'] as num?)?.toInt() ?? 0)}）',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            TextButton.icon(
+              onPressed: () => _openFolder(r.cover!['path'] as String),
+              icon: const Icon(Icons.play_circle_outline, size: 16),
+              label: const Text('打开封面', style: TextStyle(fontSize: 12)),
+            ),
+          ],
           if (_entryHint() case final hint?) ...[
             const SizedBox(height: 12),
             Container(

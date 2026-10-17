@@ -27,6 +27,7 @@ text = """
   yshjy ys <文件或文件夹>          打包成伪装文件
   yshjy --list <文件>             先看看里面有什么（不解压）
   yshjy --rescue <文件>           文件坏了也尽量救出来
+  yshjy --extract-cover <文件>    只把伪装包里的原版视频/图片拿出来（不解压）
   yshjy --help                    看这份帮助
   yshjy -V, --version             看版本和档位（常用版 / 全能版）
 

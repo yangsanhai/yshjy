@@ -27,6 +27,7 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   yshjy ys <파일/폴더>            위장 파일로 묶기
   yshjy --list <파일>             안을 보기만 하기 (풀지 않음)
   yshjy --rescue <파일>           손상된 압축 파일에서 최대한 복구
+  yshjy --extract-cover <파일>    위장 패키지의 원본 영상/이미지만 추출 (압축 해제 안 함)
   yshjy --help                    이 도움말
   yshjy --report <파일>           진단 패키지 생성 (--no-paths는 경로를 숨김)
   yshjy -V, --version             버전과 에디션 (common / full)
