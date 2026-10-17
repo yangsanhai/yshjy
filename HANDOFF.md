@@ -187,8 +187,10 @@ yshjy --json 包.mp4             # 事件流按行输出（脚本/前端消费�
 ## 下一步（按用户"做到完全完整能用"的目标排）
 
 ```
-0. 界面（第 1 批已写） 协议层 `--serve`：完成 + 7 组冒烟全过（docs/PROTOCOL.md）
-                     GUI：`gui/`（Flutter）—— 空状态 / 预览 / 进度 / 完成 / 失败 / 诊断提醒
+0. 界面（第 1 批已跑通）协议层 `--serve`：完成 + 7 组冒烟全过（docs/PROTOCOL.md）
+                     GUI：`gui/`（Flutter 3.44.9）**已编译并实机启动验证** ——
+                     空状态 / 预览 / 进度 / 完成 / 失败 / 诊断提醒；窗口标题「杨三海解压」
+                     产物：gui/build/linux/x64/release/bundle/（内含引擎 yshjy，双击即用）
                      技术：Process.start + NDJSON（不是 FFI），见 gui/README.md
                      第 2 批待做：拖放入口 / 密码框 / 空间不足确认 / 条目勾选 / 批量队列 / 打包面板 / 设置页
 1. 打发布包           bash scripts/release.sh（一次出常用版 + 全能版）+ scripts/build-deb.sh
