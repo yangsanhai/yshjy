@@ -58,7 +58,7 @@
 {"id": 3, "ok": true, "result": { ... }}
 
 // 失败：前端拿 code 查语言包，note 只用来写日志/反馈
-{"id": 3, "ok": false, "error": {"code": "NOT_ARCHIVE", "note": "..."}}
+{"id": 3, "ok": false, "error": {"code": "NOT_ARCHIVE", "note": "...", "detail": {...}}}
 ```
 
 ## 事件（引擎 → 前端，主动推送，没有 id）
@@ -114,6 +114,34 @@
 {"total_size": 2048, "zip_size": 120, "cover_size": 1688,
  "entries": 1, "layout": "FreeAtom", "warnings": []}
 ```
+
+## 错误里的 `detail`（前端拼人话用）
+
+失败时 `error.detail` 会带一组**结构化参数**。有了它，界面才能说
+「你给的是个 MP4 视频」，而不是干巴巴一句「出错」：
+
+```jsonc
+{"id": 3, "ok": false, "error": {
+  "code": "NOT_ARCHIVE",
+  "note": "…技术备注，写给日志/开发者…",
+  "detail": {
+    "looks_like": "mp4",        // 引擎探测到的真实类型
+    "looks_kind": "media",      // archive / media / document / program / unknown
+    "ext": "mp4",               // 扩展名（小写，可能没有这个键）
+    "ext_kind": "media",        // 扩展名"暗示"的类别
+    "ext_mismatch": "false",    // "true" = **名字和内容不符**（伪装包的典型特征）
+    "mime": "video/mp4",
+    "size": "1688",             // 字节（字符串，避免大数精度问题）
+    "brand": "isom"             // 类型特有的细节（MP4 的 brand、MKV 的 doctype…）
+  }
+}}
+```
+
+**为什么用字符串而不是数字/布尔**：`looks_like` 以后可能加值，`size` 可能超过
+JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryParse`）。
+
+`ext_mismatch == "true"` 是**最该高亮的信号**：
+名字写 `.mp4`、内容其实是 ZIP —— 这正是伪装包的样子，界面应当明说。
 
 ## 错误码
 

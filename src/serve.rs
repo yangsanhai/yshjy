@@ -144,7 +144,8 @@ fn 处理命令(
                 };
                 let 响应 = match 结果 {
                     Ok(v) => ok(id, v),
-                    Err((码, 备注)) => 错误响应(id, &码, &备注),
+                    // 引擎的 detail 原样带出去：前端据此说"你给的是个 MP4"
+                    Err(错误) => json!({"id": id, "ok": false, "error": 错误}),
                 };
                 let _ = 发.send(响应);
             });
@@ -184,16 +185,16 @@ fn 做list(
     参数: &Value,
     事件: &Arc<ChannelSink>,
     取消: &CancelToken,
-) -> Result<Value, (String, String)> {
+) -> Result<Value, Value> {
     let 路径 = 参数
         .get("path")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| ("BAD_PARAM".to_string(), "缺少 path".to_string()))?;
+        .ok_or_else(|| 错误值("BAD_PARAM", "缺少 path"))?;
     let 密码 = 参数.get("password").and_then(|v| v.as_str());
     let sink: Arc<dyn EventSink> = 事件.clone();
     let ctx = UnpackCtx::new(1, sink).with_cancel(取消.clone());
 
-    let (_目标, pv) = yshjy::preview::preview(Path::new(路径), &ctx, 密码).map_err(失败)?;
+    let (_目标, pv) = yshjy::preview::preview(Path::new(路径), &ctx, 密码).map_err(错误对象)?;
     Ok(json!({
         "format": pv.format,
         "complete": pv.complete,
@@ -209,19 +210,19 @@ fn 做extract(
     参数: &Value,
     事件: &Arc<ChannelSink>,
     取消: &CancelToken,
-) -> Result<Value, (String, String)> {
+) -> Result<Value, Value> {
     let 路径 = 参数
         .get("path")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| ("BAD_PARAM".to_string(), "缺少 path".to_string()))?;
+        .ok_or_else(|| 错误值("BAD_PARAM", "缺少 path"))?;
 
     // 挑选表达式暂时只支持「序号列表」；通配还没接进协议 —— 宁可报不支持，也不静默忽略
     if let Some(s) = 参数.get("select").and_then(|v| v.as_str())
         && !s.trim().is_empty()
     {
-        return Err((
-            "UNSUPPORTED".to_string(),
-            format!("协议 v1 暂不支持 select（收到 {s}）"),
+        return Err(错误值(
+            "UNSUPPORTED",
+            &format!("协议 v1 暂不支持 select（收到 {s}）"),
         ));
     }
 
@@ -250,7 +251,7 @@ fn 做extract(
     Ok(结果json(&out))
 }
 
-fn 做pack(参数: &Value) -> Result<Value, (String, String)> {
+fn 做pack(参数: &Value) -> Result<Value, Value> {
     let 输入: Vec<PathBuf> = 参数
         .get("inputs")
         .and_then(|v| v.as_array())
@@ -262,12 +263,12 @@ fn 做pack(参数: &Value) -> Result<Value, (String, String)> {
         })
         .unwrap_or_default();
     if 输入.is_empty() {
-        return Err(("BAD_PARAM".to_string(), "inputs 不能为空".to_string()));
+        return Err(错误值("BAD_PARAM", "inputs 不能为空"));
     }
     let 输出 = 参数
         .get("out")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| ("BAD_PARAM".to_string(), "缺少 out".to_string()))?;
+        .ok_or_else(|| 错误值("BAD_PARAM", "缺少 out"))?;
 
     let 扩展名 = Path::new(输出)
         .extension()
@@ -291,9 +292,9 @@ fn 做pack(参数: &Value) -> Result<Value, (String, String)> {
     }
 
     let 文件 = std::fs::File::create(输出)
-        .map_err(|e| ("PERMISSION_DENIED".to_string(), format!("建不了输出文件: {e}")))?;
+        .map_err(|e| 错误值("PERMISSION_DENIED", &format!("建不了输出文件: {e}")))?;
     let mut bw = std::io::BufWriter::new(文件);
-    let rep = yshjy::pack::build(&opts, &mut bw).map_err(失败)?;
+    let rep = yshjy::pack::build(&opts, &mut bw).map_err(错误对象)?;
     use std::io::Write;
     let _ = bw.flush();
 
@@ -317,9 +318,26 @@ fn 错误响应(id: u64, 码: &str, 备注: &str) -> Value {
     json!({"id": id, "ok": false, "error": {"code": 码, "note": 备注}})
 }
 
-/// 引擎错误 → 协议错误（**只给码 + 技术备注，不给用户句子**）
-fn 失败(e: yshjy::Error) -> (String, String) {
-    (e.code.as_str().to_string(), format!("{e:?}"))
+/// 参数类错误（没有引擎 detail 可带）
+fn 错误值(码: &str, 备注: &str) -> Value {
+    json!({"code": 码, "note": 备注, "detail": {}})
+}
+
+/// 引擎错误 → 协议错误对象
+///
+/// **`detail` 原样带出去**（`looks_like` / `ext_mismatch` / `size` …）：
+/// 前端据此才能说"名字写的是 .mp4，内容其实是 ZIP —— 这很可能就是伪装包"。
+/// 只给码 + 技术备注，**不给用户句子**（文案归前端查语言包）。
+fn 错误对象(e: yshjy::Error) -> Value {
+    let mut detail = serde_json::Map::new();
+    for (k, v) in &e.detail {
+        detail.insert(k.clone(), json!(v));
+    }
+    json!({
+        "code": e.code.as_str(),
+        "note": format!("{e:?}"),
+        "detail": detail,
+    })
 }
 
 fn 结果json(out: &JobOutcome) -> Value {
@@ -362,10 +380,30 @@ mod tests {
     }
 
     #[test]
+    fn 非压缩包的错误里带着真实类型() {
+        // 造一个"名字是 .mp4、内容其实是 ZIP"的文件 —— 伪装包的典型样子
+        let dir = std::env::temp_dir().join(format!("yshjy_serve_mis_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let 假 = dir.join("伪装.mp4");
+        std::fs::write(&假, b"PK\x03\x04not a real zip but signature is enough").unwrap();
+
+        let 事件 = ChannelSink::new(64);
+        let 取消 = CancelToken::new();
+        let e = 做list(&json!({"path": 假.to_str().unwrap()}), &事件, &取消).unwrap_err();
+        assert_eq!(e["code"], "NOT_ARCHIVE", "{e}");
+        let d = &e["detail"];
+        assert_eq!(d["looks_like"], "zip", "要认出内容其实是 ZIP：{d}");
+        assert_eq!(d["ext"], "mp4");
+        assert_eq!(d["ext_mismatch"], "true", "名字与内容不符必须标出来：{d}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn 缺参数报_bad_param_而不是崩() {
         let 事件 = ChannelSink::new(16);
         let 取消 = CancelToken::new();
         let e = 做list(&json!({}), &事件, &取消).unwrap_err();
-        assert_eq!(e.0, "BAD_PARAM");
+        assert_eq!(e["code"], "BAD_PARAM");
     }
 }

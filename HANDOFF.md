@@ -32,7 +32,7 @@ git 提交       782817d（v0.9 共 10 批 + 3 次文档收口；每批一个提
                83e098f  分发层：shell 补全 / man / deb 脚本
                （第12批）契约服务 --serve + docs/PROTOCOL.md（提交见 git log 顶部）
 源码           17915 行 / 35 个文件（另有 fuzz/ 三个目标）
-测试           268 单元 + 25 冒烟 + 7 组协议冒烟（全过）
+测试           277 单元 + 25 冒烟 + 7 组协议冒烟（全过）
                fuzz 首次体检：2787 万次畸形输入，**零 crash**
 代码规范       clippy -D warnings 零警告
 语言包         7 种（zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES），中文包 116 条键

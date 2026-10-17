@@ -103,6 +103,11 @@ pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
 }
 
 fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
+    // ⓪ 文件夹不是包。拖一个目录进来是很常见的误操作，
+    //   别让用户看到"没找到压缩包"这种答非所问的话。
+    if path.is_dir() {
+        return Err(Error::new(ErrorCode::NotArchive).with("is_dir", "true"));
+    }
     // ①' ZIP 分卷（`.z01`/`.z02`… + `.zip`）
     //     **必须在 7z 分卷之前判**：`.z01` 是 ZIP 分卷的专用后缀，
     //     而 7z 分卷的编号从 `.001` 起（常带 `.7z` 前缀）—— 顺序反了会被 7z 抢走。
@@ -138,7 +143,54 @@ fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
         });
     }
     // ④ ZIP：先算偏移（快），不行再全文件扫描（慢）
-    locate_zip(path, ctx)
+    //
+    // 失败时补上「这个文件本身是什么」：外壳据此才能回答
+    // "你给我的是个 MP4 视频，里面没藏东西"，而不是干巴巴一句"不是压缩包"。
+    locate_zip(path, ctx).map_err(|e| 附上文件类型(e, path))
+}
+
+/// 把「真实类型 / 大小 / 扩展名是否与内容相符」塞进错误的结构化参数
+///
+/// 键名都是稳定的机器标识（外壳查文案，引擎不产句子）：
+/// - `looks_like`   探测到的类型（`mp4` / `png` / `elf` / `zip` …）
+/// - `mime`         常见 MIME
+/// - `looks_kind`   粗类别（`archive` / `media` / `document` / `program`）
+/// - `ext`          扩展名（小写，可能为空）
+/// - `ext_kind`     扩展名"暗示"的类别
+/// - `ext_mismatch` `"true"` = **名字和内容对不上**（伪装包的典型特征）
+/// - `size`         文件字节数
+fn 附上文件类型(mut e: Error, path: &Path) -> Error {
+    use crate::probe::probe_path;
+
+    let 扩展名 = path
+        .extension()
+        .and_then(|x| x.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if let Ok(p) = probe_path(path) {
+        let 实际类别 = p.kind.category();
+        e = e
+            .with("looks_like", p.kind.as_str())
+            .with("mime", p.mime)
+            .with("looks_kind", 实际类别);
+        for (k, v) in &p.detail {
+            e = e.with(k, v);
+        }
+        if !扩展名.is_empty() {
+            e = e.with("ext", &扩展名);
+            if let Some(名字类别) = crate::probe::extension_category(&扩展名) {
+                e = e.with("ext_kind", 名字类别).with(
+                    "ext_mismatch",
+                    if 名字类别 != 实际类别 { "true" } else { "false" },
+                );
+            }
+        }
+    }
+    if let Ok(m) = std::fs::metadata(path) {
+        e = e.with("size", m.len());
+    }
+    e
 }
 
 fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
@@ -422,7 +474,9 @@ pub fn run_job(
     // ② 解压
     let outcome = match prepared {
         Err(e) => {
-            ctx.diagnostic(DiagnosticCode::PartialData, format!("identify: {e}"));
+            // 不再另发 PartialData 诊断：识别失败的原因已经在错误的结构化参数里
+            // （looks_like / ext_mismatch…），外壳会拼成"你给的是个 MP4"，
+            // 再打一条 "identify: [NOT_ARCHIVE]…" 只是噪音。
             Outcome::from_error(&e)
         }
         Ok((target, _pv)) => {
