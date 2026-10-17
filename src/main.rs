@@ -855,6 +855,22 @@ fn do_extract(a: 解压参数) -> ExitCode {
     // 目录会递归展开，多文件自动排队（重复的会去掉、大文件先跑）
     let paths: Vec<PathBuf> = targets.iter().map(PathBuf::from).collect();
     let expanded = batch::expand_inputs(&paths);
+
+    // 交互式补密码：终端里遇到加密包**先问一句**，不要直接失败
+    // （用户反馈 2026-10-17：「能改成需要密码用户输入吗，直接失败就很难受」）
+    //
+    // 只在「没给 -p、不是 -q/--json、stdin 是终端」时问 —— 脚本/管道里
+    // 绝不能停下来等人，否则批量任务会挂死。
+    let mut password = password;
+    if password.is_none() && !quiet && !json {
+        use std::io::IsTerminal;
+        if std::io::stdin().is_terminal()
+            && let Some(带锁) = 找_带锁的包(&expanded)
+        {
+            password = 问解压码(&带锁);
+        }
+    }
+
     if expanded.is_empty() {
         eprintln!(
             "{}",
@@ -946,6 +962,77 @@ fn do_extract(a: 解压参数) -> ExitCode {
         打印汇总(&report, quiet);
     }
     ExitCode::from(report.exit_code().clamp(0, 255) as u8)
+}
+
+/// 只读索引，找第一个「带锁」的包（不解压、不打印）
+///
+/// 预览失败（缺分卷 / 索引坏）就当没锁 —— 探测失败不能反过来拦住正常解压。
+fn 找_带锁的包(paths: &[PathBuf]) -> Option<PathBuf> {
+    use std::sync::Arc;
+    use yshjy::ctx::UnpackCtx;
+    use yshjy::event::EventSink;
+
+    struct 静默;
+    impl EventSink for 静默 {
+        fn emit(&self, _ev: &yshjy::event::Event) {}
+    }
+
+    for p in paths {
+        let sink: Arc<dyn EventSink> = Arc::new(静默);
+        let ctx = UnpackCtx::new(1, sink);
+        if let Ok((_, pv)) = yshjy::preview::preview(p, &ctx, None)
+            && pv.encrypted_count > 0
+        {
+            return Some(p.clone());
+        }
+    }
+    None
+}
+
+/// 问用户要解压码（关闭回显；直接回车 = 放弃）
+fn 问解压码(包: &std::path::Path) -> Option<String> {
+    use std::io::Write;
+    let 名 = 包
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| 包.display().to_string());
+    eprintln!("🔑 {名} 带锁，需要解压码");
+    eprint!("   请输入解压码（输入时不显示；直接回车 = 放弃）：");
+    let _ = std::io::stderr().flush();
+    match 读一行不回显() {
+        Some(p) if !p.trim().is_empty() => Some(p.trim().to_string()),
+        _ => {
+            eprintln!("   （没输入，按「没有解压码」继续）");
+            None
+        }
+    }
+}
+
+/// 从终端读一行，**不回显**（解压码不该出现在屏幕上，也不该留在 shell 历史里）
+fn 读一行不回显() -> Option<String> {
+    use std::io::BufRead;
+    #[cfg(unix)]
+    {
+        // SAFETY: tcgetattr / tcsetattr 只读写 termios 结构体；
+        // 失败就退回普通读（最坏情况只是回显关不掉，不影响正确性）。
+        unsafe {
+            let fd = libc::STDIN_FILENO;
+            let mut 原: libc::termios = std::mem::zeroed();
+            if libc::tcgetattr(fd, &mut 原) == 0 {
+                let mut 关回显 = 原;
+                关回显.c_lflag &= !libc::ECHO;
+                libc::tcsetattr(fd, libc::TCSANOW, &关回显);
+                let mut line = String::new();
+                let n = std::io::stdin().lock().read_line(&mut line).ok();
+                libc::tcsetattr(fd, libc::TCSANOW, &原);
+                eprintln!(); // 回显关着，换行得自己补
+                return n.map(|_| line.trim_end_matches(['\r', '\n']).to_string());
+            }
+        }
+    }
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line).ok()?;
+    Some(line.trim_end_matches(['\r', '\n']).to_string())
 }
 
 /// 把引擎事件渲染成终端上的人话（引擎只发码和数字，文案归这里）
