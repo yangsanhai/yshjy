@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,6 +36,7 @@ class _HomePageState extends State<HomePage> {
   String? _errorNote;
   EngineError? _error;
   final TextEditingController _pwCtrl = TextEditingController();
+  bool _dragging = false;
   String? _password;
   final List<String> _notes = [];
 
@@ -187,6 +189,42 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// 一键生成诊断包（路径已脱敏），发给开发者就能定位问题
+  Future<void> _makeReport() async {
+    try {
+      final r = await _client.report(path: _file);
+      final p = r['path'] as String? ?? '';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('诊断包已生成（路径已脱敏）：$p\n把它发给我就行')),
+      );
+    } on EngineError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('生成失败：${_errText(e.code)}')));
+    }
+  }
+
+  /// 从清单里猜「接下来该点哪个」——解压出一堆文件后新手最迷茫的就是这个
+  String? _entryHint() {
+    final pv = _preview;
+    if (pv == null) return null;
+    bool looksLikeEntry(String n) {
+      final l = n.toLowerCase();
+      return l.contains('setup') ||
+          l.contains('install') ||
+          l.contains('启动') ||
+          l.contains('开始游戏') ||
+          l.endsWith('.bat') ||
+          l.endsWith('run.sh') ||
+          l.endsWith('.appimage') ||
+          l.endsWith('game.exe');
+    }
+
+    final hits = pv.entries.where((e) => !e.isDir && looksLikeEntry(e.path)).toList();
+    return hits.isEmpty ? null : hits.first.path;
+  }
+
   /// 这次失败是不是"缺解压码"（资源分享里最常见的情况）
   bool get _needsPassword =>
       _errorCode == 'PASSWORD_REQUIRED' || _errorCode == 'PASSWORD_WRONG';
@@ -300,6 +338,21 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // 整个窗口都能拖进来（新手第一反应就是拖）
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: (detail) {
+        setState(() => _dragging = false);
+        if (detail.files.isEmpty) return;
+        // 拖进来多个文件时先开第一个（批量队列下一版做）
+        _open(detail.files.first.path);
+      },
+      child: _scaffold(),
+    );
+  }
+
+  Widget _scaffold() {
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -369,10 +422,13 @@ class _HomePageState extends State<HomePage> {
             child: Icon(Icons.inbox_outlined, size: 56, color: cs.primary),
           ),
           const SizedBox(height: 24),
-          Text('把伪装包交给我', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            _dragging ? '松手就行' : '把伪装包交给我',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 8),
           Text(
-            '网盘下载的「.mp4 / .png」，其实可能是压缩包\n我能自己找到它藏在哪，然后解开',
+            '网盘下载的「.mp4 / .png」，其实可能是压缩包\n直接拖进这个窗口，或者点下面选择',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: cs.onSurfaceVariant,
@@ -632,6 +688,20 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(fontSize: 12),
             ),
           ],
+          if (_entryHint() case final hint?) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '接下来点这个：$hint',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
           if (_notes.isNotEmpty) ...[
             const SizedBox(height: 14),
             for (final n in _notes)
@@ -708,6 +778,12 @@ class _HomePageState extends State<HomePage> {
             ],
             // 技术详情（`Error { code: … }`）对新手是噪音，默认收起来：
             // 需要报障时一键复制，而不是糊在脸上
+            if ((_errorNote ?? '').isNotEmpty)
+              TextButton.icon(
+                onPressed: _makeReport,
+                icon: const Icon(Icons.bug_report_outlined, size: 15),
+                label: const Text('生成诊断包（报障用）', style: TextStyle(fontSize: 12)),
+              ),
             if ((_errorNote ?? '').isNotEmpty)
               TextButton.icon(
                 onPressed: () {
