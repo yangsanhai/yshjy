@@ -227,74 +227,123 @@
 |---|---|---|
 | 第 18 批 ✅ | P1 批量队列（协议 `scan` + `batch` + 队列 UI + 完成卡三 段式）+ S2b/S10 | 大 |
 | 第 19 批 ✅ | P2 智能解压 + P3 失败卡（缺分卷说清"缺哪一块"） | 中 |
-| 第 20 批 | P5 设置可写 + P4 密码管理 + **P2b 封面分离**（用户设计时明确要求过，见 DESIGN §3） | 大 |
-| 第 21 批 | P5 界面 i18n（zh/en）+ P6 菜单/快捷键 | 中 |
-| 第 22 批 | P7 预览树/部分解压 + P8 完成卡分享 + P9 安全默认 | 中 |
-| 第 23 批 | P10 主题/窗口尺寸记忆 + P11 新手引导 | 小 |
+| 第 20 批 | **AUDIT-2026-10-17b 全部问题并入**：密码链路 / 封面分离 / 密码界面 / 输出与设置 / 打包开关 / 引擎健壮性 / 界面打磨 / 平台地基 / CLI（见 §5.1，9 组） | 大（分多次提交） |
+| 第 21 批 | 组 5 后三项（干扰数据/假签名/时间戳）+ 组 8 收尾 + 全平台构建链（Windows/macOS） | 中 |
+| 第 22 批 | Android（P12）+ 移动端 seek 三档 | 大 |
+| 第 23 批 | iOS（P12b）+ 发布自查（密钥/个人路径/refs 第三方素材） | 大 |
 | 发布 | 重打 dist（含全部修复）+ GUI 打包进发行物 | 中 |
-| 之后 | P12 手机端（单独排期） | 大 |
 
 **每批完成必须**：`cargo test` + `flutter test` + 真机跑一遍 + 截图确认 + commit。
 **发布前**：`dist/` 必须重打（现有包不含 cover/crash/serve/probe/批量修复）。
 
 ---
 
-## 5.1 第 20 批任务清单（完成即 **v0.0.20**）
+## 5.1 第 20 批任务清单（完成即 **0.0.20-c**）
 
-**版本号规则（2026-10-17 用户定）**：批次号与版本号对齐 —— 第 19 批 = `0.0.19`，
-第 20 批 = `0.0.20`，依次类推。这是内部迭代编号，**不是语义化版本的降级**。
+> **2026-10-17 晚用户要求**：把 `docs/AUDIT-2026-10-17b.md` 里发现的**全部问题**
+> 都并入这一轮，不再留到 22/23 批。下面是合并后的完整清单。
+> 体量提醒：这已经是原来第 20–23 批的总和，**按组提交、做不完的组明确顺延**
+> （顺延到 0.0.21-c，不留在半成品状态）。
 
-### 第 1 组 · 密码可用性（先做：改动小，但决定后面的密码界面有没有意义）
+**版本号规则（2026-10-17 用户定，晚修）**：批次号 = 版本号，内测期加 `-c`
+（Cargo / pubspec 只认连字符，`0.0.19.c` 会被构建工具拒绝）。
+当前 = `0.0.19-c`，第 20 批 = `0.0.20-c`，依次类推。
 
-1. **密码按多编码依次试**：UTF-8 → GBK → UTF-16LE（DESIGN §17.1）
-   落点 `src/extract.rs`（`verify_password_at` + 两处解压入口）、`src/extract_rar.rs`
-   验收：分别用 GBK 编码加密的 zip 与 rar 样本各一个，能解开且哈希一致
-2. **7z 条目加密标记如实上报**（`src/preview.rs:322` 现在硬编码 `false`）
-   验收：内容加密的 7z 在预览显示「N 个加密」而不是 0
-3. **协议加 `enc_kind`**：`none / zipcrypto / aes128 / aes192 / aes256`（DESIGN §17.4）
-   验收：界面能按强度给不同提示（ZipCrypto 要提示「可能误判」）
-4. **密码框加眼睛图标**（`home_page.dart:1260`、`pack_page.dart:227`）
-   验收：点一下看明文，再点回密文；两个页面都有
+### 组 0 · 文档与版本（先做，10 分钟）
 
-### 第 2 组 · P2b 封面分离（用户设计时明确要求过，DESIGN §3 / §17.5）
+1. `Cargo.toml` / `gui/pubspec.yaml` → `0.0.19-c`（已完成），第 20 批完成时 → `0.0.20-c`
+2. `docs/PROTOCOL.md` 补齐实现里已经有的 `scan` / `batch` / `report` 三个命令
+   （真身在 `src/serve.rs:160,218,117`；features 数组 `:253` 已列 7 项）
+3. `HANDOFF.md` 顶部的提交号与「已交付到第 N 批」同步
+4. 验收：`yshjy --version` 显示 `0.0.19-c`；PROTOCOL 命令表与 `serve.rs` 的 `match` 一致
 
-1. 引擎：按定位阶段算出的压缩层起点，切出封面区写成 `原文件名.封面.mp4`
-   （图片封面则 `.png/.jpg`；开头模式的包切末尾段）。**绝不覆盖原包**
-2. 可选 ffmpeg remux 修 moov 索引；没有 ffmpeg 就跳过，不报错
-3. 协议：`extract` 增加 `cover: {path, size, kind}`
-4. 界面：完成卡多一行「🎬 视频已分离：xxx.mp4（119 MB）[打开]」
-5. CLI：实现 `--extract-cover`（只剥封面、不解压）
-   验收：两个真实包（8.7G / 5.9G）都切出可播放封面；`ffmpeg -v error -i 封面.mp4 -t 60 -f null -`
-   零错误；原包 SHA-256 不变
+### 组 1 · 密码链路（最优先：设计承诺了、现在实际不可用）
 
-### 第 3 组 · P4 密码管理界面
+1. **密码多编码依次试**：UTF-8 → GBK → UTF-16LE
+   落点 `src/extract.rs:151/172/349`、`src/extract_rar.rs:160`
+   验收：GBK 加密的 zip 与 rar 各一个样本解得开、内容一致；两个真实包 SHA 不变
+2. **7z 条目加密标记如实上报**（`src/preview.rs:322` 现在写死 `false`）
+   验收：内容加密的 7z 预览显示「N 个加密」而不是 0
+3. **`enc_kind` 进协议**：`none / zipcrypto / aes128 / aes192 / aes256`
+   界面提示：AES-256「校验可靠」；ZipCrypto「老式加密，可能解出坏文件」
+4. **密码框眼睛图标**（`home_page.dart:1260`、`pack_page.dart:227`）
 
-1. 近期密码 chips（按该密码成功次数排序，点一下填入）
-2. 「☐ 不保存本次密码」勾选
-3. 试密码可视化：引擎加 `password_try{index,total}`，界面显示「正在试第 3/12 个」
-4. 预览补全（DESIGN §14.4）：每项显示大小 + ☑ 勾选 + 「试试密码本」按钮
-5. 进度页补速度与剩余时间（壳侧用两次 progress 时间差自算）
-   验收：加密样本跑一遍，全程能看出在试第几个；取消后原包未动
+### 组 2 · 封面分离 P2b（用户设计时明确要求过）
 
-### 第 4 组 · P5 设置页可写 + 输出与后处理（DESIGN §17.2）
+1. 按定位阶段的压缩层起点切 `[0, 起点)` → `原文件名.封面.mp4`（图片则 .png/.jpg），**绝不覆盖原包**
+2. 有 ffmpeg 才 remux 修 moov，没有就跳过（不成为硬依赖）
+3. 协议 `extract` 增加 `cover: {path, size, kind}`；CLI 实现 `--extract-cover`
+4. 完成卡加一行「🎬 视频已分离：xxx.mp4（119 MB）[打开]」
+5. 验收：8.7G / 5.9G 两个真实包都切出可播放封面
+   `ffmpeg -v error -i 封面.mp4 -t 60 -f null -` 零错误；原包 SHA-256 不变
 
-1. 设置页真正写回 `~/.config/yshjy/config.toml`（现在只能看）
+### 组 3 · 密码管理 + 预览补全 P4
+
+1. 引擎加 `password_try{index,total}`，界面显示「正在试第 3/12 个」
+2. 近期密码 chips（按成功次数排）+ 「☐ 不保存本次密码」
+3. 预览补全：每项显示大小 + ☑ 勾选 + 「试试密码本」按钮（DESIGN §14.4）
+4. 进度页补速度与剩余时间（壳侧用两次 progress 时间差自算）
+5. 验收：加密样本全程看得出在试第几个；取消后原包未动
+
+### 组 4 · 输出与设置 P5
+
+1. 设置页真正写回 `~/.config/yshjy/config.toml`（现在 148 行全是只读 ListTile）
 2. 解压确认区加「输出到 [路径]」+「解压后：保留 / 移入回收站」
-3. 引擎 `[output]` 增加 `on_done = "keep" | "trash"`（trash 走 XDG 回收站，不 rm）
-4. 重名策略在界面可选（rename / skip / replace）
-   验收：改设置后重启界面仍生效；选"移入回收站"后原包进 `~/.local/share/Trash`
+3. 引擎 `[output]` 增加 `on_done = "keep" | "trash"`（XDG 回收站，不 rm）
+4. 重名策略上界面（rename / skip / replace）
+5. 历史页条目可点「在目录中显示」；批量失败行改用 `_errText` 人话（现在裸奔 `failed`）
+6. 验收：改设置重启仍生效；选回收站后原包进 `~/.local/share/Trash`
 
-### 第 5 组 · 打包端开关（做得完就做，做不完拆到第 21 批）
+### 组 5 · 打包端开关（DESIGN §17.8 十项）
 
-分卷（`--split`）、自动说明书、校验和 SHA-256 三项上界面（DESIGN §17.8）
-验收：打一个 >100MB 的包，能选分卷并生成 `.001/.002`，校验和文件与包一致
+1. 分卷 `--split`（`.001/.002`）+ 界面开关
+2. 自动说明书
+3. SHA-256 校验和（全 `src/` 目前零实现）
+4. 干扰数据 / 假签名 / 改时间戳（后三项做不完顺延到 0.0.21-c，但**要列进界面并标注「下一版」**，不留假开关）
+5. 验收：打一个 >100MB 的包，选分卷生成 `.001/.002`；校验和文件与包一致
+
+### 组 6 · 引擎健壮性（AUDIT-b §2 全部并入）
+
+1. `0x7075` Unicode Path（先验 CRC32；`src/layout/zip.rs:436 decode_name`）
+2. `--encoding gbk|big5|sjis|utf-8|auto`（手动代码页）
+3. EOCD 分块倒扫（`src/layout/zip.rs:41` 的 1 MiB 窗口 → 64 KiB 块 + 20 B 重叠）
+4. 识别/列清单双维度进度 `SCAN_PROGRESS`（`src/scan.rs` 目前零进度）
+5. 解压前内存预检（字典×块×线程 vs `MemAvailable`，`src/hardware.rs`）
+6. 炸弹限额从「整批中止」改成「问一句，只跳过这个」（`src/safety.rs:242`）
+7. 条目 `packSize` 未读满 → 报「拼接错位」（`src/layout/zip.rs`）
+8. 嵌套包自动下钻一层（`NestedArchive` 已定义、无人调用）
+9. **D13 优雅关闭**：关闭前发 `cancel` + 「还在解压，确定关闭？」确认（`engine.dart:404` 的 dispose 至今无调用点）
+
+### 组 7 · 界面打磨
+
+1. 第一屏只留一个最强入口（「选文件夹」收进溢出菜单，调研 07:921-923）
+2. 空状态去掉 10 个格式名那条（移关于页）
+3. 智能解压「结果预告」+ 三模式开关（现在只有一句说明文案）
+4. 完成卡「复制解压方法给对方」
+5. 主题可切（现在只有 `ThemeMode.system`）+ 记住窗口尺寸
+6. 新手引导（三步浮层）
+7. Del 键移除队列项（D4）
+8. 批量里单独取消某一行（D5）
+
+### 组 8 · 平台地基（DESIGN §18，越晚越贵）
+
+1. Dart 侧抽 `EngineTransport`（把 `Process.start` 装进 `ProcessTransport`）
+2. 导出稳定 C ABI（`libyshjy.so/.a` 已产出，缺的是导出层）
+3. GUI 4 处 `$HOME/.local/state` 改平台 API（`app_shell.dart:160`、`history_store.dart:52`、
+   `settings_page.dart:27`、`about_page.dart:111`）
+
+### 组 9 · CLI 补全（CLI-SPEC §3.6 的 11 个参数）
+
+`--config` `--layout` `--split` `--cover` `--password-file` `--no-auto-password`
+`-v/-vv` `--log` `--no-color` `--extract-cover` `--keep` `--encoding`
+（`--extract-cover` 属组 2；此处补齐其余，`src/main.rs:64` 的「带值选项」常量同步）
 
 ### 收尾 · 版本与验证
 
-- `Cargo.toml` / `gui/pubspec.yaml` → **0.0.20**
-- `cargo test` + `flutter test` + 真机跑一遍 + 截图
+- `Cargo.toml` / `gui/pubspec.yaml` → **0.0.20-c**
+- `cargo test` + `flutter test` + 真机跑 + 截图
 - **两个真实包复验**（改了密码与解压路径，必须重跑 SHA 对齐）
-- `git commit`，HANDOFF / CHANGELOG 同步
+- `git commit`（**每组一个提交**，可单独回滚），HANDOFF / CHANGELOG 同步
 
 ---
 
