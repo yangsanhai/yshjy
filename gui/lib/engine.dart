@@ -198,6 +198,9 @@ class EngineError implements Exception {
 // ───────────────────────── 客户端 ─────────────────────────
 
 class EngineClient {
+  /// 全局单例：整个应用只有**一个**引擎进程（多页面共用，事件流广播给所有订阅者）
+  static final EngineClient instance = EngineClient();
+
   Process? _proc;
   final _events = StreamController<EngineEvent>.broadcast();
   final Map<int, Completer<Map<String, dynamic>>> _pending = {};
@@ -327,6 +330,21 @@ class EngineClient {
       if (password != null) 'password': password,
     });
     return ExtractResult.fromJson(_unwrap(r));
+  }
+
+  /// 打包成伪装文件（大包可能很慢，超时放宽到 2 小时）
+  Future<Map<String, dynamic>> pack({
+    required List<String> inputs,
+    required String out,
+    String? password,
+  }) async {
+    final r = await _call({
+      'cmd': 'pack',
+      'inputs': inputs,
+      'out': out,
+      if (password != null) 'password': password,
+    }, timeout: const Duration(hours: 2));
+    return _unwrap(r);
   }
 
   /// 生成诊断包（报障用）。默认**路径脱敏**，方便直接贴到群里。

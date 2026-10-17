@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'home_page.dart';
+import 'app_shell.dart';
 
 void main(List<String> args) {
   // 右键「用杨三海解压打开」时，桌面环境会把文件路径当参数传进来
@@ -32,7 +32,7 @@ class YshjyApp extends StatelessWidget {
       theme: theme(Brightness.light),
       darkTheme: theme(Brightness.dark),
       themeMode: ThemeMode.system,
-      home: HomePage(initialFile: initialFile),
+      home: AppShell(initialFile: initialFile),
     );
   }
 }

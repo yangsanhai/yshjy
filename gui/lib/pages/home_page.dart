@@ -6,7 +6,8 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'engine.dart';
+import '../engine.dart';
+import '../history_store.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error }
@@ -15,14 +16,20 @@ class HomePage extends StatefulWidget {
   /// 启动时要直接打开的文件（右键菜单传进来的），可能为空
   final String? initialFile;
 
-  const HomePage({super.key, this.initialFile});
+  /// 把当前状态同步给外壳的底部状态栏（"正在解压…"/"就绪"）
+  final ValueChanged<String>? onStatus;
+
+  /// 是否自动拉起引擎（widget 测试里必须关掉）
+  final bool autoStart;
+
+  const HomePage({super.key, this.initialFile, this.onStatus, this.autoStart = true});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  final EngineClient _client = EngineClient();
+  final EngineClient _client = EngineClient.instance;
   StreamSubscription<EngineEvent>? _sub;
 
   Phase _phase = Phase.empty;
@@ -44,7 +51,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     // 引擎没启动也别让界面崩：错误在点"选择文件"时才提示
-    _client.start().catchError((_) {});
+    if (widget.autoStart) _client.start().catchError((_) {});
     _sub = _client.events.listen(_onEvent);
     // 从右键菜单带文件启动：等首帧画完再开，避免 setState 早于 build
     final f = widget.initialFile;
@@ -154,6 +161,7 @@ class _HomePageState extends State<HomePage> {
         _preview = pv;
         _phase = Phase.preview;
       });
+      widget.onStatus?.call('已识别：${pv.fileCount} 个文件');
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
@@ -168,12 +176,22 @@ class _HomePageState extends State<HomePage> {
       _current = null;
     });
     try {
+      widget.onStatus?.call('正在解压…');
       final r = await _client.extract(path, password: _password);
       if (!mounted) return;
       setState(() {
         _result = r;
         _phase = Phase.done;
       });
+      widget.onStatus?.call(r.ok ? '完成：${r.entriesDone} 个文件' : '部分完成');
+      // 记一条历史（历史页读它）
+      await HistoryStore.add(HistoryEntry(
+        time: DateTime.now().toIso8601String(),
+        input: path,
+        dest: r.dest,
+        ok: r.ok,
+        bytes: r.bytesWritten,
+      ));
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
