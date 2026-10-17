@@ -372,6 +372,59 @@ fn read_full<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<usize> {
     Ok(total)
 }
 
+/// Info-ZIP Unicode Path extra field（0x7075）：`version(1) + crc32(4) + utf8_name`
+///
+/// **必须验 CRC32 再采用**：extra 字段可能是伪造/过期的，CRC 对不上说明它
+/// 描述的不是当前这个名字。参考 zip2 `src/extra_fields/zipinfo_utf8.rs:25-35`。
+fn unicode_path(extra: &[u8], raw_name: &[u8]) -> Option<String> {
+    let mut p = 0usize;
+    while p + 4 <= extra.len() {
+        let tag = u16le(extra, p);
+        let size = u16le(extra, p + 2) as usize;
+        let body = p + 4;
+        if body + size > extra.len() {
+            break;
+        }
+        if tag == 0x7075 && size >= 5 {
+            let want = u32le(extra, body + 1);
+            if want == crc32(raw_name)
+                && let Ok(s) = std::str::from_utf8(&extra[body + 5..body + size])
+            {
+                return Some(s.to_string());
+            }
+        }
+        p = body + size;
+    }
+    None
+}
+
+/// CRC-32（IEEE，ZIP 用的那个）
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &b in data {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+/// 解码文件名：先看 Info-ZIP Unicode Path（0x7075，验过 CRC），再走四级回退链
+///
+/// macOS / Windows 的工具会把「本地编码名字 + UTF-8 名字」双写，
+/// 读 extra 能直接把乱码救回正确中文 —— 比猜编码可靠。
+pub fn decode_name_with_extra(bytes: &[u8], is_utf8: bool, extra: &[u8]) -> String {
+    if let Some(s) = unicode_path(extra, bytes) {
+        return s;
+    }
+    decode_name(bytes, is_utf8)
+}
+
 /// 从 WinZip AES extra field（0x9901）里取强度
 ///
 /// 结构（APPNOTE 4.4.8）：`tag(2) size(2) version(2) "AE"(2) strength(1) method(2)`
@@ -470,10 +523,9 @@ pub fn list_entries<R: Read + Seek>(r: &mut R, layout: &ZipLayout) -> Result<Vec
             }
         }
 
-        // 文件名编码：ZIP 规范用 UTF-8 或本地代码页；带 UTF-8 标志（bit 11）时明确为 UTF-8
-        // 文件名编码：见 decode_name 的四级回退链
+        // 文件名编码：见 decode_name 的四级回退链；0x7075 extra 优先（验 CRC）
         let is_utf8 = flags & (1 << 11) != 0;
-        let path = decode_name(&name_bytes, is_utf8);
+        let path = decode_name_with_extra(&name_bytes, is_utf8, &extra);
 
         let is_dir = path.ends_with('/') || path.ends_with('\\');
 
