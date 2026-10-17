@@ -619,6 +619,17 @@ pub fn run_job(
     stats.millis = elapsed_ms(started);
     ctx.force_progress(None);
 
+    // 解压完原包怎么办（DESIGN §17.2）：默认留着；配置成 trash 才移回收站。
+    // 只在成功 / 部分成功时动 —— 失败时原包是用户重试的唯一材料。
+    // 回收站失败不改变解压结论（内容已经出来了），静默跳过。
+    if matches!(
+        &outcome,
+        Outcome::Success | Outcome::Partial { .. }
+    ) && crate::config::全局配置().output.on_done == "trash"
+    {
+        let _ = crate::trash::move_to_trash(&job.input);
+    }
+
     JobOutcome {
         id: job.id,
         input: job.input.clone(),

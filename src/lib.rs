@@ -42,6 +42,7 @@ pub mod safety;
 pub mod scan;
 pub mod select;
 pub mod tools;
+pub mod trash;
 pub mod unpack;
 
 pub use error::{Error, ErrorCode, Result};

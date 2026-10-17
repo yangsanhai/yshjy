@@ -152,6 +152,8 @@ pub struct Output {
     pub dir: Option<String>,
     /// 重名怎么办：`rename` | `skip` | `replace`
     pub conflict: String,
+    /// 解压完原包怎么办：`keep`（默认）| `trash`（移入回收站，**永不 rm**）
+    pub on_done: String,
 }
 
 impl Default for Output {
@@ -159,6 +161,7 @@ impl Default for Output {
         Self {
             dir: None,
             conflict: "rename".into(),
+            on_done: "keep".into(),
         }
     }
 }
@@ -238,6 +241,10 @@ impl Config {
             if let Some(x) = t.get("conflict").and_then(|x| x.as_str()) {
                 cfg.output.conflict = x.to_string();
             }
+            if let Some(x) = t.get("on_done").and_then(|x| x.as_str()) {
+                // 只认两个值：别的写法一律按 keep（绝不做永久删除）
+                cfg.output.on_done = if x == "trash" { "trash".into() } else { "keep".into() };
+            }
         }
         if let Some(t) = v.get("safety") {
             if let Some(x) = t.get("zip_bomb_ratio").and_then(|x| x.as_integer()) {
@@ -248,6 +255,59 @@ impl Config {
             }
         }
         cfg
+    }
+
+    /// 把当前配置写回 `config_path()`（设置页保存用）
+    ///
+    /// **整份重写**：会丢掉用户手写的注释（设置页保存前应提示一次）。
+    pub fn save(&self) -> crate::error::Result<()> {
+        use crate::error::{Error, ErrorCode};
+
+        fn esc(s: &str) -> String {
+            s.replace('\\', "\\\\").replace('"', "\\\"")
+        }
+
+        let path = config_path();
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| {
+                Error::new(ErrorCode::PermissionDenied).context(format!("建配置目录失败: {e}"))
+            })?;
+        }
+        let lang = self.general.language.clone().unwrap_or_default();
+        let out_dir = self.output.dir.clone().unwrap_or_default();
+        let text = format!(
+            "# yshjy 配置（设置页 / --show-config 维护）\n\
+             # 注意：在设置页点保存会整份重写，手写注释会丢\n\n\
+             [general]\n\
+             language = \"{}\"\n\
+             default_mode = \"{}\"\n\
+             jobs = {}\n\n\
+             [password]\n\
+             file = \"{}\"\n\
+             auto_from_notes = {}\n\
+             max_candidates = {}\n\n\
+             [output]\n\
+             dir = \"{}\"\n\
+             conflict = \"{}\"\n\
+             on_done = \"{}\"\n\n\
+             [safety]\n\
+             zip_bomb_ratio = {}\n\
+             warn_executables = {}\n",
+            esc(&lang),
+            esc(&self.general.default_mode),
+            self.general.jobs,
+            esc(&self.password.file),
+            self.password.auto_from_notes,
+            self.password.max_candidates,
+            esc(&out_dir),
+            esc(&self.output.conflict),
+            esc(&self.output.on_done),
+            self.safety.zip_bomb_ratio,
+            self.safety.warn_executables
+        );
+        std::fs::write(&path, text).map_err(|e| {
+            Error::new(ErrorCode::PermissionDenied).context(format!("写配置失败: {e}"))
+        })
     }
 
     /// 默认输出目录（展开 `~`）
