@@ -350,7 +350,26 @@ fn 做extract(
             "note": out.note,
         }));
     }
-    Ok(结果json(&out))
+    let mut 结果 = 结果json(&out);
+
+    // 封面分离（DESIGN §3 / §17.5）：解压成功后顺手把 `[0, 压缩层起点)` 切出来。
+    // 默认开（参数 `cover: false` 可关）；失败一律忽略 —— 封面是附赠品，
+    // 不能让主流程因为切不出封面就报错。
+    if 参数.get("cover").and_then(|v| v.as_bool()).unwrap_or(true) {
+        let sink0: Arc<dyn EventSink> = Arc::new(yshjy::event::NullSink);
+        let ctx0 = UnpackCtx::new(1, sink0);
+        if let Ok(yshjy::job::Target::Zip { base, .. }) =
+            yshjy::job::identify(Path::new(路径), &ctx0)
+            && let Ok(Some(c)) = yshjy::cover_extract::extract_zip_cover(Path::new(路径), base)
+        {
+            结果["cover"] = json!({
+                "path": c.path.display().to_string(),
+                "size": c.size,
+                "kind": c.kind,
+            });
+        }
+    }
+    Ok(结果)
 }
 
 fn 做pack(参数: &Value) -> Result<Value, Value> {

@@ -280,6 +280,10 @@ fn main() -> ExitCode {
     if has("--rescue") {
         return do_rescue(&targets, &val_of("--dest"), quiet);
     }
+    // 只剥封面、不解压（DESIGN §3 / §17.5）
+    if has("--extract-cover") {
+        return do_extract_cover(&targets, quiet);
+    }
     if cmd == "ys" {
         return do_pack(
             &targets,
@@ -1349,6 +1353,62 @@ fn 找位置参数(argv: &[String], 带值: &[&str]) -> Option<PathBuf> {
         return Some(PathBuf::from(a));
     }
     None
+}
+
+/// `--extract-cover`：只把伪装包里的封面区切出来，不解压（DESIGN §3 / §17.5）
+///
+/// 封面区 = `[0, 压缩层起点)`。起点由定位阶段算出（ZIP 的 `Target::Zip.base`），
+/// 所以这里**不需要重新扫一遍文件**。
+fn do_extract_cover(targets: &[String], quiet: bool) -> ExitCode {
+    use std::sync::Arc;
+
+    let mut 失败 = false;
+    for t in targets {
+        let p = std::path::Path::new(t);
+        let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(yshjy::event::NullSink);
+        let ctx = yshjy::ctx::UnpackCtx::new(0, sink);
+
+        match yshjy::job::identify(p, &ctx) {
+            Ok(yshjy::job::Target::Zip { base, .. }) => {
+                match yshjy::cover_extract::extract_zip_cover(p, base) {
+                    Ok(Some(c)) => {
+                        if quiet {
+                            println!("{}", c.path.display());
+                        } else {
+                            let kind = match c.kind {
+                                "video" => "视频",
+                                "image" => "图片",
+                                _ => "未知类型",
+                            };
+                            println!("🎬 {} —— 封面已分离（{kind}）", c.path.display());
+                            println!("     {}，原包未改动", 人类可读(c.size));
+                        }
+                    }
+                    Ok(None) => {
+                        eprintln!("{t} —— 压缩层就在文件开头，没有封面区可切");
+                        失败 = true;
+                    }
+                    Err(e) => {
+                        eprintln!("{t} —— 切封面失败: {e}");
+                        失败 = true;
+                    }
+                }
+            }
+            Ok(_) => {
+                eprintln!("{t} —— 目前只支持 ZIP 伪装包（7z/RAR 的压缩层起点还没接）");
+                失败 = true;
+            }
+            Err(e) => {
+                eprintln!("{t} —— 认不出伪装包: {e}");
+                失败 = true;
+            }
+        }
+    }
+    if 失败 {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> ExitCode {

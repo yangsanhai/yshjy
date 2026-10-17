@@ -27,6 +27,7 @@ USO:
   yshjy ys <archivo o carpeta>    empaquetar en un archivo camuflado
   yshjy --list <archivo>          ver el contenido sin extraer
   yshjy --rescue <archivo>        rescatar lo máximo posible de un archivo dañado
+  yshjy --extract-cover <archivo> extraer solo el vídeo/imagen original (sin descomprimir)
   yshjy --help                    esta ayuda
   yshjy --report <archivo>        crear un paquete de diagnóstico (--no-paths oculta rutas)
   yshjy -V, --version             versión y edición (común / completa)
