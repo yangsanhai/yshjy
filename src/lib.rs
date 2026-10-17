@@ -19,6 +19,7 @@ pub mod batch;
 pub mod config;
 pub mod cover_extract;
 pub mod ctx;
+pub mod drill;
 pub mod error;
 pub mod event;
 pub mod extract;
