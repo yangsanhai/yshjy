@@ -19,6 +19,35 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// ── 标题栏按钮：最小化 / 最大化（还原）─────────────────────────────────────
+//
+// 为什么得手写：GTK3 的 `GtkHeaderBar` 只有 `set_show_close_button()`，
+// 它**不读** `org.gnome.desktop.wm.preferences button-layout`，也不像 GTK4 /
+// libadwaita 那样自带最小化、最大化按钮。所以走 CSD（client-side decoration）
+// 时窗口就只剩一个关闭按钮 —— 而 Chrome / Qt 那些自己画标题栏的应用是三按钮，
+// 看起来就不一致。这里补上两个按钮，图标随窗口状态切换。
+static void on_maximize_clicked(GtkWindow* window) {
+  if (gtk_window_is_maximized(window)) {
+    gtk_window_unmaximize(window);
+  } else {
+    gtk_window_maximize(window);
+  }
+}
+
+static gboolean on_window_state_changed(GtkWidget* widget,
+                                        GdkEventWindowState* event,
+                                        gpointer user_data) {
+  (void)event;
+  GtkButton* button = GTK_BUTTON(user_data);
+  gboolean maximized = gtk_window_is_maximized(GTK_WINDOW(widget));
+  gtk_button_set_image(
+      button,
+      gtk_image_new_from_icon_name(
+          maximized ? "window-restore-symbolic" : "window-maximize-symbolic",
+          GTK_ICON_SIZE_MENU));
+  return FALSE;
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -47,6 +76,29 @@ static void my_application_activate(GApplication* application) {
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "杨三海解压");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
+
+    // 顺序说明：`gtk_header_bar_pack_end` 先加的紧挨关闭按钮，后加的往左，
+    // 所以最终是 [最小化][最大化/还原][关闭]。
+    GtkWidget* maximize_button =
+        gtk_button_new_from_icon_name("window-maximize-symbolic", GTK_ICON_SIZE_MENU);
+    gtk_widget_set_valign(maximize_button, GTK_ALIGN_CENTER);
+    gtk_button_set_relief(GTK_BUTTON(maximize_button), GTK_RELIEF_NONE);
+    gtk_widget_set_tooltip_text(maximize_button, "最大化 / 还原");
+    g_signal_connect_swapped(maximize_button, "clicked",
+                             G_CALLBACK(on_maximize_clicked), window);
+    gtk_header_bar_pack_end(header_bar, maximize_button);
+    g_signal_connect(window, "window-state-event",
+                     G_CALLBACK(on_window_state_changed), maximize_button);
+
+    GtkWidget* minimize_button =
+        gtk_button_new_from_icon_name("window-minimize-symbolic", GTK_ICON_SIZE_MENU);
+    gtk_widget_set_valign(minimize_button, GTK_ALIGN_CENTER);
+    gtk_button_set_relief(GTK_BUTTON(minimize_button), GTK_RELIEF_NONE);
+    gtk_widget_set_tooltip_text(minimize_button, "最小化");
+    g_signal_connect_swapped(minimize_button, "clicked",
+                             G_CALLBACK(gtk_window_iconify), window);
+    gtk_header_bar_pack_end(header_bar, minimize_button);
+
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
     gtk_window_set_title(window, "杨三海解压");

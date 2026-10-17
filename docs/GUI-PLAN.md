@@ -324,3 +324,5 @@
 | D6 | 18 批 | 拖入多个文件时若其中有目录，`_scan` 能处理（引擎展开），但界面提示没说明"展开" | 文案 | 第 22 批 P8 |
 | D10 | 20 批前 | **界面启动后同时存在两个 `yshjy --serve` 引擎进程**（实测各持一条管道）。根因：`EngineClient.start()` 里 `if (_started) return` 之后 `await Process.start` 挂起，并发调用在 `_started = true` 之前又进一次 | 双份内存 / 双份状态目录写者，违背「引擎单例」设计 | **已修**：缓存启动 Future（`_starting ??= _doStart()`），失败清缓存允许重试，`_onClosed` 里一并重置。验证：GUI 1 + 引擎 1 |
 | D11 | 20 批前 | **`flutter build linux --release` 会清掉 bundle 里手工放进去的引擎 `yshjy`** —— 编译完直接启动就是「引擎未就绪」 | 每次改界面后都会静默复现 | 流程坑（不改代码）：**先 build，再 `cp target/release/yshjy gui/build/linux/x64/release/bundle/`**；或跑 `scripts/install-gui.sh` |
+| D12 | 20 批前 | **标题栏只有「关闭」**：GNOME/Wayland 走 `GtkHeaderBar`，而 GTK3 的 HeaderBar 既不读 `org.gnome.desktop.wm.preferences button-layout`，也不像 GTK4/libadwaita 那样自带最小化、最大化按钮 | 与 Chrome/Qt 等自绘标题栏应用不一致，用户第一反应是"漏做了" | **已修**：`gui/linux/runner/my_application.cc` 手加两个按钮（最小化 / 最大化↔还原，图标随窗口状态切换） |
+| D13 | 20 批前 | **关闭不是优雅关闭**：`gui/lib/engine.dart:404` 的 `dispose()`（会 `_proc.kill()`）**全项目没有调用点**，现在只靠引擎读 stdin 的 EOF 兜底（实测：关前端后引擎 3 秒内自动退出，退出码 0）。但解压中点关闭 = 直接硬中断，**不发 cancel、不清理半成品、没有确认框** | 解压到一半关窗口会留下半截文件，且用户不知道发生了什么 | 第 20 批组 3 之后补：关闭前先发 `cancel` + 「还在解压，确定关闭？」确认 |
