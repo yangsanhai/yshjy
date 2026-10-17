@@ -347,6 +347,25 @@ class EngineClient {
     return _unwrap(r);
   }
 
+  /// 扫一批路径（目录会自动展开、分卷自动归并）——只读文件头，不解压
+  Future<Map<String, dynamic>> scan(List<String> paths) async => _unwrap(
+        await _call({'cmd': 'scan', 'paths': paths},
+            timeout: const Duration(minutes: 3)),
+      );
+
+  /// 批量解压：引擎内部逐个跑，一个坏了不影响其余（S13）
+  Future<Map<String, dynamic>> batch({
+    required List<String> paths,
+    String? dest,
+    String? password,
+  }) async =>
+      _unwrap(await _call({
+        'cmd': 'batch',
+        'paths': paths,
+        if (dest != null) 'dest': dest,
+        if (password != null) 'password': password,
+      }, timeout: const Duration(hours: 6)));
+
   /// 生成诊断包（报障用）。默认**路径脱敏**，方便直接贴到群里。
   Future<Map<String, dynamic>> report({String? path}) async {
     final r = await _call({

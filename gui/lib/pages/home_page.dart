@@ -10,7 +10,29 @@ import '../engine.dart';
 import '../history_store.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
-enum Phase { empty, listing, preview, extracting, done, error }
+enum Phase { empty, listing, preview, extracting, done, error, queue }
+
+/// 队列里的一行（S13 批量队列）
+class _QueueItem {
+  final String path;
+  final String name;
+  final int size;
+  final String kind;
+  final int volumes;
+  final bool archive;
+
+  /// pending / running / ok / partial / failed
+  String status = 'pending';
+
+  _QueueItem({
+    required this.path,
+    required this.name,
+    required this.size,
+    required this.kind,
+    required this.volumes,
+    required this.archive,
+  });
+}
 
 class HomePage extends StatefulWidget {
   /// 启动时要直接打开的文件（右键菜单传进来的），可能为空
@@ -44,6 +66,11 @@ class _HomePageState extends State<HomePage> {
   EngineError? _error;
   final TextEditingController _pwCtrl = TextEditingController();
   bool _dragging = false;
+
+  /// 队列（S13）与批量结果
+  final List<_QueueItem> _queue = [];
+  List<String> _batchOrder = [];
+  Map<String, dynamic>? _batch;
   String? _password;
   final List<String> _notes = [];
 
@@ -73,6 +100,18 @@ class _HomePageState extends State<HomePage> {
   void _onEvent(EngineEvent e) {
     if (!mounted) return;
     switch (e.kind) {
+      case 'JOB_STARTED':
+        final jobNo = ((e.data['job'] ?? e.data['id']) as num?)?.toInt();
+        if (jobNo != null && jobNo >= 1 && jobNo <= _batchOrder.length) {
+          final path = _batchOrder[jobNo - 1];
+          final idx = _queue.indexWhere((q) => q.path == path);
+          if (idx >= 0) {
+            setState(() {
+              _queue[idx].status = 'running';
+              _current = _queue[idx].name;
+            });
+          }
+        }
       case 'STAGE_STARTED':
         setState(() => _stage = (e.data['stage'] as String?) ?? '');
       case 'EXTRACT_PROGRESS':
@@ -137,14 +176,132 @@ class _HomePageState extends State<HomePage> {
       ],
     );
     try {
-      final f = await openFile(acceptedTypeGroups: const [group]);
-      if (f != null) await _open(f.path);
+      // 多选：一次挑一堆包是常态（网盘一次下 8 个）
+      final files = await openFiles(acceptedTypeGroups: const [group]);
+      if (files.isEmpty) return;
+      if (files.length == 1) {
+        await _open(files.first.path);
+      } else {
+        await _scan(files.map((f) => f.path).toList());
+      }
     } on PlatformException catch (e) {
       _showError('FILE_PICKER', e.message ?? '选不了文件');
     }
   }
 
+  /// 选一个文件夹：目录里可能混着一堆无关文件，交给引擎筛
+  Future<void> _pickFolder() async {
+    try {
+      final dir = await getDirectoryPath();
+      if (dir != null) await _scan([dir]);
+    } on PlatformException catch (e) {
+      _showError('FILE_PICKER', e.message ?? '选不了文件夹');
+    }
+  }
+
+  /// 扫一批路径 → 队列（目录展开、分卷归并都在引擎里做）
+  Future<void> _scan(List<String> paths) async {
+    setState(() {
+      _phase = Phase.listing;
+      _queue.clear();
+      _batch = null;
+      _notes.clear();
+      _errorCode = null;
+    });
+    try {
+      final r = await _client.scan(paths);
+      if (!mounted) return;
+      final items = (r['items'] as List?) ?? const [];
+      setState(() {
+        for (final raw in items) {
+          final i = (raw as Map).cast<String, dynamic>();
+          _queue.add(_QueueItem(
+            path: i['path'] as String? ?? '',
+            name: i['name'] as String? ?? '',
+            size: (i['size'] as num?)?.toInt() ?? 0,
+            kind: i['kind'] as String? ?? 'UNKNOWN',
+            volumes: (i['volumes'] as num?)?.toInt() ?? 1,
+            archive: i['archive'] == true,
+          ));
+        }
+        _phase = Phase.queue;
+      });
+      widget.onStatus?.call('找到 ${_queue.where((q) => q.archive).length} 个可解包');
+    } on EngineError catch (e) {
+      _showError(e.code, e.note, e);
+    }
+  }
+
+  /// 开始批量解压（走引擎 `batch`，一次调用跑完整个队列）
+  Future<void> _startQueue() async {
+    final ready = _queue.where((q) => q.archive).toList();
+    if (ready.isEmpty) return;
+    setState(() {
+      _phase = Phase.extracting;
+      _batch = null;
+      _progress = null;
+      _current = null;
+      for (final q in ready) {
+        q.status = 'pending';
+      }
+      _batchOrder = ready.map((q) => q.path).toList();
+    });
+    widget.onStatus?.call('正在批量解压 ${ready.length} 个…');
+    try {
+      final r = await _client.batch(
+        paths: _batchOrder,
+        password: _password,
+      );
+      if (!mounted) return;
+      final jobs = (r['jobs'] as List?) ?? const [];
+      setState(() {
+        for (final raw in jobs) {
+          final j = (raw as Map).cast<String, dynamic>();
+          final path = j['path'] as String? ?? '';
+          final idx = _queue.indexWhere((q) => q.path == path);
+          if (idx < 0) continue;
+          final oc = j['outcome'] as String? ?? '';
+          _queue[idx].status =
+              oc == 'ok' ? 'ok' : (oc == 'partial' ? 'partial' : 'failed');
+        }
+        _batch = r;
+        _phase = Phase.done;
+      });
+      final ok = (r['ok'] as num?)?.toInt() ?? 0;
+      final failed = (r['failed'] as num?)?.toInt() ?? 0;
+      widget.onStatus?.call('批量完成：$ok 成功 / $failed 失败');
+      // 历史：每个任务一条
+      for (final raw in jobs) {
+        final j = (raw as Map).cast<String, dynamic>();
+        final oc = j['outcome'] as String? ?? '';
+        await HistoryStore.add(HistoryEntry(
+          time: DateTime.now().toIso8601String(),
+          input: j['path'] as String? ?? '',
+          dest: j['dest'] as String?,
+          ok: oc == 'ok' || oc == 'partial',
+          bytes: (j['bytes'] as num?)?.toInt() ?? 0,
+        ));
+      }
+    } on EngineError catch (e) {
+      _showError(e.code, e.note, e);
+    }
+  }
+
+  void _resetQueue() {
+    setState(() {
+      _queue.clear();
+      _batch = null;
+      _phase = Phase.empty;
+      _file = null;
+    });
+  }
+
   Future<void> _open(String path) async {
+    // 拖进来的是文件夹 → 队列模式（目录里通常混着一堆无关文件）
+    if (await Directory(path).exists()) {
+      await _scan([path]);
+      return;
+    }
     setState(() {
       _phase = Phase.listing;
       _file = path;
@@ -363,8 +520,12 @@ class _HomePageState extends State<HomePage> {
       onDragDone: (detail) {
         setState(() => _dragging = false);
         if (detail.files.isEmpty) return;
-        // 拖进来多个文件时先开第一个（批量队列下一版做）
-        _open(detail.files.first.path);
+        final paths = detail.files.map((f) => f.path).toList();
+        if (paths.length == 1) {
+          _open(paths.first);
+        } else {
+          _scan(paths);
+        }
       },
       child: _scaffold(),
     );
@@ -418,9 +579,221 @@ class _HomePageState extends State<HomePage> {
       Phase.listing => _busyView('正在识别…'),
       Phase.preview => _previewView(),
       Phase.extracting => _progressView(),
-      Phase.done => _doneView(),
+      Phase.done => _batch == null ? _doneView() : _batchDoneView(),
+      Phase.queue => _queueView(),
       Phase.error => _errorView(),
     };
+  }
+
+  // ───────────────────────── 批量队列（S13）─────────────────────────
+
+  Widget _queueView() {
+    final cs = Theme.of(context).colorScheme;
+    final ready = _queue.where((q) => q.archive).length;
+    return Column(
+      key: const ValueKey('queue'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text('找到 $ready 个可解包',
+                style: Theme.of(context).textTheme.titleMedium),
+            if (_queue.length > ready)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text('（跳过 ${_queue.length - ready} 个无关文件）',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              ),
+            const Spacer(),
+            TextButton(onPressed: _resetQueue, child: const Text('清空')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: ListView.separated(
+              itemCount: _queue.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, i) {
+                final q = _queue[i];
+                return ListTile(
+                  dense: true,
+                  leading: Icon(
+                    q.archive ? Icons.inventory_2_outlined : Icons.help_outline,
+                    size: 20,
+                    color: q.archive ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                  title: Row(
+                    children: [
+                      Flexible(
+                        child: Text(q.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13)),
+                      ),
+                      if (q.volumes > 1) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: cs.secondaryContainer,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text('分卷 ${q.volumes}',
+                              style: TextStyle(
+                                  fontSize: 10, color: cs.onSecondaryContainer)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: Text(
+                    q.archive ? '${q.kind.toUpperCase()} · ${_size(q.size)}'
+                        : '看起来不是压缩包 · ${_size(q.size)}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  trailing: _queueStatusChip(q),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: ready == 0 ? null : _startQueue,
+          icon: const Icon(Icons.play_arrow),
+          label: Text(ready == 0 ? '没有可解压的包' : '开始解压全部（$ready 个）'),
+          style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14)),
+        ),
+      ],
+    );
+  }
+
+  Widget _queueStatusChip(_QueueItem q) {
+    final cs = Theme.of(context).colorScheme;
+    final (text, color) = switch (q.status) {
+      'running' => ('处理中', cs.primary),
+      'ok' => ('完成', cs.primary),
+      'partial' => ('部分', Colors.orange),
+      'failed' => ('失败', cs.error),
+      _ => ('等待', cs.onSurfaceVariant),
+    };
+    if (q.status == 'pending' && !q.archive) {
+      return Text('跳过', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant));
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (q.status == 'running')
+          const SizedBox(
+            width: 12, height: 12,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          )
+        else
+          Icon(
+            switch (q.status) {
+              'ok' => Icons.check_circle_outline,
+              'partial' => Icons.warning_amber_outlined,
+              'failed' => Icons.error_outline,
+              _ => Icons.schedule,
+            },
+            size: 14,
+            color: color,
+          ),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(fontSize: 11, color: color)),
+      ],
+    );
+  }
+
+  /// 批量完成卡（Sunpack 三段式：结果标题 / 量化副标题 / 直达按钮）
+  Widget _batchDoneView() {
+    final cs = Theme.of(context).colorScheme;
+    final r = _batch!;
+    final ok = (r['ok'] as num?)?.toInt() ?? 0;
+    final failed = (r['failed'] as num?)?.toInt() ?? 0;
+    final partial = (r['partial'] as num?)?.toInt() ?? 0;
+    final ms = (r['elapsed_ms'] as num?)?.toInt() ?? 0;
+    final bytes = (r['bytes'] as num?)?.toInt() ?? 0;
+    final jobs = (r['jobs'] as List?) ?? const [];
+    final failedJobs = jobs
+        .cast<Map>()
+        .where((j) => (j['outcome'] as String? ?? '') != 'ok')
+        .toList();
+    final firstDest = jobs
+        .cast<Map>()
+        .map((j) => j['dest'] as String?)
+        .firstWhere((d) => d != null, orElse: () => null);
+
+    return Column(
+      key: const ValueKey('batch-done'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 6),
+        Icon(failed == 0 ? Icons.check_circle : Icons.info_outline,
+            size: 44, color: failed == 0 ? cs.primary : Colors.orange),
+        const SizedBox(height: 8),
+        Text('解压完成',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(
+          '$ok 成功'
+          '${partial > 0 ? ' · $partial 部分' : ''}'
+          '${failed > 0 ? ' · $failed 失败' : ''}'
+          ' · 用时 ${(ms / 1000).toStringAsFixed(1)} 秒'
+          ' · 写出 ${_size(bytes)}',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+        ),
+        const SizedBox(height: 14),
+        if (failedJobs.isNotEmpty)
+          Expanded(
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListView.separated(
+                itemCount: failedJobs.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final j = failedJobs[i];
+                  final name = (j['path'] as String? ?? '').split('/').last;
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(Icons.error_outline, size: 18, color: cs.error),
+                    title: Text(name, style: const TextStyle(fontSize: 12)),
+                    subtitle: Text((j['outcome'] as String? ?? '').toLowerCase(),
+                        style: const TextStyle(fontSize: 11)),
+                  );
+                },
+              ),
+            ),
+          )
+        else
+          const Spacer(),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            if (firstDest != null)
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => _openFolder(firstDest),
+                  icon: const Icon(Icons.folder_open, size: 18),
+                  label: const Text('打开输出目录'),
+                ),
+              ),
+            if (firstDest != null) const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _resetQueue,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('再来一批'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _emptyView() {
@@ -454,13 +827,27 @@ class _HomePageState extends State<HomePage> {
                 ),
           ),
           const SizedBox(height: 28),
-          FilledButton.icon(
-            onPressed: _pick,
-            icon: const Icon(Icons.add),
-            label: const Text('选择文件'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-            ),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: _pick,
+                icon: const Icon(Icons.add),
+                label: const Text('选择文件'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _pickFolder,
+                icon: const Icon(Icons.folder_open_outlined, size: 18),
+                label: const Text('选文件夹'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           Text(

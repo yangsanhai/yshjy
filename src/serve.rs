@@ -155,7 +155,67 @@ fn 处理命令(
             }
             return;
         }
-        "list" | "extract" | "pack" => {
+        // 扫一批路径（S13 队列 / S10 多候选的数据源）：
+        // 展开目录 → 归并分卷 → 逐个认类型。只读文件头，不解压任何东西。
+        "scan" => {
+            let paths: Vec<PathBuf> = 值
+                .get("paths")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str())
+                        .map(PathBuf::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if paths.is_empty() {
+                写行(出, &错误响应(id, "BAD_PARAM", "缺少 paths"));
+                return;
+            }
+            let 展开 = yshjy::batch::expand_inputs(&paths);
+            let mut items = Vec::new();
+            for p in &展开 {
+                let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+                let 探 = yshjy::probe::probe_path(p).ok();
+                let looks_like = 探
+                    .as_ref()
+                    .map(|x| format!("{:?}", x.kind))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let mime = 探.as_ref().map(|x| x.mime).unwrap_or("application/octet-stream");
+                let sink: Arc<dyn EventSink> = Arc::new(yshjy::event::NullSink);
+                let ctx = UnpackCtx::new(0, sink);
+                let (kind, volumes) = match yshjy::job::identify(p, &ctx) {
+                    Ok(t) => {
+                        let n = match &t {
+                            yshjy::job::Target::SevenZ { volumes } => volumes.len(),
+                            yshjy::job::Target::ZipSplit { volumes } => volumes.len(),
+                            _ => 1,
+                        };
+                        (t.as_str().to_string(), n)
+                    }
+                    Err(_) => ("UNKNOWN".to_string(), 1),
+                };
+                items.push(json!({
+                    "path": p.display().to_string(),
+                    "name": p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+                    "size": size,
+                    "kind": kind,
+                    "volumes": volumes,
+                    "looks_like": looks_like,
+                    "mime": mime,
+                    "archive": kind != "UNKNOWN",
+                }));
+            }
+            写行(
+                出,
+                &ok(
+                    id,
+                    json!({"items": items, "expanded": 展开.len(), "given": paths.len()}),
+                ),
+            );
+            return;
+        }
+        "list" | "extract" | "pack" | "batch" => {
             let 参数 = 值.clone();
             let 事件 = 事件.clone();
             let 发 = 结果发.clone();
@@ -165,6 +225,7 @@ fn 处理命令(
                 let 结果 = match cmd.as_str() {
                     "list" => 做list(&参数, &事件, &取消给任务),
                     "extract" => 做extract(&参数, &事件, &取消给任务),
+                    "batch" => 做batch(&参数, &事件, &取消给任务),
                     _ => 做pack(&参数),
                 };
                 let 响应 = match 结果 {
@@ -189,7 +250,7 @@ fn hello() -> Value {
     json!({
         "protocol": 协议版本,
         "engine": yshjy::VERSION,
-        "features": ["list", "extract", "pack", "cancel", "report"],
+        "features": ["list", "extract", "pack", "cancel", "report", "scan", "batch"],
         "event_kinds": [
             "JOB_STARTED", "JOB_FINISHED", "STAGE_STARTED", "STAGE_FINISHED",
             "SCAN_PROGRESS", "PREVIEW_READY", "EXTRACT_PROGRESS", "ENTRY_FINISHED",
@@ -431,4 +492,87 @@ mod tests {
         let e = 做list(&json!({}), &事件, &取消).unwrap_err();
         assert_eq!(e["code"], "BAD_PARAM");
     }
+}
+
+// ───────────────────────── 批量 ─────────────────────────
+
+/// 批量执行：展开目录/归并分卷 → 排队 → 逐个跑（S13）
+///
+/// 为什么放在**一个** `batch` 命令里而不是前端循环调 `extract`：
+/// 1. 分卷归并、目录展开是引擎的知识（`expand_inputs`），前端不该自己猜；
+/// 2. 一次任务里取消能立刻停掉整个队列，而不是前端逐个 cancel 竞态；
+/// 3. 每个任务的 `JOB_STARTED` / `JOB_FINISHED` 事件天然带任务号，界面据此更新队列行。
+fn 做batch(
+    参数: &Value,
+    事件: &Arc<ChannelSink>,
+    取消: &CancelToken,
+) -> Result<Value, Value> {
+    let paths: Vec<PathBuf> = 参数
+        .get("paths")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str())
+                .map(PathBuf::from)
+                .collect()
+        })
+        .unwrap_or_default();
+    if paths.is_empty() {
+        return Err(错误值("BAD_PARAM", "缺少 paths"));
+    }
+    let dest = 参数.get("dest").and_then(|v| v.as_str()).map(PathBuf::from);
+    let password = 参数
+        .get("password")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let smart_dir = 参数
+        .get("smart_dir")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let 展开 = yshjy::batch::expand_inputs(&paths);
+    let 任务 = yshjy::batch::make_jobs(&展开);
+    let cfg = yshjy::config::全局配置();
+    let opts = yshjy::batch::BatchOptions {
+        jobs: 1, // 顺序跑：队列的进度才有意义，也不会把机械盘打成碎片
+        continue_on_error: true,
+        password,
+        selection: yshjy::select::Selection::all(),
+        dest,
+        smart_dir,
+        force: false,
+        limits: yshjy::safety::Limits {
+            max_ratio: cfg.safety.zip_bomb_ratio,
+            warn_executables: cfg.safety.warn_executables,
+            ..Default::default()
+        },
+    };
+    let sink: Arc<dyn EventSink> = 事件.clone();
+    let started = std::time::Instant::now();
+    let report = yshjy::batch::run_batch(任务, &opts, &sink, 取消, |job, o, s, c| {
+        yshjy::job::run_job(job, o, s, c)
+    });
+    Ok(json!({
+        "total": report.len(),
+        "ok": report.succeeded(),
+        "partial": report.partial(),
+        "failed": report.failed(),
+        "cancelled": report.cancelled(),
+        "bytes": report.bytes_written(),
+        "elapsed_ms": started.elapsed().as_millis() as u64,
+        "jobs": report.jobs.iter().map(|j| json!({
+            "id": j.id,
+            "path": j.input.display().to_string(),
+            "outcome": match &j.outcome {
+                yshjy::error::Outcome::Success => "ok".to_string(),
+                yshjy::error::Outcome::Partial { .. } => "partial".to_string(),
+                yshjy::error::Outcome::Cancelled { .. } => "cancelled".to_string(),
+                yshjy::error::Outcome::Failed(c) => format!("{c:?}"),
+            },
+            "bytes": j.stats.bytes_written,
+            "entries": j.stats.entries_done,
+            "elapsed_ms": j.stats.millis,
+            "dest": j.stats.dest.as_ref().map(|d| d.display().to_string()),
+        })).collect::<Vec<_>>(),
+    }))
 }

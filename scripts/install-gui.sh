@@ -35,10 +35,14 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 cp -r "$BUNDLE"/. "$DEST"/
 
-# 引擎：优先用 bundle 里的，没有就从 target/ 补
-if [ ! -x "$DEST/yshjy" ]; then
-  [ -x target/release/yshjy ] || cargo build --release
+# 引擎：**永远用 target/release 的最新构建**覆盖
+#
+# 坑：bundle 里的引擎是 `flutter build` 当时拷进去的快照，之后 cargo 改了代码
+# 它不会自动更新 —— 结果界面是新写的、引擎是旧的，协议命令对不上（BAD_PARAM/UNKNOWN_COMMAND）。
+if [ -x target/release/yshjy ]; then
   cp target/release/yshjy "$DEST/"
+else
+  cargo build --release && cp target/release/yshjy "$DEST/"
 fi
 chmod 755 "$DEST/yshjy_gui" "$DEST/yshjy"
 
