@@ -33,8 +33,6 @@
 //!
 //! # 下一步（本层还没做完的部分）
 //!
-//! - `list()`（预览）还没进 trait：`preview.rs` 现在按「文件路径 + Target」工作，
-//!   要改成按「一条流」工作才能归位（下一批）
 //! - 实现体目前**委托**给既有函数（`extract_zip_auto_ctx` 等），行为零变化；
 //!   后续批次再把落盘逻辑内聚到 `OutputSink`，实现体才会真正搬进 handler
 //! - `pack/`（反向打包）侧将来对应 `trait OutArchive`
@@ -630,19 +628,68 @@ impl InArchive for TarStreamUnpacker {
 
     fn list(
         &self,
-        _src: &mut Source<'_>,
-        _opts: &UnpackOptions,
-        _ctx: &UnpackCtx,
+        src: &mut Source<'_>,
+        opts: &UnpackOptions,
+        ctx: &UnpackCtx,
     ) -> Result<Preview> {
-        // tar 是**顺序格式**：列清单得把整条流扫一遍。现在如实报「信息不完整」
-        // （`complete: false`，外壳会显示"无法预览"），而不是给一个空清单 ——
-        // 空清单会被当成"包里什么都没有"，那是最糟的误导。
-        // 将来要做的话：边扫边收集，扫到哪报到哪（`complete: false` 已经预留了）。
-        Ok(Preview {
+        // tar 是**顺序格式**：没有中央目录，"里面有什么"只能把整条流的头扫一遍
+        // （只读头，不读数据体）。所以这里给的是**完整清单**，代价是顺序读到底 ——
+        // 和 ZIP「读尾部索引秒出」不是一个量级，这是格式决定的，不是实现偷懒。
+        //
+        // 外层压缩（.tar.gz 等）必须先剥壳，且**与解压共用一份剥壳逻辑**
+        // （`extract_stream::open_tar_stream`）：否则两边支持范围会悄悄分叉
+        // —— 解压认得的格式、预览却说"不支持"，用户只会觉得这工具坏了。
+        let reader = crate::extract_stream::open_tar_stream(&mut *src.reader, opts.outer)?;
+        let mut archive = tar::Archive::new(reader);
+        let entries = archive.entries().map_err(|e| {
+            Error::new(ErrorCode::NotArchive).context(format!("读 tar 条目失败: {e}"))
+        })?;
+
+        let mut pv = Preview {
             format: "tar",
-            complete: false,
+            complete: true,
             ..Default::default()
-        })
+        };
+        // 序号口径与解压完全一致（1-based、含目录条目）：`--select 3` 指的必须是
+        // 预览里第 3 行，不能因为"目录不算"就错位一格。
+        for (zero_based, ent) in entries.enumerate() {
+            let idx = zero_based as u64 + 1;
+            // 大 tar.gz 扫到底要几十秒，用户可能中途按 Ctrl-C：
+            // 取消就**如实**标"不完整"，绝不把半份清单说成全部。
+            if ctx.is_cancelled() {
+                pv.complete = false;
+                break;
+            }
+            let ent = match ent {
+                Ok(e) => e,
+                Err(_) => {
+                    // 中间坏了：已列出的照样有用，但不能再说"完整"
+                    pv.complete = false;
+                    break;
+                }
+            };
+            // 用原始字节 + 宽松解码：文件名不是 UTF-8 时 `path()` 会直接报错，
+            // 而我们只是想把它显示出来（解压侧也是宽松处理）
+            let name = String::from_utf8_lossy(&ent.path_bytes()).to_string();
+            let is_dir = ent.header().entry_type().is_dir();
+            let size = ent.header().size().unwrap_or(0);
+            if !is_dir {
+                pv.total_size = pv.total_size.saturating_add(size);
+            }
+            pv.entries.push(crate::event::EntryView {
+                index: idx,
+                path: name.clone(),
+                size,
+                // tar 不记"压缩后大小"：压缩在外层（整条流一个数），条目级没有这个概念。
+                // 填 `None` 而不是 0 —— UI 才知道这是"没有这个信息"，不是"压成了 0 字节"。
+                packed: None,
+                encrypted: false, // tar 格式本身不支持加密
+                is_dir,
+                modified: ent.header().mtime().ok().map(|s| s as i64),
+                is_risky: !is_dir && crate::safety::is_risky_executable(&name),
+            });
+        }
+        Ok(pv)
     }
 }
 
@@ -838,6 +885,94 @@ mod tests {
         assert!(pv.complete);
         // 序号必须 1-based（界面显示的号 = `--select` 用的号）
         assert_eq!(pv.entries[0].index, 1);
+    }
+
+    /// 造一份内存 tar，返回（tar 字节, 各文件大小）
+    fn 造内存tar() -> (Vec<u8>, [u64; 3]) {
+        let 文件: [(&str, &[u8]); 3] = [
+            ("a.txt", b"hello"),
+            ("run.sh", b"#!/bin/sh\necho hi\n"),
+            ("游戏数据/说明.txt", b"abc"),
+        ];
+        let mut 数据 = Vec::new();
+        {
+            let mut b = tar::Builder::new(&mut 数据);
+            for (名, 内容) in 文件 {
+                let mut 头 = tar::Header::new_gnu();
+                头.set_size(内容.len() as u64);
+                头.set_mode(if 名.ends_with(".sh") { 0o755 } else { 0o644 });
+                头.set_entry_type(tar::EntryType::Regular);
+                头.set_mtime(1_700_000_000);
+                头.set_cksum();
+                b.append_data(&mut 头, 名, 内容).unwrap();
+            }
+            // 目录条目：tar 里目录**也是条目**，序号要算进去（否则 --select 会错位一格）
+            let mut 头 = tar::Header::new_gnu();
+            头.set_size(0);
+            头.set_entry_type(tar::EntryType::Directory);
+            头.set_mode(0o755);
+            头.set_cksum();
+            b.append_data(&mut 头, "游戏数据/", std::io::empty()).unwrap();
+            b.finish().unwrap();
+        }
+        let 大小 = [
+            文件[0].1.len() as u64,
+            文件[1].1.len() as u64,
+            文件[2].1.len() as u64,
+        ];
+        (数据, 大小)
+    }
+
+    #[test]
+    fn tar_的列清单走统一接口() {
+        let (数据, 大小) = 造内存tar();
+        let handler = find(ArchiveFormat::Tar, Shape::Tar).unwrap();
+        let mut cur = std::io::Cursor::new(&数据[..]);
+        let mut src = Source::new(&mut cur);
+        let pv = handler
+            .list(&mut src, &UnpackOptions::new("."), &UnpackCtx::quiet(0))
+            .expect("tar 应当能列清单");
+
+        assert!(pv.complete, "顺序扫完就该给完整清单（不是「信息不完整」）");
+        assert_eq!(pv.entries.len(), 4);
+        assert_eq!(pv.entries[0].path, "a.txt");
+        assert_eq!(pv.entries[0].size, 大小[0]);
+        assert_eq!(pv.entries[0].index, 1, "序号必须 1-based");
+        assert!(!pv.entries[0].is_risky);
+        assert_eq!(pv.entries[1].path, "run.sh");
+        assert!(pv.entries[1].is_risky, ".sh / .exe 要标成「可执行」提醒");
+        assert_eq!(pv.entries[2].path, "游戏数据/说明.txt", "中文名不能乱码");
+        assert!(pv.entries[3].is_dir, "目录条目要标成目录");
+        assert_eq!(pv.entries[3].index, 4, "目录条目也占序号");
+        assert_eq!(pv.total_size, 大小.iter().sum::<u64>(), "目录不占总大小");
+        assert_eq!(pv.encrypted_count, 0);
+        assert!(pv.entries[0].modified.is_some(), "tar 头里有 mtime");
+        assert_eq!(pv.entries[0].packed, None, "tar 没有条目级压缩大小，填 None 不是 0");
+    }
+
+    #[test]
+    fn tar_gz_的列清单要先剥外层压缩() {
+        let (tar数据, _) = 造内存tar();
+        let mut gz = Vec::new();
+        {
+            use std::io::Write as _;
+            let mut e = flate2::write::GzEncoder::new(&mut gz, flate2::Compression::fast());
+            e.write_all(&tar数据).unwrap();
+            e.finish().unwrap();
+        }
+        let mut opts = UnpackOptions::new(".");
+        opts.outer = Some(ArchiveFormat::Gzip);
+
+        let handler = find(ArchiveFormat::Tar, Shape::Tar).unwrap();
+        let mut cur = std::io::Cursor::new(&gz[..]);
+        let mut src = Source::new(&mut cur);
+        let pv = handler.list(&mut src, &opts, &UnpackCtx::quiet(0)).unwrap();
+
+        // 剥壳逻辑与解压共用一份（extract_stream::open_tar_stream）：
+        // 这里能列出条目，就证明两边没有分叉
+        assert!(pv.complete);
+        assert_eq!(pv.entries.len(), 4);
+        assert_eq!(pv.entries[2].path, "游戏数据/说明.txt");
     }
 
     /// 只声明格式、**故意不实现 `list`** 的假解压器 —— 专门用来测 trait 的默认实现

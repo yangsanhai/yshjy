@@ -94,24 +94,12 @@ impl PackReport {
         self.warnings.is_empty()
     }
 
-    /// 一句话摘要
-    pub fn summary(&self) -> String {
-        let mut s = format!(
-            "写出 {} 字节（封面 {} + 内容 {}），共 {} 个条目，布局 {}",
-            self.total_size,
-            self.cover_size,
-            self.zip_size,
-            self.entries,
-            match self.layout {
-                PackLayout::TailAppend => "尾部追加",
-                PackLayout::FreeAtom => "free 原子",
-            }
-        );
-        if !self.warnings.is_empty() {
-            s += &format!("，{} 条自检提示", self.warnings.len());
-        }
-        s
-    }
+    // 注：这里**故意没有** `summary()`。
+    //
+    // 早先它直接拼中文句子（"写出 N 字节（封面 A + 内容 B），共 C 个条目…"），
+    // 违反了本项目的分层约定（见 src/i18n.rs 模块头：引擎只给结构化数据，
+    // 句子归外壳）。结果是：英文/日文界面下面这句永远中文，翻译不了。
+    // v0.9 第 10 批把它挪到外壳（main::do_pack）查语言包渲染 —— 别再加回来。
 }
 
 /// **把输入打成伪装包**

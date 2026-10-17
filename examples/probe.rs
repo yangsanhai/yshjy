@@ -263,7 +263,11 @@ fn main() -> ExitCode {
         match yshjy::pack::build(&opts, &mut out_file) {
             Ok(rep) => {
                 drop(out_file);
-                println!("   ✅ {}", rep.summary());
+                // 探针直接打结构化字段（`PackReport` 不再产句子：文案归外壳）
+                println!(
+                    "   ✅ 写出 {} 字节（封面 {} + 内容 {}），共 {} 个条目，布局 {:?}",
+                    rep.total_size, rep.cover_size, rep.zip_size, rep.entries, rep.layout
+                );
                 // 落地后自检（不能"以为成功就完事"）
                 match yshjy::pack::self_check(std::path::Path::new(&out_path), rep.entries) {
                     Ok(warns) if warns.is_empty() => {

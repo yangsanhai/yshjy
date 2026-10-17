@@ -494,6 +494,63 @@ fn 预览_json(t: &str, pv: &yshjy::preview::Preview) -> String {
     .to_string()
 }
 
+/// 打印救援模式重建出来的清单（`--list` 的兜底路径与 `--rescue` 共用）
+///
+/// 为什么抽出来：这段以前在两处各写一遍，都是 `"… {size:>14} 字节 …"` +
+/// `"合计 {:.2} GB"` —— 单位写死中文、体量一律 GB（3 字节也显示 0.00 GB），
+/// 而且翻译不了。v0.9 第 10 批收成一份：体量走 [`人类可读`]，文案走语言包。
+fn 打印救援清单(
+    items: &[yshjy::rescue::LocalEntry],
+    quiet: bool,
+    标题键: &str,
+    带提示: bool,
+    path: &str,
+) {
+    let 语 = 文案();
+    if quiet {
+        for it in items {
+            println!("{}", it.path);
+        }
+        return;
+    }
+    println!(
+        "{}",
+        语.t(标题键, &[("count", &items.len().to_string())])
+    );
+    let mut total = 0u64;
+    for it in items.iter().take(50) {
+        let lock = if it.encrypted() { "🔒" } else { "  " };
+        println!(
+            "{}",
+            语.t(
+                "cli.rescue_item",
+                &[
+                    ("lock", lock),
+                    ("size", &人类可读(it.pack_size)),
+                    ("path", &it.path),
+                ]
+            )
+        );
+        total += it.pack_size;
+    }
+    if items.len() > 50 {
+        println!(
+            "{}",
+            语.t("cli.rescue_more", &[("count", &(items.len() - 50).to_string())])
+        );
+    }
+    println!(
+        "{}",
+        语.t(
+            "cli.rescue_total",
+            &[("size", &人类可读(total)), ("count", &items.len().to_string())]
+        )
+    );
+    if 带提示 {
+        println!("{}", 语.t("cli.rescue_tip", &[("path", path)]));
+    }
+}
+
 /// 中央目录坏了时的兜底列举：按 local header 顺序重建
 fn try_list_by_rescue(path: &str, quiet: bool) -> Option<ExitCode> {
     let mut f = std::fs::File::open(path).ok()?;
@@ -514,27 +571,7 @@ fn try_list_by_rescue(path: &str, quiet: bool) -> Option<ExitCode> {
     if items.is_empty() {
         return None;
     }
-    if quiet {
-        for it in &items {
-            println!("{}", it.path);
-        }
-    } else {
-        println!(
-            "🔧 中央目录坏了，已按文件头重建清单（{} 项）：\n",
-            items.len()
-        );
-        let mut total = 0u64;
-        for it in items.iter().take(50) {
-            let lock = if it.encrypted() { "🔒" } else { "  " };
-            println!("   {lock} {:>14} 字节   {}", it.pack_size, it.path);
-            total += it.pack_size;
-        }
-        if items.len() > 50 {
-            println!("   … 还有 {} 项", items.len() - 50);
-        }
-        println!("\n   合计 {:.2} GB", total as f64 / 1e9);
-        println!("   提示：用 yshjy \"{path}\" 直接解压（缺的解压码加 -p）");
-    }
+    打印救援清单(&items, quiet, "cli.rescue_rebuilt_header", true, path);
     Some(ExitCode::from(code::OK))
 }
 
@@ -926,10 +963,16 @@ fn do_pack(
     tail: bool,
     quiet: bool,
 ) -> ExitCode {
+    // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
+    // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
+    let 语 = 文案();
     let inputs: Vec<PathBuf> = targets.iter().map(PathBuf::from).collect();
     for i in &inputs {
         if !i.exists() {
-            eprintln!("❌ 找不到：{}", i.display());
+            eprintln!(
+                "{}",
+                语.t("cli.pack_missing", &[("path", &i.display().to_string())])
+            );
             return ExitCode::from(code::ERR);
         }
     }
@@ -954,16 +997,25 @@ fn do_pack(
     }
 
     if !quiet {
-        println!("📦 打包 {} 项 → {}", inputs.len(), out.display());
+        println!(
+            "{}",
+            语.t(
+                "cli.pack_start",
+                &[
+                    ("count", &inputs.len().to_string()),
+                    ("out", &out.display().to_string())
+                ]
+            )
+        );
         if let Some(pw) = password {
-            println!("   加密：{}（不回显）", mask(pw));
+            println!("{}", 语.t("cli.pack_locked", &[("mask", &mask(pw))]));
         }
     }
 
     let f = match std::fs::File::create(&out) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("❌ 建不了输出文件：{e}");
+            eprintln!("{}", 语.t("cli.pack_create_failed", &[("err", &e.to_string())]));
             return ExitCode::from(code::ERR);
         }
     };
@@ -976,30 +1028,52 @@ fn do_pack(
             if quiet {
                 println!("{}", out.display());
             } else {
-                println!("✅ {}", rep.summary());
+                let 布局 = match rep.layout {
+                    yshjy::pack::PackLayout::TailAppend => 语.t("cli.pack_layout_tail", &[]),
+                    yshjy::pack::PackLayout::FreeAtom => 语.t("cli.pack_layout_free", &[]),
+                };
+                println!(
+                    "{}",
+                    语.t(
+                        "cli.pack_done",
+                        &[
+                            ("total", &人类可读(rep.total_size)),
+                            ("cover", &人类可读(rep.cover_size)),
+                            ("zip", &人类可读(rep.zip_size)),
+                            ("entries", &rep.entries.to_string()),
+                            ("layout", &布局),
+                        ]
+                    )
+                );
+                for w in &rep.warnings {
+                    println!("{}", 语.t("cli.pack_warn", &[("warn", w)]));
+                }
             }
             // 自检 —— 不能"以为成功就完事"
             match yshjy::pack::self_check(&out, rep.entries) {
                 Ok(warns) if warns.is_empty() => {
                     if !quiet {
-                        println!("   ✅ 自检通过（这个文件能播放，也能被我们解回来）");
+                        println!("{}", 语.t("cli.pack_selfcheck_ok", &[]));
                     }
                     ExitCode::from(code::OK)
                 }
                 Ok(warns) => {
                     for w in warns {
-                        eprintln!("   ⚠ {w}");
+                        eprintln!("{}", 语.t("cli.pack_warn", &[("warn", &w)]));
                     }
                     ExitCode::from(code::PARTIAL)
                 }
                 Err(e) => {
-                    eprintln!("   ❌ 自检失败：{e}");
+                    eprintln!(
+                        "{}",
+                        语.t("cli.pack_selfcheck_bad", &[("err", &e.to_string())])
+                    );
                     ExitCode::from(code::ERR)
                 }
             }
         }
         Err(e) => {
-            eprintln!("❌ 打包失败：{e}");
+            eprintln!("{}", 语.t("cli.pack_failed", &[("err", &e.to_string())]));
             ExitCode::from(code::ERR)
         }
     }
@@ -1063,30 +1137,47 @@ fn 找位置参数(argv: &[String], 带值: &[&str]) -> Option<PathBuf> {
 }
 
 fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> ExitCode {
+    let 语 = 文案();
     let path = &targets[0];
     let mut f = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("❌ 打不开 {path}：{e}");
+            eprintln!(
+                "{}",
+                语.t("cli.rescue_cannot_open", &[("path", path), ("err", &e.to_string())])
+            );
             return ExitCode::from(code::ERR);
         }
     };
     let size = match f.metadata() {
         Ok(m) => m.len(),
         Err(e) => {
-            eprintln!("❌ 读不到文件信息：{e}");
+            eprintln!(
+                "{}",
+                语.t("cli.rescue_no_meta", &[("err", &e.to_string())])
+            );
             return ExitCode::from(code::ERR);
         }
     };
 
     if !quiet {
-        println!("🩺 救援模式：不看中央目录，按每个文件的头重建清单…");
+        println!("{}", 语.t("cli.rescue_start", &[]));
     }
+    // 救援路径也接上事件通道（v0.9 第 10 批）：
+    // 「解出了可执行文件」这类安全提醒只有**走事件**才到得了用户眼前
+    // （塞进内部 warnings 等于没提醒）。--json 目前只覆盖解压/预览，
+    // 救援主路径没有 json 出口，所以这里固定传 false。
+    let 出口: std::sync::Arc<dyn yshjy::event::EventSink> =
+        std::sync::Arc::new(终端出口::new(quiet, false));
+    let ctx = yshjy::ctx::UnpackCtx::new(1, 出口);
     let hits = match yshjy::scan::scan_whole_file(&mut f, size, &yshjy::scan::ScanOptions::strict())
     {
         Ok(h) => h,
         Err(e) => {
-            eprintln!("❌ 扫描失败：{e}");
+            eprintln!(
+                "{}",
+                语.t("cli.rescue_scan_failed", &[("err", &e.to_string())])
+            );
             return ExitCode::from(code::ERR);
         }
     };
@@ -1097,7 +1188,7 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
     {
         Some(s) => s,
         None => {
-            eprintln!("❌ 没找到任何压缩包的痕迹");
+            eprintln!("{}", 语.t("cli.rescue_not_found", &[]));
             return ExitCode::from(code::NOT_ARCHIVE);
         }
     };
@@ -1109,17 +1200,7 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
         &yshjy::rescue::RescueOptions::default(),
     ) {
         Ok(items) => {
-            if quiet {
-                for it in &items {
-                    println!("{}", it.path);
-                }
-            } else {
-                println!("✅ 重建出 {} 个条目：", items.len());
-                for it in items.iter().take(30) {
-                    let lock = if it.encrypted() { "🔒" } else { "  " };
-                    println!("   {lock} {:>14} 字节   {}", it.pack_size, it.path);
-                }
-            }
+            打印救援清单(&items, quiet, "cli.rescue_rebuilt_ok", false, path);
 
             // ── 真的把数据救出来（中央目录坏了时的救命名路径）──
             let dest: PathBuf = match dest_opt {
@@ -1134,9 +1215,12 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
             };
             let eopts = yshjy::extract::ExtractOptions::new(&dest);
             if !quiet {
-                println!("\n📤 按文件头逐个抽取数据 → {}", dest.display());
+                println!(
+                    "{}",
+                    语.t("cli.rescue_extract_to", &[("dest", &dest.display().to_string())])
+                );
             }
-            match yshjy::rescue::extract_by_locals(&mut f, start, size, &eopts) {
+            match yshjy::rescue::extract_by_locals_ctx(&mut f, start, size, &eopts, &ctx) {
                 Ok(rep) => {
                     if quiet {
                         for fe in &rep.files {
@@ -1158,13 +1242,19 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
                     }
                 }
                 Err(e) => {
-                    eprintln!("   ❌ 抽取失败：{e}");
+                    eprintln!(
+                        "{}",
+                        语.t("cli.rescue_extract_failed", &[("err", &e.to_string())])
+                    );
                     ExitCode::from(code::ERR)
                 }
             }
         }
         Err(e) => {
-            eprintln!("❌ 救援失败：{e}");
+            eprintln!(
+                "{}",
+                语.t("cli.rescue_failed", &[("err", &e.to_string())])
+            );
             ExitCode::from(code::ERR)
         }
     }

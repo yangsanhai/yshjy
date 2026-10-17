@@ -335,34 +335,18 @@ impl Write for BudgetWriter<'_> {
     }
 }
 
-/// **解压 TAR**（含 `.tar.gz` / `.tar.xz` / `.tar.zst` / `.tar.bz2` 两层）
+/// **剥掉 tar 的外层压缩壳**，得到一条"未压缩的 tar 字节流"
 ///
-/// `outer` 传 `None` 表示裸 tar；传 `Some(fmt)` 表示先解外层压缩流再展开 tar。
-/// # 为什么是 `R: Read + 'a` 而不是 `R: Read + 'static`
-/// 早先写成了 `'static`，只是因为内部把源装进了 `Box<dyn Read>`（默认带 `'static`）。
-/// 这让**借来的流**（`&mut File`、`&mut Window`…）没法传进来 —— 而统一接口
-/// （`crate::unpack::Source`）恰恰只提供借来的流。放宽成 `'a` 后两种都收，
-/// 对原有调用点（传 `File` 这类拥有型）完全兼容：约束更松，调用更自由。
-pub fn extract_tar<'a, R: Read + 'a>(
+/// 解压（[`extract_tar_ctx`]）和列清单（`unpack::TarStreamUnpacker::list`）
+/// **必须**共用这一份逻辑 —— 否则两边对"支持哪些外层格式"的支持会悄悄分叉：
+/// 解压认得 `.tar.br`、预览却不认，用户看到的就是"这包没法预览"。
+///
+/// `outer` 传 `None` = 裸 tar；`Some(fmt)` = 先解 `fmt` 这一层再当 tar 读。
+pub(crate) fn open_tar_stream<'a, R: Read + 'a>(
     src: R,
     outer: Option<ArchiveFormat>,
-    opts: &ExtractStreamOptions,
-) -> Result<crate::extract::ExtractReport> {
-    extract_tar_ctx(src, outer, opts, &UnpackCtx::quiet(0))
-}
-
-/// 同 [`extract_tar`]，但带上事件 / 进度 / 取消上下文
-pub fn extract_tar_ctx<'a, R: Read + 'a>(
-    src: R,
-    outer: Option<ArchiveFormat>,
-    opts: &ExtractStreamOptions,
-    ctx: &UnpackCtx,
-) -> Result<crate::extract::ExtractReport> {
-    fs::create_dir_all(&opts.dest)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
-
-    // ── 剥外层压缩流 ──
-    let reader: Box<dyn Read + 'a> = match outer {
+) -> Result<Box<dyn Read + 'a>> {
+    Ok(match outer {
         None => Box::new(src),
         Some(ArchiveFormat::Gzip) => Box::new(flate2::read::GzDecoder::new(src)),
         Some(ArchiveFormat::Zstd) => {
@@ -399,7 +383,37 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
             return Err(Error::new(ErrorCode::NotArchive)
                 .with("reason", format!("不支持的 tar 外层格式: {other:?}")));
         }
-    };
+    })
+}
+
+/// **解压 TAR**（含 `.tar.gz` / `.tar.xz` / `.tar.zst` / `.tar.bz2` 两层）
+///
+/// `outer` 传 `None` 表示裸 tar；传 `Some(fmt)` 表示先解外层压缩流再展开 tar。
+/// # 为什么是 `R: Read + 'a` 而不是 `R: Read + 'static`
+/// 早先写成了 `'static`，只是因为内部把源装进了 `Box<dyn Read>`（默认带 `'static`）。
+/// 这让**借来的流**（`&mut File`、`&mut Window`…）没法传进来 —— 而统一接口
+/// （`crate::unpack::Source`）恰恰只提供借来的流。放宽成 `'a` 后两种都收，
+/// 对原有调用点（传 `File` 这类拥有型）完全兼容：约束更松，调用更自由。
+pub fn extract_tar<'a, R: Read + 'a>(
+    src: R,
+    outer: Option<ArchiveFormat>,
+    opts: &ExtractStreamOptions,
+) -> Result<crate::extract::ExtractReport> {
+    extract_tar_ctx(src, outer, opts, &UnpackCtx::quiet(0))
+}
+
+/// 同 [`extract_tar`]，但带上事件 / 进度 / 取消上下文
+pub fn extract_tar_ctx<'a, R: Read + 'a>(
+    src: R,
+    outer: Option<ArchiveFormat>,
+    opts: &ExtractStreamOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    fs::create_dir_all(&opts.dest)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
+
+    // ── 剥外层压缩流（与「列清单」共用同一份逻辑，见 open_tar_stream）──
+    let reader = open_tar_stream(src, outer)?;
 
     let mut archive = tar::Archive::new(reader);
     let mut report = crate::extract::ExtractReport::default();

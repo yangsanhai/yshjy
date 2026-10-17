@@ -9,7 +9,8 @@
 //! - **7z**：`ArchiveReader` 解析头 → `Archive.files`（头里就带名字/大小）
 //! - **RAR**：`rars` 的 `members()`（只解析头；库要求数据在内存里，所以超大 RAR 会降级）
 //!
-//! 单流格式只有一个产物，直接由文件名推出；TAR 家族暂不预览（顺序格式要扫完整流）。
+//! 单流格式只有一个产物，直接由文件名推出；**TAR 家族**是顺序格式、没有索引，
+//! 只能把整条流的头扫一遍（不读数据体），实现见 `unpack::TarStreamUnpacker::list`。
 
 use std::path::{Path, PathBuf};
 
