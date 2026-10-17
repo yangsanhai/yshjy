@@ -166,7 +166,30 @@ class ExtractResult {
 class EngineError implements Exception {
   final String code;
   final String note;
-  EngineError(this.code, this.note);
+
+  /// 引擎附带的结构化参数（`looks_like` / `ext_mismatch` / `size` …）
+  ///
+  /// 有了它界面才能说"你给的是个 MP4 视频"，而不是干巴巴一句"出错"。
+  /// 这是协议 v1 的兼容扩展：老引擎不给这个字段，界面按空表处理即可。
+  final Map<String, dynamic> detail;
+
+  EngineError(this.code, this.note, [Map<String, dynamic>? detail])
+      : detail = detail ?? const {};
+
+  /// 引擎探测到的真实类型（`mp4` / `png` / `elf` / `zip` …）
+  String? get looksLike => detail['looks_like'] as String?;
+
+  /// 文件扩展名（小写）
+  String? get ext => detail['ext'] as String?;
+
+  /// 名字和内容对不上？（伪装包的典型特征）
+  bool get extMismatch => detail['ext_mismatch'] == 'true';
+
+  /// 文件大小（字节）
+  int? get size => int.tryParse(detail['size']?.toString() ?? '');
+
+  /// 真实内容的大类：archive / media / document / program / unknown
+  String get looksKind => (detail['looks_kind'] as String?) ?? 'unknown';
 
   @override
   String toString() => 'EngineError($code): $note';
@@ -276,6 +299,7 @@ class EngineClient {
     throw EngineError(
       e['code'] as String? ?? 'UNKNOWN',
       e['note'] as String? ?? '',
+      (e['detail'] as Map?)?.cast<String, dynamic>(),
     );
   }
 

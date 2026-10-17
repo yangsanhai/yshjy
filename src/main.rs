@@ -383,6 +383,9 @@ fn do_list(targets: &[String], quiet: bool, json: bool) -> ExitCode {
                 );
                 if !quiet {
                     eprintln!("   （{e}）");
+                    if let Some(提示) = 文件类型提示(std::path::Path::new(t)) {
+                        eprintln!("   ℹ {提示}");
+                    }
                     eprintln!("{}", 文案().t("cli.rescue_hint", &[]));
                 }
                 if worst == code::OK {
@@ -647,6 +650,13 @@ fn do_extract(a: 解压参数) -> ExitCode {
             "{}",
             文案().t("cli.nothing_found", &[("targets", &targets.join(" "))])
         );
+        // 说清楚"每个输入到底是什么"—— 空文件夹 / 空文件 / 视频，都比一句
+        // "没找到能处理的东西"有用
+        for t in &targets {
+            if let Some(提示) = 文件类型提示(std::path::Path::new(t)) {
+                eprintln!("   ℹ {提示}");
+            }
+        }
         return ExitCode::from(code::USAGE);
     }
     if !quiet && !json && expanded.len() > 1 {
@@ -801,6 +811,11 @@ impl yshjy::event::EventSink for 终端出口 {
                 eprintln!("   ⚠ {} 没解开（{}）", path, result.as_str());
             }
             Event::Diagnostic { code, note, .. } => {
+                // 「走了慢路」是性能诊断，跟用户无关；只有排查问题时才要
+                // （想看就 --json 拿事件流，那里是完整的）
+                if matches!(code, yshjy::event::DiagnosticCode::SlowPath) {
+                    return;
+                }
                 self.清行();
                 eprintln!(
                     "{}",
@@ -895,6 +910,95 @@ fn 失败文案(code: yshjy::error::ErrorCode) -> String {
     文案().t(key, &[])
 }
 
+
+/// 文件类型 → 人话（CLI 版；与 `失败文案` 同一层，将来一起挪进语言包）
+fn 文件类型名(kind: &str) -> &'static str {
+    match kind {
+        "mp4" => "MP4 视频",
+        "mov" => "MOV 视频",
+        "mkv" => "MKV 视频",
+        "webm" => "WebM 视频",
+        "avi" => "AVI 视频",
+        "flv" => "FLV 视频",
+        "ts" => "MPEG-TS 视频流",
+        "png" => "PNG 图片",
+        "jpeg" => "JPEG 图片",
+        "gif" => "GIF 图片",
+        "webp" => "WebP 图片",
+        "bmp" => "BMP 图片",
+        "tiff" => "TIFF 图片",
+        "mp3" => "MP3 音频",
+        "flac" => "FLAC 音频",
+        "ogg" => "OGG 音频",
+        "wav" => "WAV 音频",
+        "pdf" => "PDF 文档",
+        "elf" => "Linux 可执行程序",
+        "exe" => "Windows 可执行程序",
+        "zip" => "ZIP 压缩包",
+        "7z" => "7z 压缩包",
+        "rar" => "RAR 压缩包",
+        "gzip" => "gzip 压缩流",
+        "xz" => "xz 压缩流",
+        "zstd" => "zstd 压缩流",
+        "bzip2" => "bzip2 压缩流",
+        "lz4" => "LZ4 压缩流",
+        "text" => "文本文件",
+        _ => "认不出的文件",
+    }
+}
+
+/// 失败时补一句「这个文件其实是……」
+///
+/// 为什么值得单独查一遍文件头：定位失败时用户最想知道的是
+/// "我给你的这个到底是啥"，而不是"不是压缩包"。尤其**名字与内容不符**时 ——
+/// 那正是伪装包的特征（`.mp4` 里其实是 ZIP），必须点出来。
+fn 文件类型提示(path: &std::path::Path) -> Option<String> {
+    use yshjy::probe;
+    if path.is_dir() {
+        return Some("这是一个文件夹 —— 里面没有能找到的压缩包".into());
+    }
+    // 空文件单独说：这是最常见的"下载失败"痕迹，比"认不出类型"有用得多
+    if let Ok(m) = std::fs::metadata(path)
+        && m.len() == 0
+    {
+        return Some("这是一个空文件（0 字节）—— 一般是下载失败留下的空壳，重新下一次吧".into());
+    }
+    let p = probe::probe_path(path).ok()?;
+    let 大小 = std::fs::metadata(path)
+        .map(|m| 人类可读(m.len()))
+        .unwrap_or_default();
+    let 类型 = 文件类型名(p.kind.as_str());
+    let 扩展名 = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    // 名字和内容对不上 —— 伪装包的典型特征，优先说这个
+    if !扩展名.is_empty()
+        && let Some(名类别) = probe::extension_category(&扩展名)
+    {
+        let 实类别 = p.kind.category();
+        if 名类别 != 实类别 {
+            let 名 = format!(".{扩展名}");
+            return Some(if 实类别 == "archive" {
+                format!("名字写的是{名}，内容其实是{类型}（{大小}）—— 这很可能就是伪装包，用 --rescue 再试一次")
+            } else if 实类别 == "program" {
+                format!("⚠ 名字写的是{名}，内容其实是{类型}（{大小}）—— 来路不明的程序别运行")
+            } else {
+                format!("名字写的是{名}，内容其实是{类型}（{大小}）—— 可能被改过名")
+            });
+        }
+    }
+    if p.kind == probe::FileKind::Unknown {
+        return Some(format!("认不出这是什么文件（{大小}）—— 可能被加密过，或者文件头坏了"));
+    }
+    if p.kind.is_executable() {
+        return Some(format!("⚠ 这个文件其实是{类型}（{大小}）—— 来路不明的程序别运行"));
+    }
+    Some(format!("这个文件看起来是：{类型}（{大小}）"))
+}
+
 /// 打印每个任务的结果
 fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
     for j in &report.jobs {
@@ -919,16 +1023,22 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
                 ]
             )
         );
-        if let Some(d) = &j.stats.dest {
+        // 失败时那个目录只是"准备落盘"时建的，里面是空的 —— 别让用户以为有东西
+        if !matches!(j.outcome, yshjy::error::Outcome::Failed(_))
+            && let Some(d) = &j.stats.dest
+        {
             println!("     📁 {}", d.display());
         }
         for (name, res) in j.stats.failed.iter().take(5) {
             println!("     ⚠ {name}（{}）", res.as_str());
         }
-        if matches!(j.outcome, yshjy::error::Outcome::Failed(_))
-            && let Some(note) = &j.note
-        {
-            println!("     ({note})");
+        if matches!(j.outcome, yshjy::error::Outcome::Failed(_)) {
+            if let Some(提示) = 文件类型提示(&j.input) {
+                println!("   ℹ {提示}");
+            }
+            if let Some(note) = &j.note {
+                println!("     ({note})");
+            }
         }
     }
 

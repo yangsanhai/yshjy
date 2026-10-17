@@ -30,6 +30,7 @@ class _HomePageState extends State<HomePage> {
   ExtractResult? _result;
   String? _errorCode;
   String? _errorNote;
+  EngineError? _error;
   final List<String> _notes = [];
 
   @override
@@ -141,7 +142,7 @@ class _HomePageState extends State<HomePage> {
         _phase = Phase.preview;
       });
     } on EngineError catch (e) {
-      _showError(e.code, e.note);
+      _showError(e.code, e.note, e);
     }
   }
 
@@ -161,17 +162,86 @@ class _HomePageState extends State<HomePage> {
         _phase = Phase.done;
       });
     } on EngineError catch (e) {
-      _showError(e.code, e.note);
+      _showError(e.code, e.note, e);
     }
   }
 
-  void _showError(String code, String note) {
+  void _showError(String code, String note, [EngineError? e]) {
     if (!mounted) return;
     setState(() {
       _phase = Phase.error;
       _errorCode = code;
       _errorNote = note;
+      _error = e;
     });
+  }
+
+  /// 文件类型 → 人话（与 CLI 同一张表；将来抽成语言包）
+  ///
+  /// ⚠ Dart 不支持非 ASCII 标识符，下面变量名一律英文。
+  String _kindName(String k) => switch (k) {
+        'mp4' => 'MP4 视频',
+        'mov' => 'MOV 视频',
+        'mkv' => 'MKV 视频',
+        'webm' => 'WebM 视频',
+        'avi' => 'AVI 视频',
+        'flv' => 'FLV 视频',
+        'ts' => 'MPEG-TS 视频流',
+        'png' => 'PNG 图片',
+        'jpeg' => 'JPEG 图片',
+        'gif' => 'GIF 图片',
+        'webp' => 'WebP 图片',
+        'bmp' => 'BMP 图片',
+        'tiff' => 'TIFF 图片',
+        'mp3' => 'MP3 音频',
+        'flac' => 'FLAC 音频',
+        'ogg' => 'OGG 音频',
+        'wav' => 'WAV 音频',
+        'pdf' => 'PDF 文档',
+        'elf' => 'Linux 可执行程序',
+        'exe' => 'Windows 可执行程序',
+        'zip' => 'ZIP 压缩包',
+        '7z' => '7z 压缩包',
+        'rar' => 'RAR 压缩包',
+        'gzip' => 'gzip 压缩流',
+        'xz' => 'xz 压缩流',
+        'zstd' => 'zstd 压缩流',
+        'bzip2' => 'bzip2 压缩流',
+        'lz4' => 'LZ4 压缩流',
+        'text' => '文本文件',
+        _ => '认不出的文件',
+      };
+
+  /// 失败时那句「这个文件其实是……」
+  ({String text, bool warn})? _typeHint() {
+    final e = _error;
+    if (e == null || e.detail.isEmpty) return null;
+    final size = e.size;
+    if (size != null && size == 0) {
+      return (
+        text: '这是一个空文件（0 字节）—— 一般是下载失败留下的空壳，重新下一次吧',
+        warn: false
+      );
+    }
+    final kind = _kindName(e.looksLike ?? 'unknown');
+    final sizeText = size == null ? '' : '，${_size(size)}';
+    if (e.extMismatch) {
+      final extName = '.${e.ext ?? ''}';
+      if (e.looksKind == 'archive') {
+        return (text: '名字写的是$extName，内容其实是$kind$sizeText —— 这很可能就是伪装包', warn: false);
+      }
+      if (e.looksKind == 'program') {
+        return (text: '⚠ 名字写的是$extName，内容其实是$kind$sizeText —— 来路不明的程序别运行', warn: true);
+      }
+      return (text: '名字写的是$extName，内容其实是$kind$sizeText —— 可能被改过名', warn: false);
+    }
+    if (e.looksKind == 'program') {
+      return (text: '⚠ 这其实是一个$kind$sizeText —— 来路不明的程序别运行', warn: true);
+    }
+    if ((e.looksLike ?? '') == 'unknown') {
+      return (text: '认不出这是什么文件$sizeText —— 可能被加密过，或者文件头坏了', warn: false);
+    }
+    return (text: '这个文件看起来是：$kind$sizeText', warn: false);
   }
 
   Future<void> _openFolder(String? dir) async {
@@ -578,6 +648,27 @@ class _HomePageState extends State<HomePage> {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            if (_typeHint() case final hint?) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: hint.warn
+                      ? cs.errorContainer.withValues(alpha: 0.35)
+                      : cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  hint.text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: hint.warn ? cs.error : null,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
             if ((_errorNote ?? '').isNotEmpty) ...[
               const SizedBox(height: 10),
               SelectableText(
