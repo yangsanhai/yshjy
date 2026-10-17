@@ -13,6 +13,8 @@ use std::process::ExitCode;
 
 /// 崩溃兜底（panic 时把现场写进 state 目录，并告诉用户怎么报障）
 mod crash;
+/// 契约服务（`--serve`）：给 GUI / 脚本用的 JSON 管道，见 docs/PROTOCOL.md
+mod serve;
 
 /// 退出码常量 —— **全部从引擎取**，外壳不许自己定数
 ///
@@ -118,6 +120,11 @@ fn main() -> ExitCode {
             .or_else(|| cfg.general.language.clone())
             .as_deref(),
     ));
+
+    // 契约服务：GUI / 脚本通过它驱动引擎（一行一个 JSON），见 docs/PROTOCOL.md
+    if argv.iter().any(|a| a == "--serve") {
+        return ExitCode::from(serve::运行());
+    }
 
     // 开发自检用：手动触发一次崩溃，验证「崩溃日志 + 用户提示」这条链路是通的。
     // 放在语言包初始化**之后**，所以它会走真实的多语言文案（而不是兜底那套中英双语）。
