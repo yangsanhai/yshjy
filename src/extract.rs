@@ -482,6 +482,15 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             break;
         }
 
+        // 读满校验（DESIGN §17.6 / AUDIT 3-12）：声明大小 vs 实际读出。
+        // 分卷拼错位时库可能「成功」返回但少读几字节 —— 不校验就是假成功。
+        let expected = file.size();
+        if read_err.is_none() && expected > 0 && written != expected {
+            read_err = Some(format!(
+                "条目声明 {expected} 字节，实际读出 {written} 字节 —— 分卷可能拼错位或数据被截断"
+            ));
+        }
+
         match read_err {
             Some(msg) => {
                 report.skipped.push((name.clone(), msg));

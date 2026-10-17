@@ -38,7 +38,7 @@ const ZIP64_EOCD_LEN: u64 = 56;
 /// ZIP64 定位器长度（恰好 20 字节 —— 这也是 unar 分块扫描要重叠 20 字节的原因）
 const ZIP64_LOC_LEN: u64 = 20;
 /// 默认尾部搜索窗口（1 MiB）
-pub const DEFAULT_WINDOW: u64 = 1 << 20;
+pub const DEFAULT_WINDOW: u64 = 16 << 20;
 
 /// ZIP 的定位结果
 #[derive(Debug, Clone)]
@@ -146,30 +146,71 @@ pub fn locate_with_window<R: Read + Seek>(
             .with("size", file_size));
     }
 
-    let win = window.min(file_size);
-    let win_start = file_size - win;
-    r.seek(SeekFrom::Start(win_start))
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek failed: {e}")))?;
-    let mut buf = vec![0u8; win as usize];
-    let got = read_full(r, &mut buf)?;
-    buf.truncate(got);
+    // ── 分块倒扫找 EOCD：64 KiB 一块，块间留 20 字节重叠 ──
+    //
+    // 以前是「一次读 window 字节」：尾部垃圾比窗口大就永远找不到，只能退化成
+    // 全文件扫描（8 GB 包要几十秒）。分块倒扫让内存占用恒定，窗口可以开大。
+    // 参考 xadmaster `XADZipParser.m:118-191`（64 KiB 块 + 20 B 重叠）。
+    const CHUNK: u64 = 64 * 1024;
+    const OVERLAP: u64 = 20;
 
-    let eocd_rel = find_eocd_backwards(&buf).ok_or_else(|| {
+    let limit = if window == 0 {
+        file_size
+    } else {
+        window.min(file_size)
+    };
+    // 最多往回扫到 floor（含）；用「位置」判断而不是累计字节数 ——
+    // 块间的 20 字节重叠会被重复计，用累加会提前 20 字节/块 收工（实测漏掉最后一个块）。
+    let floor = file_size.saturating_sub(limit);
+    let mut end = file_size;
+    let mut found: Option<u64> = None;
+
+    while end > floor {
+        let take = CHUNK.min(end - floor);
+        let start = end - take;
+        // 往前多读 OVERLAP：签名跨块时也能看见
+        let read_start = start.saturating_sub(OVERLAP);
+        let read_len = (end - read_start) as usize;
+        let mut buf = vec![0u8; read_len];
+        r.seek(SeekFrom::Start(read_start))
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek failed: {e}")))?;
+        let got = read_full(r, &mut buf)?;
+        buf.truncate(got);
+        if let Some(rel) = find_eocd_backwards(&buf) {
+            found = Some(read_start + rel as u64);
+            break;
+        }
+        if start == floor {
+            break;
+        }
+        end = start + OVERLAP; // 下一轮带上这块尾部
+    }
+
+    let eocd_abs = found.ok_or_else(|| {
         Error::new(ErrorCode::NotArchive)
             .with("reason", "no_eocd_in_window")
-            .with("window", win)
+            .with("window", limit)
             .context("尾部窗口内未见 PK05 06 签名（可能需要全文件扫描）")
     })?;
+
+    // 重新读 EOCD 前后一小段（ZIP64 定位器紧贴 EOCD 前 20 字节）
+    let win_start = eocd_abs.saturating_sub(64);
+    let ctx_len = ((file_size - win_start).min(64 + EOCD_LEN + 65535)) as usize;
+    let mut buf = vec![0u8; ctx_len];
+    r.seek(SeekFrom::Start(win_start))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek failed: {e}")))?;
+    let got = read_full(r, &mut buf)?;
+    buf.truncate(got);
+    let eocd_rel = (eocd_abs - win_start) as usize;
 
     // 至少要有完整的 22 字节 EOCD
     if eocd_rel + EOCD_LEN as usize > buf.len() {
         return Err(Error::new(ErrorCode::Truncated)
             .with("reason", "eocd_truncated")
-            .with("at", win_start + eocd_rel as u64));
+            .with("at", eocd_abs));
     }
 
     let eocd = &buf[eocd_rel..];
-    let eocd_abs = win_start + eocd_rel as u64;
     let comment_len = u16le(eocd, 20);
 
     // EOCD 之后的剩余（注释 + 可能的尾部垃圾）
