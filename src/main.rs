@@ -1219,7 +1219,10 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
             上色(&行, if matches!(j.outcome, Outcome::Success) { 绿 } else { 黄 })
         );
         if let Some(d) = &j.stats.dest {
-            println!("     📁 {}", d.display());
+            // 显示**绝对路径**：`.` 对用户等于没说
+            // （实测踩到：产物落在 ~ 里，用户看完输出还是找不到）
+            let abs = std::fs::canonicalize(d).unwrap_or_else(|_| d.clone());
+            println!("     📁 {}", abs.display());
         }
         for (name, res) in j.stats.failed.iter().take(5) {
             println!("     ⚠ {name}（{}）", res.as_str());
