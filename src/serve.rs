@@ -5,7 +5,7 @@
 //! 引擎怎么重构、界面怎么换，只要协议不动，两边可以各自升级。
 //!
 //! 命令**语义**在 [`yshjy::api`]（C ABI 也调同一份）；这里只管传输：
-//! 信封、线程、忙/取消、事件出队。
+//! 信封、线程、忙/取消、双向询问（`ASK_USER` ↔ `answer`）、单行跳过。
 //!
 //! # 线程模型
 //! ```text
@@ -24,6 +24,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use yshjy::api;
+use yshjy::ask::{self, AskGate};
 use yshjy::event::{ChannelSink, EventSink};
 use yshjy::progress::CancelToken;
 
@@ -32,6 +33,22 @@ use yshjy::progress::CancelToken;
 /// 真身在 `yshjy::api`（C ABI 也用它），这里只是给同 crate 的测试一个短名字。
 #[cfg(test)]
 const 协议版本: u64 = api::协议版本;
+
+/// 询问超时：用户不在 / 前端崩了 → 按「跳过」处理，任务不能永远吊着
+const 询问超时: Duration = Duration::from_secs(60);
+
+/// 正在跑的任务（含双向询问的闸门）
+struct 当前任务 {
+    取消: CancelToken,
+    门: Arc<AskGate>,
+    句柄: std::thread::JoinHandle<()>,
+}
+
+impl 当前任务 {
+    fn 还在跑(&self) -> bool {
+        !self.句柄.is_finished()
+    }
+}
 
 /// 运行服务，返回进程退出码
 pub fn 运行() -> u8 {
@@ -53,7 +70,7 @@ pub fn 运行() -> u8 {
 
     let (结果发, 结果收) = mpsc::channel::<Value>();
     let 事件 = ChannelSink::new(16_384);
-    let mut 当前: Option<(u64, CancelToken, std::thread::JoinHandle<()>)> = None;
+    let mut 当前: Option<当前任务> = None;
 
     let stdout = std::io::stdout();
     let mut 出 = stdout.lock();
@@ -77,17 +94,15 @@ pub fn 运行() -> u8 {
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
         // ④ 任务跑完了就把句柄放掉（否则一直显示"忙"）
-        if let Some((_, _, 句柄)) = &当前
-            && 句柄.is_finished()
-        {
+        if 当前.as_ref().is_some_and(|t| !t.还在跑()) {
             当前 = None;
         }
     }
 
     // 收尾：让还在跑的任务自己停下（最多等 3 秒，别把前端吊死）
-    if let Some((_, 取消, 句柄)) = 当前 {
-        取消.cancel_with("serve shutting down");
-        let _ = 句柄.join();
+    if let Some(t) = 当前 {
+        t.取消.cancel_with("serve shutting down");
+        let _ = t.句柄.join();
     }
     0
 }
@@ -103,7 +118,7 @@ fn 处理命令(
     出: &mut impl Write,
     事件: &Arc<ChannelSink>,
     结果发: &mpsc::Sender<Value>,
-    当前: &mut Option<(u64, CancelToken, std::thread::JoinHandle<()>)>,
+    当前: &mut Option<当前任务>,
 ) {
     let 值: Value = match serde_json::from_str(文本) {
         Ok(v) => v,
@@ -116,9 +131,15 @@ fn 处理命令(
     // 转成 String：下面要把它 move 进任务线程，借用 `值` 会活不过 'static
     let cmd = 值.get("cmd").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
-    // 一次只跑一个任务：并发解压同一个磁盘只会互相拖慢，且界面也只有一个进度面板
-    let 忙 = 当前.as_ref().is_some_and(|(_, _, h)| !h.is_finished());
-    if 忙 && !matches!(cmd.as_str(), "cancel" | "hello" | "report") {
+    // 一次只跑一个任务：并发解压同一个磁盘只会互相拖慢，且界面也只有一个进度面板。
+    // 例外：取消 / 握手 / 诊断 / 回答 / 跳过 —— 它们本来就要在"忙"的时候能用。
+    let 忙 = 当前.as_ref().is_some_and(|t| t.还在跑());
+    if 忙
+        && !matches!(
+            cmd.as_str(),
+            "cancel" | "hello" | "report" | "answer" | "skip"
+        )
+    {
         写行(
             出,
             &错误响应(id, "BUSY", "上一个任务还没结束：先发 cancel，或等它的结果"),
@@ -129,10 +150,32 @@ fn 处理命令(
     match cmd.as_str() {
         "hello" => 写行(出, &ok(id, api::hello())),
         "cancel" => {
-            if let Some((_, 取消, _)) = 当前 {
-                取消.cancel_with("api cancel");
+            if let Some(t) = 当前 {
+                t.取消.cancel_with("api cancel");
             }
             写行(出, &ok(id, json!({"cancelled": true})));
+        }
+        // 回答 ASK_USER（限额询问）：continue / skip / cancel
+        "answer" => {
+            let 值文本 = 值.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            match ask::解析答案(值文本) {
+                Some(答案) => {
+                    let 送到 = 当前.as_ref().map(|t| t.门.回答(答案)).unwrap_or(false);
+                    写行(出, &ok(id, json!({"answered": 送到, "value": 值文本})));
+                }
+                None => 写行(
+                    出,
+                    &错误响应(id, "BAD_PARAM", "value 只能是 continue / skip / cancel"),
+                ),
+            }
+        }
+        // 批量里跳过当前这一项，继续下一个（不是整批取消）
+        "skip" => {
+            let 有任务 = 当前.is_some();
+            if let Some(t) = 当前 {
+                t.取消.skip();
+            }
+            写行(出, &ok(id, json!({"skipped": 有任务})));
         }
         // 生成诊断包（报障用）：界面点一下就出 zip，不用教用户开终端
         "report" => {
@@ -151,11 +194,24 @@ fn 处理命令(
             let 发 = 结果发.clone();
             let 取消 = CancelToken::new();
             let 取消给任务 = 取消.clone();
+            // 询问闸门：任务线程 emit ASK_USER 后阻塞，主线程把 answer 送进来。
+            // **只有请求里明确 `ask:true` 才启用** —— 老前端不会处理 ASK_USER，
+            // 给它开闸门只会让任务白等 60 秒再跳过（宁可直接硬失败，行为可预期）。
+            let 门 = AskGate::new(事件.clone(), 询问超时);
+            let 门给任务 = if 参数
+                .get("ask")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                Some(门.clone())
+            } else {
+                None
+            };
             let 句柄 = std::thread::spawn(move || {
-                let 结果 = api::执行(&cmd, &参数, &事件, &取消给任务);
+                let 结果 = api::执行(&cmd, &参数, &事件, &取消给任务, 门给任务.as_ref());
                 let _ = 发.send(结果响应(id, 结果));
             });
-            *当前 = Some((id, 取消, 句柄));
+            *当前 = Some(当前任务 { 取消, 门, 句柄 });
         }
         other => 写行(
             出,
@@ -204,12 +260,22 @@ mod tests {
         assert_eq!(h["protocol"], 协议版本);
         assert_eq!(h["engine"], yshjy::VERSION);
         // PROTOCOL 表 / 前端能力判断都吃这个数组：漏一项就等于"功能不存在"
-        for c in ["hello", "cancel", "report", "scan", "list", "extract", "pack", "batch"] {
+        for c in [
+            "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "answer",
+            "skip",
+        ] {
             assert!(
                 h["features"].as_array().unwrap().contains(&json!(c)),
                 "hello.features 少了 {c}"
             );
         }
+        assert!(
+            h["event_kinds"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("ASK_USER")),
+            "ASK_USER 必须出现在事件表里，否则外壳不会去处理它"
+        );
     }
 
     #[test]
@@ -238,5 +304,16 @@ mod tests {
         let 取消 = CancelToken::new();
         let e = api::列表(&json!({}), &事件, &取消).unwrap_err();
         assert_eq!(e["code"], "BAD_PARAM");
+    }
+
+    #[test]
+    fn 询问超时真的会到点_不把任务吊死() {
+        // 用一个 10 ms 的闸门验证"超时=跳过"；生产值 60 秒在 询问超时 常量里
+        let 事件: Arc<dyn EventSink> = ChannelSink::new(16);
+        let 门 = AskGate::new(事件, Duration::from_millis(10));
+        let t0 = std::time::Instant::now();
+        let 答案 = 门.问("possible_zip_bomb", 100, 10);
+        assert_eq!(答案, ask::答案::跳过);
+        assert!(t0.elapsed() < Duration::from_secs(1), "超时必须真的返回");
     }
 }

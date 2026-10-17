@@ -21,6 +21,11 @@
 - **嵌套包自动下钻（组 C）**：新增 `src/drill.rs`，`extract` 加 `drill:true`。
   只下一层、最多 8 个、跳过输入包自身（dest==源目录不会自我递归）、失败只记
   `nested[].outcome=failed`；协议实测 外层 mp4 → 内层 zip → 深层文件 全通
+- **双向协议（组 B）**：新增 `src/ask.rs` + `ASK_USER` 事件 + `answer` / `skip` 命令。
+  限额命中时引擎停下来问（60 秒不答=跳过，一次任务只问一次，迟到答案不污染下一次）；
+  `extract`/`batch` 只有声明 `ask:true` 才启用询问（老前端行为不变）；
+  `skip` 只跳当前一项、批量继续。取消/跳过在 ZIP/7z/单流循环里改为 `Cancelled` 语义
+  （不再误报 `DATA_LOST`）。
 
 ## [0.0.19] · 2026-10-17（版本号规则变更 + GUI 更新）
 

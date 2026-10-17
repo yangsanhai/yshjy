@@ -253,6 +253,23 @@ pub enum Event {
         /// 可用多少字节
         available: u64,
     },
+    /// 引擎需要用户做一个决定（限额超过时）
+    ///
+    /// 前端收到后弹窗，用户的选择用 `answer` 命令送回：
+    /// `{"cmd":"answer","value":"continue|skip|cancel"}`。
+    /// **超时（默认 60 秒）按「跳过」处理** —— 用户不在时任务不能永远吊着。
+    AskUser {
+        /// 任务号（0 = 引擎未指定；批次里就是当前正在跑的那个）
+        job: u64,
+        /// 询问号（answer 里带回；现在一次任务只问一次，保留以便将来多问）
+        id: u64,
+        /// 原因码：`possible_zip_bomb` / `extract_size_limit_exceeded`
+        reason: String,
+        /// 已经写出多少字节
+        written: u64,
+        /// 触发的上限
+        limit: u64,
+    },
     /// 诊断提醒（不打断流程）
     Diagnostic {
         /// 任务号
@@ -281,6 +298,7 @@ impl Event {
             | Event::PasswordNeeded { job, .. }
             | Event::PasswordTry { job, .. }
             | Event::SpaceShortage { job, .. }
+            | Event::AskUser { job, .. }
             | Event::Diagnostic { job, .. } => *job,
         }
     }
@@ -309,6 +327,7 @@ impl Event {
             Event::PasswordNeeded { .. } => "PASSWORD_NEEDED",
             Event::PasswordTry { .. } => "PASSWORD_TRY",
             Event::SpaceShortage { .. } => "SPACE_SHORTAGE",
+            Event::AskUser { .. } => "ASK_USER",
             Event::Diagnostic { .. } => "DIAGNOSTIC",
         }
     }

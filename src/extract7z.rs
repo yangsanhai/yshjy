@@ -407,6 +407,14 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                     Ok(0) => break,
                     Ok(n) => {
                         if let Err(e) = budget.record(n as u64) {
+                            // 跳过 / 取消：按取消收尾（不是"数据坏了"）
+                            if e.is_cancelled() {
+                                drop(out);
+                                let _ = std::fs::remove_file(&out_path);
+                                report.cancelled = true;
+                                ctx.entry_done(idx, &name, ItemResult::Skipped, 0);
+                                return Ok(false);
+                            }
                             report.budget_hit = true;
                             report
                                 .skipped

@@ -15,6 +15,7 @@
 #![warn(missing_docs)]
 
 pub mod api;
+pub mod ask;
 pub mod batch;
 pub mod config;
 pub mod cover_extract;
