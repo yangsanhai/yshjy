@@ -1,30 +1,16 @@
-// This is a basic Flutter widget test.
+// 冒烟测试：外壳能构建出来、五个导航项都在
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+// 不真的启动引擎（测试环境没有 yshjy 可执行文件），只看界面骨架。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:yshjy_gui/main.dart';
+import 'package:yshjy_gui/app_shell.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('导航栏有五个入口', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AppShell(bootstrapEngine: false)));
     await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    for (final label in ['解压', '打包', '历史', '设置', '关于']) {
+      expect(find.text(label), findsWidgets, reason: '缺少导航项 $label');
+    }
   });
 }
