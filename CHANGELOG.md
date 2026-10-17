@@ -6,6 +6,17 @@
 
 **主题：把「自动试密码」的边界说清楚、钉死。**
 
+### 修复 — GUI 双引擎竞态（随界面更新一起做）
+
+- `EngineClient.start()` 用 `if (_started) return` 挡重复启动，但 `await Process.start`
+  挂起期间 `_started` 还是 false → 并发调用各起一个引擎。实测界面启动后**两个**
+  `yshjy --serve` 同时存在、各持一条管道（违背「引擎单例」设计，双份内存 + 双份状态写者）
+- 改为缓存启动 Future：`start() => _starting ??= _doStart()`；启动失败清缓存允许重试；
+  `_onClosed` 里一并重置（否则拿到已完成的旧 Future，永远重起不了）
+- 实测：修复后 GUI 1 个 + 引擎 1 个，状态栏 `● 就绪 · 引擎 0.9.0`
+- 流程坑（记在 GUI-PLAN D11）：`flutter build linux --release` 会**清掉** bundle 里
+  手工放的引擎，必须「先 build 再 cp 引擎」，否则启动就是「引擎未就绪」
+
 ### 新增 — 第 19 批：缺分卷检测（P3）+ 智能解压规则上屏（P2）
 
 - **`MissingVolume` 以前是个死错误码**：定义了、有语言包键，但**从来没被抛出过**。
