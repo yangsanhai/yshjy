@@ -48,6 +48,76 @@ static gboolean on_window_state_changed(GtkWidget* widget,
   return FALSE;
 }
 
+// ── 窗口尺寸记忆（P10）：关掉再开，别每次都从屏幕的 45% 重新算 ──
+typedef struct {
+  int w;
+  int h;
+  gboolean maximized;
+} WindowSizeState;
+
+static gchar* window_state_dir(void) {
+  const gchar* xdg = g_getenv("XDG_STATE_HOME");
+  if (xdg != NULL && *xdg != '\0') {
+    return g_strdup_printf("%s/yshjy", xdg);
+  }
+  const gchar* home = g_getenv("HOME");
+  return g_strdup_printf("%s/.local/state/yshjy", home != NULL ? home : ".");
+}
+
+static gboolean load_window_size(WindowSizeState* st) {
+  gchar* dir = window_state_dir();
+  gchar* path = g_build_filename(dir, "gui-window.txt", NULL);
+  gchar* text = NULL;
+  gboolean ok = FALSE;
+  if (g_file_get_contents(path, &text, NULL, NULL)) {
+    int w = 0, h = 0, m = 0;
+    // 太小/太大的值一律不认（换过屏幕、文件被改坏都走默认比例）
+    if (sscanf(text, "%d %d %d", &w, &h, &m) >= 2 && w >= 420 && h >= 320) {
+      st->w = w;
+      st->h = h;
+      st->maximized = (m != 0);
+      ok = TRUE;
+    }
+    g_free(text);
+  }
+  g_free(path);
+  g_free(dir);
+  return ok;
+}
+
+static gboolean on_configure(GtkWidget* widget, GdkEventConfigure* event,
+                             gpointer data) {
+  WindowSizeState* st = (WindowSizeState*)data;
+  // 只记「非最大化」尺寸：最大化时 configure 给的是整块屏幕
+  if (!gtk_window_is_maximized(GTK_WINDOW(widget))) {
+    st->w = event->width;
+    st->h = event->height;
+  }
+  return FALSE;
+}
+
+static gboolean on_state_track(GtkWidget* widget, GdkEventWindowState* event,
+                               gpointer data) {
+  (void)widget;
+  WindowSizeState* st = (WindowSizeState*)data;
+  st->maximized = (event->new_window_state & GDK_WINDOW_STATE_MAXIMIZED) != 0;
+  return FALSE;
+}
+
+static void on_destroy_save_size(GtkWidget* widget, gpointer data) {
+  (void)widget;
+  WindowSizeState* st = (WindowSizeState*)data;
+  gchar* dir = window_state_dir();
+  g_mkdir_with_parents(dir, 0700);
+  gchar* path = g_build_filename(dir, "gui-window.txt", NULL);
+  gchar* text = g_strdup_printf("%d %d %d\n", st->w, st->h, st->maximized ? 1 : 0);
+  g_file_set_contents(path, text, -1, NULL);
+  g_free(text);
+  g_free(path);
+  g_free(dir);
+  g_free(st);
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -133,9 +203,27 @@ static void my_application_activate(GApplication* application) {
 
   int win_w = CLAMP((int)(work.width * 0.45), min_w, max_w);
   int win_h = CLAMP((int)(work.height * 0.66), min_h, max_h);
+
+  // 上次关窗时的尺寸（P10）；换屏/改分辨率后 clamp 回当前工作区
+  WindowSizeState* size_state = g_new0(WindowSizeState, 1);
+  size_state->w = win_w;
+  size_state->h = win_h;
+  if (load_window_size(size_state)) {
+    win_w = CLAMP(size_state->w, min_w, (int)(work.width * 0.98));
+    win_h = CLAMP(size_state->h, min_h, (int)(work.height * 0.98));
+    size_state->w = win_w;
+    size_state->h = win_h;
+  }
   gtk_window_set_default_size(window, win_w, win_h);
   // 用户手动拖小时也别小到布局散架
   gtk_widget_set_size_request(GTK_WIDGET(window), min_w, min_h);
+
+  g_signal_connect(window, "configure-event", G_CALLBACK(on_configure), size_state);
+  g_signal_connect(window, "window-state-event", G_CALLBACK(on_state_track), size_state);
+  g_signal_connect(window, "destroy", G_CALLBACK(on_destroy_save_size), size_state);
+  if (size_state->maximized) {
+    gtk_window_maximize(window);
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
