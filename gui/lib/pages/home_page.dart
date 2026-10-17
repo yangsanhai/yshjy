@@ -84,6 +84,9 @@ class _HomePageState extends State<HomePage> {
   /// 自动试密码的进度（引擎 PASSWORD_TRY 事件）
   int _pwTry = 0;
   int _pwTotal = 0;
+  /// 全文件扫描进度（引擎 SCAN_PROGRESS 事件）
+  int _scanDone = 0;
+  int _scanTotal = 0;
   /// 密码本里的常用解压码（点一下填入）
   List<String> _recentPw = [];
   final List<String> _notes = [];
@@ -129,6 +132,15 @@ class _HomePageState extends State<HomePage> {
         }
       case 'STAGE_STARTED':
         setState(() => _stage = (e.data['stage'] as String?) ?? '');
+      case 'SCAN_PROGRESS':
+        final b = e.data['bytes'];
+        if (b is List && b.length == 2) {
+          setState(() {
+            _scanDone = (b[0] as num?)?.toInt() ?? 0;
+            _scanTotal = (b[1] as num?)?.toInt() ?? 0;
+            _stage = 'LOCATE';
+          });
+        }
       case 'EXTRACT_PROGRESS':
         final p = e.progress;
         setState(() {
@@ -1054,7 +1066,9 @@ class _HomePageState extends State<HomePage> {
   Widget _progressView() {
     final p = _progress;
     final cs = Theme.of(context).colorScheme;
-    final frac = p?.fraction;
+    // 扫描阶段没有 _progress：用 SCAN_PROGRESS 的两个数字画进度条（D1）
+    final frac = p?.fraction ??
+        (_scanTotal > 0 ? (_scanDone / _scanTotal).clamp(0.0, 1.0) : null);
     return Center(
       key: const ValueKey('extract'),
       child: ConstrainedBox(
@@ -1096,6 +1110,14 @@ class _HomePageState extends State<HomePage> {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   '🔑 正在试第 $_pwTry/$_pwTotal 个解压码…',
+                  style: TextStyle(fontSize: 12, color: cs.primary),
+                ),
+              ),
+            if (_stage == 'LOCATE' && _scanTotal > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '🔍 正在扫大文件：${_size(_scanDone)} / ${_size(_scanTotal)}',
                   style: TextStyle(fontSize: 12, color: cs.primary),
                 ),
               ),

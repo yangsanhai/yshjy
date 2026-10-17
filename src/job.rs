@@ -259,8 +259,26 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
 
     // 兜底：包藏在文件中间 → 全文件扫描（慢路，要告诉用户）
     ctx.diagnostic(DiagnosticCode::SlowPath, "locate failed; scanning whole file");
-    let hits = crate::scan::scan_whole_file(&mut f, size, &crate::scan::ScanOptions::strict())
-        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("scan: {e}")))?;
+    // 扫描进度按 500ms 节流（8 GB 约 8000 块，全推会把管道刷爆）
+    let mut 上次 = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(1))
+        .unwrap_or_else(std::time::Instant::now);
+    let hits = crate::scan::scan_whole_file_with_progress(
+        &mut f,
+        size,
+        &crate::scan::ScanOptions::strict(),
+        |done, total| {
+            if 上次.elapsed() >= std::time::Duration::from_millis(500) {
+                上次 = std::time::Instant::now();
+                ctx.emit(&crate::event::Event::ScanProgress {
+                    job: ctx.job,
+                    files: None,
+                    bytes: Some((done, total)),
+                });
+            }
+        },
+    )
+    .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("scan: {e}")))?;
     if hits.is_empty() {
         return Err(Error::new(ErrorCode::NotArchive)
             .with("path", path.display().to_string())

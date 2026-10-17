@@ -207,6 +207,21 @@ pub fn scan_whole_file<R: Read + Seek>(
     file_size: u64,
     opts: &ScanOptions,
 ) -> Result<Vec<ScanHit>> {
+    scan_whole_file_with_progress(r, file_size, opts, |_, _| {})
+}
+
+/// 带进度的全文件扫描（D1：8 GB 包识别时界面不能只是转圈）
+///
+/// 回调参数是 `(已扫字节, 总字节)`，每块一次；调用方自己决定怎么节流/上报。
+pub fn scan_whole_file_with_progress<R: Read + Seek, F>(
+    r: &mut R,
+    file_size: u64,
+    opts: &ScanOptions,
+    mut on_progress: F,
+) -> Result<Vec<ScanHit>>
+where
+    F: FnMut(u64, u64),
+{
     let limit = match opts.max_scan_bytes {
         Some(n) => n.min(file_size),
         None => file_size,
@@ -294,6 +309,8 @@ pub fn scan_whole_file<R: Read + Seek>(
             buf.clone()
         };
         read_pos += n as u64;
+        // 每块报一次进度（分块通常 1 MiB，8 GB 约 8000 次；外壳按时间节流）
+        on_progress(read_pos.min(limit), limit);
         if n < want {
             break;
         }
