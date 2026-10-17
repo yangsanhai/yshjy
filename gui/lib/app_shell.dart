@@ -42,6 +42,47 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (widget.bootstrapEngine) _bootstrap();
+    // 首帧之后再弹引导（initState 里直接 showDialog 会拿不到 Navigator）
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboarding());
+  }
+
+  /// 第一次打开时的三步引导（只弹一次；标记写在 state 目录）
+  Future<void> _maybeOnboarding() async {
+    try {
+      final env = Platform.environment;
+      final base = env['XDG_STATE_HOME'] ?? '${env['HOME']}/.local/state';
+      final dir = Directory('$base/yshjy');
+      final flag = File('${dir.path}/onboarding_done');
+      if (await flag.exists()) return;
+      await dir.create(recursive: true);
+      await flag.writeAsString('1');
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('三步就会了'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('1️⃣ 把「.mp4 / .png」拖进这个窗口 —— 不用管它真是什么'),
+              SizedBox(height: 10),
+              Text('2️⃣ 自动认格式、自动找解压码；认不出也会试着扫一遍'),
+              SizedBox(height: 10),
+              Text('3️⃣ 解压完会告诉你该点哪个文件启动'),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      // 引导失败不影响主流程
+    }
   }
 
   @override
