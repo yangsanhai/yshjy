@@ -17,6 +17,13 @@
 - **文档**：新增 `docs/AUDIT-2026-10-17.md`（设计与实现对照审查）、
   `DESIGN.md` 增补第十七章（密码编码 / 输出后处理 / 名字解析 / 加密强度 / 封面分离 /
   大包体验 / 安全限额 / 打包开关现状）、`GUI-PLAN.md` 增补第 20 批任务清单
+- **引擎开始产库（全平台前置）**：`Cargo.toml` 增加
+  `[lib] crate-type = ["rlib", "cdylib", "staticlib"]`，实测产出
+  `libyshjy.so`（659 KB）、`libyshjy.a`（41 MB）、`libyshjy.rlib`（8.8 MB）；
+  bin 与 `--version` 不受影响。iOS 只能走静态库 FFI（系统禁止 fork/exec 子进程）
+- **设计新增第十八章「全平台架构」**：用户 2026-10-17 明确「全平台都要做」
+  （Linux / Windows / macOS / Android / iOS）。现状 GUI 死绑 `Process.start`，
+  iOS 跑不了 → 需抽 `EngineTransport` 接口 + 引擎产库（产库这步已做）
 
 ## [0.9.0] · 2026-10-17（定稿，待发布）
 
