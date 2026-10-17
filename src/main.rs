@@ -67,6 +67,18 @@ const 带值的选项: &[&str] = &[
     "--config", "--layout", "--cover", "--password-file", "--log",
 ];
 
+/// 不带值的选项 —— 用来拦住拼错的参数
+///
+/// 以前 `-extract-cover`（少打一个横线）会被静默忽略 → 默认解压照跑，
+/// 用户以为在提封面，实际解了整个 5 GB 包（2026-10-17 实测踩到）。
+const 无值选项: &[&str] = &[
+    "--list", "-l", "--rescue", "--extract-cover", "--json", "--quiet", "-q",
+    "--help", "-h", "--version", "-V", "--show-config", "--report", "--no-paths",
+    "--force", "-f", "--no-smart-dir", "--no-checksum", "--no-readme", "--tail",
+    "--serve", "--debug-crash", "--no-auto-password", "--no-color", "--keep",
+    "-v", "-vv", "--verbose",
+];
+
 /// 进程级文案仓库
 ///
 /// CLI 一次进程只跑一种语言，用单例最省事。**它放在外壳里** —— 引擎侧保持无全局状态，
@@ -359,15 +371,42 @@ fn main() -> ExitCode {
     // 收集"非选项参数"（文件名 / 目录 / 子命令）
     let mut positional: Vec<String> = Vec::new();
     let mut i = 1;
+    let mut 选项结束 = false;
     while i < argv.len() {
         let a = &argv[i];
+        // `--` 之后一律当文件名（名字本身以 - 开头的文件也能解）
+        if 选项结束 {
+            positional.push(a.clone());
+            i += 1;
+            continue;
+        }
+        if a == "--" {
+            选项结束 = true;
+            i += 1;
+            continue;
+        }
         if 带值的选项.contains(&a.as_str()) {
             i += 2; // 跳过它的值
             continue;
         }
-        if a.starts_with('-') {
-            i += 1;
-            continue;
+        if a.starts_with('-') && a.len() > 1 {
+            if 无值选项.contains(&a.as_str()) {
+                i += 1;
+                continue;
+            }
+            // 不认识的选项：**必须报错**，绝不静默忽略。
+            // 静默忽略的后果是「拼错参数 → 默认解压照跑」，用户完全察觉不到。
+            let 猜 = format!("--{}", a.trim_start_matches('-'));
+            let 提示 = if 无值选项.contains(&猜.as_str()) || 带值的选项.contains(&猜.as_str())
+            {
+                format!("（你是不是想写 {猜}？）")
+            } else {
+                // 再试一次「少打横线」以外的常见错：`--lst` 之类就只提示看帮助
+                String::new()
+            };
+            eprintln!("❌ 不认识的选项 {a}{提示}");
+            eprintln!("   看帮助：yshjy --help");
+            return ExitCode::from(code::USAGE);
         }
         positional.push(a.clone());
         i += 1;
