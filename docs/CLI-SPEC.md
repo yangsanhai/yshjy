@@ -137,7 +137,7 @@ yshjy --select required 包.mp4       # 只要必需的：跳过目录与 .DS_St
 > Ctrl-C 接管（取消令牌 + 退出码 130）、`--lang`、`--show-config`、`--import-passwords`、
 > `--split`、`--extract-cover`、`--encoding`。
 >
-> 实测脚本：`~/.hermes/cache/scratch/cli_e_probe.py`（16 项断言，全过）。
+> 实测脚本：`tests/cli-e-probe.py`（16 项断言，全过）。
 
 ---
 

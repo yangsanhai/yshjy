@@ -29,7 +29,7 @@
        · 顺带修 D17：小包压缩比误报（64 MiB 起检）
     ✅ 组E CLI 扫尾（--config / --layout / --cover / --password-file / --no-auto-password /
        -v / -vv / --log / --no-color / --keep）
-       · 实测 16 项断言全过（cli_e_probe.py）；7 种语言包 --help 同步
+       · 实测 16 项断言全过（tests/cli-e-probe.py）；7 种语言包 --help 同步
        · --layout L5/L6 明确拒绝、L3/L4 报未实现；--keep 打印中间 ZIP 路径
 
 ## 第 20 批进度（0.9.20-c 目标）
