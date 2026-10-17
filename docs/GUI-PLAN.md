@@ -228,3 +228,5 @@
 | D8 | 19 批 | `JobOutcome` 不带 detail → 协议里失败原因是"裸码"，前端拿不到结构化字段 | 界面只能猜 | 19 批用"失败时重新 identify"绕过；根治要在批量结果里带 detail（记到 P3 收尾） |
 | D9 | 19 批 | probe 对分卷中间块必然返回"认不出" | 失败页误导 | **19 批已修**（缺卷时不显示类型卡） |
 | D6 | 18 批 | 拖入多个文件时若其中有目录，`_scan` 能处理（引擎展开），但界面提示没说明"展开" | 文案 | 第 22 批 P8 |
+| D10 | 20 批前 | **界面启动后同时存在两个 `yshjy --serve` 引擎进程**（实测各持一条管道）。根因：`EngineClient.start()` 里 `if (_started) return` 之后 `await Process.start` 挂起，并发调用在 `_started = true` 之前又进一次 | 双份内存 / 双份状态目录写者，违背「引擎单例」设计 | **已修**：缓存启动 Future（`_starting ??= _doStart()`），失败清缓存允许重试，`_onClosed` 里一并重置。验证：GUI 1 + 引擎 1 |
+| D11 | 20 批前 | **`flutter build linux --release` 会清掉 bundle 里手工放进去的引擎 `yshjy`** —— 编译完直接启动就是「引擎未就绪」 | 每次改界面后都会静默复现 | 流程坑（不改代码）：**先 build，再 `cp target/release/yshjy gui/build/linux/x64/release/bundle/`**；或跑 `scripts/install-gui.sh` |

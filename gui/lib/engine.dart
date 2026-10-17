@@ -207,6 +207,13 @@ class EngineClient {
   int _nextId = 1;
   bool _started = false;
 
+  /// 正在启动中的那次 `start()`。
+  ///
+  /// 为什么需要它：`await Process.start` 挂起期间，第二个调用看到的 `_started`
+  /// 还是 false，于是会**再起一个引擎进程**（实测界面启动后同时存在两个
+  /// `yshjy --serve`，各持一条管道）。缓存 Future 让并发调用共用同一次启动。
+  Future<void>? _starting;
+
   /// 引擎路径（按优先级查找）
   ///
   /// 1. 环境变量 `YSHJY_BIN`（开发时指到 target/release/yshjy）
@@ -225,19 +232,28 @@ class EngineClient {
 
   Stream<EngineEvent> get events => _events.stream;
 
-  Future<void> start() async {
+  /// 起引擎（幂等）。并发的多次调用共用同一个 Future —— 只会起一个进程；
+  /// 启动失败时清掉缓存，允许下次重试。
+  Future<void> start() => _starting ??= _doStart();
+
+  Future<void> _doStart() async {
     if (_started) return;
-    _proc = await Process.start(executable, ['--serve']);
-    _proc!.stdout
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen(_onLine, onDone: _onClosed);
-    // 引擎的 stderr 只有崩溃/调试信息，不打扰用户，但留着便于排查
-    _proc!.stderr
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen((l) => debugPrint('[engine] $l'));
-    _started = true;
+    try {
+      _proc = await Process.start(executable, ['--serve']);
+      _proc!.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(_onLine, onDone: _onClosed);
+      // 引擎的 stderr 只有崩溃/调试信息，不打扰用户，但留着便于排查
+      _proc!.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((l) => debugPrint('[engine] $l'));
+      _started = true;
+    } catch (_) {
+      _starting = null;
+      rethrow;
+    }
   }
 
   void _onLine(String line) {
@@ -270,6 +286,7 @@ class EngineClient {
     }
     _pending.clear();
     _started = false;
+    _starting = null; // 否则下次 start() 会拿到「已完成的旧 Future」，永远重起不了
   }
 
   /// 发一条命令，等它的响应。

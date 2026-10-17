@@ -13,17 +13,20 @@
 下一步 **第 20 批：P5 设置页能真改 + P4 密码管理**（密码本打码显示 / 试到第几个 /
 不保存本次密码），顺带补 D1（大文件识别没进度）。批次顺序见 docs/GUI-PLAN.md §5。
 
-⚠️ **GUI 产物还是旧版**：`gui/build/linux/x64/release/bundle/yshjy_gui` 时间戳 19:30，
-而源码 `home_page.dart` 已改到 19:53 —— 第 18/19 批的界面改动**不在现有 bundle 里**。
-动界面或给人演示前先 `cd gui && flutter build linux --release`。
+✅ **GUI 已更新并实机验证通过（2026-10-17 20:26）**：
+  · `lib/libapp.so` 20:26 —— 含第 18/19 批界面改动。**看时间要以 `lib/libapp.so` 为准**，
+    `yshjy_gui` 是启动器（只在 C++ 层变时才更新，现仍是 19:30），拿它当整体时间戳会误判"旧版"
+  · 引擎已拷进 bundle：`bundle/yshjy` = `target/release/yshjy`（0.9.0）
+  · 实机状态栏：`● 就绪  状态目录 ~/.local/state/yshjy  引擎 0.9.0`，无 ProcessException
+  · 进程：GUI 1 个 + 引擎 1 个（双引擎竞态已修，见 GUI-PLAN D10）
 
-⚠️ **bundle 里没有引擎**（这是「引擎未就绪 ProcessException」的真因，别再误判成崩溃）：
-`engine.dart` 找引擎的顺序是 ① `YSHJY_BIN` 环境变量 → ② **跟界面同目录的 `yshjy`**
-→ ③ PATH 里的 `yshjy`。本机三条全落空：bundle 只有 `yshjy_gui` / `data/` / `lib/`，
-系统里也没装 `yshjy`（`which yshjy` 空）。所以界面能画出来、但连不上引擎。
-修法（任选一）：`cp target/release/yshjy gui/build/linux/x64/release/bundle/` 再重开界面；
-或跑 `bash scripts/install-gui.sh`（装到 `~/.local/opt/yshjy` 并建菜单项，它会把
-`target/release/yshjy` 一起拷过去）。**别用「双击 bundle 里的 yshjy_gui」当发布验证**。
+⚠️ **每次 `flutter build` 都会清掉 bundle 里手工放的引擎**（D11）——顺序不能反：
+
+    cd gui && flutter build linux --release
+    cp ~/hermes/yshjy/target/release/yshjy gui/build/linux/x64/release/bundle/
+
+  反了就是「引擎未就绪 (ProcessException)」。引擎查找顺序：`YSHJY_BIN` →
+  同目录 `yshjy` → PATH（本机 PATH 里没装 yshjy，所以只能靠前两条）。
 
 > 最后更新：2026-10-17（GUI 第 19 批；重开对话先看「GUI 完整化计划」和「下一步」）
 > 项目路径：`/home/user/hermes/yshjy/`
