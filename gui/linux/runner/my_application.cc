@@ -151,6 +151,8 @@ static void my_application_activate(GApplication* application) {
     // 所以最终是 [最小化][最大化/还原][关闭]。
     GtkWidget* maximize_button =
         gtk_button_new_from_icon_name("window-maximize-symbolic", GTK_ICON_SIZE_MENU);
+    // ⚠️ GTK3 新建的 widget 默认是 hidden，pack 进 header bar 也不会自动显示
+    gtk_widget_show(maximize_button);
     gtk_widget_set_valign(maximize_button, GTK_ALIGN_CENTER);
     gtk_button_set_relief(GTK_BUTTON(maximize_button), GTK_RELIEF_NONE);
     gtk_widget_set_tooltip_text(maximize_button, "最大化 / 还原");
@@ -162,6 +164,7 @@ static void my_application_activate(GApplication* application) {
 
     GtkWidget* minimize_button =
         gtk_button_new_from_icon_name("window-minimize-symbolic", GTK_ICON_SIZE_MENU);
+    gtk_widget_show(minimize_button);
     gtk_widget_set_valign(minimize_button, GTK_ALIGN_CENTER);
     gtk_button_set_relief(GTK_BUTTON(minimize_button), GTK_RELIEF_NONE);
     gtk_widget_set_tooltip_text(minimize_button, "最小化");
