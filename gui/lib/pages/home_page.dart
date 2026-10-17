@@ -886,23 +886,22 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.add),
                 label: const Text('选择文件'),
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
                 ),
               ),
-              OutlinedButton.icon(
+              const SizedBox(width: 8),
+              // 次入口弱化成文字按钮（调研 07:921-923：第一屏只该有一个最强入口）
+              TextButton.icon(
                 onPressed: _pickFolder,
-                icon: const Icon(Icons.folder_open_outlined, size: 18),
-                label: const Text('选文件夹'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                ),
+                icon: const Icon(Icons.folder_open_outlined, size: 16),
+                label: const Text('选整个文件夹', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
           const SizedBox(height: 24),
           Text(
-            '支持 ZIP / 7z / RAR / TAR / gzip / xz / zstd / bzip2 / lz4 / brotli',
-            style: Theme.of(context).textTheme.bodySmall,
+            '认不出的格式也能试 —— 拖进来就行',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
         ],
       ),
@@ -1223,6 +1222,27 @@ class _HomePageState extends State<HomePage> {
                   icon: const Icon(Icons.folder_open),
                   label: const Text('打开目录'),
                 ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  // 分享文案（调研 07:952-954）：资源圈的真实动作是「把方法告诉对方」
+                  final name = (_file ?? '').split('/').last;
+                  final pw = (_password == null || _password!.isEmpty)
+                      ? ''
+                      : '解压码：$_password\n';
+                  Clipboard.setData(ClipboardData(
+                    text: '「$name」不是视频/图片，是伪装包。\n'
+                        '用「杨三海解压」（yshjy）打开它，拖进去就行。\n'
+                        '$pw'
+                        '（普通播放器打不开是正常的）',
+                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已复制，直接发给对方就行')),
+                  );
+                },
+                icon: const Icon(Icons.copy_all_outlined, size: 18),
+                label: const Text('复制解压方法'),
+              ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () => setState(() {
