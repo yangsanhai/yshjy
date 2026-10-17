@@ -410,7 +410,7 @@
    - ✅ **界面已完成（21 批组 A-界面）**：`home_page.dart` 清单上方两行勾选
      （`want-cover` / `want-extract`）；只勾封面 → 按钮变「只提取封面」、完成卡说
      「封面已提取出来」；只勾内容 → 传 `cover:false`；都不勾 → 按钮置灰。
-     协议实测 17 项全过（`~/.hermes/cache/scratch/yshjy_probe_plain.py`）。
+     协议实测 17 项全过（`tests/protocol-probe-plain.py`）。
 2. 打包模式：普通压缩（默认 `.zip`）/ 伪装成视频图片（详见 §5.2 ②）
    - ✅ **引擎（21 批组 A-界面）**：`pack` 新增 `mode:"plain"` → `pack::build_plain`
      （不写封面、不写 pad），产物开头就是 `PK\x03\x04`；不传 `mode` 仍是伪装（老前端不变）。
@@ -449,7 +449,7 @@
    - ✅ **已完成（21 批组 E，0.9.21-c）**：9 个参数全部接线并实测 16 项断言；
      7 种语言包 `--help` 同步；`--layout L5/L6` 明确拒绝、L3/L4 报未实现；
      `--keep` 保留并打印中间 ZIP。见 `docs/CLI-SPEC.md` §3.6 与
-     `~/.hermes/cache/scratch/cli_e_probe.py`。
+     `tests/cli-e-probe.py`。
 
 > 顺序建议（按上面的排批原则重排；**2026-10-17 用户指定：平台地基提到第一项**）：
 > **① 平台地基**（D：`EngineTransport` + 稳定 C ABI + 4 处硬编码路径）——单独一轮，先做
