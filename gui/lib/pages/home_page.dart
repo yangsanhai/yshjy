@@ -62,6 +62,9 @@ class _HomePageState extends State<HomePage> {
   String _stage = '';
   ExtractResult? _result;
   String? _errorCode;
+
+  /// 引擎给的结构化细节（如缺分卷的 missing/found）—— 失败卡据此说"缺哪一块"
+  Map<String, dynamic>? _errorDetail;
   String? _errorNote;
   EngineError? _error;
   final TextEditingController _pwCtrl = TextEditingController();
@@ -152,6 +155,10 @@ class _HomePageState extends State<HomePage> {
   /// 错误码 → 人话（**这就是"引擎只给码、壳查文案"的落地**）
   String _errText(String code) => switch (code) {
         'NOT_ARCHIVE' => '这里面没找到压缩包 —— 可能不是伪装包，或者文件下坏了',
+        'MISSING_VOLUME' => '分卷不齐 —— 缺了一块',
+        'TRUNCATED' => '文件没下完（数据不完整）',
+        'DATA_LOST' => '文件坏了，只能救回一部分',
+        'ENCRYPTED_UNBREAKABLE' => '这个包加密了，而且没法试出解压码',
         'PASSWORD_REQUIRED' => '这个包需要解压码',
         'PASSWORD_WRONG' => '解压码不对',
         'PERMISSION_DENIED' => '没有权限读写这个位置（换个目录试试）',
@@ -359,6 +366,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _phase = Phase.error;
       _errorCode = code;
+      _errorDetail = e?.detail;
       _errorNote = note;
       _error = e;
     });
@@ -608,7 +616,16 @@ class _HomePageState extends State<HomePage> {
             TextButton(onPressed: _resetQueue, child: const Text('清空')),
           ],
         ),
-        const SizedBox(height: 8),
+        // P2 智能解压：规则在引擎里（Bandizip 三规则），但要让用户知道会发生什么
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            '会按包里的结构自动决定要不要多建一层文件夹：只有一个顶层目录就直接铺开，'
+            '一堆散文件才包一层（跟 Bandizip 的「智能解压」同一套规则）',
+            style: TextStyle(fontSize: 11, height: 1.5, color: cs.onSurfaceVariant),
+          ),
+        ),
+        const SizedBox(height: 0),
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
@@ -1146,6 +1163,8 @@ class _HomePageState extends State<HomePage> {
 
   Widget _errorView() {
     final cs = Theme.of(context).colorScheme;
+    // 分卷中间块本来就没有文件头，探测结论必然是"认不出" —— 说出来只会误导
+    final hint = _errorCode == 'MISSING_VOLUME' ? null : _typeHint();
     return Center(
       key: const ValueKey('error'),
       child: ConstrainedBox(
@@ -1160,7 +1179,7 @@ class _HomePageState extends State<HomePage> {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            if (_typeHint() case final hint?) ...[
+            if (hint != null) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1175,9 +1194,43 @@ class _HomePageState extends State<HomePage> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
-                    color: hint.warn ? cs.error : null,
+                    color: hint!.warn ? cs.error : null,
                     height: 1.5,
                   ),
+                ),
+              ),
+            ],
+            // 缺分卷是网盘资源最高频的失败原因 —— 直接说缺哪一块、怎么补救
+            if (_errorCode == 'MISSING_VOLUME') ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (_errorDetail?['missing'] as String?) != null
+                          ? '缺这一块：${_errorDetail!['missing']}'
+                          : '分卷不全',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.error,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      (_errorDetail?['found'] as String?) != null
+                          ? '已经找到 ${_errorDetail!['found']} 块。'
+                              '把缺的那几块一起下下来（网盘里通常是同一个文件夹），再拖进来。'
+                          : '把缺的那几块一起下下来，再拖进来。',
+                      style: const TextStyle(fontSize: 12, height: 1.5),
+                    ),
+                  ],
                 ),
               ),
             ],

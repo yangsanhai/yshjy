@@ -94,7 +94,51 @@ impl Target {
 // ───────────────────────────── 识别 ─────────────────────────────
 
 /// 认出这是什么（会发阶段事件）
+/// 识别归档，并且**先做缺卷自检**
+///
+/// 缺分卷是网盘资源最高频的失败原因（`refs/analysis/07-竞品界面调研.md` §12①），
+/// 而底层 `as_7z_volumes` 遇到断号只是"停下来"——继续解只会报 `Truncated/DataLost`，
+/// 用户看到"文件损坏"完全被误导。这里提前判死，并给出「缺哪一块 / 已找到几块」。
 pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
+    let t = identify_内(path, ctx)?;
+    let vols = match &t {
+        Target::SevenZ { volumes } => Some(volumes),
+        Target::ZipSplit { volumes } => Some(volumes),
+        _ => None,
+    };
+    if let Some(v) = vols {
+        if let Some(缺) = 缺卷信息(v) {
+            return Err(Error::new(ErrorCode::MissingVolume)
+                .with("missing", &缺)
+                .with("found", v.len().to_string()));
+        }
+    }
+    Ok(t)
+}
+
+/// 分卷组是否断在中途？返回缺失那一块的文件名
+///
+/// 判定：拿最后一块的名字，按同样位数把序号 +1 拼出来；
+/// **它不存在、但更靠后的块存在** → 中间断了一块（末尾缺块不算，那是没下完，走 Truncated）。
+pub fn 缺卷信息(vols: &[PathBuf]) -> Option<String> {
+    let 末块 = vols.last()?;
+    let name = 末块.file_name()?.to_string_lossy().to_string();
+    let (base, num, width) = split_volume_name(&name)?;
+    let dir = 末块.parent().unwrap_or_else(|| Path::new("."));
+    let 缺号 = num + 1;
+    let 缺 = dir.join(format!("{base}{缺号:0width$}"));
+    if 缺.exists() {
+        return None;
+    }
+    for j in (缺号 + 1)..=(缺号 + 200) {
+        if dir.join(format!("{base}{j:0width$}")).exists() {
+            return Some(缺.file_name()?.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+fn identify_内(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     ctx.stage_started(Stage::Locate);
     let t0 = Instant::now();
     let r = identify_inner(path, ctx);
