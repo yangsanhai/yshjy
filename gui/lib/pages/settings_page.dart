@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../theme_mode.dart';
+
 /// 设置页（可写）
 ///
 /// 只动 `[output]` 段的三项（输出目录 / 重名策略 / 原包处理）：
@@ -33,6 +35,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final _outDirCtrl = TextEditingController();
   String _conflict = 'rename';
   String _onDone = 'keep';
+  /// 主题：auto（跟随系统）/ light / dark
+  String _theme = 'auto';
   bool _loaded = false;
   bool _saving = false;
 
@@ -52,12 +56,14 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final f = File(_configPath);
       final text = await f.exists() ? await f.readAsString() : '';
-      final out = _parseOutput(text);
+      final out = _parseSection(text, 'output');
+      final gen = _parseSection(text, 'general');
       if (!mounted) return;
       setState(() {
         _outDirCtrl.text = out['dir'] ?? '';
         _conflict = out['conflict'] ?? 'rename';
         _onDone = out['on_done'] ?? 'keep';
+        _theme = gen['theme'] ?? 'auto';
         _loaded = true;
       });
     } catch (_) {
@@ -66,13 +72,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// 只解析 `[output]` 段（够用且不引 TOML 依赖）
-  Map<String, String> _parseOutput(String text) {
+  Map<String, String> _parseSection(String text, String section) {
     final out = <String, String>{};
     var inOutput = false;
     for (final line in text.split('\n')) {
       final t = line.trim();
       if (t.startsWith('[') && t.endsWith(']')) {
-        inOutput = t == '[output]';
+        inOutput = t == '[$section]';
         continue;
       }
       if (!inOutput || t.isEmpty || t.startsWith('#')) continue;
@@ -89,7 +95,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// 在原文里逐行更新 `[output]` 的三个键；段不存在就追加
-  String _upsertOutput(String text, Map<String, String> vals) {
+  String _upsertSection(String text, String section, Map<String, String> vals) {
     final lines = text.isEmpty ? <String>[] : text.split('\n');
     final result = <String>[];
     final seen = <String>{};
@@ -109,7 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final t = line.trim();
       if (t.startsWith('[') && t.endsWith(']')) {
         if (inOutput) flushMissing();
-        inOutput = t == '[output]';
+        inOutput = t == '[$section]';
         if (inOutput) sectionFound = true;
         result.add(line);
         continue;
@@ -128,7 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!sectionFound) {
       result
         ..add('')
-        ..add('[output]');
+        ..add('[$section]');
       for (final e in vals.entries) {
         result.add('${e.key} = "${e.value}"');
       }
@@ -141,13 +147,15 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final f = File(_configPath);
       final text = await f.exists() ? await f.readAsString() : '';
-      final updated = _upsertOutput(text, {
+      var updated = _upsertSection(text, 'output', {
         'dir': _outDirCtrl.text.trim(),
         'conflict': _conflict,
         'on_done': _onDone,
       });
+      updated = _upsertSection(updated, 'general', {'theme': _theme});
       await f.parent.create(recursive: true);
       await f.writeAsString(updated);
+      themeMode.value = parseThemeMode(_theme);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已保存，下次处理就生效（不用重启）')),
@@ -189,6 +197,22 @@ class _SettingsPageState extends State<SettingsPage> {
         Text(
           '改完点保存，下次处理就生效（不用重启）',
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 18),
+        _section('外观', cs),
+        DropdownButtonFormField<String>(
+          initialValue: _theme,
+          decoration: const InputDecoration(
+            labelText: '主题',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'auto', child: Text('跟随系统（推荐）')),
+            DropdownMenuItem(value: 'light', child: Text('浅色')),
+            DropdownMenuItem(value: 'dark', child: Text('深色')),
+          ],
+          onChanged: (v) => setState(() => _theme = v ?? 'auto'),
         ),
         const SizedBox(height: 18),
         _section('解压输出', cs),
