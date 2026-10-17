@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui' show AppExitResponse;
 
 import 'engine.dart';
-import 'history_store.dart';
+import 'platform_paths.dart';
 import 'pages/about_page.dart';
 import 'pages/home_page.dart';
 import 'pages/history_page.dart';
@@ -49,9 +49,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// 第一次打开时的三步引导（只弹一次；标记写在 state 目录）
   Future<void> _maybeOnboarding() async {
     try {
-      final env = Platform.environment;
-      final base = env['XDG_STATE_HOME'] ?? '${env['HOME']}/.local/state';
-      final dir = Directory('$base/yshjy');
+      final dir = Directory(stateDir);
       final flag = File('${dir.path}/onboarding_done');
       if (await flag.exists()) return;
       await dir.create(recursive: true);
@@ -238,9 +236,7 @@ class _StatusBar extends StatelessWidget {
           fontSize: 11,
           color: cs.onSurfaceVariant,
         );
-    final outDir = Platform.environment['HOME'] != null
-        ? '${Platform.environment['HOME']}/.local/state/yshjy'
-        : '';
+    final outDir = prettyPath(stateDir);
     return Container(
       height: 26,
       padding: const EdgeInsets.symmetric(horizontal: 12),

@@ -404,7 +404,9 @@
 例外：纯界面缺陷（按钮不显示、文案别扭）可以随时插，但**不能反过来先做界面再做引擎**。
 
 ### A. 用户验收提的两条（界面层；引擎部分按排批原则先做）
-1. 封面作为清单里可勾选的一行（详见 §5.2 ①，用户原话已记）
+1. 封面作为清单里可勾选的一行（详见 §5.2 ①）
+   - ✅ **引擎部分已完成（21 批组 D）**：`list` 结果带 `cover{size,kind,ext}`；
+     `extract` 支持 `extract:false`（只提封面，不建输出目录）。界面勾选行待做。
 2. 打包模式：普通压缩（默认 `.zip`）/ 伪装成视频图片（详见 §5.2 ②）
 
 ### B. 双向协议（**必须同组做，别拆开**）
@@ -417,6 +419,9 @@
 
 ### D. 平台地基（大块，单独一轮，别跟别的混）
 6. `EngineTransport` 抽象 + 稳定 C ABI（iOS 用）+ 4 处硬编码 state 路径改平台 API
+   - ✅ **已完成（21 批组 D）**：`gui/lib/transport/engine_transport.dart`、
+     `ffi/`（C ABI v1，见 `docs/FFI.md`）、`gui/lib/platform_paths.dart`（5 处路径 + 4 处 xdg-open）。
+     验收实证：ctypes 直调 `.so` 跑通 hello/list/extract/事件/取消。
 
 ### E. CLI 扫尾
 7. `--config` / `--keep` / `--no-color` / `-v` / `--log` / `--password-file` / `--no-auto-password` / `--layout`

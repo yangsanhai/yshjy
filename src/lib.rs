@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod api;
 pub mod batch;
 pub mod config;
 pub mod cover_extract;
@@ -32,6 +33,7 @@ pub mod layout;
 pub mod pack;
 pub mod pack_post;
 pub mod password_hint;
+pub mod paths;
 pub mod preview;
 pub mod probe;
 pub mod progress;

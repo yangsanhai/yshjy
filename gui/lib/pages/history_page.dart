@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../history_store.dart';
+import '../platform_paths.dart';
 
 /// 历史页：本机处理过的记录（纯本地 JSON，不联网）
 class HistoryPage extends StatefulWidget {
@@ -51,9 +50,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
   /// 打开某个解压目录（历史条目点一下就走这里）
   Future<void> _reveal(String path) async {
-    try {
-      await Process.run('xdg-open', [path]);
-    } catch (_) {}
+    await openDirectory(path);
   }
 
   @override
@@ -83,7 +80,7 @@ class _HistoryPageState extends State<HistoryPage> {
             ],
           ),
           Text(
-            '只存在本机（~/.local/state/yshjy/gui-history.json），不会上传',
+            '只存在本机（${prettyPath(stateDir)}/gui-history.json），不会上传',
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 12),

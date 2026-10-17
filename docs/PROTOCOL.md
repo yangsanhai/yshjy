@@ -39,7 +39,12 @@
 // 解压（进度通过事件推回来）
 {"id": 3, "cmd": "extract", "path": "/home/me/游戏.mp4",
  "dest": "/home/me/解压结果", "password": null,
- "select": null, "force": false}
+ "select": null, "force": false,
+ "cover": true, "extract": true}
+
+// 只提取伪装封面（不解压内容）：界面里"只勾封面"就是这条
+{"id": 9, "cmd": "extract", "path": "/home/me/游戏.mp4",
+ "cover": true, "extract": false}
 
 // 打包成伪装文件
 {"id": 4, "cmd": "pack", "inputs": ["/home/me/我的游戏"],
@@ -67,8 +72,8 @@
 | cmd | 参数 | 说明 |
 |---|---|---|
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
-| `list` | `path`, `password?` | 只列内容，不解压 |
-| `extract` | `path`, `dest?`, `password?`, `force?` | 解压单个目标；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
+| `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
+| `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
 | `pack` | `inputs[]`, `out`, `password?`, `tail?` | 打包成伪装文件 |
 | `cancel` | — | 取消当前任务 |
 | `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` |
@@ -222,8 +227,12 @@ JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryPar
 | 前端 | 怎么接 |
 |---|---|
 | Flutter（桌面 / Android） | `Process.start('yshjy', ['--serve'])`，按行读写；Android 端由平台通道调用同协议的本地实现 |
+| Flutter（iOS） | **不能起子进程**：走 `FfiTransport`（`EngineTransport` 的另一种实现）+ C ABI，见 `docs/FFI.md` |
 | Tauri / Electron | Rust 侧 spawn `--serve` 子进程，或用 `ipc::Channel` 转发 |
 | 脚本 / 网页 | `yshjy --serve < 命令.ndjson > 事件.ndjson`，或直接 `yshjy --json` 单次模式 |
+
+命令语义只有一份实现：`src/api.rs`。`--serve`（管道）和 C ABI（`ffi/`）都调它，
+改命令只改那一处 —— 两个传输不会各走各的。
 
 ## 什么时候该升版本
 

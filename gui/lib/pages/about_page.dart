@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../platform_paths.dart';
 
 /// 关于页：版本、边界、报障入口
 class AboutPage extends StatefulWidget {
@@ -37,7 +38,6 @@ class _AboutPageState extends State<AboutPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final home = Platform.environment['HOME'] ?? '.';
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -108,9 +108,9 @@ class _AboutPageState extends State<AboutPage> {
         const SizedBox(height: 10),
         OutlinedButton.icon(
           onPressed: () async {
-            final dir = '$home/.local/state/yshjy';
+            final dir = stateDir;
             await Directory(dir).create(recursive: true);
-            await Process.run('xdg-open', [dir]);
+            await openDirectory(dir);
           },
           icon: const Icon(Icons.folder_open, size: 18),
           label: const Text('打开状态目录（崩溃日志在这里）'),
