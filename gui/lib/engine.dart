@@ -329,6 +329,16 @@ class EngineClient {
     return ExtractResult.fromJson(_unwrap(r));
   }
 
+  /// 生成诊断包（报障用）。默认**路径脱敏**，方便直接贴到群里。
+  Future<Map<String, dynamic>> report({String? path}) async {
+    final r = await _call({
+      'cmd': 'report',
+      if (path != null) 'path': path,
+      'no_paths': true,
+    }, timeout: const Duration(minutes: 2));
+    return _unwrap(r);
+  }
+
   Future<void> cancel() async {
     try {
       await _call({'cmd': 'cancel'}, timeout: const Duration(seconds: 10));

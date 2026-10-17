@@ -114,7 +114,7 @@ fn 处理命令(
 
     // 一次只跑一个任务：并发解压同一个磁盘只会互相拖慢，且界面也只有一个进度面板
     let 忙 = 当前.as_ref().is_some_and(|(_, _, h)| !h.is_finished());
-    if 忙 && !matches!(cmd.as_str(), "cancel" | "hello") {
+    if 忙 && !matches!(cmd.as_str(), "cancel" | "hello" | "report") {
         写行(
             出,
             &错误响应(id, "BUSY", "上一个任务还没结束：先发 cancel，或等它的结果"),
@@ -129,6 +129,31 @@ fn 处理命令(
                 取消.cancel_with("api cancel");
             }
             写行(出, &ok(id, json!({"cancelled": true})));
+        }
+        // 生成诊断包（报障用）：界面点一下就出 zip，不用教用户开终端
+        "report" => {
+            let opts = yshjy::report::ReportOptions {
+                target: 值
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .map(PathBuf::from),
+                hide_paths: 值.get("no_paths").and_then(|v| v.as_bool()).unwrap_or(false),
+                out_dir: 值
+                    .get("out_dir")
+                    .and_then(|v| v.as_str())
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| {
+                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                    }),
+                argv: std::env::args().collect(),
+            };
+            let sink: Arc<dyn EventSink> = 事件.clone();
+            let ctx = UnpackCtx::new(1, sink);
+            match yshjy::report::生成(&opts, &ctx) {
+                Ok(p) => 写行(出, &ok(id, json!({"path": p.display().to_string()}))),
+                Err(e) => 写行(出, &json!({"id": id, "ok": false, "error": 错误对象(e)})),
+            }
+            return;
         }
         "list" | "extract" | "pack" => {
             let 参数 = 值.clone();
@@ -164,7 +189,7 @@ fn hello() -> Value {
     json!({
         "protocol": 协议版本,
         "engine": yshjy::VERSION,
-        "features": ["list", "extract", "pack", "cancel"],
+        "features": ["list", "extract", "pack", "cancel", "report"],
         "event_kinds": [
             "JOB_STARTED", "JOB_FINISHED", "STAGE_STARTED", "STAGE_FINISHED",
             "SCAN_PROGRESS", "PREVIEW_READY", "EXTRACT_PROGRESS", "ENTRY_FINISHED",
