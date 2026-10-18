@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **第 23.5 批已完成（v0.9.22-c，2026-10-18，工作室接手交付）——「成熟感最小集」**：
+> **第 23.5 批已完成（v0.9.23-c，2026-10-18，工作室接手交付）——「成熟感最小集」**：
 > ① **deb 现在带图形界面**：包含 `yshjy_gui` + `libapp.so`、应用菜单项「杨三海解压」、
 >    256×256 图标、`postinst/postrm` 刷新菜单缓存。装完直接点开，**不再需要手动跑
 >    `install-gui.sh`**。包体积 1.9MB → 9.5MB。
@@ -10,8 +10,8 @@
 >    `gui/pubspec.yaml` 版本；出包后自查 CLI / GUI / libapp.so / desktop / 图标 / 版本号。
 > **引擎 `src/` 一行未改**。回归：`flutter test test/notify_test.dart` 2/2；
 > `build-deb.sh` 自查 5 项通过；`dpkg -l` 实装状态正常。
-> ⚠️ **版本号仍是 0.9.22-c**（本批只补壳，未递进）；若要对外区隔，下一批改 `0.9.23-c`
-> （需同步 Cargo.toml + pubspec.yaml + CHANGELOG）。
+> ⚠️ **版本号已递进到 0.9.23-c**（23.5 批占用）；原第 23 批功能顺延为 **0.9.24-c**
+> （清单在本文档下方与 `docs/GUI-PLAN.md` §8）。
 > 工作室档案：`~/hermes/studio/projects/yshjy/`（PRD / ARCH / PLAN / ACCEPTANCE / RELEASE /
 > REVIEW / MATURITY / EXISTING）。
 >
