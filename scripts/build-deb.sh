@@ -119,7 +119,7 @@ Priority: optional
 Architecture: $ARCH
 Installed-Size: $INSTALLED_SIZE
 Depends: libc6 (>= 2.34), libgtk-3-0 | libgtk-3-0t64
-Recommends: libnotify-bin
+Recommends: libnotify-bin, desktop-file-utils
 Maintainer: yangsanhai <1848409757@qq.com>
 Homepage: https://github.com/yangsanhai/yshjy
 Description: 杨三海解压 —— 还原伪装成视频/图片的压缩包（含图形界面）
