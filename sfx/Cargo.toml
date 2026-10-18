@@ -1,0 +1,29 @@
+[package]
+name = "yshjy-sfx"
+version = "0.9.22"
+edition = "2021"
+license = "MIT"
+description = "杨三海解压 —— Windows 自解压存根（双击即解压）"
+publish = false
+
+# 这是一个**独立**的小 crate：只做一件事 —— 把自己尾部藏着的 ZIP 解出来。
+# 不进主 crate 的依赖树，主 crate 只 `include_bytes!` 它的产物。
+[[bin]]
+name = "yshjy-sfx"
+path = "src/main.rs"
+
+[dependencies]
+# ZIP 的 deflate 后端（纯 Rust 的 miniz_oxide → 能交叉编译到 Windows）
+flate2 = "1.1.10"
+# 和主引擎同一个 zip 实现，保证「引擎能解的包，存根也能解」
+zip = { version = "9.0.4", default-features = false, features = [
+    "deflate-flate2",
+    "aes-crypto",
+] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+panic = "abort"
+strip = true
+codegen-units = 1

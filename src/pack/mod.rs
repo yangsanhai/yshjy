@@ -472,6 +472,79 @@ pub fn sniff_head(path: &Path, n: usize) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
+// ───────────────────────── 自解压（SFX）─────────────────────────
+
+/// Windows 自解压存根（`scripts/build-sfx-stub.sh` 交叉编译生成）
+///
+/// 用 `include_bytes!` 编进主程序是**故意的**：用户生成自解压包时不需要外部程序、
+/// 不需要联网，也不依赖用户机器上装着 7-Zip。
+///
+/// 发布前必须先跑构建脚本；没有存根就直接编译失败 —— 不允许悄悄退化成普通 ZIP。
+pub const SFX_STUB: &[u8] = include_bytes!("../../assets/sfx/yshjy-sfx.exe");
+
+/// 自解压尾标：`"YSHSFX01" + zip_offset(u64 LE) + zip_size(u64 LE)` = 24 字节
+pub const SFX_MAGIC: &[u8; 8] = b"YSHSFX01";
+
+/// **生成 Windows 自解压 exe**：`[存根][ZIP 数据][尾标 24B]`
+///
+/// 和伪装包不是一回事：这里不追求「能播放/能打开」，exe 自己就是程序，
+/// 双击后由存根把尾部 ZIP 解到旁边的新文件夹。
+///
+/// 暂不支持的（明确报错，不静默降级）：解压码、分卷。
+pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    if opts.inputs.is_empty() {
+        return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
+    }
+    if opts.password.is_some() {
+        return Err(Error::new(ErrorCode::InvalidArgument)
+            .context("自解压包暂不支持解压码（存根不做密码输入）"));
+    }
+
+    let tmp = std::env::temp_dir().join(format!(
+        "yshjy_sfx_{}_{}.zip",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let zip_size = fs::metadata(&tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
+        .len();
+
+    let 存根大小 = SFX_STUB.len() as u64;
+    out.write_all(SFX_STUB)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write stub: {e}")))?;
+    let mut f = fs::File::open(&tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
+    std::io::copy(&mut f, out)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+    // 尾标：存根只认最后 24 字节，偏移是「ZIP 起点在 exe 里的绝对位置」
+    out.write_all(SFX_MAGIC)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write magic: {e}")))?;
+    out.write_all(&存根大小.to_le_bytes())
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write offset: {e}")))?;
+    out.write_all(&zip_size.to_le_bytes())
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write size: {e}")))?;
+
+    if 保留中间产物已开启() {
+        // `--keep`：留着中间 ZIP
+    } else {
+        let _ = fs::remove_file(&tmp);
+    }
+
+    Ok(PackReport {
+        total_size: 存根大小 + zip_size + 24,
+        zip_size,
+        cover_size: 存根大小,
+        entries,
+        layout: PackLayout::TailAppend,
+        warnings: Vec::new(),
+        intermediate: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

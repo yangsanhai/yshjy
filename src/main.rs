@@ -75,7 +75,7 @@ const 无值选项: &[&str] = &[
     "--list", "-l", "--rescue", "--extract-cover", "--json", "--quiet", "-q",
     "--help", "-h", "--version", "-V", "--show-config", "--report", "--no-paths",
     "--force", "-f", "--no-smart-dir", "--no-checksum", "--no-readme", "--tail",
-    "--serve", "--debug-crash", "--no-auto-password", "--no-color", "--keep",
+    "--sfx", "--serve", "--debug-crash", "--no-auto-password", "--no-color", "--keep",
     "-v", "-vv", "--verbose",
 ];
 
@@ -490,9 +490,10 @@ fn main() -> ExitCode {
             quiet,
             split: &split_o,
             checksum: !has("--no-checksum"),
-            readme: !has("--no-readme"),
+            readme: !has("--no-readme") && !has("--sfx"),
             layout: &layout_o,
             cover: &cover_o,
+            sfx: has("--sfx"),
         });
     }
 
@@ -1492,6 +1493,8 @@ struct 打包参数<'a> {
     layout: &'a Option<String>,
     /// `--cover <文件>`
     cover: &'a Option<String>,
+    /// `--sfx`：生成 Windows 自解压 exe（第 23 批）
+    sfx: bool,
 }
 
 fn do_pack(a: 打包参数<'_>) -> ExitCode {
@@ -1506,6 +1509,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         readme,
         layout,
         cover,
+        sfx,
     } = a;
     // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
     // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
@@ -1520,16 +1524,43 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             return ExitCode::from(code::ERR);
         }
     }
-    let out: PathBuf = match dest_opt {
+    let mut out: PathBuf = match dest_opt {
         Some(d) => PathBuf::from(d),
         None => {
             let base = inputs[0]
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "packed".into());
-            PathBuf::from(format!("{base}.mp4"))
+            PathBuf::from(format!("{base}.{}", if sfx { "exe" } else { "mp4" }))
         }
     };
+
+    // 自解压（第 23 批）：产物是能双击运行的 exe，和「伪装 / 分卷 / 解压码」互斥。
+    // 这些限制都**明确报错**，不静默忽略（D20 的教训）。
+    if sfx {
+        if password.is_some() {
+            eprintln!("❌ 自解压包暂不支持解压码（存根不做密码输入）");
+            return ExitCode::from(code::USAGE);
+        }
+        if split.is_some() {
+            eprintln!("❌ 自解压包不能分卷（双击要是一个完整文件）");
+            return ExitCode::from(code::USAGE);
+        }
+        if cover.is_some() {
+            eprintln!("❌ --sfx 不需要 --cover：外壳就是自带的存根");
+            return ExitCode::from(code::USAGE);
+        }
+        match out.extension().and_then(|e| e.to_str()) {
+            None => {
+                out.set_extension("exe");
+            }
+            Some(e) if e.eq_ignore_ascii_case("exe") => {}
+            Some(e) => {
+                eprintln!("❌ 自解压输出必须以 .exe 结尾（现在 .{e}）");
+                return ExitCode::from(code::USAGE);
+            }
+        }
+    }
 
     // 输出扩展名决定封面素材：.png → 内置 PNG、.jpg → 内置 JPEG、.mp4 → 内置小视频。
     // 以前这里**从没传过** cover_ext，一律用小视频 —— 于是 `ys -o 图.png` 产出的
@@ -1612,7 +1643,12 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         }
     };
     let mut bw = std::io::BufWriter::new(f);
-    match yshjy::pack::build(&opts, &mut bw) {
+    let 打包结果 = if sfx {
+        yshjy::pack::build_sfx(&opts, &mut bw)
+    } else {
+        yshjy::pack::build(&opts, &mut bw)
+    };
+    match 打包结果 {
         Ok(rep) => {
             use std::io::Write;
             let _ = bw.flush();
@@ -1637,6 +1673,9 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                         ]
                     )
                 );
+                if sfx {
+                    println!("🖱 双击这个 exe 就会自动解压到同目录的新文件夹（Windows）");
+                }
                 for w in &rep.warnings {
                     println!("{}", 语.t("cli.pack_warn", &[("warn", w)]));
                 }
@@ -1651,7 +1690,11 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             match yshjy::pack::self_check(&out, rep.entries) {
                 Ok(warns) if warns.is_empty() => {
                     if !quiet {
-                        println!("{}", 语.t("cli.pack_selfcheck_ok", &[]));
+                        if sfx {
+                            println!("   ✅ 自检通过（存根能找到尾部数据）");
+                        } else {
+                            println!("{}", 语.t("cli.pack_selfcheck_ok", &[]));
+                        }
                     }
                     // 交付形态：分卷 / 校验和 / 说明书（DESIGN §14.2 / §17.8）
                     let post = yshjy::pack_post::PostOptions {

@@ -55,4 +55,31 @@ fn main() {
     } else {
         println!("cargo:warning=已嵌入 {} 种语言包", files.len());
     }
+
+    // 自解压存根：必须是 Windows PE（MZ 开头）。
+    //
+    // 这是发布安全阀：开发机上用 Linux 版存根验证逻辑时可以设
+    // `YSHJY_ALLOW_NON_PE_STUB=1` 跳过；正常构建/打包必须是真的 PE，
+    // 否则用户拿到的「自解压 exe」在 Windows 上根本打不开。
+    let stub = Path::new("assets/sfx/yshjy-sfx.exe");
+    println!("cargo:rerun-if-changed=assets/sfx");
+    match std::fs::read(stub) {
+        Ok(b) => {
+            if b.len() < 2 || &b[..2] != b"MZ" {
+                if std::env::var_os("YSHJY_ALLOW_NON_PE_STUB").is_some() {
+                    println!("cargo:warning=自解压存根不是 Windows PE（开发验证模式，禁止发布）");
+                } else {
+                    panic!(
+                        "assets/sfx/yshjy-sfx.exe 不是 Windows PE。\n\
+                         先跑 scripts/build-sfx-stub.sh 生成真正的存根；\n\
+                         开发时只想验证逻辑，可设 YSHJY_ALLOW_NON_PE_STUB=1。"
+                    );
+                }
+            }
+        }
+        Err(e) => panic!(
+            "读不到自解压存根（{e}）。\n先跑 scripts/build-sfx-stub.sh 生成 \
+             assets/sfx/yshjy-sfx.exe。"
+        ),
+    }
 }

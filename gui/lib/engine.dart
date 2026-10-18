@@ -384,9 +384,11 @@ class EngineClient {
     return ExtractResult.fromJson(_unwrap(r));
   }
 
-  /// 打包（`mode: plain` = 普通 ZIP；`disguise` = 伪装成视频/图片）
+  /// 打包（`mode: plain` = 普通 ZIP；`disguise` = 伪装成用户选的文件）
   ///
   /// 普通压缩是默认语义（GUI-PLAN §5.2②）；伪装是特殊功能，要显式选。
+  /// `cover` = 用户挑的外壳文件路径（任意类型）。伪装模式下必填；
+  /// 引擎会按外壳的文件头决定布局（MP4 走 free 原子，其他走尾部追加）。
   Future<Map<String, dynamic>> pack({
     required List<String> inputs,
     required String out,
@@ -395,6 +397,8 @@ class EngineClient {
     bool checksum = true,
     bool readme = true,
     String mode = 'disguise',
+    String? cover,
+    bool sfx = false,
   }) async {
     final r = await _call({
       'cmd': 'pack',
@@ -402,6 +406,8 @@ class EngineClient {
       'out': out,
       'mode': mode,
       if (password != null) 'password': password,
+      if (cover != null) 'cover': cover,
+      if (sfx) 'sfx': true,
       if (splitBytes != null) 'split': splitBytes,
       'checksum': checksum,
       'readme': readme,
