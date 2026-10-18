@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../notify.dart';
 import '../platform_paths.dart';
 import '../theme_mode.dart';
 
@@ -30,6 +31,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String _onDone = 'keep';
   /// 主题：auto（跟随系统）/ light / dark
   String _theme = 'auto';
+  /// 处理完成后是否发桌面通知
+  bool _notify = true;
   bool _loaded = false;
   bool _saving = false;
 
@@ -57,6 +60,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _conflict = out['conflict'] ?? 'rename';
         _onDone = out['on_done'] ?? 'keep';
         _theme = gen['theme'] ?? 'auto';
+        _notify = (gen['notify'] ?? 'on') != 'off';
         _loaded = true;
       });
     } catch (_) {
@@ -145,7 +149,11 @@ class _SettingsPageState extends State<SettingsPage> {
         'conflict': _conflict,
         'on_done': _onDone,
       });
-      updated = _upsertSection(updated, 'general', {'theme': _theme});
+      updated = _upsertSection(updated, 'general', {
+        'theme': _theme,
+        'notify': _notify ? 'on' : 'off',
+      });
+      Notifier.enabled = _notify; // 立刻生效，不用重启
       await f.parent.create(recursive: true);
       await f.writeAsString(updated);
       themeMode.value = parseThemeMode(_theme);
@@ -264,6 +272,17 @@ class _SettingsPageState extends State<SettingsPage> {
         Text(
           '「移入回收站」只放进系统回收站（可还原），本工具从不永久删除文件。',
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('处理完成后发桌面通知'),
+          subtitle: Text(
+            '解压/打包结束、或解压失败时给一条系统通知（需要系统有 notify-send）',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: _notify,
+          onChanged: (v) => setState(() => _notify = v),
         ),
         const SizedBox(height: 14),
         Align(

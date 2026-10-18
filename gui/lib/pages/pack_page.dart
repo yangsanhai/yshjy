@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../notify.dart';
 
 /// 打包页：把文件/文件夹做成"能播放的伪装包"
 ///
@@ -191,6 +192,7 @@ class _PackPageState extends State<PackPage> {
       if (!mounted) return;
       setState(() => _result = r);
       widget.onStatus?.call('打包完成');
+      Notifier.send('打包完成', '输出目录里看结果，或点历史页');
     } on EngineError catch (e) {
       if (!mounted) return;
       setState(() => _error = e.code);
