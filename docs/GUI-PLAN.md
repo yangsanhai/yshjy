@@ -531,3 +531,35 @@
 | P23-5 | 自解压增强：密码输入、解压进度窗口、Linux `.sh` 自解压、macOS | 本批 |
 | P23-6 | 7z 写包评估（`sevenz-rust2` 支持 compress）或明确不做 | D18 |
 | P23-7 | `--serve` 一次性喂多条命令丢结果 | D16 |
+
+### 第 24 批候选 · 成熟度基线（工作室 2026-10-18 立项）
+
+参考项目已浅克隆到 `~/hermes/yshjy/refs/外部-归档软件/`（PeaZip / NanaZip / Keka / File Roller /
+Ark / RustDesk / LocalSend / libarchive）。原则：**只补「核心场景闭环」，不追 200 种格式**（会失焦）。
+
+**A. 后端（引擎）**
+- 格式注册表数据化（学 NanaZip 的 Core-Codec 分离 / 7-Zip 的 flags）：加格式不改主流程
+- 兼容性基准：libarchive 测试集 + 7-Zip 官方测试文件，统计真实可开率
+- 性能基准：识别 / 列表 / 解压 / 打包四类耗时，固定样本对比
+
+**B. 中间层（协议/桥）**
+- 契约测试：协议请求/响应 golden JSON，改引擎自动比对
+- `pack` 进度事件（现在只有解压有）
+- 协议能力表：前端按 `hello.features` 显示按钮，不猜
+
+**C. 前端（界面）**
+- 五态审计：空 / 加载 / 成功 / 失败 / 部分成功，逐页过
+- 桌面集成：右键菜单、拖到托盘、默认打开方式、完成通知（学 File Roller / Ark）
+- 设置页四组：默认行为 / 系统集成 / 高级 / 关于与更新
+- 键盘与无障碍：Tab 顺序、快捷键、图标按钮语义标签
+
+**D. 质量与分发**
+- CI 多平台矩阵（照 RustDesk / LocalSend）：Linux / Windows / macOS 构建 + 测试
+- 安装包：deb / AppImage / Flatpak、zip / MSI / winget、dmg / Homebrew
+- 自动更新与崩溃上报（可选、默认关闭）
+- 发布安全自查：密钥 / 个人路径 / 第三方许可证 / SBOM
+
+**E. 明确不做**
+- 不追 PeaZip 的 200+ 格式
+- 不做内置文件管理器（不属于核心场景）
+- 不做云盘 / 同步
