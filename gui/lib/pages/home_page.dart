@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../history_store.dart';
+import '../notify.dart';
 import '../platform_paths.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
@@ -486,6 +487,11 @@ class _HomePageState extends State<HomePage> {
         _phase = Phase.done;
       });
       widget.onStatus?.call(r.ok ? '完成：${r.entriesDone} 个文件' : '部分完成');
+      // 解压完发桌面通知：切到别的窗口也知道；发不出不影响主流程
+      Notifier.send(
+        r.ok ? '解压完成' : '解压部分完成',
+        '${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
+      );
       // 产物里若还套着压缩包，问一句要不要再解一层（不自动，免得大包解到天荒地老）
       _probeNested();
       // 记一条历史（历史页读它）
@@ -503,6 +509,7 @@ class _HomePageState extends State<HomePage> {
 
   void _showError(String code, String note, [EngineError? e]) {
     if (!mounted) return;
+    Notifier.send('解压没成功', note.isEmpty ? code : note);
     setState(() {
       _phase = Phase.error;
       _errorCode = code;

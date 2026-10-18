@@ -13,6 +13,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 V=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+# 版本一致性：代码和界面必须同版本，否则打出来的包里两半对不上
+V_GUI=$(grep -m1 '^version:' gui/pubspec.yaml | awk '{print $2}')
+if [ "$V" != "$V_GUI" ]; then
+  echo "!! 版本不一致，拒绝打包：" >&2
+  echo "   Cargo.toml       = $V" >&2
+  echo "   gui/pubspec.yaml = $V_GUI" >&2
+  exit 1
+fi
 ARCH=$(uname -m)
 DOCS=(CHANGELOG.md CONTRIBUTING.md DEVLOG.md HANDOFF.md install.sh LICENSE README.md)
 
