@@ -520,7 +520,20 @@
 - `tests/sfx_stub_test.py` —— 存根解压、中文路径、截断/坏尾标、重名目录
 - `tests/protocol_sfx.py` —— 协议 sfx、互斥项、产物自解
 
-### 第 23 批 · 0.9.23-c（能力补齐，用户确认「都要」）
+### 第 23.5 批 · 成熟感最小集（✅ 已交付 2026-10-18，工作室接手）
+
+> 用户原话：「优化好几轮了还是不像一个成熟的应用」。
+> 体检见 `~/hermes/studio/projects/yshjy/MATURITY.md`（18 项，5 项明显缺）。
+
+| 编号 | 内容 | 落点 | 状态 |
+|---|---|---|---|
+| P23.5-1 | **deb 带图形界面**：GUI bundle + 应用菜单项 + 图标 + postinst/postrm | `scripts/build-deb.sh` | ✅ |
+| P23.5-2 | **桌面通知**：解压完成/部分完成/失败/打包完成；缺 `notify-send` 静默；设置开关 | `gui/lib/notify.dart`、`home_page.dart`、`pack_page.dart`、`settings_page.dart` | ✅ |
+| P23.5-3 | **版本一致性校验 + 出包自查**：不一致拒打包；出包后查 5 个关键文件 | `scripts/build-deb.sh`、`scripts/release.sh` | ✅ |
+| P23.5-4 | GUI bundle 不带引擎副本（统一用 `/usr/bin/yshjy`，避免 D11 双版本） | `scripts/build-deb.sh` | ✅ |
+| P23.5-5 | 版本号递进到 `0.9.23-c` | — | ⬜ 待用户拍板 |
+
+### 第 23 批 · 0.9.23-c（能力补齐，用户确认「都要」）— **未开始**（23.5 批插在它前面）
 
 | 编号 | 内容 | 依据 |
 |---|---|---|
