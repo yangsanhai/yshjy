@@ -282,15 +282,9 @@ class _HomePageState extends State<HomePage> {
   // ───────────────────────── 动作 ─────────────────────────
 
   Future<void> _pick() async {
-    const group = XTypeGroup(
-      label: '压缩包或伪装文件',
-      extensions: [
-        'mp4', 'mkv', 'avi', 'mov', 'webm', // 伪装外壳
-        'zip', '7z', 'rar', 'tar', 'gz', 'xz', 'zst', 'bz2', 'lz4', 'br', 'z01',
-        'png', 'jpg', 'jpeg', 'gif', 'webp', // 图片外壳
-        'txt', 'md', // 文本外壳
-      ],
-    );
+    // 不设扩展名白名单：伪装包的外壳可能是 .pdf / .docx / .mp3 / .exe 之类，
+    // 名单一写死用户在对话框里就看不到（拖拽却能用，行为不一致）。
+    const group = XTypeGroup(label: '压缩包或伪装文件');
     try {
       // 多选：一次挑一堆包是常态（网盘一次下 8 个）
       final files = await openFiles(acceptedTypeGroups: const [group]);

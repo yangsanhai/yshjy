@@ -80,7 +80,7 @@
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
 | `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
 | `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?`, `drill?`, `ask?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`ask:true` 表示前端能处理 `ASK_USER`（不写 = 限额命中直接失败）；`select` 暂不支持（非空直接报 `UNSUPPORTED`） |
-| `pack` | `inputs[]`, `out`, `password?`, `tail?`, `mode?`, `split?`, `checksum?`, `readme?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装成视频/图片（老行为）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode |
+| `pack` | `inputs[]`, `out`, `cover?`, `sfx?`, `password?`, `tail?`, `mode?`, `split?`, `checksum?`, `readme?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装（老行为）；**`cover` = 外壳文件的绝对路径，伪装模式必填，任意类型**（引擎按文件头决定布局：MP4 走 free 原子，其他走尾部追加）；**`sfx:true` = 生成 Windows 自解压 exe**（输出必须 `.exe`，与 `cover`/`split`/`password` 互斥）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode |
 | `cancel` | — | 取消当前任务（整批停） |
 | `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
 | `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |

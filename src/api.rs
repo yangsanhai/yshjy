@@ -328,6 +328,22 @@ pub fn 解压(
     Ok(结果)
 }
 
+/// 比较「是不是同一个文件」用的路径规范化
+///
+/// 输出文件通常还不存在，`canonicalize` 会失败 —— 那就把父目录规范化再拼文件名，
+/// 这样 `./a.mp4` 和 `/home/me/a.mp4` 也能比出来。
+fn 规范路径(p: &Path) -> PathBuf {
+    if let Ok(c) = std::fs::canonicalize(p) {
+        return c;
+    }
+    let parent = p.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let name = p.file_name().unwrap_or_default();
+    match std::fs::canonicalize(parent) {
+        Ok(c) => c.join(name),
+        Err(_) => p.to_path_buf(),
+    }
+}
+
 /// 打包（伪装 / 普通压缩共用一条实现）
 pub fn 打包(参数: &Value) -> Result<Value, Value> {
     let 输入: Vec<PathBuf> = 参数
@@ -348,15 +364,80 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| 错误值("BAD_PARAM", "缺少 out"))?;
 
-    let 扩展名 = Path::new(输出)
+    // 打包模式（GUI-PLAN §5.2②）：普通压缩是默认语义，伪装是特殊功能。
+    // 协议默认仍是 disguise —— 「只加不删」：老前端不传 mode，行为不能变。
+    let 普通压缩 = 参数.get("mode").and_then(|v| v.as_str()) == Some("plain");
+    // 自解压（第 23 批）：生成 Windows exe，双击自己解压。与伪装/分卷/密码互斥。
+    let 自解压 = 参数.get("sfx").and_then(|v| v.as_bool()).unwrap_or(false);
+    if 自解压 {
+        if 普通压缩 {
+            return Err(错误值("BAD_PARAM", "普通压缩和自解压只能选一个"));
+        }
+        if 参数.get("split").and_then(|v| v.as_u64()).is_some() {
+            return Err(错误值("BAD_PARAM", "自解压包不能分卷（双击要是一个完整文件）"));
+        }
+        if 参数.get("password").and_then(|v| v.as_str()).is_some() {
+            return Err(错误值("BAD_PARAM", "自解压包暂不支持解压码"));
+        }
+        if 参数.get("cover").and_then(|v| v.as_str()).is_some() {
+            return Err(错误值("BAD_PARAM", "自解压不需要 cover（外壳就是存根）"));
+        }
+        let ext = Path::new(输出)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if ext != "exe" {
+            return Err(错误值("BAD_PARAM", "自解压的输出文件必须以 .exe 结尾"));
+        }
+    }
+
+    let 规范输出 = 规范路径(Path::new(输出));
+    for i in &输入 {
+        if 规范路径(i) == 规范输出 {
+            return Err(错误值("BAD_PARAM", "输出文件不能覆盖要打包的源文件"));
+        }
+    }
+
+    // 外壳文件（伪装模式）：任意类型，用户选什么就是什么。
+    //
+    // 之前协议没这个参数，界面只能拿三个内置小素材 —— 用户想伪装成 PDF / 安装包 /
+    // 自己的猫图都没门。现在 `cover` 传路径，引擎原样读进来当外壳；
+    // 布局由 `pack::build` 按文件头（魔数）决定，非 MP4 自动降到「尾部追加」。
+    let mut 扩展名 = Path::new(输出)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("mp4")
         .to_ascii_lowercase();
-
-    // 打包模式（GUI-PLAN §5.2②）：普通压缩是默认语义，伪装是特殊功能。
-    // 协议默认仍是 disguise —— 「只加不删」：老前端不传 mode，行为不能变。
-    let 普通压缩 = 参数.get("mode").and_then(|v| v.as_str()) == Some("plain");
+    let mut 外壳字节: Option<Vec<u8>> = None;
+    let mut 外壳路径: Option<String> = None;
+    if !普通压缩 && !自解压 {
+        let 外壳 = 参数
+            .get("cover")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| 错误值("BAD_PARAM", "伪装打包要先选一个伪装文件"))?;
+        let 外壳文件 = Path::new(外壳);
+        if 规范路径(外壳文件) == 规范输出 {
+            return Err(错误值(
+                "BAD_PARAM",
+                "输出文件不能就是伪装文件本身（会把外壳覆盖掉）",
+            ));
+        }
+        let 数据 = std::fs::read(外壳文件)
+            .map_err(|e| 错误值("PATH_NOT_FOUND", &format!("伪装文件读不了: {e}")))?;
+        if 数据.is_empty() {
+            return Err(错误值("BAD_PARAM", "伪装文件是空文件，没法当外壳"));
+        }
+        扩展名 = 外壳文件
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp4")
+            .to_ascii_lowercase();
+        外壳字节 = Some(数据);
+        外壳路径 = Some(外壳.to_string());
+    }
     let 素材 = crate::pack::cover::BuiltinCover::for_extension(&扩展名);
 
     let mut opts = crate::pack::PackOptions {
@@ -365,11 +446,15 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
             .get("password")
             .and_then(|v| v.as_str())
             .map(str::to_string),
-        cover_ext: 扩展名,
+        cover: 外壳字节,
+        cover_ext: 扩展名.clone(),
         ..Default::default()
     };
-    // 图片/文本封面不能用 MP4 的 free 原子（会写坏封面）—— 与 CLI 同一条规则
-    if 参数.get("tail").and_then(|v| v.as_bool()) == Some(true) || !素材.is_video() {
+    // 图片/文本内置素材不能用 MP4 的 free 原子（会写坏封面）—— 与 CLI 同一条规则。
+    // 用户自带外壳不在这里判断：`pack::build` 会按魔数兜底降级。
+    if 参数.get("tail").and_then(|v| v.as_bool()) == Some(true)
+        || (opts.cover.is_none() && !素材.is_video())
+    {
         opts.layout = crate::pack::PackLayout::TailAppend;
     }
 
@@ -378,6 +463,8 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     let mut bw = std::io::BufWriter::new(文件);
     let rep = if 普通压缩 {
         crate::pack::build_plain(&opts, &mut bw)
+    } else if 自解压 {
+        crate::pack::build_sfx(&opts, &mut bw)
     } else {
         crate::pack::build(&opts, &mut bw)
     }
@@ -408,6 +495,8 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
 
     Ok(json!({
         "mode": if 普通压缩 { "plain" } else { "disguise" },
+        "sfx": 自解压,
+        "cover": 外壳路径,
         "total_size": rep.total_size,
         "zip_size": rep.zip_size,
         "cover_size": rep.cover_size,
