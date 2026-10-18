@@ -531,9 +531,10 @@
 | P23.5-2 | **桌面通知**：解压完成/部分完成/失败/打包完成；缺 `notify-send` 静默；设置开关 | `gui/lib/notify.dart`、`home_page.dart`、`pack_page.dart`、`settings_page.dart` | ✅ |
 | P23.5-3 | **版本一致性校验 + 出包自查**：不一致拒打包；出包后查 5 个关键文件 | `scripts/build-deb.sh`、`scripts/release.sh` | ✅ |
 | P23.5-4 | GUI bundle 不带引擎副本（统一用 `/usr/bin/yshjy`，避免 D11 双版本） | `scripts/build-deb.sh` | ✅ |
-| P23.5-5 | 版本号递进到 `0.9.23-c` | — | ⬜ 待用户拍板 |
+| P23.5-5 | 版本号递进到 `0.9.23-c` | `Cargo.toml` + `gui/pubspec.yaml` + `CHANGELOG.md` | ✅ |
 
-### 第 23 批 · 0.9.23-c（能力补齐，用户确认「都要」）— **未开始**（23.5 批插在它前面）
+### 第 23 批 · 0.9.24-c（能力补齐，用户确认「都要」）— **未开始**
+> 版本号顺延：0.9.23-c 已被 23.5 批占用。
 
 | 编号 | 内容 | 依据 |
 |---|---|---|
