@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -105,6 +106,8 @@ class _HomePageState extends State<HomePage> {
   String? _outDir;
   /// 文件名编码（P23-3）：auto = 引擎自动链（UTF-8 → 0x7075 → GB18030）
   String _encoding = 'auto';
+  /// 文件列表的滚动条控制器（用户报过「滚轮没反应」——至少要有可见滚动条能拖）
+  final ScrollController _listCtrl = ScrollController();
   /// 引擎的 ASK_USER 已经在弹窗里等答案（防止重复弹）
   bool _askOpen = false;
 
@@ -125,6 +128,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _pwCtrl.dispose();
+    _listCtrl.dispose();
     _sub?.cancel();
     _client.dispose();
     super.dispose();
@@ -525,6 +529,106 @@ class _HomePageState extends State<HomePage> {
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
+  }
+
+  /// 紧凑小按钮：默认 TextButton 高 48，一行塞四个会把上面的列表挤没（窄窗口致命）
+  Widget _miniBtn(String text, VoidCallback onTap, {IconData? icon}) {
+    const st = ButtonStyle(
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      minimumSize: WidgetStatePropertyAll(Size(0, 28)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8)),
+      textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+    );
+    final label = Text(text, style: const TextStyle(fontSize: 12));
+    return icon == null
+        ? TextButton(style: st, onPressed: onTap, child: label)
+        : TextButton.icon(
+            style: st,
+            onPressed: onTap,
+            icon: Icon(icon, size: 15),
+            label: label,
+          );
+  }
+
+  /// 高级选项弹窗（P23-2 输出目录 / P23-3 文件名编码）
+  ///
+  /// 做成弹窗而不是页面上的一块：页面上放不下时会挤掉列表高度（窄窗口下列表为 0 高、
+  /// 滚轮没反应）。弹窗不占主界面布局。
+  Future<void> _showAdvanced() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: const Text('高级选项', style: TextStyle(fontSize: 15)),
+          contentPadding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.drive_folder_upload_outlined, size: 18),
+                title: const Text('输出到指定目录', style: TextStyle(fontSize: 13)),
+                subtitle: Text(
+                  _outDir ?? '默认：解到包所在目录旁边（推荐）',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_outDir != null)
+                      IconButton(
+                        tooltip: '改回默认（包旁边）',
+                        icon: const Icon(Icons.restart_alt, size: 18),
+                        onPressed: () => setDlg(() => _outDir = null),
+                      ),
+                    TextButton(
+                      onPressed: () async {
+                        final d = await getDirectoryPath(confirmButtonText: '就解到这里');
+                        if (d != null) setDlg(() => _outDir = d);
+                      },
+                      child: const Text('选择', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.translate, size: 18),
+                title: const Text('文件名编码', style: TextStyle(fontSize: 13)),
+                subtitle: const Text('老包在中文/日文 Windows 上打的，名字变乱码时手动指定',
+                    style: TextStyle(fontSize: 11)),
+                trailing: DropdownButton<String>(
+                  value: _encoding,
+                  isDense: true,
+                  style: const TextStyle(fontSize: 12),
+                  items: const [
+                    DropdownMenuItem(value: 'auto', child: Text('自动')),
+                    DropdownMenuItem(value: 'gbk', child: Text('GBK 中文')),
+                    DropdownMenuItem(value: 'big5', child: Text('Big5 繁体')),
+                    DropdownMenuItem(value: 'sjis', child: Text('Shift-JIS 日文')),
+                    DropdownMenuItem(value: 'utf-8', child: Text('UTF-8')),
+                  ],
+                  onChanged: (v) => setDlg(() => _encoding = v ?? 'auto'),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      ),
+    );
+    // 弹窗里改的值要反映到主界面那一行摘要上
+    if (mounted) setState(() {});
   }
 
   void _showError(String code, String note, [EngineError? e]) {
@@ -1103,7 +1207,18 @@ class _HomePageState extends State<HomePage> {
   Widget _previewView() {
     final pv = _preview!;
     final cs = Theme.of(context).colorScheme;
-    return Column(
+    // 整页接住滚轮：用户在窗口任何位置滚，都滚文件列表。
+    // 只在 ListView 里滚的话，鼠标停在头部/卡片上就会「滚了没反应」（用户实测报过）。
+    return Listener(
+      onPointerSignal: (e) {
+        if (e is PointerScrollEvent && _listCtrl.hasClients) {
+          final pos = _listCtrl.position;
+          final next = (_listCtrl.offset + e.scrollDelta.dy)
+              .clamp(pos.minScrollExtent, pos.maxScrollExtent);
+          if (next != _listCtrl.offset) _listCtrl.jumpTo(next);
+        }
+      },
+      child: Column(
       key: const ValueKey('preview'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1227,100 +1342,40 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(height: 12),
-        // 文件级挑选（P23-1）：列表所见即所解 —— 取消勾选的条目不会解出来
+        // 文件级挑选（P23-1）：统计 + 全选 + 高级入口压成**一行**。
+        // 别堆成两三块：挤在列表上方会吃掉列表高度，窄窗口下列表被压成 0 高，
+        // 滚轮看起来就「完全没反应」（用户实测报过）。
         Row(
           children: [
             Text(
-              '已选 ${_picked.length} / ${pv.entries.where((e) => !e.isDir).length} 个文件',
+              '已选 ${_picked.length} / ${pv.entries.where((e) => !e.isDir).length}',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
+            _miniBtn('全选', () => setState(() {
+                  _picked
+                    ..clear()
+                    ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
+                })),
+            _miniBtn('全不选', () => setState(() => _picked.clear())),
             const Spacer(),
-            TextButton(
-              onPressed: () => setState(() {
-                _picked
-                  ..clear()
-                  ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
-              }),
-              child: const Text('全选', style: TextStyle(fontSize: 12)),
-            ),
-            TextButton(
-              onPressed: () => setState(() => _picked.clear()),
-              child: const Text('全不选', style: TextStyle(fontSize: 12)),
+            _miniBtn(
+              '高级：${_outDir == null ? '包旁边' : '自定义'} · '
+              '${_encoding == 'auto' ? '自动编码' : _encoding.toUpperCase()}',
+              _showAdvanced,
+              icon: Icons.tune,
             ),
           ],
-        ),
-        // 高级选项（P23-2 输出目录 / P23-3 文件名编码）：默认收起，新手不用管
-        Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          clipBehavior: Clip.antiAlias,
-          child: ExpansionTile(
-            key: const ValueKey('advanced'),
-            dense: true,
-            leading: const Icon(Icons.tune, size: 18),
-            title: const Text('高级选项（输出位置 / 文件名编码）',
-                style: TextStyle(fontSize: 13)),
-            subtitle: Text(
-              '${_outDir == null ? '输出：包旁边' : '输出：$_outDir'}'
-              ' · 编码：${_encoding == 'auto' ? '自动' : _encoding.toUpperCase()}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
-            ),
-            children: [
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.drive_folder_upload_outlined, size: 18),
-                title: const Text('输出到指定目录', style: TextStyle(fontSize: 13)),
-                subtitle: Text(
-                  _outDir ?? '默认：解到包所在目录旁边（推荐）',
-                  style: const TextStyle(fontSize: 11),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_outDir != null)
-                      IconButton(
-                        tooltip: '改回默认（包旁边）',
-                        icon: const Icon(Icons.restart_alt, size: 18),
-                        onPressed: () => setState(() => _outDir = null),
-                      ),
-                    TextButton(
-                      onPressed: () async {
-                        final d = await getDirectoryPath(confirmButtonText: '就解到这里');
-                        if (d != null && mounted) setState(() => _outDir = d);
-                      },
-                      child: const Text('选择', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ),
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.translate, size: 18),
-                title: const Text('文件名编码', style: TextStyle(fontSize: 13)),
-                subtitle: const Text('老包在中文/日文 Windows 上打的，名字变乱码时手动指定',
-                    style: TextStyle(fontSize: 11)),
-                trailing: DropdownButton<String>(
-                  value: _encoding,
-                  isDense: true,
-                  style: const TextStyle(fontSize: 12),
-                  items: const [
-                    DropdownMenuItem(value: 'auto', child: Text('自动')),
-                    DropdownMenuItem(value: 'gbk', child: Text('GBK 中文')),
-                    DropdownMenuItem(value: 'big5', child: Text('Big5 繁体')),
-                    DropdownMenuItem(value: 'sjis', child: Text('Shift-JIS 日文')),
-                    DropdownMenuItem(value: 'utf-8', child: Text('UTF-8')),
-                  ],
-                  onChanged: (v) => setState(() => _encoding = v ?? 'auto'),
-                ),
-              ),
-            ],
-          ),
         ),
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
-            child: ListView.separated(
+            // 常显滚动条：列表比视口长时必须看得出来能滚（用户报过「滚轮没反应」，
+            // 至少要有能拖的条；Flutter 在 Linux 桌面默认不画滚动条）
+            child: Scrollbar(
+              controller: _listCtrl,
+              thumbVisibility: true,
+              child: ListView.separated(
+              controller: _listCtrl,
               itemCount: pv.entries.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
@@ -1387,6 +1442,7 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -1418,6 +1474,7 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ],
+      ),
     );
   }
 
