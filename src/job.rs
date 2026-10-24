@@ -263,6 +263,23 @@ fn 附上文件类型(mut e: Error, path: &Path) -> Error {
     e
 }
 
+/// 文件开头是不是 ZIP 本地文件头（`PK\x03\x04`）
+///
+/// 用来区分「这压根不是压缩包」和「是 ZIP 但没下完」——体检 T9-P5 里截断的 zip
+/// 被报成「这不是压缩包」，害得用户以为拿错文件去重下。
+fn 开头像zip(f: &mut std::fs::File) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut buf = [0u8; 4];
+    if f.seek(SeekFrom::Start(0)).is_err() {
+        return false;
+    }
+    if f.read_exact(&mut buf).is_err() {
+        return false;
+    }
+    // PK\x03\x04 普通条目；PK\x05\x06 空包；PK\x07\x08 跨卷标记
+    buf[0] == b'P' && buf[1] == b'K' && matches!(buf[2], 0x03 | 0x05 | 0x07)
+}
+
 fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     let mut f = std::fs::File::open(path)
         .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
@@ -301,12 +318,32 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     )
     .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("scan: {e}")))?;
     if hits.is_empty() {
+        // 走到这里说明全文件扫描连一个像样的 ZIP 结构都没认出来 —— 这是「真不是压缩包」
+        // （伪装包的典型样子：名字是 .mp4，内容是别的格式）。
+        // 注意：**不要**在这里看开头是不是 PK 就改报 Truncated —— 一个 41 字节的
+        // 「PK\x03\x04 + 垃圾」也能开头是 PK，那样会把伪装包误判成「没下完」。
+        // 「没下完」的判断放在下一段（扫到了结构、但凑不出可用窗口）。
         return Err(Error::new(ErrorCode::NotArchive)
             .with("path", path.display().to_string())
             .context("no archive found in file"));
     }
-    let l = crate::layout::zip::locate_with_window(&mut f, size, size)
-        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("locate_wide: {e}")))?;
+    let l = match crate::layout::zip::locate_with_window(&mut f, size, size) {
+        Ok(l) => l,
+        Err(e) => {
+            // T9-P5：扫到了 ZIP 结构却凑不出一个可用窗口 —— 要分清两种完全不同的情况：
+            //   * 真包没下完（末尾中央目录缺失）：文件有实质内容，扫描命中不止一处
+            //   * 伪装包（名字是 .mp4、内容只有个 PK 签名 + 几十字节垃圾）：命中只有开头一处
+            // 判据：命中 ≥2 处，或文件本身已经不小（>64 KB）且开头是 PK。
+            // 只按「开头是 PK」判会把伪装包误判成「没下完」（serve.rs 有个测试盯着这条）。
+            let 像是没下完 = hits.len() >= 2 || (size > 64 * 1024 && 开头像zip(&mut f));
+            if 像是没下完 {
+                return Err(Error::new(ErrorCode::Truncated)
+                    .with("path", path.display().to_string())
+                    .context(format!("locate_wide: {e}")));
+            }
+            return Err(Error::new(ErrorCode::NotArchive).context(format!("locate_wide: {e}")));
+        }
+    };
     ctx.diagnostic(
         DiagnosticCode::HiddenAtOffset,
         format!("base={} len={}", l.base, l.data_len()),
@@ -1104,6 +1141,10 @@ fn outcome_from(res: Result<ExtractReport>, stats: &mut JobStats, ctx: &UnpackCt
                     ErrorCode::NeedPassword
                 } else if 密码错 {
                     ErrorCode::WrongPassword
+                } else if let Some(code) = rep.io_error {
+                    // T9-P3：一个都没解出来，但原因是「写不进去」（只读目录 / 没空间 /
+                    // 路径太长 / 目标是个文件）—— 这不是包坏了，别报「中间有一段数据丢了」
+                    code
                 } else if rep.skipped.is_empty() {
                     ErrorCode::NotArchive
                 } else {

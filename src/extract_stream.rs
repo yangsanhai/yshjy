@@ -230,7 +230,7 @@ pub fn decompress_stream_ctx<R: Read>(
         let src = src;
         let mut out = BudgetWriter {
             inner: crate::io::PartWriter::create(out_path).map_err(|e| {
-                Error::new(ErrorCode::Internal).context(format!("创建输出失败: {e}"))
+                { let m = format!("创建输出失败: {e}"); Error::from(e).context(m) }
             })?,
             budget: &mut budget,
             written: 0,
@@ -275,7 +275,7 @@ pub fn decompress_stream_ctx<R: Read>(
 
     // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
     let mut part = crate::io::PartFile::create(out_path)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("创建输出失败: {e}")))?;
+        .map_err(|e| { let m = format!("创建输出失败: {e}"); Error::from(e).context(m) })?;
     let mut buf = vec![0u8; 64 * 1024];
     let mut total = 0u64;
     loop {
@@ -293,8 +293,11 @@ pub fn decompress_stream_ctx<R: Read>(
             }
         };
         budget.record(n as u64)?;
-        part.as_file().write_all(&buf[..n])
-            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("写盘失败: {e}")))?;
+        part.as_file().write_all(&buf[..n]).map_err(|e| {
+            // 单流没有「跳过单条」的概念，失败即整体失败 —— 直接用分类后的码返回
+            let m = format!("写盘失败: {e}");
+            Error::from(e).context(m)
+        })?;
         total += n as u64;
         ctx.advance(n as u64, Some(&out_label));
     }
@@ -594,6 +597,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
         let mut part = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
+                report.note_io_error(&e);
                 report
                     .skipped
                     .push((name.clone(), format!("创建失败: {e}")));
@@ -622,6 +626,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                         break;
                     }
                     if let Err(e) = part.as_file().write_all(&buf[..n]) {
+                        report.note_io_error(&e);
                         err = Some(format!("写盘失败: {e}"));
                         break;
                     }
