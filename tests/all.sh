@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# 一条命令跑完全部验证 —— 「敢改的底子」
+#
+#   默认（快，约 40–60 秒）：
+#     代码格式检查 → 编译 → 单元测试 → clippy → 6 个协议探针 → 界面测试
+#   --slow（几十分钟，发版前跑）：
+#     额外跑「300 MiB 大 RAR」「RAR 分卷」这类造样本的慢测试
+#
+# 用法：
+#   bash tests/all.sh            # 平时改完代码跑这个
+#   bash tests/all.sh --slow     # 发版前
+#   bash tests/all.sh --no-gui   # 只验引擎（改界面的人常用）
+#
+# 设计原则：
+#   1. **不删任何文件**（临时目录交给 mktemp，测完不清理也不影响仓库）
+#   2. 每项独立计数，失败也继续跑完（一次看全所有问题，不要修一个跑一遍）
+#   3. 最后一张表说清：过了几项、挂在哪几项
+
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+
+SLOW=0
+GUI=1
+for a in "$@"; do
+  case "$a" in
+    --slow) SLOW=1 ;;
+    --no-gui) GUI=0 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    *) echo "不认识的参数：$a（可用：--slow / --no-gui）" >&2; exit 2 ;;
+  esac
+done
+
+PASS=0
+FAIL=0
+SKIP=0
+FAILED=()
+T0=$(date +%s)
+
+ok()   { PASS=$((PASS+1)); printf '  \033[32m✓\033[0m %s\n' "$1"; }
+bad()  { FAIL=$((FAIL+1)); FAILED+=("$1"); printf '  \033[31m✗\033[0m %s\n' "$1"; }
+skip() { SKIP=$((SKIP+1)); printf '  \033[33m–\033[0m %s（跳过：%s）\n' "$1" "$2"; }
+head_() { printf '\n\033[1m═══ %s ═══\033[0m\n' "$1"; }
+
+# 跑一条命令，成功记 ✓、失败记 ✗（输出只在失败时打出来，避免刷屏）
+#
+# 注意：变量名一律用英文 —— **bash 的 local 不认中文标识符**
+# （本项目踩过两次，release.sh 里也记着这条教训）
+run() { # run <说明> <命令...>
+  local label="$1"; shift
+  local log
+  log=$(mktemp "${TMPDIR:-/tmp}/yshjy_all.XXXXXX")
+  if "$@" >"$log" 2>&1; then
+    ok "$label"
+  else
+    bad "$label"
+    echo "    ── 失败详情（最后 15 行，完整日志：$log）──"
+    tail -15 "$log" | sed 's/^/    /'
+  fi
+  return 0
+}
+
+# ───────────────────────── 0. 环境 ─────────────────────────
+head_ "0. 环境"
+if [ -x target/release/yshjy ]; then
+  ok "找到 target/release/yshjy"
+  BIN="$(pwd)/target/release/yshjy"
+else
+  bad "没有 target/release/yshjy（先 cargo build --release）"
+  BIN=""
+fi
+if [ "$GUI" = 1 ]; then
+  FLUTTER="${FLUTTER_BIN:-}"
+  if [ -z "$FLUTTER" ]; then
+    if command -v flutter >/dev/null 2>&1; then FLUTTER="flutter"
+    elif [ -x "$HOME/flutter/bin/flutter" ]; then FLUTTER="$HOME/flutter/bin/flutter"
+    fi
+  fi
+  if [ -n "$FLUTTER" ]; then ok "找到 flutter（$FLUTTER）"; else skip "界面测试" "没装 flutter"; GUI=0; fi
+fi
+
+# ───────────────────────── 1. 编译与静态检查 ─────────────────────────
+head_ "1. 编译与静态检查"
+run "cargo build --release" cargo build --release --quiet
+run "cargo clippy（-D warnings）" bash -c 'cargo clippy --quiet -- -D warnings'
+# 格式检查只作提示：本项目是手写紧凑风格 + 大量中文标识符，
+# rustfmt 会把整份代码重排（上千行 diff），不适合当「有没有砸坏东西」的判据。
+if cargo fmt --check >/dev/null 2>&1; then
+  ok "cargo fmt --check"
+else
+  skip "cargo fmt --check" "手写风格没跑 rustfmt（仅提示，不算失败）"
+fi
+
+# ───────────────────────── 2. 单元测试 ─────────────────────────
+head_ "2. 单元测试（cargo test）"
+run "cargo test --release" cargo test --release --quiet
+
+# ───────────────────────── 3. 协议探针 ─────────────────────────
+head_ "3. 协议探针（引擎 ↔ 界面之间的契约）"
+if [ -n "$BIN" ]; then
+  for t in protocol_select protocol_level protocol_serve_eof protocol_pack_cover protocol_sfx protocol_sfx_linux; do
+    if [ -f "tests/$t.py" ]; then
+      run "$t" env YSHJY_BIN="$BIN" python3 "tests/$t.py"
+    else
+      skip "$t" "脚本不存在"
+    fi
+  done
+  run "冒烟测试（smoke.sh）" bash tests/smoke.sh "$BIN"
+else
+  skip "协议探针" "没有可执行文件"
+fi
+
+# ───────────────────────── 4. 界面 ─────────────────────────
+head_ "4. 界面（flutter test）"
+if [ "$GUI" = 1 ]; then
+  run "flutter test" bash -c "cd gui && '$FLUTTER' test"
+else
+  skip "界面测试" "用 --no-gui 关掉了"
+fi
+
+# ───────────────────────── 5. 慢测试（--slow 才跑）─────────────────────────
+head_ "5. 慢测试"
+if [ "$SLOW" = 1 ]; then
+  run "300 MiB 大 RAR（X2 回归）" cargo test --release --quiet -- --ignored 大rar
+  run "RAR 分卷识别（X1 回归）" cargo test --release --quiet 认出_rar_四卷分卷
+else
+  skip "300 MiB 大 RAR" "加 --slow 才跑"
+  skip "RAR 分卷识别" "加 --slow 才跑"
+fi
+
+# ───────────────────────── 汇总 ─────────────────────────
+T1=$(date +%s)
+printf '\n\033[1m═══════ 结果 ═══════\033[0m\n'
+printf '  通过 %d · 失败 %d · 跳过 %d · 用时 %d 秒\n' "$PASS" "$FAIL" "$SKIP" "$((T1-T0))"
+if [ "$FAIL" -gt 0 ]; then
+  printf '\n  挂在：\n'
+  for c in "${FAILED[@]}"; do printf '    · %s\n' "$c"; done
+  printf '\n  提示：失败项的「最后 15 行」已经在上面打出来了。\n'
+  exit 1
+fi
+printf '\n  \033[32m全绿\033[0m —— 这一版没砸坏东西。\n'
+exit 0

@@ -51,6 +51,26 @@
 - 实测：200 MB 文件 `mode:"plain"` 打包 → 收到 `PACK_PROGRESS`（done_bytes 走到 200000000），产物 200,000,112 B 正常
 - 待接：GUI 打包页的 Dart 侧监听（下一轮，和界面收口一起做）
 
+### 界面文案表（N1，D21 收尾）
+- 新建 `gui/lib/humanize.dart`：错误码 17 条 / 诊断码 10 条 / 条目结果 6 条 / 批量结论，全中文
+- **查不到的码不再显示原始码**（D21「缺一条就不显示」落地）：统一给一句通用人话
+- 修掉一个真 bug：界面查的是 `PASSWORD_REQUIRED` / `PASSWORD_WRONG`，引擎发的是
+  `NEED_PASSWORD` / `WRONG_PASSWORD` —— 对不上，以前密码错会显示「错误码：NEED_PASSWORD」
+- `home_page` / `pack_page` 全部改查这张表，两页不再各写一份
+
+### 打包页进度条（N2）
+- 打包页订阅 `PACK_PROGRESS`：进度条 + 百分比 + 已写/总量 + 当前文件
+- 开始/结束都清读数，不会挂着上一次的百分比
+- `flutter test` 4/4、`flutter build linux --release` 通过
+
+### `tests/all.sh`（N3，清单「敢改的底子」）
+- 一条命令跑完：编译 → clippy(`-D warnings`) → 单元测试 → 6 个协议探针 → 冒烟 → 界面测试
+- `--slow` 追加 300 MiB 大 RAR 与 RAR 分卷回归；`--no-gui` 只验引擎
+- 失败项会打「最后 15 行 + 完整日志路径」，一次看全所有问题
+- 实测：**13 通过 / 0 失败 / 3 跳过**，耗时 115 秒
+- 两个坑记在脚本里：bash 的 `local` 不认中文变量名；`cargo fmt --check` 只作提示
+  （项目是手写紧凑风格，rustfmt 会重排上千行）
+
 ### 回归证据
 - `cargo test --release`：**303 passed / 0 failed**（新增「认出 RAR 四卷分卷」；
   改写「超大 RAR 不再被大小检查拦住」；新增 ignored「300 MiB 真包解压」）
