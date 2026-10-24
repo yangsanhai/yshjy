@@ -361,9 +361,15 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     // 打包模式（GUI-PLAN §5.2②）：普通压缩是默认语义，伪装是特殊功能。
     // 协议默认仍是 disguise —— 「只加不删」：老前端不传 mode，行为不能变。
     let 普通压缩 = 参数.get("mode").and_then(|v| v.as_str()) == Some("plain");
-    // 自解压（第 23 批）：生成 Windows exe，双击自己解压。与伪装/分卷/密码互斥。
-    let 自解压 = 参数.get("sfx").and_then(|v| v.as_bool()).unwrap_or(false);
-    if 自解压 {
+    // 自解压（第 23 批）：`sfx: true` / `"windows"` → exe；`"linux"` / `"sh"` → .sh 脚本。
+    // 与伪装互斥；分卷、cover 也互斥（双击要是一个完整文件、外壳就是存根本身）。
+    let 自解压: Option<&'static str> = match 参数.get("sfx") {
+        Some(Value::Bool(true)) => Some("windows"),
+        Some(Value::String(s)) if s == "windows" => Some("windows"),
+        Some(Value::String(s)) if s == "linux" || s == "sh" => Some("linux"),
+        _ => None,
+    };
+    if let Some(种类) = 自解压 {
         if 普通压缩 {
             return Err(错误值("BAD_PARAM", "普通压缩和自解压只能选一个"));
         }
@@ -378,8 +384,14 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if ext != "exe" {
-            return Err(错误值("BAD_PARAM", "自解压的输出文件必须以 .exe 结尾"));
+        if 种类 == "windows" && ext != "exe" {
+            return Err(错误值("BAD_PARAM", "Windows 自解压的输出文件必须以 .exe 结尾"));
+        }
+        if 种类 == "linux" && ext != "sh" {
+            return Err(错误值(
+                "BAD_PARAM",
+                "Linux 自解压的输出文件必须以 .sh 结尾（才好双击/直接执行）",
+            ));
         }
     }
 
@@ -402,7 +414,7 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
         .to_ascii_lowercase();
     let mut 外壳字节: Option<Vec<u8>> = None;
     let mut 外壳路径: Option<String> = None;
-    if !普通压缩 && !自解压 {
+    if !普通压缩 && 自解压.is_none() {
         let 外壳 = 参数
             .get("cover")
             .and_then(|v| v.as_str())
@@ -465,7 +477,10 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     let mut bw = std::io::BufWriter::new(文件);
     let rep = if 普通压缩 {
         crate::pack::build_plain(&opts, &mut bw)
-    } else if 自解压 {
+    } else if 自解压 == Some("linux") {
+        // Linux 自解压：shell 脚本 + ZIP（偏移写死在脚本里，不靠尾标）
+        crate::pack::build_sfx_sh(&opts, &mut bw)
+    } else if 自解压.is_some() {
         crate::pack::build_sfx(&opts, &mut bw)
     } else {
         crate::pack::build(&opts, &mut bw)
@@ -473,6 +488,12 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     .map_err(错误对象)?;
     use std::io::Write;
     let _ = bw.flush();
+    // Linux 自解压产物要能直接双击/执行
+    #[cfg(unix)]
+    if 自解压 == Some("linux") {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(输出, std::fs::Permissions::from_mode(0o755));
+    }
 
     // 交付形态（DESIGN §14.2 / §17.8）：分卷 / 校验和 / 说明书。
     // 失败不改判 —— 包已经打好了。
@@ -497,7 +518,8 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
 
     Ok(json!({
         "mode": if 普通压缩 { "plain" } else { "disguise" },
-        "sfx": 自解压,
+        "sfx": 自解压.is_some(),
+        "sfx_kind": 自解压,
         "cover": 外壳路径,
         "total_size": rep.total_size,
         "zip_size": rep.zip_size,

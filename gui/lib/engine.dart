@@ -407,7 +407,8 @@ class EngineClient {
     bool readme = true,
     String mode = 'disguise',
     String? cover,
-    bool sfx = false,
+    /// 自解压种类（P23-5）：'windows'（exe）/ 'linux'（.sh）；null = 不自解压
+    String? sfxKind,
     /// 压缩级别（P23-4）：0 = 仅存储最快 / 6 = 标准 / 9 = 最小体积
     int? level,
   }) async {
@@ -418,7 +419,7 @@ class EngineClient {
       'mode': mode,
       if (password != null) 'password': password,
       if (cover != null) 'cover': cover,
-      if (sfx) 'sfx': true,
+      if (sfxKind != null) 'sfx': sfxKind,
       if (splitBytes != null) 'split': splitBytes,
       if (level != null) 'level': level,
       'checksum': checksum,

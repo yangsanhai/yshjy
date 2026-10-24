@@ -31,8 +31,10 @@ class _PackPageState extends State<PackPage> {
   int _coverSize = 0;
   /// 外壳扩展名 —— 决定输出文件的扩展名（必须一致，不然一认文件头就露馅）
   String _coverExt = '';
-  /// 自解压（第 23 批）：生成双击就解压的 Windows exe，不需要外壳文件
+  /// 自解压（第 23 批）：生成双击就解压的包，不需要外壳文件
   bool _sfx = false;
+  /// 自解压种类（P23-5）：windows = exe、linux = .sh
+  String _sfxKind = 'windows';
   final TextEditingController _pwCtrl = TextEditingController();
   /// 解压码是否显示明文（眼睛图标）
   bool _showPw = false;
@@ -74,10 +76,13 @@ class _PackPageState extends State<PackPage> {
     });
   }
 
-  /// 当前模式对应的输出扩展名（普通 = .zip；自解压 = .exe；伪装 = 外壳的扩展名）
+  /// 当前模式对应的输出扩展名
+  /// （普通 = .zip；自解压 = .exe / .sh；伪装 = 外壳的扩展名）
   String get _ext => _mode == 'plain'
       ? 'zip'
-      : (_sfx ? 'exe' : (_coverExt.isEmpty ? 'mp4' : _coverExt));
+      : (_sfx
+          ? (_sfxKind == 'linux' ? 'sh' : 'exe')
+          : (_coverExt.isEmpty ? 'mp4' : _coverExt));
 
   /// 从路径里取小写扩展名（没有就空串）
   String _extOf(String path) {
@@ -178,13 +183,13 @@ class _PackPageState extends State<PackPage> {
       // 普通压缩产物永远是 ZIP；伪装产物扩展名必须和外壳一致
       final out = _mode == 'plain'
           ? _withExt(_out!, 'zip')
-          : _withExt(_out!, isSfx ? 'exe' : _ext);
+          : _withExt(_out!, _ext);
       final r = await _client.pack(
         inputs: _inputs,
         out: out,
         password: _pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim(),
         cover: _mode == 'disguise' && !isSfx ? _coverPath : null,
-        sfx: isSfx,
+        sfxKind: isSfx ? _sfxKind : null,
         splitBytes: !isSfx && _split ? _parseSize(_splitCtrl.text) : null,
         level: _level,
         checksum: _checksum,
@@ -280,11 +285,37 @@ class _PackPageState extends State<PackPage> {
                         if (_out != null) _out = _withExt(_out!, _ext);
                       }),
               secondary: const Icon(Icons.window_outlined, size: 20),
-              title: const Text('生成 Windows 自解压 exe（双击就解压）',
-                  style: TextStyle(fontSize: 13)),
-              subtitle: const Text('别人不用装任何软件；暂不支持解压码和分卷',
+              title: const Text('生成自解压包（双击就解压）', style: TextStyle(fontSize: 13)),
+              subtitle: const Text('别人不用装任何软件；支持解压码，不支持分卷',
                   style: TextStyle(fontSize: 11)),
             ),
+            if (_sfx)
+              Padding(
+                padding: const EdgeInsets.only(left: 40, right: 4, bottom: 6),
+                child: Row(
+                  children: [
+                    const Text('目标系统：', style: TextStyle(fontSize: 12)),
+                    DropdownButton<String>(
+                      key: const ValueKey('sfx-kind'),
+                      value: _sfxKind,
+                      isDense: true,
+                      style: const TextStyle(fontSize: 12),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'windows', child: Text('Windows（.exe）')),
+                        DropdownMenuItem(
+                            value: 'linux', child: Text('Linux（.sh）')),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(() {
+                                _sfxKind = v ?? 'windows';
+                                if (_out != null) _out = _withExt(_out!, _ext);
+                              }),
+                    ),
+                  ],
+                ),
+              ),
           ],
           const SizedBox(height: 8),
           Row(

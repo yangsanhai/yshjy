@@ -77,7 +77,8 @@ const 无值选项: &[&str] = &[
     "--list", "-l", "--rescue", "--extract-cover", "--json", "--quiet", "-q",
     "--help", "-h", "--version", "-V", "--show-config", "--report", "--no-paths",
     "--force", "-f", "--no-smart-dir", "--no-checksum", "--no-readme", "--tail",
-    "--sfx", "--serve", "--debug-crash", "--no-auto-password", "--no-color", "--keep",
+    "--sfx", "--sfx-linux", "--serve", "--debug-crash", "--no-auto-password", "--no-color",
+    "--keep",
     "-v", "-vv", "--verbose",
 ];
 
@@ -505,10 +506,17 @@ fn main() -> ExitCode {
             quiet,
             split: &split_o,
             checksum: !has("--no-checksum"),
-            readme: !has("--no-readme") && !has("--sfx"),
+            readme: !has("--no-readme") && !has("--sfx") && !has("--sfx-linux"),
             layout: &layout_o,
             cover: &cover_o,
-            sfx: has("--sfx"),
+            // 第 23 批：--sfx-linux 生成 .sh；--sfx 生成 Windows exe
+            sfx: if has("--sfx-linux") {
+                Some("linux")
+            } else if has("--sfx") {
+                Some("windows")
+            } else {
+                None
+            },
             level,
         });
     }
@@ -1509,8 +1517,8 @@ struct 打包参数<'a> {
     layout: &'a Option<String>,
     /// `--cover <文件>`
     cover: &'a Option<String>,
-    /// `--sfx`：生成 Windows 自解压 exe（第 23 批）
-    sfx: bool,
+    /// `--sfx` / `--sfx-linux`：自解压种类（第 23 批）
+    sfx: Option<&'static str>,
     /// `--level 0-9`：压缩级别（P23-4）
     level: Option<u32>,
 }
@@ -1550,13 +1558,19 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "packed".into());
-            PathBuf::from(format!("{base}.{}", if sfx { "exe" } else { "mp4" }))
+            let 后缀 = match sfx {
+                Some("linux") => "sh",
+                Some(_) => "exe",
+                None => "mp4",
+            };
+            PathBuf::from(format!("{base}.{后缀}"))
         }
     };
 
     // 自解压（第 23 批）：产物是能双击运行的 exe，和「伪装 / 分卷 / 解压码」互斥。
     // 这些限制都**明确报错**，不静默忽略（D20 的教训）。
-    if sfx {
+    if let Some(种类) = sfx {
+        let 后缀 = if 种类 == "linux" { "sh" } else { "exe" };
         if split.is_some() {
             eprintln!("❌ 自解压包不能分卷（双击要是一个完整文件）");
             return ExitCode::from(code::USAGE);
@@ -1567,11 +1581,11 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         }
         match out.extension().and_then(|e| e.to_str()) {
             None => {
-                out.set_extension("exe");
+                out.set_extension(后缀);
             }
-            Some(e) if e.eq_ignore_ascii_case("exe") => {}
+            Some(e) if e.eq_ignore_ascii_case(后缀) => {}
             Some(e) => {
-                eprintln!("❌ 自解压输出必须以 .exe 结尾（现在 .{e}）");
+                eprintln!("❌ 自解压输出必须以 .{后缀} 结尾（现在 .{e}）");
                 return ExitCode::from(code::USAGE);
             }
         }
@@ -1662,16 +1676,25 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         }
     };
     let mut bw = std::io::BufWriter::new(f);
-    let 打包结果 = if sfx {
-        yshjy::pack::build_sfx(&opts, &mut bw)
-    } else {
-        yshjy::pack::build(&opts, &mut bw)
+    let 打包结果 = match sfx {
+        Some("linux") => yshjy::pack::build_sfx_sh(&opts, &mut bw),
+        Some(_) => yshjy::pack::build_sfx(&opts, &mut bw),
+        None => yshjy::pack::build(&opts, &mut bw),
     };
     match 打包结果 {
         Ok(rep) => {
             use std::io::Write;
             let _ = bw.flush();
             drop(bw);
+            // Linux 自解压产物要能直接双击 / 执行
+            #[cfg(unix)]
+            if sfx == Some("linux") {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(
+                    &out,
+                    std::fs::Permissions::from_mode(0o755),
+                );
+            }
             if quiet {
                 println!("{}", out.display());
             } else {
@@ -1692,8 +1715,14 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                         ]
                     )
                 );
-                if sfx {
-                    println!("🖱 双击这个 exe 就会自动解压到同目录的新文件夹（Windows）");
+                match sfx {
+                    Some("linux") => println!(
+                        "🖱 双击（或终端里 sh 这个文件）就会解到同目录的新文件夹（Linux）"
+                    ),
+                    Some(_) => println!(
+                        "🖱 双击这个 exe 就会自动解压到同目录的新文件夹（Windows）"
+                    ),
+                    None => {}
                 }
                 for w in &rep.warnings {
                     println!("{}", 语.t("cli.pack_warn", &[("warn", w)]));
@@ -1709,7 +1738,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             match yshjy::pack::self_check(&out, rep.entries) {
                 Ok(warns) if warns.is_empty() => {
                     if !quiet {
-                        if sfx {
+                        if sfx.is_some() {
                             println!("   ✅ 自检通过（存根能找到尾部数据）");
                         } else {
                             println!("{}", 语.t("cli.pack_selfcheck_ok", &[]));
