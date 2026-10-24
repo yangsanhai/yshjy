@@ -130,7 +130,7 @@
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.9.20-c",
+{"protocol": 1, "engine": "0.9.24-c",
  "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip"],
  "event_kinds": ["JOB_STARTED", "STAGE_STARTED", "STAGE_FINISHED", "...", "ASK_USER"],
  "languages": ["zh-CN", "..."]}
