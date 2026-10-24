@@ -324,7 +324,9 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 18),
         _section('其它（改 config.toml）', cs),
-        _kv('界面语言', 'zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES'),
+        // T7-P5：以前这里并列写着 7 个语言代码，看着像「改 config.toml 就能切界面语言」，
+        // 实际界面文案全是硬编码中文。直接说实话，别骗人。
+        _kv('界面语言', '目前只有中文（引擎支持 7 种语言，界面文案还没抽成语言包）'),
         _kv('并行任务数', 'jobs = 1（机械盘建议 1）'),
         _kv('压缩比上限', 'zip_bomb_ratio = 100（防炸弹）'),
         _kv('可执行提醒', 'warn_executables = true'),
@@ -338,7 +340,7 @@ class _SettingsPageState extends State<SettingsPage> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            '· 界面文案多语言切换（引擎已支持 7 种语言，界面文案还没抽成语言包）\n'
+            '· 界面多语言切换（要先把界面里 401 处硬编码中文抽成语言包，工作量大）\n'
             '· 主题切换（现在跟随系统深/浅色）',
             style: TextStyle(fontSize: 12, height: 1.7, color: cs.onSurfaceVariant),
           ),
