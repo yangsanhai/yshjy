@@ -883,6 +883,10 @@ fn extract_target(
     uopts.password = password;
     uopts.selection = opts.selection.clone();
     uopts.limits = opts.limits.clone();
+    // T9-P2：把设置页里那个「重名策略」真正接上（以前只存不用，三策略输出完全一样）
+    uopts.overwrite = crate::extract::Overwrite::from_config(
+        &crate::config::全局配置().output.conflict,
+    );
 
     match target {
         Target::Zip { base, len } => {
@@ -1125,6 +1129,16 @@ fn outcome_from(res: Result<ExtractReport>, stats: &mut JobStats, ctx: &UnpackCt
                 };
             }
             if rep.files.is_empty() {
+                // T9-P2：如果每个条目都是「按设置跳过」，那不是失败 —— 是用户自己选的策略，
+                // 不该报成「数据丢了」或「不是压缩包」
+                if !rep.skipped.is_empty()
+                    && rep.skipped.iter().all(|(_, why)| why.contains("按策略跳过"))
+                {
+                    return Outcome::Partial {
+                        done: 0,
+                        total: rep.skipped.len() as u64,
+                    };
+                }
                 // 一个都没解出来：分清三种情况（D14）
                 //   没给密码 → NeedPassword（「这个包带锁」）
                 //   给了但错了 → WrongPassword（「解压码不对」，别让用户以为没输）

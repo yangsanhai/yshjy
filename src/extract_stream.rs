@@ -741,7 +741,7 @@ fn 消点(p: &Path) -> PathBuf {
     out
 }
 
-fn unique_path_stream(path: &Path) -> PathBuf {
+pub(crate) fn unique_path_stream(path: &Path) -> PathBuf {
     if !path.exists() {
         return path.to_path_buf();
     }

@@ -38,6 +38,23 @@ pub enum Overwrite {
     Rename,
 }
 
+impl Overwrite {
+    /// 从配置里的字符串解析（`config.toml` 的 `output.conflict`）
+    ///
+    /// 认 `rename`（默认）/ `replace` / `skip`，大小写与前后空格不敏感。
+    /// **认不出的值一律按 Rename** —— 宁可多出一个 `(1)` 副本，也绝不误删用户已有文件。
+    ///
+    /// 由来（体检 T9-P2）：这个配置项以前只在设置页里存着，引擎从来没读过，
+    /// 三种策略实测输出一模一样（永远是 Rename），等于骗人。
+    pub fn from_config(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "replace" | "overwrite" => Overwrite::Replace,
+            "skip" => Overwrite::Skip,
+            _ => Overwrite::Rename,
+        }
+    }
+}
+
 /// 解压参数
 #[derive(Debug, Clone)]
 pub struct ExtractOptions {
@@ -663,6 +680,21 @@ fn 还原条目属性<R: std::io::Read>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 重名策略从配置解析() {
+        // T9-P2：设置页存的就是这三个词，引擎必须认
+        assert_eq!(Overwrite::from_config("rename"), Overwrite::Rename);
+        assert_eq!(Overwrite::from_config("replace"), Overwrite::Replace);
+        assert_eq!(Overwrite::from_config("skip"), Overwrite::Skip);
+        // 大小写 / 前后空格都算数（用户手改 config.toml 很容易带空格）
+        assert_eq!(Overwrite::from_config("  REPLACE "), Overwrite::Replace);
+        assert_eq!(Overwrite::from_config("Skip"), Overwrite::Skip);
+        // 认不出的值一律按最安全的 Rename：宁可多一个副本，也绝不覆盖用户文件
+        assert_eq!(Overwrite::from_config(""), Overwrite::Rename);
+        assert_eq!(Overwrite::from_config("乱写的"), Overwrite::Rename);
+        assert_eq!(Overwrite::from_config("overwrite"), Overwrite::Replace);
+    }
 
     /// 「密码」这个中文密码的三种字节形态（2026-10-17 实测值）
     #[test]

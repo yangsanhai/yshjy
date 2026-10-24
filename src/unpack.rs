@@ -557,7 +557,24 @@ impl InArchive for SingleStreamUnpacker {
             .out_name
             .clone()
             .unwrap_or_else(|| 兜底输出名.to_string());
-        let out_path = opts.dest.join(&out_name);
+        let mut out_path = opts.dest.join(&out_name);
+        // T9-P2：单流以前直接覆盖已有文件，「跳过 / 自动改名」设了也不作数。
+        // 现在与其它格式共用一套策略和同一句原因（job.rs 靠这句话认出「这不是错误」）。
+        if out_path.exists() {
+            match opts.overwrite {
+                Overwrite::Skip => {
+                    let mut rep = ExtractReport::default();
+                    rep.skipped
+                        .push((out_name.clone(), "已存在，按策略跳过".into()));
+                    ctx.entry_done(0, &out_name, crate::error::ItemResult::Skipped, 0);
+                    return Ok(rep);
+                }
+                Overwrite::Rename => {
+                    out_path = crate::extract_stream::unique_path_stream(&out_path);
+                }
+                Overwrite::Replace => {}
+            }
+        }
         // 重借用出 `&mut dyn ReadSeek`：`Source` 里存的就是一个可变引用，
         // 不能 move 出来，重借用一次；泛型参数又要求 Sized，所以必须有这一层
         let reader: &mut dyn ReadSeek = &mut *src.reader;
