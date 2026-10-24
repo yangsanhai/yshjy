@@ -367,6 +367,10 @@ fn 预扫输入(inputs: &[PathBuf]) -> (u64, u64) {
     (b, f.max(1))
 }
 
+/// 打包命令（协议 `pack`）
+///
+/// 三条交付路径：普通压缩（`.zip`）/ 伪装（外壳 + 压缩数据）/ 自解压（exe 或 .sh）。
+/// 普通压缩这条会发 `PACK_PROGRESS`（N2），其余两条目前只报阶段事件。
 pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Value> {
     let 输入: Vec<PathBuf> = 参数
         .get("inputs")

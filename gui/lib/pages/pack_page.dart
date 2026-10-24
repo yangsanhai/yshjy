@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../humanize.dart';
 import '../notify.dart';
 
 /// 打包页：把文件/文件夹做成"能播放的伪装包"
@@ -48,9 +50,31 @@ class _PackPageState extends State<PackPage> {
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _result;
+  /// 打包进度（PACK_PROGRESS，N2）：打几 GB 的包时界面不能是死的
+  Progress? _progress;
+  String? _current;
+  StreamSubscription<EngineEvent>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    // 引擎事件是广播流：打包页订阅自己关心的（解压页订阅它自己的）
+    _sub = _client.events.listen(_onEvent);
+  }
+
+  /// 只关心打包进度，别的 kind（解压进度/诊断…）不归这页管
+  void _onEvent(EngineEvent e) {
+    if (e.kind != 'PACK_PROGRESS') return;
+    if (!mounted) return;
+    setState(() {
+      _progress = e.progress;
+      _current = e.current;
+    });
+  }
 
   @override
   void dispose() {
+    _sub?.cancel();
     _pwCtrl.dispose();
     super.dispose();
   }
@@ -152,13 +176,11 @@ class _PackPageState extends State<PackPage> {
     return null;
   }
 
-  /// 错误码 → 人话（界面别直接糊 code）
+  /// 错误码 → 人话（界面不糊 code；引擎码查 `humanize.dart`，界面自己的码在这补）
   String _errorText(String code) => switch (code) {
         'NO_COVER' => '伪装模式要先选一个伪装文件（在下面「伪装文件」那里选）',
         'SPLIT_SIZE_INVALID' => '分卷大小填得不对，改一下再开始',
-        'BAD_PARAM' => '参数不对：输出文件不能和伪装文件/源文件是同一个',
-        'PATH_NOT_FOUND' => '找不到伪装文件（是不是被移走了？）',
-        _ => '打包失败（$code）',
+        _ => errorText(code),
       };
 
   Future<void> _pack() async {
@@ -177,6 +199,8 @@ class _PackPageState extends State<PackPage> {
       _busy = true;
       _error = null;
       _result = null;
+      _progress = null;
+      _current = null;
     });
     widget.onStatus?.call('正在打包…');
     try {
@@ -552,6 +576,32 @@ class _PackPageState extends State<PackPage> {
                   style: TextStyle(fontSize: 11)),
             ),
           const SizedBox(height: 8),
+          // 打包进度（N2）：有读数就画一条，打大包时能看见在动
+          if (_busy)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LinearProgressIndicator(
+                    value: _progress?.fraction,
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _progress == null
+                        ? '正在准备…'
+                        : '${((_progress!.fraction ?? 0) * 100).toStringAsFixed(1)}% · '
+                            '${_size(_progress!.doneBytes)} / ${_size(_progress!.totalBytes)}'
+                            '${_current == null ? '' : ' · $_current'}',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
           if (_error != null)
             Text(
               _errorText(_error!),

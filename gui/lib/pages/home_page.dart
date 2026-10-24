@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../history_store.dart';
+import '../humanize.dart';
 import '../notify.dart';
 import '../platform_paths.dart';
 
@@ -261,35 +262,11 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  String _diagText(String code) => switch (code) {
-        'RISKY_ENTRY' => '解出了可执行文件，运行前请确认来源',
-        'REBUILT_INDEX' => '索引坏了，清单是按文件头重建的',
-        'VOLUMES_MERGED' => '分卷已自动拼起来',
-        'OFFSET_CORRECTED' => '偏移不对，已自动修正',
-        'HIDDEN_AT_OFFSET' => '包藏在文件中间，已按真实位置定位',
-        'PASSWORD_FROM_NOTES' => '解压码是从旁边的说明里找到的',
-        'PARTIAL_DATA' => '数据不完整，能救多少算多少',
-        'SLOW_PATH' => '走了慢路（全文件扫描），请耐心等',
-        _ => '提示：$code',
-      };
+  /// 诊断码 → 人话。表在 `lib/humanize.dart`（D21：查不到也不露原始码）
+  String _diagText(String code) => diagText(code);
 
-  /// 错误码 → 人话（**这就是"引擎只给码、壳查文案"的落地**）
-  String _errText(String code) => switch (code) {
-        'NOT_ARCHIVE' => '这里面没找到压缩包 —— 可能不是伪装包，或者文件下坏了',
-        'MISSING_VOLUME' => '分卷不齐 —— 缺了一块',
-        'TRUNCATED' => '文件没下完（数据不完整）',
-        'DATA_LOST' => '文件坏了，只能救回一部分',
-        'ENCRYPTED_UNBREAKABLE' => '这个包加密了，而且没法试出解压码',
-        'PASSWORD_REQUIRED' => '这个包需要解压码',
-        'PASSWORD_WRONG' => '解压码不对',
-        'PERMISSION_DENIED' => '没有权限读写这个位置（换个目录试试）',
-        'PATH_NOT_FOUND' => '文件不存在（是不是被移走或改名了？）',
-        'IO' => '读写文件出错了（磁盘满了 / 磁盘有问题）',
-        'CANCELLED' => '已取消（已经解出来的文件都保留着）',
-        'ENGINE_EXITED' => '引擎进程退出了（重开一次界面就好）',
-        'TIMEOUT' => '等太久了，没等到引擎回应',
-        _ => '出错了（错误码：$code）',
-      };
+  /// 错误码 → 人话（**"引擎只给码、壳查文案"的落地**，表在 `lib/humanize.dart`）
+  String _errText(String code) => errorText(code);
 
   // ───────────────────────── 动作 ─────────────────────────
 
@@ -1898,20 +1875,8 @@ class _HomePageState extends State<HomePage> {
 
   // ───────────────────────── 小工具 ─────────────────────────
 
-  /// 批量结果里的 `outcome` 是 Rust 的 Debug 名（`WrongPassword` / `CrcError`），
-  /// 直接 toLowerCase 会把英文裸奔给用户 —— 转成错误码再查人话。
-  String _batchOutcomeText(String oc) {
-    if (oc == 'ok') return '完成';
-    if (oc == 'partial') return '部分完成';
-    if (oc == 'cancelled') return '已取消';
-    final b = StringBuffer();
-    for (var i = 0; i < oc.length; i++) {
-      final c = oc[i];
-      if (i > 0 && c.toUpperCase() == c && c.toLowerCase() != c) b.write('_');
-      b.write(c.toUpperCase());
-    }
-    return _errText(b.toString());
-  }
+  /// 批量结论 → 人话（老引擎给 Debug 名、新引擎给码，两种都认；见 `humanize.dart`）
+  String _batchOutcomeText(String oc) => batchOutcomeText(oc);
 
   /// 在文件管理器里定位某个文件（失败项用）
   Future<void> _revealInFolder(String path) async {
