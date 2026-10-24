@@ -704,7 +704,7 @@ impl Drop for TempFileReader {
 /// 为什么不跟随真实符号链接：解压过程中目录才刚建，很多目标文件还没落盘，
 /// `canonicalize` 会失败。这里做的是「纯字面规范化」—— 足够挡住 `../../etc/passwd`
 /// 这类逃逸，也不会因为文件还没解出来而误判。
-fn 链接目标安全(dest: &Path, 链接路径: &Path, 目标: &str) -> bool {
+pub(crate) fn 链接目标安全(dest: &Path, 链接路径: &Path, 目标: &str) -> bool {
     let t = Path::new(目标);
     if t.is_absolute() {
         return false;
