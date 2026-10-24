@@ -8,10 +8,14 @@
 //!   并如实告诉用户「请直接给文件路径」
 //! - **分卷** → 每卷 `read_path` 得到 `Archive`，再用 `rars::extract_volumes_to` 拼成一条逻辑流
 //!
-//! # 为什么 RAR 解出的文件没有原始时间戳
+//! # RAR 的时间戳
 //!
-//! 走流式 API 时 `ExtractedEntryMeta` 带 `file_time` / `attr_source`，**现在能补时间戳和权限位**了
-//! （以前用 `read_member` 拿不到头信息，是有意取舍；L1 批一起补上）。
+//! 走流式 API 时 `ExtractedEntryMeta` 带 `file_time` / `mtime_refinement`，**修改时间已经还原**：
+//! 回调里按 RAR 版本（RAR4 = DOS 时间、RAR5 = Unix 秒）换算成 `SystemTime` 记下来，
+//! 整包解完之后统一 `set_modified`（解压途中改会被库后续写入冲掉）。
+//!
+//! 权限位**还没做**：Unix 权限得从 `attr` + `host_os` 推（Windows 的 attr 是另一套语义），
+//! 属于「做了要能保证不错」，先留 TODO。
 //!
 //! # 许可
 //! RAR 的压缩算法是专有的，`rars` 是 Apache-2.0 的**纯 Rust 读取实现** ——
@@ -136,8 +140,11 @@ fn 单卷解压(
     opts: &ExtractRarOptions,
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
+    // 还原修改时间要按 RAR 版本换算（RAR4 存 DOS 时间、RAR5 存 Unix 时间），先问库
+    let family = archive.family();
     执行解压(
         packed_total,
+        family,
         |pw| archive.test_with_options(读选项(pw)),
         |pw, cb| archive.extract_to_with_options(读选项(pw), cb),
         opts,
@@ -152,8 +159,14 @@ fn 多卷解压(
     opts: &ExtractRarOptions,
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
+    // 同一组卷必然同版本，取第一卷的就行
+    let family = archives
+        .first()
+        .map(|a| a.family())
+        .unwrap_or(rars::ArchiveFamily::Rar50Plus);
     执行解压(
         packed_total,
+        family,
         |pw| rars::test_volumes_with_options(archives, 读选项(pw)),
         |pw, cb| rars::extract_volumes_to_with_options(archives, 读选项(pw), cb),
         opts,
@@ -238,6 +251,7 @@ pub fn extract_rar_ctx(
 /// `extract_volumes_to`）与「解出来往哪写、怎么记账」解耦，避免同一套落盘逻辑写两遍。
 fn 执行解压<测, 跑>(
     packed_total: u64,
+    family: rars::ArchiveFamily,
     测: 测,
     跑: 跑,
     opts: &ExtractRarOptions,
@@ -263,6 +277,11 @@ where
     let limits = opts.limits.clone();
     let has_pw = opts.password.is_some();
     let selection = opts.selection.clone();
+
+    // 修改时间登记表：回调里记下 (落盘路径, 原始时间)，整包解完再统一补 ——
+    // 解压途中改会被库后续的写入冲掉，所以必须等全部写完
+    let 时间表 = Rc::new(RefCell::new(Vec::<(std::path::PathBuf, std::time::SystemTime)>::new()));
+    let 时间表2 = 时间表.clone();
     // RAR 回调不给条目序号，我们自己数（预览→解压的挑选锚点就靠它）
     let idx_cell = Rc::new(std::cell::Cell::new(0u64));
     let idx_ref = idx_cell.clone();
@@ -398,6 +417,18 @@ where
             }
         };
 
+        // 文件建出来了才登记修改时间（创建失败的条目不该留登记，否则解完会冒出假警告）。
+        // `extracted_system_time` 自己按 RAR 版本换算：RAR4 是 DOS 时间、RAR5 是 Unix 秒
+        if let Some(t) =
+            rars::timestamp::extracted_system_time(
+                family,
+                meta.file_time,
+                meta.mtime_refinement,
+            )
+        {
+            时间表2.borrow_mut().push((out_path.clone(), t));
+        }
+
         // 包一层：边写边记限额与统计
         Ok(Box::new(CountingWriter {
             inner: f,
@@ -443,6 +474,20 @@ where
             .warnings
             .push(format!("解压过程报错（已解出部分）: {e}"));
     }
+    // RAR 现在也能还原修改时间了：整包解完再统一补 —— 此刻文件都已关闭，
+    // 改 mtime 不会被后续写入冲掉。失败只记警告，不影响「解出来了」这个结论。
+    for (p, t) in 时间表.borrow().iter() {
+        let 结果 = fs::OpenOptions::new()
+            .write(true)
+            .open(p)
+            .and_then(|f| f.set_modified(*t));
+        if let Err(e) = 结果 {
+            final_report
+                .warnings
+                .push(format!("还原修改时间失败 {}: {e}", p.display()));
+        }
+    }
+
     final_report.files.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(final_report)
 }
@@ -537,6 +582,39 @@ fn unique_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rar_解出的文件带包内原始修改时间() {
+        // 阶段 1 梯队四·第 1 项：以前 RAR 解出的文件时间就是「解压那一刻」，
+        // 现在要还原成包里记的原始时间。样本里的时间是 2012-07-13。
+        use crate::ctx::UnpackCtx;
+
+        let data = fs::read("tests/data/rar_mtime_sample.rar").expect("样本不见了");
+        let dest = scratch("rar_mtime");
+        let ctx = UnpackCtx::quiet(1);
+        let opts = ExtractRarOptions::new(&dest);
+
+        let rep = extract_rar_ctx(&data, &opts, &ctx).unwrap();
+        assert!(!rep.files.is_empty(), "样本该能解出文件：{:?}", rep.warnings);
+
+        // 2013-01-01 00:00:00 UTC = 1356998400。原始时间是 2012 年，必须早于这个点；
+        // 如果还原失败，文件时间会是「现在」（2026 年），这条就会挂。
+        for f in &rep.files {
+            let t = fs::metadata(&f.out_path)
+                .and_then(|m| m.modified())
+                .expect("拿不到修改时间");
+            let secs = t
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("时间早于 1970")
+                .as_secs();
+            assert!(
+                secs < 1_356_998_400,
+                "{} 的修改时间没被还原（{secs}，2013 年之后 = 还是解压当下）",
+                f.name
+            );
+            assert!(secs > 0, "{} 的时间成了 1970 年，别把缺时间写成 0", f.name);
+        }
+    }
 
     #[test]
     fn 挑选与进度在_rar_路径上也生效() {

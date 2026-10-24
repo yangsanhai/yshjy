@@ -170,6 +170,39 @@ target 存在的意义：只读 fuzz 再快也碰不到落盘。）
 | tar | - | - | - | ✓ | ✓ | - |
 | gzip/xz/zstd/bzip2/brotli/lz4 | - | - | - | - | - | - |
 
+### 阶段 1 梯队四·第 1 项：RAR 还原修改时间
+> 由来（体检时列的 TODO 第 9 项）：`extract_rar.rs` 顶部注释一直写着「现在能补时间戳和
+> 权限位了」，但 `caps()` 里是 `restores_mtime: false` —— 注释是张空头支票，
+> 解出来的 RAR 文件时间永远是「解压那一刻」。
+
+- 回调里从 `ExtractedEntryMeta.file_time` 取原始时间，按 RAR 版本换算
+  （RAR4 = DOS 时间、RAR5 = Unix 秒 + `mtime_refinement` 亚秒补位），
+  统一交给库的 `rars::timestamp::extracted_system_time()`
+- **整包解完再统一 `set_modified`**：解压途中改 mtime 会被库后续的写入冲掉
+- 文件创建成功才登记时间（创建失败的条目不留登记，免得解完冒假警告）；
+  还原失败只追加一条 warning，不影响「解出来了」这个结论
+- `caps().restores_mtime` 改成 `true`，跟实现对齐；那条「RAR 还原不了时间戳，
+  别写 true」的老断言同步改掉
+- 权限位**仍然没做**（Unix 权限要从 `attr` + `host_os` 推，Windows attr 是另一套语义），
+  模块注释里改成如实说明，不再暗示已经支持
+
+实测：
+| 检查 | 结果 |
+|---|---|
+| 解 `stored_recovery_1.rar` 出的 `protected.bin` | 时间 **2012-07-13 19:01:20**（当时是 2026-10-24 23:47） |
+| 新增单测「rar 解出的文件带包内原始修改时间」 | 通过（断言必须早于 2013 年、又不能是 1970） |
+| `--caps` 输出 | rar4 / rar5 的「还原时间」位由 `-` 变成 `✓` |
+
+### 顺带修好：契约测试自己的漏洞
+> `--caps` 吐的是 JSON **数组**，而契约采集器只认 `{` 开头的行 —— caps 这项以前
+> 只验了退出码，能力位怎么变都测不出来，等于白挂。
+
+- 采集器现在也解析数组行，且对 `--caps` 这种表**按原值固化**（布尔值也是契约：
+  能力位一改，界面显示的能力表就错）
+- 效果验证：改完 `restores_mtime` 后契约测试立刻报
+  `· .events._caps 是新加的字段（契约变更）`，`--update` 后 golden 里
+  `rar5.restores_mtime` 确实是 `true`
+
 ### 已知缺口（已记进 `docs/TODO.md` 表尾）
 - **RAR 路径尚未接上**：`unrar` 的解压回调由库自己管理 writer 生命周期，无法在
   「条目写完那一刻」安全 `finish`（改错会删掉好文件）。需要先确认库的写结束语义，

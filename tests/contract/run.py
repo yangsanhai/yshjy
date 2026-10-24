@@ -56,11 +56,25 @@ def collect(stdout):
     events = {}
     for line in stdout.splitlines():
         line = line.strip()
-        if not line.startswith("{"):
+        # 事件流每行一个对象；`--caps` 这种命令整行是一个数组
+        if not line.startswith(("{", "[")):
             continue
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
+            continue
+        if isinstance(obj, list):
+            # `--caps` 这类命令直接吐一个数组（不是事件流）；数组里的**值**也是契约
+            # （能力位一改，界面显示的能力表就错），所以这里不压成类型，原样存下来
+            if obj and isinstance(obj[0], dict) and "format" in obj[0]:
+                caps = {}
+                for row in obj:
+                    caps[str(row.get("format"))] = {
+                        k: v for k, v in row.items() if k != "format"
+                    }
+                events.setdefault("_caps", caps)
+            else:
+                events.setdefault("_array", shape_of(obj))
             continue
         if not isinstance(obj, dict):
             continue

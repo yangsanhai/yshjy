@@ -471,8 +471,8 @@ impl InArchive for RarUnpacker {
             encrypted_names: false,
             split_volumes: true,
             selective: true,
-            // 诚实结论：走 `rars` 高层 API 拿不到 file_time（详见 extract_rar.rs 模块注释）
-            restores_mtime: false,
+            // 现在能还原了：回调里拿到 `ExtractedEntryMeta.file_time`，整包解完统一 set_modified
+            restores_mtime: true,
             // RAR 算法专有，我们只做读取
             can_create: false,
         }
@@ -807,7 +807,10 @@ mod tests {
         assert!(七z.caps().encrypted_names, "7z -mhe=on 会加密文件名");
 
         let rar = find(ArchiveFormat::Rar5, Shape::Plain).unwrap();
-        assert!(!rar.caps().restores_mtime, "RAR 还原不了时间戳，别写 true");
+        assert!(
+            rar.caps().restores_mtime,
+            "RAR 现在能还原时间戳了（回调拿 file_time，解完 set_modified）"
+        );
         assert!(!rar.caps().can_create, "RAR 只解不压");
 
         let zip = find(ArchiveFormat::Zip, Shape::Plain).unwrap();
