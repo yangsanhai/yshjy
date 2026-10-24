@@ -97,7 +97,7 @@ run "cargo test --release" cargo test --release --quiet
 # ───────────────────────── 3. 协议探针 ─────────────────────────
 head_ "3. 协议探针（引擎 ↔ 界面之间的契约）"
 if [ -n "$BIN" ]; then
-  for t in protocol_select protocol_level protocol_serve_eof protocol_pack_cover protocol_sfx protocol_sfx_linux; do
+  for t in protocol_select protocol_level protocol_serve_eof protocol_pack_cover protocol_sfx protocol_sfx_linux protocol_cancel_job; do
     if [ -f "tests/$t.py" ]; then
       run "$t" env YSHJY_BIN="$BIN" python3 "tests/$t.py"
     else

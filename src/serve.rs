@@ -186,12 +186,33 @@ fn 处理命令(
 
     match cmd.as_str() {
         "hello" => 写行(出, &ok(id, api::hello())),
-        "cancel" => {
-            if let Some(t) = 当前 {
-                t.取消.cancel_with("api cancel");
+        // 取消：带 job → 只取消队列里的那一条（D5）；不带 job → 整批停下
+        "cancel" => match 值.get("job").and_then(|v| v.as_u64()) {
+            Some(job_id) => {
+                let mut 真打断 = false;
+                if let Some(t) = 当前.as_ref() {
+                    t.取消.cancel_job(job_id);
+                    // 只有「正在跑的就是它」才敢真打断，不然会把别人的任务也停掉
+                    真打断 = t.取消.running_job() == Some(job_id);
+                    if 真打断 {
+                        t.取消.skip();
+                    }
+                }
+                写行(
+                    出,
+                    &ok(
+                        id,
+                        json!({"cancelled_job": job_id, "running": 真打断}),
+                    ),
+                );
             }
-            写行(出, &ok(id, json!({"cancelled": true})));
-        }
+            None => {
+                if let Some(t) = 当前.as_ref() {
+                    t.取消.cancel_with("api cancel");
+                }
+                写行(出, &ok(id, json!({"cancelled": true})));
+            }
+        },
         // 回答 ASK_USER（限额询问）：continue / skip / cancel
         "answer" => {
             let 值文本 = 值.get("value").and_then(|v| v.as_str()).unwrap_or("");

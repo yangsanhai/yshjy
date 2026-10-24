@@ -71,6 +71,18 @@
 - 两个坑记在脚本里：bash 的 `local` 不认中文变量名；`cargo fmt --check` 只作提示
   （项目是手写紧凑风格，rustfmt 会重排上千行）
 
+### 批量单独取消某一行（N4 / D5，0.9.25-c）
+- `CancelToken` 新增：`skip_jobs`（按任务号）+ `cancel_job()` / `take_job_skip()` /
+  `mark_running()` / `running_job()` / `clear_running()`
+- `batch.rs` **顺序和并行两条路**都在每项开始前查「这一项被单独取消了没」
+- 协议 `cancel` 支持 `job` 字段：无 `job` 仍是整批停；有 `job` 只跳那一项，
+  且**只有正在跑的就是它**才真打断（否则会把别人的任务也停了）
+- 界面：队列行加「取消这一项」按钮（排队中 = 不跑；运行中 = 立刻停），
+  `JOB_STARTED` 记下任务号，结果显示「已取消」（不再错误地显示「失败」）
+- 证据：单元测试 `界面单独取消某一行只跳过那一条`；协议探针 `tests/protocol_cancel_job.py`
+  （80 MiB × 3 个包，途中取消第 2 项 → `{1:'ok', 2:'cancelled', 3:'ok'}`，第 1、3 项照跑）
+- 顺带核实：D4（Del 键删队列条目）早批次已实现，本轮只确认在册
+
 ### 回归证据
 - `cargo test --release`：**303 passed / 0 failed**（新增「认出 RAR 四卷分卷」；
   改写「超大 RAR 不再被大小检查拦住」；新增 ignored「300 MiB 真包解压」）

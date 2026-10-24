@@ -13,6 +13,7 @@
 //! - [`LocalProgress`] —— 嵌套解压（ZIP 里套 7z）的内层进度折算到外层（RAII，台账 §3.5）
 //! - [`EtaEstimator`] —— 剩余时间估算，指数滑动平均，样本太少时**不给估算**（宁可不显示也不乱跳）
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -30,6 +31,10 @@ pub struct CancelToken {
     flag: Arc<AtomicBool>,
     /// 「只跳过当前这个」—— 与取消分开：跳过后批量继续跑下一个
     skip: Arc<AtomicBool>,
+    /// 队列里被**单独**取消的任务号（D5：界面上点某一行的「取消」）
+    skip_jobs: Arc<Mutex<HashSet<u64>>>,
+    /// 最近开始跑的任务号（0 = 没有）。用来判断「用户取消的正是正在跑的那个」
+    running: Arc<AtomicU64>,
     reason: Arc<Mutex<Option<String>>>,
 }
 
@@ -45,6 +50,8 @@ impl CancelToken {
         Self {
             flag: Arc::new(AtomicBool::new(false)),
             skip: Arc::new(AtomicBool::new(false)),
+            skip_jobs: Arc::new(Mutex::new(HashSet::new())),
+            running: Arc::new(AtomicU64::new(0)),
             reason: Arc::new(Mutex::new(None)),
         }
     }
@@ -73,6 +80,49 @@ impl CancelToken {
     /// 取走并清掉「跳过」标记（批量循环在每个任务结束时调一次）
     pub fn take_skip(&self) -> bool {
         self.skip.swap(false, Ordering::Relaxed)
+    }
+
+    /// 单独取消队列里的某一个任务（D5：界面上点某一行的「取消」）
+    ///
+    /// 与 [`Self::cancel`] 的区别：**只影响这一个任务号**，其余任务照跑。
+    /// - 它还在排队 → 批量循环在它开始前看到标记，直接标记「跳过」
+    /// - 它正在跑 → 调用方应再调一次 [`Self::skip`] 让它立刻停下
+    ///   （能不能真打断，取决于正在跑的是不是这一项，用 [`Self::running_job`] 判断）
+    pub fn cancel_job(&self, job: u64) {
+        if let Ok(mut s) = self.skip_jobs.lock() {
+            s.insert(job);
+        }
+    }
+
+    /// 取走并清掉「这个任务被单独取消」的标记（批量循环每项开始时调一次）
+    pub fn take_job_skip(&self, job: u64) -> bool {
+        self.skip_jobs
+            .lock()
+            .map(|mut s| s.remove(&job))
+            .unwrap_or(false)
+    }
+
+    /// 还有几个排队中的任务被单独取消了（测试/诊断用）
+    pub fn pending_job_skips(&self) -> usize {
+        self.skip_jobs.lock().map(|s| s.len()).unwrap_or(0)
+    }
+
+    /// 记下「现在正在跑哪个任务」（批量循环在 `JobStarted` 前后调）
+    pub fn mark_running(&self, job: u64) {
+        self.running.store(job, Ordering::Relaxed);
+    }
+
+    /// 清掉「正在跑」的标记（一个任务结束、下一个还没开始时）
+    pub fn clear_running(&self) {
+        self.running.store(0, Ordering::Relaxed);
+    }
+
+    /// 现在正在跑的任务号（没有则 `None`）
+    pub fn running_job(&self) -> Option<u64> {
+        match self.running.load(Ordering::Relaxed) {
+            0 => None,
+            n => Some(n),
+        }
     }
 
     /// 是否已被请求停下（**包含**「跳过当前」——对解压循环来说都是停下）

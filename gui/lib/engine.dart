@@ -482,6 +482,22 @@ class EngineClient {
     }
   }
 
+  /// 只取消队列里的某一行（D5）：其余任务照跑
+  ///
+  /// 返回 `{"cancelled_job": n, "running": bool}`：
+  /// - `running: true` —— 它正在跑，已经真的被打断
+  /// - `running: false` —— 它还在排队，引擎轮到它时会直接标记跳过
+  Future<Map<String, dynamic>> cancelJob(int job) async {
+    try {
+      return _unwrap(await _call(
+        {'cmd': 'cancel', 'job': job},
+        timeout: const Duration(seconds: 10),
+      ));
+    } catch (_) {
+      return const {'cancelled_job': 0, 'running': false};
+    }
+  }
+
   void dispose() {
     _proc?.closeInput();
     _proc?.kill();
