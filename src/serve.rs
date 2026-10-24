@@ -19,7 +19,7 @@
 use std::io::{BufRead, Write};
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
@@ -71,6 +71,12 @@ pub fn 运行() -> u8 {
     let (结果发, 结果收) = mpsc::channel::<Value>();
     let 事件 = ChannelSink::new(16_384);
     let mut 当前: Option<当前任务> = None;
+    // stdin 断开 ≠ 立刻退出：脚本一次性喂完命令（`printf '…' | yshjy --serve`）时 EOF 先到，
+    // 而在跑的任务还没写结果 —— 直接 break 就是「命令发了、结果没有」（D16）。
+    // 断开后进入「排空」状态：继续吐事件/结果，直到当前任务收尾；600 秒硬上限防挂死。
+    let mut 输入已断 = false;
+    let mut 断流开始: Option<Instant> = None;
+    const 断流上限: Duration = Duration::from_secs(600);
 
     let stdout = std::io::stdout();
     let mut 出 = stdout.lock();
@@ -88,14 +94,45 @@ pub fn 运行() -> u8 {
             写行(&mut 出, &v);
         }
         // ③ 收命令（30ms 一轮，保证事件输出及时）
-        match 命令收.recv_timeout(Duration::from_millis(30)) {
-            Ok(文本) => 处理命令(&文本, &mut 出, &事件, &结果发, &mut 当前),
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        if !输入已断 {
+            match 命令收.recv_timeout(Duration::from_millis(30)) {
+                Ok(文本) => 处理命令(&文本, &mut 出, &事件, &结果发, &mut 当前),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    输入已断 = true;
+                    断流开始 = Some(Instant::now());
+                }
+            }
+        } else {
+            // 没有新命令可收了，只等任务跑完（别空转烧 CPU）
+            std::thread::sleep(Duration::from_millis(10));
         }
         // ④ 任务跑完了就把句柄放掉（否则一直显示"忙"）
         if 当前.as_ref().is_some_and(|t| !t.还在跑()) {
             当前 = None;
+        }
+        // ⑤ 输入已断 + 任务也收尾 → 把最后的事件与结果吐干净再退出（D16）
+        if 输入已断 {
+            if 当前.is_none() {
+                for ev in 事件.drain() {
+                    写行(
+                        &mut 出,
+                        &json!({"type": "event", "kind": ev.kind(), "event": ev}),
+                    );
+                }
+                while let Ok(v) = 结果收.try_recv() {
+                    写行(&mut 出, &v);
+                }
+                break;
+            }
+            if 断流开始.is_some_and(|t| t.elapsed() > 断流上限) {
+                // 兜底：任务卡死也不能把脚本吊一辈子
+                if let Some(t) = 当前.take() {
+                    t.取消.cancel_with("serve shutting down (stdin closed)");
+                    let _ = t.句柄.join();
+                }
+                break;
+            }
         }
     }
 

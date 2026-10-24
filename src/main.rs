@@ -65,6 +65,8 @@ const 带值的选项: &[&str] = &[
     "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang", "--split", "--encoding",
     // 第 21 批组 E（CLI 扫尾）新增
     "--config", "--layout", "--cover", "--password-file", "--log",
+    // 第 23 批（P23-4）：打包压缩级别
+    "--level",
 ];
 
 /// 不带值的选项 —— 用来拦住拼错的参数
@@ -482,6 +484,19 @@ fn main() -> ExitCode {
         let split_o = val_of("--split");
         let layout_o = val_of("--layout");
         let cover_o = val_of("--cover");
+        // 压缩级别（P23-4）：不给就用引擎默认（6）；给了就必须是 0-9，越界报错不静默
+        let level = match val_of("--level") {
+            None => None,
+            Some(v) => match v.trim().parse::<u32>() {
+                Ok(n) if n <= 9 => Some(n),
+                _ => {
+                    eprintln!(
+                        "❌ --level 只能是 0-9 的整数（0=仅存储最快，9=压缩最小；收到 {v}）"
+                    );
+                    return ExitCode::from(code::USAGE);
+                }
+            },
+        };
         return do_pack(打包参数 {
             targets: &targets,
             dest_opt: &dest_o,
@@ -494,6 +509,7 @@ fn main() -> ExitCode {
             layout: &layout_o,
             cover: &cover_o,
             sfx: has("--sfx"),
+            level,
         });
     }
 
@@ -1495,6 +1511,8 @@ struct 打包参数<'a> {
     cover: &'a Option<String>,
     /// `--sfx`：生成 Windows 自解压 exe（第 23 批）
     sfx: bool,
+    /// `--level 0-9`：压缩级别（P23-4）
+    level: Option<u32>,
 }
 
 fn do_pack(a: 打包参数<'_>) -> ExitCode {
@@ -1510,6 +1528,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         layout,
         cover,
         sfx,
+        level,
     } = a;
     // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
     // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
@@ -1578,6 +1597,10 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         cover_ext: 扩展名,
         ..Default::default()
     };
+    // 压缩级别（P23-4）：0=仅存储（最快）/ 1-9 越大越小越慢
+    if let Some(n) = level {
+        opts.level = n;
+    }
     // 只有 MP4 才有 `free` 原子（ISO 盒子）；图片/文本用它会直接把封面写坏
     if tail || !素材.is_video() {
         opts.layout = yshjy::pack::PackLayout::TailAppend;
