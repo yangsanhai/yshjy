@@ -122,7 +122,7 @@
 | **N1** | **GUI 文案表 + 错误码人话**（D21 的后半截）：Dart 侧建 `码 → 中文` 映射，覆盖 `ItemResult` 6 码、`DiagnosticCode` 10 码、`Outcome` | 界面任何位置都不再出现 `DATA_ERROR` / `RiskyEntry` 这类原始码；解恶意包时显示「包里有不安全的路径，已跳过」这类人话 |
 | **N2** | **GUI 打包页接 `PACK_PROGRESS`** | 打 1 GB 包时打包页进度条在动、界面不假死 |
 | **N3** | **`tests/all.sh` 一条命令回归** | 一条命令跑完 语法 + `cargo test` + `clippy -D warnings` + 6 探针 + `flutter test`，默认 <60 秒；`--slow` 才跑大包/RAR 分卷 |
-| **N4** | **D5 批量单独取消某一行** | 队列某行能单独取消，其余任务照跑（引擎要支持逐条跳过） |
+| **N4** | **D5 批量单独取消某一行** | 队列某行能单独取消，其余任务照跑（引擎要支持逐条跳过）<br>**实现方案（已摸清，下一轮直接照做）**：① `CancelToken` 加 `skip_jobs: Mutex<HashSet<u64>>` + `cancel_job(id)` / `take_job_skip(id)`；② `batch.rs` 的 `run_sequential` / `run_parallel` 每项开始前查这个集合 → `skipped("cancelled by user (queue)")`；③ 协议 `cancel` 支持 `job` 字段（无 job = 整批取消；有 job 且正在跑 → 用现有 `skip` 只跳当前）；④ GUI 队列行加取消按钮，但要先处理 `JOB_STARTED` 事件建立「队列行 ↔ 引擎 job id」映射（现在界面没接这个事件） |
 | **N5** | **D4 队列条目 Del 键删除** | 选中行按 `Del` 删掉，不用点「清空」 |
 | **N6** | **D6 拖入目录的提示文案** | 拖目录进来时明确写「会自动展开其中的压缩包」 |
 | **N7** | **右键菜单**（Nautilus 脚本 + deb 提供） | 文件管理器右键压缩包出现「用杨三海解压」 |
