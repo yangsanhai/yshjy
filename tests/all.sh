@@ -109,6 +109,7 @@ if [ -n "$BIN" ]; then
   run "冒烟测试（smoke.sh）" bash tests/smoke.sh "$BIN"
   run "错误文案探针（errmsgs.sh）" bash tests/errmsgs.sh "$BIN"
   run "重名策略探针（conflict.sh）" bash tests/conflict.sh "$BIN"
+  run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
 else
   skip "协议探针" "没有可执行文件"
 fi
@@ -126,9 +127,12 @@ head_ "5. 慢测试"
 if [ "$SLOW" = 1 ]; then
   run "300 MiB 大 RAR（X2 回归）" cargo test --release --quiet -- --ignored 大rar
   run "RAR 分卷识别（X1 回归）" cargo test --release --quiet 认出_rar_四卷分卷
+  # 写盘路径 fuzz：正式跑是 10 分钟（71,661 次），日常回归只跑 60 秒探个底
+  run "fuzz 写盘路径（60 秒）" bash -c "cd fuzz && cargo +nightly fuzz run extract_target -- -max_total_time=60 -rss_limit_mb=2048 >/dev/null 2>&1"
 else
   skip "300 MiB 大 RAR" "加 --slow 才跑"
   skip "RAR 分卷识别" "加 --slow 才跑"
+  skip "fuzz 写盘路径" "加 --slow 才跑（正式 10 分钟）"
 fi
 
 # ───────────────────────── 汇总 ─────────────────────────

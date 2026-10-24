@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../engine.dart';
 import '../notify.dart';
 import '../platform_paths.dart';
 import '../theme_mode.dart';
@@ -323,6 +325,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 18),
+        _section('各格式能力（问引擎要的，不是写死的）', cs),
+        const _CapsTable(),
+        const SizedBox(height: 18),
         _section('其它（改 config.toml）', cs),
         // T7-P5：以前这里并列写着 7 个语言代码，看着像「改 config.toml 就能切界面语言」，
         // 实际界面文案全是硬编码中文。直接说实话，别骗人。
@@ -391,4 +396,114 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       );
+}
+
+/// 各格式能力表（阶段 1 梯队三·第 3 项）
+///
+/// 为什么不是写死的：能力位只在引擎的 `Caps` 里（`InArchive::caps()`），
+/// 界面自己抄一份就等于第二本账 —— 引擎哪天改了能力，界面还在按老账本显示。
+/// 所以这里每次进设置页都问引擎要（`--caps --json`），要不到就如实说读不到。
+class _CapsTable extends StatefulWidget {
+  const _CapsTable();
+
+  @override
+  State<_CapsTable> createState() => _CapsTableState();
+}
+
+class _CapsTableState extends State<_CapsTable> {
+  List<Map<String, dynamic>>? _rows;
+  String? _err;
+  bool _loading = false;
+
+  // ⚠️ 故意**不**在 initState 里加载：
+  //   ① widget 测试的 fake_async 环境会把 `Process.run` 的定时器当成「未完成」判失败
+  //   ② 每次进设置页就 spawn 一个进程也不划算（等 5 秒才出表格）
+  //   改成点一下才读，用户想看才付出这点代价。
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+    try {
+      final r = await Process.run(
+        EngineClient.executable,
+        ['--caps', '--json'],
+      ).timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      if (r.exitCode != 0) {
+        setState(() => _err = '引擎返回 ${r.exitCode}（老版本引擎没有 --caps）');
+        return;
+      }
+      final list = jsonDecode(r.stdout as String) as List;
+      setState(() {
+        _rows = list.map((e) => (e as Map).cast<String, dynamic>()).toList();
+      });
+    } catch (e) {
+      if (mounted) setState(() => _err = '$e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final rows = _rows;
+    if (rows == null) {
+      return Row(
+        children: [
+          TextButton(
+            onPressed: _loading ? null : _load,
+            child: Text(_loading ? '读取中…' : '读取各格式能力'),
+          ),
+          if (_err != null)
+            Expanded(
+              child: Text(
+                '读不到能力表：$_err',
+                style: TextStyle(fontSize: 12, color: cs.error),
+              ),
+            ),
+        ],
+      );
+    }
+    // ⚠️ Dart 的标识符只能是 ASCII —— 中文变量名编译不过（Rust 可以，Dart 不行）
+    const capsLabels = <String, String>{
+      'encrypted': '带密码',
+      'encrypted_names': '密文件名',
+      'split_volumes': '分卷',
+      'selective': '可选解',
+      'restores_mtime': '还原时间',
+      'can_create': '可打包',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final r in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 96,
+                  child: Text(
+                    '${r['format']}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    [
+                      for (final e in capsLabels.entries)
+                        if (r[e.key] == true) e.value,
+                    ].join(' · '),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }

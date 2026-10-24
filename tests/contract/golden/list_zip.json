@@ -1,0 +1,47 @@
+{
+  "events": {
+    "PreviewReady": {
+      "entries": [
+        {
+          "encrypted": "bool",
+          "index": "int",
+          "is_dir": "bool",
+          "is_risky": "bool",
+          "modified": "NoneType",
+          "packed": "int",
+          "path": "str",
+          "size": "int"
+        }
+      ],
+      "hints": [],
+      "job": "int"
+    },
+    "StageFinished": {
+      "job": "int",
+      "millis": "int",
+      "stage": "str"
+    },
+    "StageStarted": {
+      "job": "int",
+      "stage": "str"
+    },
+    "complete": "bool",
+    "encrypted": "int",
+    "entries": [
+      {
+        "encrypted": "bool",
+        "index": "int",
+        "is_dir": "bool",
+        "path": "str",
+        "risky": "bool",
+        "size": "int"
+      }
+    ],
+    "files": "int",
+    "format": "str",
+    "hints": [],
+    "input": "str",
+    "total_size": "int"
+  },
+  "rc": 0
+}

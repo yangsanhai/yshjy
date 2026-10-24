@@ -35,6 +35,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "extract_target"
+path = "fuzz_targets/extract_target.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 # 空 workspace 段：让这个 crate 独立构建，不被父目录的 workspace 收编
 # （cargo-fuzz 的惯例；少了它 `cargo +nightly fuzz run` 会报 workspace 冲突）
