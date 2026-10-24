@@ -228,7 +228,8 @@ class _PackPageState extends State<PackPage> {
     } on EngineError catch (e) {
       if (!mounted) return;
       setState(() => _error = e.code);
-      widget.onStatus?.call('打包失败：${e.code}');
+      // 五态审计：失败态要「有话说」——裸错误码（SPLIT_SIZE_INVALID）用户看不懂
+      widget.onStatus?.call('打包失败：${errorText(e.code)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
