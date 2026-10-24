@@ -10,6 +10,6 @@ Icon=yshjy
 Terminal=false
 Categories=Utility;Archiving;
 Keywords=zip;7z;rar;解压;压缩包;伪装;网盘;
-MimeType=application/zip;application/x-7z-compressed;application/vnd.rar;application/gzip;application/x-xz;application/zstd;application/x-bzip2;
+MimeType=application/zip;application/x-zip-compressed;application/x-7z-compressed;application/vnd.rar;application/x-rar;application/x-rar-compressed;application/x-tar;application/x-compressed-tar;application/gzip;application/x-xz;application/zstd;application/x-bzip2;application/x-brotli;application/x-lz4;
 StartupNotify=true
 StartupWMClass=yshjy_gui
