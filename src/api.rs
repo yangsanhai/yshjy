@@ -370,9 +370,6 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
         if 参数.get("split").and_then(|v| v.as_u64()).is_some() {
             return Err(错误值("BAD_PARAM", "自解压包不能分卷（双击要是一个完整文件）"));
         }
-        if 参数.get("password").and_then(|v| v.as_str()).is_some() {
-            return Err(错误值("BAD_PARAM", "自解压包暂不支持解压码"));
-        }
         if 参数.get("cover").and_then(|v| v.as_str()).is_some() {
             return Err(错误值("BAD_PARAM", "自解压不需要 cover（外壳就是存根）"));
         }

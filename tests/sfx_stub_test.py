@@ -105,4 +105,37 @@ r = 跑(包)
      "已有目录不被覆盖")
 断言((W / "游戏包 (2)" / "根目录.txt").exists(), "重名时自动加 (2)")
 
+# 5. 加密包（第 23 批 P23-5）：解压码从 YSHJY_SFX_PASSWORD 进来
+加密源 = W / "加密源"
+(加密源 / "笔记").mkdir(parents=True, exist_ok=True)
+(加密源 / "笔记" / "密文.txt").write_text("加密内容\n", encoding="utf-8")
+z密 = W / "加密内容.zip"
+subprocess.run(["zip", "-q", "-P", "s3cret", "-r", str(z密), "."],
+               cwd=str(加密源), check=True, capture_output=True)
+包密 = W / "加密包.exe"
+拼包(包密, z密)
+env密 = dict(os.environ, YSHJY_SFX_SILENT="1", YSHJY_SFX_NO_OPEN="1",
+            YSHJY_SFX_PASSWORD="s3cret")
+ismz = STUB.read_bytes()[:2] == b"MZ"
+if ismz:
+    env密["WINEDEBUG"] = "-all"
+    cmd密 = ["wine", str(包密)]
+else:
+    cmd密 = [str(包密)]
+subprocess.run(cmd密, cwd=str(包密.parent), env=env密,
+               capture_output=True, text=True, timeout=180)
+断言((W / "加密包" / "笔记" / "密文.txt").read_text(encoding="utf-8") == "加密内容\n",
+     "带解压码的包能解开（密码从环境变量进）")
+
+# 6. 密码错了：明确报错、不留半成品目录
+包错 = W / "错密码包.exe"
+拼包(包错, z密)
+env错 = dict(env密)
+env错["YSHJY_SFX_PASSWORD"] = "wrong"
+cmd错 = (["wine", str(包错)] if ismz else [str(包错)])
+r = subprocess.run(cmd错, cwd=str(包错.parent), env=env错,
+                   capture_output=True, text=True, timeout=180)
+断言(not (W / "错密码包").exists(), "密码错时不留下空目录")
+断言("解压码不对" in (r.stdout or "") + (r.stderr or ""), "密码错有明确提示")
+
 print(f"\n全部通过。测试目录：{W}")
