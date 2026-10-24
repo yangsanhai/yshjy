@@ -109,6 +109,7 @@ if [ -n "$BIN" ]; then
   run "冒烟测试（smoke.sh）" bash tests/smoke.sh "$BIN"
   run "错误文案探针（errmsgs.sh）" bash tests/errmsgs.sh "$BIN"
   run "重名策略探针（conflict.sh）" bash tests/conflict.sh "$BIN"
+  run "RAR 缺卷判定（rar_volume.sh）" bash tests/rar_volume.sh "$BIN"
   run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
 else
   skip "协议探针" "没有可执行文件"
