@@ -488,6 +488,59 @@ pub const SFX_STUB: &[u8] = include_bytes!("../../assets/sfx/yshjy-sfx.exe");
 /// 自解压尾标：`"YSHSFX01" + zip_offset(u64 LE) + zip_size(u64 LE)` = 24 字节
 pub const SFX_MAGIC: &[u8; 8] = b"YSHSFX01";
 
+/// Linux `.sh` 自解压存根模板（P23-5）
+///
+/// 占位符 **20 位定宽零填充**：替换前后长度完全一致，所以「脚本长度 = ZIP 偏移」
+/// 这条自洽关系成立（先按模板长度算偏移，再把数字填进去，不用改两遍）。
+/// 最后一行必须是 `exit 0` —— shell 是流式读脚本的，不退出就会把后面的 ZIP 当命令解析。
+pub const SFX_SH_STUB: &str = r#"#!/bin/sh
+# 杨三海自解压包 —— 由 yshjy 生成
+# 用法：双击，或在终端里 sh 这个文件。会解到同目录的「同名文件夹」。
+# 有解压码的包：export YSHJY_SFX_PASSWORD=你的密码 再运行（不设会提示输入）。
+set -eu
+SELF="$0"
+case "$SELF" in
+  */*) ;;
+  *) SELF="./$SELF" ;;
+esac
+ZIP_OFFSET="00000000000000000000"
+ZIP_SIZE="00000000000000000000"
+# 归一化：定宽填充可能留空格，前导 0 又会被 shell 当八进制 → 先走一遍算术展开
+ZIP_OFFSET=$(($ZIP_OFFSET))
+ZIP_SIZE=$(($ZIP_SIZE))
+BASE=$(basename "$SELF")
+NAME=${BASE%.*}
+TARGET="$NAME"
+N=1
+while [ -e "$TARGET" ]; do
+  TARGET="$NAME ($N)"
+  N=$((N + 1))
+done
+TMP="${TMPDIR:-/tmp}/yshjy-sfx-$$.zip"
+trap 'rm -f "$TMP"' EXIT INT TERM
+tail -c +$((ZIP_OFFSET + 1)) "$SELF" | head -c "$ZIP_SIZE" > "$TMP"
+mkdir -p "$TARGET"
+if command -v unzip >/dev/null 2>&1; then
+  if [ -n "${YSHJY_SFX_PASSWORD:-}" ]; then
+    unzip -q -o -P "$YSHJY_SFX_PASSWORD" "$TMP" -d "$TARGET"
+  else
+    unzip -q -o "$TMP" -d "$TARGET"
+  fi
+elif command -v bsdtar >/dev/null 2>&1; then
+  bsdtar -xf "$TMP" -C "$TARGET"
+elif command -v python3 >/dev/null 2>&1; then
+  python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$TMP" "$TARGET"
+else
+  echo "需要 unzip / bsdtar / python3 三者之一才能解开这个包" >&2
+  exit 1
+fi
+echo "解压完成：$TARGET"
+if command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$TARGET" >/dev/null 2>&1 || true
+fi
+exit 0
+"#;
+
 /// **生成 Windows 自解压 exe**：`[存根][ZIP 数据][尾标 24B]`
 ///
 /// 和伪装包不是一回事：这里不追求「能播放/能打开」，exe 自己就是程序，
@@ -537,6 +590,71 @@ pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport
         total_size: 存根大小 + zip_size + 24,
         zip_size,
         cover_size: 存根大小,
+        entries,
+        layout: PackLayout::TailAppend,
+        warnings: Vec::new(),
+        intermediate: None,
+    })
+}
+
+/// **生成 Linux 自解压 .sh**：`[shell 脚本][ZIP 数据]`
+///
+/// 与 Windows 版共用同一份 ZIP（`write_zip`），差别只在「外壳」是文本脚本：
+/// 偏移和长度作为常量写进脚本里（定宽占位替换，前后长度一致），不需要尾标。
+pub fn build_sfx_sh<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    if opts.inputs.is_empty() {
+        return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
+    }
+
+    let tmp = std::env::temp_dir().join(format!(
+        "yshjy_sfx_sh_{}_{}.zip",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let zip_size = fs::metadata(&tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
+        .len();
+
+    // 脚本长度 = ZIP 偏移（占位符定宽，替换不改变长度）
+    let 偏移 = SFX_SH_STUB.len() as u64;
+    // 用**空格**右对齐填充而不是零填充：`$((000123))` 会被 shell 当八进制，
+    // 一旦数字里出现 8/9 就直接算错（实测：ZIP 提取偏移错 100 字节，unzip 报找不到目录）。
+    let 脚本 = SFX_SH_STUB
+        .replace(
+            "ZIP_OFFSET=\"00000000000000000000\"",
+            &format!("ZIP_OFFSET=\"{偏移:>20}\"")[..],
+        )
+        .replace(
+            "ZIP_SIZE=\"00000000000000000000\"",
+            &format!("ZIP_SIZE=\"{zip_size:>20}\"")[..],
+        );
+    debug_assert_eq!(
+        脚本.len(),
+        SFX_SH_STUB.len(),
+        "占位符必须定宽替换，否则偏移会算错"
+    );
+
+    out.write_all(脚本.as_bytes())
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write sh stub: {e}")))?;
+    let mut f = fs::File::open(&tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
+    std::io::copy(&mut f, out)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+
+    if 保留中间产物已开启() {
+        // `--keep`：留着中间 ZIP
+    } else {
+        let _ = fs::remove_file(&tmp);
+    }
+
+    Ok(PackReport {
+        total_size: 偏移 + zip_size,
+        zip_size,
+        cover_size: 偏移,
         entries,
         layout: PackLayout::TailAppend,
         warnings: Vec::new(),
