@@ -193,7 +193,41 @@ pub fn find_hints_near(target: &Path) -> Vec<PasswordHint> {
         dirs.push(up);
     }
 
-    for d in dirs {
+    // T8-P4：判定「这文件是不是这个包的说明」的规则（以前是宽口径：任何 .txt/.md/.log/.ini 都读，
+    // 实测把父目录里覆盖率转储的源码注释当成了解压码）
+    //
+    //   * 同目录：名字有说明性（说明/密码/readme…）**或**与包同名，且扩展名是文档类
+    //   * 上一级：**只认与包同名**（父目录的 README.md 不再被读，那是最容易误伤的地方）
+    //
+    // 「与包同名」= `a.zip` 认 `a.说明.txt` / `a.zip.说明.txt`，且包名后面必须紧跟
+    // `.` `_` `-` 空格 —— 否则 `a.zip` 会把 `abc.txt` 当同族。
+    let target_name = target
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let target_stem = target
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let 与包同名 = |name: &str| -> bool {
+        [&target_name, &target_stem].iter().any(|base| {
+            let base = base.as_str();
+            if base.is_empty() {
+                return false;
+            }
+            if name == base {
+                return true;
+            }
+            match name.strip_prefix(base) {
+                Some(rest) => rest.starts_with(['.', '_', '-', ' ']),
+                None => false,
+            }
+        })
+    };
+
+    for (idx, d) in dirs.iter().enumerate() {
+        // 0 = 包所在目录；>0 = 上一级
+        let 是上级 = idx > 0;
         let Ok(rd) = fs::read_dir(d) else { continue };
         for ent in rd.flatten() {
             let path = ent.path();
@@ -213,9 +247,20 @@ pub fn find_hints_near(target: &Path) -> Vec<PasswordHint> {
             else {
                 continue;
             };
-            let looks_like_doc =
-                DOC_STEMS.iter().any(|s| stem.contains(s)) || DOC_EXTS.iter().any(|e| e == &ext);
-            if !looks_like_doc {
+            let name = path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let 名字有说明性 = DOC_STEMS.iter().any(|s| stem.contains(s));
+            let 是文档类型 = DOC_EXTS.iter().any(|e| e == &ext);
+            // T8-P4：两个条件都要满足。以前是 `名字有说明性 || 是文档类型`，
+            // 等于「任何 .txt 都读」，才把无关源码注释当成了密码。
+            let 允许 = if 是上级 {
+                与包同名(&name)
+            } else {
+                名字有说明性 || 与包同名(&name)
+            };
+            if !允许 || !是文档类型 {
                 continue;
             }
             // 体积限制：说明文件不该很大
@@ -361,6 +406,85 @@ mod tests {
         assert!(!hints.is_empty(), "相对路径下也该能找到说明文件");
         assert_eq!(hints[0].password, "相对路径测试");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn p4_父目录的readme和无关txt不再被读() {
+        // T8-P4 实测事故：父目录里覆盖率转储的源码注释被当成了「解压码」。
+        // 现在规则：上一级只认「与包同名」的说明文件。
+        let 根 = std::env::temp_dir().join(format!("yshjy_p4a_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&根);
+        let dir = 根.join("包");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(根.join("README.md"), "解压密码: 父目录的密码").unwrap();
+        fs::write(根.join("cov.txt"), "解压码：覆盖率转储里的注释").unwrap();
+        let target = dir.join("a.zip");
+        fs::write(&target, b"x").unwrap();
+
+        let got: Vec<String> = find_hints_near(&target)
+            .into_iter()
+            .map(|h| h.password)
+            .collect();
+        assert!(
+            !got.iter().any(|p| p.contains("父目录的密码")),
+            "父目录 README.md 不该再被读：{got:?}"
+        );
+        assert!(
+            !got.iter().any(|p| p.contains("覆盖率")),
+            "父目录无关 txt 不该再被读：{got:?}"
+        );
+        let _ = fs::remove_dir_all(&根);
+    }
+
+    #[test]
+    fn p4_同目录无关txt不读但同名说明读() {
+        let dir = std::env::temp_dir().join(format!("yshjy_p4b_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("cov.txt"), "解压码：无关文件里的字").unwrap();
+        fs::write(dir.join("a.说明.txt"), "解压码：同名前缀的密码").unwrap();
+        let target = dir.join("a.zip");
+        fs::write(&target, b"x").unwrap();
+
+        let got: Vec<String> = find_hints_near(&target)
+            .into_iter()
+            .map(|h| h.password)
+            .collect();
+        assert!(
+            got.iter().any(|p| p == "同名前缀的密码"),
+            "与包同名的说明要读：{got:?}"
+        );
+        assert!(
+            !got.iter().any(|p| p.contains("无关文件")),
+            "同目录里名字无关的 txt 不该读：{got:?}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn p4_上一级只认同名说明() {
+        let 根 = std::env::temp_dir().join(format!("yshjy_p4c_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&根);
+        let dir = 根.join("包");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(根.join("a.zip.说明.txt"), "解压码：外层的同名说明").unwrap();
+        fs::write(根.join("说明.txt"), "解压码：外层通用说明").unwrap();
+        let target = dir.join("a.zip");
+        fs::write(&target, b"x").unwrap();
+
+        let got: Vec<String> = find_hints_near(&target)
+            .into_iter()
+            .map(|h| h.password)
+            .collect();
+        assert!(
+            got.iter().any(|p| p == "外层的同名说明"),
+            "上一级的同名说明要读：{got:?}"
+        );
+        assert!(
+            !got.iter().any(|p| p == "外层通用说明"),
+            "上一级的通用说明不再读（P4 收窄）：{got:?}"
+        );
+        let _ = fs::remove_dir_all(&根);
     }
 
     #[test]
