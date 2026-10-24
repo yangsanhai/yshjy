@@ -111,6 +111,7 @@ if [ -n "$BIN" ]; then
   run "重名策略探针（conflict.sh）" bash tests/conflict.sh "$BIN"
   run "RAR 缺卷判定（rar_volume.sh）" bash tests/rar_volume.sh "$BIN"
   run "zip 符号链接（zip_symlink.sh）" bash tests/zip_symlink.sh "$BIN"
+  run "默认打开方式（mime_default.sh）" bash tests/mime_default.sh gui/linux/yshjy.desktop
   run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
 else
   skip "协议探针" "没有可执行文件"

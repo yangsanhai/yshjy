@@ -301,6 +301,35 @@ target 存在的意义：只读 fuzz 再快也碰不到落盘。）
 
 验证：`flutter test` **5 项全过**（新增 1 项）；`flutter analyze` 只余 1 条预存 info。
 
+### 阶段 1 梯队四：默认打开方式（双击 zip 直接是我们）
+> 现状：`.desktop` 里**早就写了 MimeType**，但装完 `xdg-mime query default application/zip`
+> 返回的还是 `org.gnome.Nautilus.desktop` —— 因为 GNOME 的文件管理器默认就抢着处理
+> 压缩包，光声明「我能打开」不等于「默认给我打开」。
+
+- `gui/linux/yshjy.desktop` 的 MimeType 补全：原来 7 种 → **14 种**
+  （补了 `x-zip-compressed`、`x-rar`、`x-rar-compressed`、`x-tar`、`x-compressed-tar`、
+  `x-brotli`、`x-lz4`）
+- `scripts/build-deb.sh` 的 postinst：给**装包那个人**（`$SUDO_USER`）设默认，
+  不用 system 级、不动其他用户
+- `scripts/install-gui.sh`（用户级安装）也会调一次
+- 新增 `scripts/set-default-mime.sh`：可手动设、`--status` 看现状、`--restore` 一键还原
+  （卸载前想恢复就用它）
+
+**踩到的坑（重要）**：desktop 里的 `Exec` 必须指向**真实存在的可执行文件**。
+第一次测试时我拿模板直接拷（`Exec=__EXEC__`），`update-desktop-database` 虽然把它
+收进了 `mimeinfo.cache`，`mimeapps.list` 也写对了，但 `xdg-mime query` 依旧回退到
+Nautilus —— GLib 判定 desktop 无效就静默忽略。换成真实的 `/usr/bin/true` 后立刻生效。
+这条已写进探针注释里，免得以后有人以为脚本坏了。
+
+实测（`tests/mime_default.sh`，7 项断言全过，全程隔离 `XDG_DATA_HOME`/`XDG_CONFIG_HOME`，
+不碰用户真实配置）：
+| 检查 | 结果 |
+|---|---|
+| desktop 声明 zip / 7z / rar | ✅ |
+| `xdg-mime query default` 三种格式 | ✅ 全部 `yshjy.desktop` |
+| `gio mime application/zip` | ✅ 「默认应用程序：yshjy.desktop」 |
+| `--restore` 之后 | ✅ 退回 `org.gnome.Nautilus.desktop` |
+
 ### 已知缺口（已记进 `docs/TODO.md` 表尾）
 - **RAR 路径尚未接上**：`unrar` 的解压回调由库自己管理 writer 生命周期，无法在
   「条目写完那一刻」安全 `finish`（改错会删掉好文件）。需要先确认库的写结束语义，

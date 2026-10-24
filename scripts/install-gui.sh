@@ -58,6 +58,12 @@ cp gui/linux/yshjy.png "$ICONS/yshjy.png"
 update-desktop-database "$APPS" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 
+# 双击压缩包打开我们 —— 光有 desktop 不够：GNOME 的文件管理器默认就抢着处理 zip，
+# 装完双击出来的是「解压到文件夹」，不是我们的界面。
+# 这个脚本会写 ~/.config/mimeapps.list；想还原跑 scripts/set-default-mime.sh --restore
+echo "==> 默认打开方式"
+bash scripts/set-default-mime.sh 2>/dev/null | head -1 || true
+
 echo
 echo "  ✅ 装好了：应用菜单里搜「杨三海解压」"
 echo "     也可以直接运行：$DEST/yshjy_gui 文件路径"

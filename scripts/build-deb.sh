@@ -96,6 +96,20 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t /usr/share/icons/hicolor 2>/dev/null || true
 fi
+# 让「双击压缩包」真的打开我们 —— 光有 MimeType 不够：GNOME 里文件管理器
+# （Nautilus）默认就抢着处理 zip，用户装完还是双击出来一堆文件。
+# 只给**装包这个人**设默认（$SUDO_USER），不动其他用户，也不用 system 级默认。
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] \
+   && command -v xdg-mime >/dev/null 2>&1; then
+  for m in application/zip application/x-zip-compressed \
+           application/x-7z-compressed application/vnd.rar \
+           application/x-rar application/x-rar-compressed \
+           application/x-tar application/x-compressed-tar \
+           application/gzip application/x-xz application/zstd \
+           application/x-bzip2 application/x-brotli application/x-lz4; do
+    su -s /bin/sh "$SUDO_USER" -c "xdg-mime default yshjy.desktop $m" 2>/dev/null || true
+  done
+fi
 exit 0
 EOF
 cat > "$STAGE/DEBIAN/postrm" <<'EOF'
