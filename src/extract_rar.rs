@@ -91,6 +91,13 @@ pub fn extract_rar_file_ctx(
             .with("file", path.display().to_string())
             .context(format!("不是有效的 RAR（或版本不支持）: {e}"))
     })?;
+    // 只给了一卷、但它自己末尾挂着「内容续到下一卷」→ 就是缺卷。
+    // 不在这里拦，库会解到一半才失败，最后被归类成「这不是压缩包」（自相矛盾且误导）
+    if 还有后续卷(&archive) {
+        return Err(Error::new(ErrorCode::MissingVolume)
+            .with("file", path.display().to_string())
+            .context("这是分卷压缩包的一卷，后面还有卷没下回来（RAR 分卷要整组放齐）"));
+    }
     单卷解压(archive, packed, opts, ctx)
 }
 
@@ -130,7 +137,38 @@ pub fn extract_rar_volumes_ctx(
         packed = packed.saturating_add(fs::metadata(p).map(|m| m.len()).unwrap_or(0));
         archives.push(a);
     }
+
+    // 缺卷自查：最后一卷末尾若还挂着「内容续到下一卷」，说明后面还有卷没给。
+    // 以前没有这一步，缺卷的表现是「这不是压缩包」—— 用户完全看不懂自己缺了什么
+    if let Some(末) = archives.last()
+        && 还有后续卷(末)
+    {
+        return Err(Error::new(ErrorCode::MissingVolume)
+            .with(
+                "last_volume",
+                volumes
+                    .last()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
+            )
+            .context(format!(
+                "分卷不完整：只找到 {} 卷，最后一卷后面还有卷没下回来",
+                archives.len()
+            )));
+    }
     多卷解压(&archives, packed, opts, ctx)
+}
+
+/// 这一卷的末尾是不是还挂着「内容续到下一卷」的标记（RAR 的 `split_after` 位）？
+///
+/// 缺卷自查靠它：分卷包少给最后几卷时，前面每一卷都读得出来、也「看起来像」完整包，
+/// 只有这个位能说明「后面还有」。拿不到成员列表就返回 false —— 宁可漏报，绝不乱报
+/// （乱报会把好好的完整包拒收，比漏报还糟）。
+fn 还有后续卷(a: &rars::Archive) -> bool {
+    a.members()
+        .last()
+        .map(|m| m.meta.is_split_after)
+        .unwrap_or(false)
 }
 
 /// 单卷：先 `test` 验密码（`rars` 解密失败不报错、只静默不写 → 必须先验），再流式解
