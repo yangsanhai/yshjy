@@ -204,6 +204,15 @@ pub enum Event {
         /// 提示（可能多条）
         hints: Vec<PreviewHint>,
     },
+    /// 打包进度（PACK：打几 GB 的包时界面不能是死的）
+    PackProgress {
+        /// 任务号
+        job: u64,
+        /// 进度读数（已写字节 / 总字节 / 已处理文件 / 总文件）
+        progress: ProgressView,
+        /// 当前正在打的条目
+        current: Option<String>,
+    },
     /// 解压进度
     ExtractProgress {
         /// 任务号
@@ -294,6 +303,7 @@ impl Event {
             | Event::ScanProgress { job, .. }
             | Event::PreviewReady { job, .. }
             | Event::ExtractProgress { job, .. }
+            | Event::PackProgress { job, .. }
             | Event::EntryFinished { job, .. }
             | Event::PasswordNeeded { job, .. }
             | Event::PasswordTry { job, .. }
@@ -309,7 +319,9 @@ impl Event {
     pub fn is_progress(&self) -> bool {
         matches!(
             self,
-            Event::ScanProgress { .. } | Event::ExtractProgress { .. }
+            Event::ScanProgress { .. }
+                | Event::ExtractProgress { .. }
+                | Event::PackProgress { .. }
         )
     }
 
@@ -323,6 +335,7 @@ impl Event {
             Event::ScanProgress { .. } => "SCAN_PROGRESS",
             Event::PreviewReady { .. } => "PREVIEW_READY",
             Event::ExtractProgress { .. } => "EXTRACT_PROGRESS",
+            Event::PackProgress { .. } => "PACK_PROGRESS",
             Event::EntryFinished { .. } => "ENTRY_FINISHED",
             Event::PasswordNeeded { .. } => "PASSWORD_NEEDED",
             Event::PasswordTry { .. } => "PASSWORD_TRY",
