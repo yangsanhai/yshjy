@@ -197,7 +197,9 @@ static void my_application_activate(GApplication* application) {
 
   // 内容能放下的最小尺寸（逻辑像素），但不能超过工作区的 85%
   int min_w = MIN(520, (int)(work.width * 0.85));
-  int min_h = MIN(400, (int)(work.height * 0.85));
+  // 560 而不是 400：预览页 = 格式行 + 智能解压提示 + 内容卡 + 挑选行 + 文件列表 + 按钮行，
+  // 400 高度下列表会被压成 0 高、滚轮看起来「没反应」（用户实测报过）。
+  int min_h = MIN(560, (int)(work.height * 0.85));
   // 上限同样按比例收，避免超宽屏上拉成一整条
   int max_w = MIN(1000, (int)(work.width * 0.85));
   int max_h = MIN(800, (int)(work.height * 0.90));

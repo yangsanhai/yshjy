@@ -535,7 +535,8 @@ else
   exit 1
 fi
 echo "解压完成：$TARGET"
-if command -v xdg-open >/dev/null 2>&1; then
+# 自动化/测试场景别真弹文件管理器（YSHJY_SFX_NO_OPEN=1）
+if [ -z "${YSHJY_SFX_NO_OPEN:-}" ] && command -v xdg-open >/dev/null 2>&1; then
   xdg-open "$TARGET" >/dev/null 2>&1 || true
 fi
 exit 0
