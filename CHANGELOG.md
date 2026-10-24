@@ -43,6 +43,14 @@
 - 协议与 `--json` 多出 `human` / `reason` 两个字段
 - CLI 现在打：「⚠ 文件名（跳过）—— 链接指向 /etc/passwd，会跑到解压目录外，已拒绝（防逃逸）」
 
+### 打包进度（L2 / 清单第 6 条，原来打大包界面是死的）
+- 新事件 `PACK_PROGRESS`（`progress` + `current`），`hello.event_kinds` 同步
+- 引擎：`build_plain_ctx` 逐 4 MiB 上报；`write_zip` / `add_dir` 都接回调（大目录也逐文件报）
+- 协议：`pack` 命令先按输入预扫出总字节/总文件，再逐块上报，结束补一条终态
+- CLI：进度条同时接 `EXTRACT_PROGRESS` 与 `PACK_PROGRESS`
+- 实测：200 MB 文件 `mode:"plain"` 打包 → 收到 `PACK_PROGRESS`（done_bytes 走到 200000000），产物 200,000,112 B 正常
+- 待接：GUI 打包页的 Dart 侧监听（下一轮，和界面收口一起做）
+
 ### 回归证据
 - `cargo test --release`：**303 passed / 0 failed**（新增「认出 RAR 四卷分卷」；
   改写「超大 RAR 不再被大小检查拦住」；新增 ignored「300 MiB 真包解压」）

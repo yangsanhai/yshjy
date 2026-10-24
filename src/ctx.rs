@@ -127,6 +127,45 @@ impl UnpackCtx {
         self.maybe_progress(current);
     }
 
+    /// 打包时上报「又写出去了 n 字节」（500 ms 节流，`PACK_PROGRESS` 事件）
+    ///
+    /// 为什么不复用 `advance`：`advance` 发的是 `EXTRACT_PROGRESS`，
+    /// 界面会当成解压进度画到解压页上 —— 阶段不同，事件必须分开。
+    pub fn advance_pack(&self, bytes: u64, current: Option<&str>) {
+        self.progress.add_bytes(bytes);
+        let now = Instant::now();
+        let 该发 = match self.last_emit.lock() {
+            Ok(mut t) => {
+                if now.duration_since(*t).as_millis() >= 500 {
+                    *t = now;
+                    true
+                } else {
+                    false
+                }
+            }
+            Err(_) => true,
+        };
+        if 该发 {
+            self.emit(&Event::PackProgress {
+                job: self.job,
+                progress: self.progress.view(),
+                current: current.map(|s| s.to_string()),
+            });
+        }
+    }
+
+    /// 强制发一条打包进度（阶段结束时用）
+    pub fn force_pack_progress(&self, current: Option<&str>) {
+        if let Ok(mut t) = self.last_emit.lock() {
+            *t = Instant::now();
+        }
+        self.emit(&Event::PackProgress {
+            job: self.job,
+            progress: self.progress.view(),
+            current: current.map(|s| s.to_string()),
+        });
+    }
+
     /// 强制发一条进度（阶段结束时用，保证界面看到的是最新值）
     pub fn force_progress(&self, current: Option<&str>) {
         if let Ok(mut t) = self.last_emit.lock() {

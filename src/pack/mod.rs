@@ -147,7 +147,7 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, &mut |_, _| {})?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -217,6 +217,15 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
 /// 那个结构体在测试里有十几处**逐字段**构造，加一个字段就得把所有测试一起改，
 /// 而且改漏一处就是编译错误（HANDOFF「给广泛构造的结构体加字段」那条教训）。
 pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    build_plain_ctx(opts, out, |_, _| {})
+}
+
+/// 同 [`build_plain`]，但把「已写多少」逐块报出来（`PACK_PROGRESS` 的数据源）
+pub fn build_plain_ctx<W: Write>(
+    opts: &PackOptions,
+    out: &mut W,
+    mut 进度: impl FnMut(u64, &str),
+) -> Result<PackReport> {
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
@@ -229,7 +238,8 @@ pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackRepo
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let mut 报 = |n: u64, name: &str| 进度(n, name);
+    let entries = write_zip(&opts.inputs, &tmp, opts, &mut 报)?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -306,7 +316,12 @@ fn write_free_atom_header<W: Write>(out: &mut W, payload_len: u64) -> Result<u64
 }
 
 /// 把输入路径（文件或目录，可递归）打成 ZIP
-fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize> {
+fn write_zip(
+    inputs: &[PathBuf],
+    tmp: &Path,
+    opts: &PackOptions,
+    进度: &mut dyn FnMut(u64, &str),
+) -> Result<usize> {
     let file = fs::File::create(tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("create tmp: {e}")))?;
     let mut zw = zip::ZipWriter::new(file);
@@ -330,7 +345,7 @@ fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "dir".into());
-            count += add_dir(&mut zw, input, &base_name, method, opts.level as i64, pw)?;
+            count += add_dir(&mut zw, input, &base_name, method, opts.level as i64, pw, 进度)?;
         } else {
             let name = input
                 .file_name()
@@ -342,8 +357,22 @@ fn write_zip(inputs: &[PathBuf], tmp: &Path, opts: &PackOptions) -> Result<usize
             let mut f = fs::File::open(input).map_err(|e| {
                 Error::new(ErrorCode::Internal).context(format!("open {input:?}: {e}"))
             })?;
-            std::io::copy(&mut f, &mut zw)
-                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip write: {e}")))?;
+            // 逐块写 + 逐块报：单文件几 GB 时界面也有动静（每 4 MiB 报一次）
+            let mut buf = vec![0u8; 4 * 1024 * 1024];
+            loop {
+                use std::io::Read as _;
+                use std::io::Write as _;
+                let n = f.read(&mut buf).map_err(|e| {
+                    Error::new(ErrorCode::Internal).context(format!("read {input:?}: {e}"))
+                })?;
+                if n == 0 {
+                    break;
+                }
+                zw.write_all(&buf[..n]).map_err(|e| {
+                    Error::new(ErrorCode::Internal).context(format!("zip write: {e}"))
+                })?;
+                进度(n as u64, &name);
+            }
             count += 1;
         }
     }
@@ -401,6 +430,7 @@ fn add_dir<W: Write + Seek>(
     method: zip::CompressionMethod,
     level: i64,
     pw: Option<&str>,
+    进度: &mut dyn FnMut(u64, &str),
 ) -> Result<usize> {
     let mut n = 0usize;
     let rd = fs::read_dir(dir)
@@ -415,15 +445,28 @@ fn add_dir<W: Write + Seek>(
             .metadata()
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?;
         if meta.is_dir() {
-            n += add_dir(zw, &p, &arc, method, level, pw)?;
+            n += add_dir(zw, &p, &arc, method, level, pw, 进度)?;
         } else {
             let fopt = 条目选项(method, level, meta.modified().ok(), pw)?;
             zw.start_file(&arc, fopt)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
             let mut f = fs::File::open(&p)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open {p:?}: {e}")))?;
-            std::io::copy(&mut f, zw)
-                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip write: {e}")))?;
+            let mut buf = vec![0u8; 4 * 1024 * 1024];
+            loop {
+                use std::io::Read as _;
+                use std::io::Write as _;
+                let k = f.read(&mut buf).map_err(|e| {
+                    Error::new(ErrorCode::Internal).context(format!("read {p:?}: {e}"))
+                })?;
+                if k == 0 {
+                    break;
+                }
+                zw.write_all(&buf[..k]).map_err(|e| {
+                    Error::new(ErrorCode::Internal).context(format!("zip write: {e}"))
+                })?;
+                进度(k as u64, &arc);
+            }
             n += 1;
         }
     }
@@ -561,7 +604,7 @@ pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, &mut |_, _| {})?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -615,7 +658,7 @@ pub fn build_sfx_sh<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackRep
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts)?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, &mut |_, _| {})?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();

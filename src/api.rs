@@ -37,6 +37,7 @@ pub const 事件种类: &[&str] = &[
     "SCAN_PROGRESS",
     "PREVIEW_READY",
     "EXTRACT_PROGRESS",
+    "PACK_PROGRESS",
     "ENTRY_FINISHED",
     "PASSWORD_NEEDED",
     "PASSWORD_TRY",
@@ -58,7 +59,7 @@ pub fn 执行(
         "scan" => 扫描(参数),
         "list" => 列表(参数, 事件, 取消),
         "extract" => 解压(参数, 事件, 取消, ask),
-        "pack" => 打包(参数),
+        "pack" => 打包(参数, 事件),
         "batch" => 批量(参数, 事件, 取消, ask),
         "report" => 诊断(参数, 事件),
         // 这两条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令
@@ -339,7 +340,34 @@ fn 规范路径(p: &Path) -> PathBuf {
 }
 
 /// 打包（伪装 / 普通压缩共用一条实现）
-pub fn 打包(参数: &Value) -> Result<Value, Value> {
+/// 预扫输入：算出打包进度的分母（总字节 / 总文件数）
+///
+/// 打包本来就要把每个文件读一遍，这里多走一次目录代价很小；
+/// 但能让界面从第一秒就有正确的百分比，而不是「写了 3 MB / 未知」。
+fn 预扫输入(inputs: &[PathBuf]) -> (u64, u64) {
+    fn 走(p: &Path, 字节: &mut u64, 文件: &mut u64) {
+        let Ok(m) = std::fs::metadata(p) else {
+            return;
+        };
+        if m.is_dir() {
+            if let Ok(rd) = std::fs::read_dir(p) {
+                for e in rd.flatten() {
+                    走(&e.path(), 字节, 文件);
+                }
+            }
+        } else {
+            *字节 = 字节.saturating_add(m.len());
+            *文件 += 1;
+        }
+    }
+    let (mut b, mut f) = (0u64, 0u64);
+    for i in inputs {
+        走(i, &mut b, &mut f);
+    }
+    (b, f.max(1))
+}
+
+pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Value> {
     let 输入: Vec<PathBuf> = 参数
         .get("inputs")
         .and_then(|v| v.as_array())
@@ -475,8 +503,18 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
     let 文件 = std::fs::File::create(输出)
         .map_err(|e| 错误值("PERMISSION_DENIED", &format!("建不了输出文件: {e}")))?;
     let mut bw = std::io::BufWriter::new(文件);
+    // 打包进度（PACK_PROGRESS）：先按输入大小算分母，再逐块上报，结束补一条终态
+    let ctx = crate::ctx::UnpackCtx::new(1, 事件.clone());
+    let (总字节, 总文件) = 预扫输入(&opts.inputs);
+    ctx.set_total(总字节, 总文件);
+
     let rep = if 普通压缩 {
-        crate::pack::build_plain(&opts, &mut bw)
+        let r = {
+            let mut 报 = |n: u64, 名字: &str| ctx.advance_pack(n, Some(名字));
+            crate::pack::build_plain_ctx(&opts, &mut bw, &mut 报)
+        };
+        ctx.force_pack_progress(None);
+        r
     } else if 自解压 == Some("linux") {
         // Linux 自解压：shell 脚本 + ZIP（偏移写死在脚本里，不靠尾标）
         crate::pack::build_sfx_sh(&opts, &mut bw)

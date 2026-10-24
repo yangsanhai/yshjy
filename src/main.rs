@@ -1119,6 +1119,9 @@ impl yshjy::event::EventSink for 终端出口 {
         match ev {
             Event::ExtractProgress {
                 progress, current, ..
+            }
+            | Event::PackProgress {
+                progress, current, ..
             } => {
                 if !self.tty {
                     return; // 管道模式：别画进度条
