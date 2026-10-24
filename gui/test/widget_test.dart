@@ -13,4 +13,31 @@ void main() {
       expect(find.text(label), findsWidgets, reason: '缺少导航项 $label');
     }
   });
+
+  // 梯队四·首屏单一入口收口
+  //
+  // 新手打开最怕「一堆按钮不知道该点哪个」。规矩是：首屏只能有一个最强入口
+  // （FilledButton = 选择文件），其余入口必须降级成文字按钮。
+  // 这条以前只在注释里写着（调研 07:921-923），现在用测试钉住 ——
+  // 免得以后又顺手加个 FilledButton 把首屏搞乱。
+  testWidgets('首屏只有一个最强入口', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AppShell(bootstrapEngine: false)));
+    await tester.pump();
+
+    expect(
+      find.widgetWithText(FilledButton, '选择文件'),
+      findsOneWidget,
+      reason: '首屏该有「选择文件」这个主按钮',
+    );
+    expect(
+      find.byType(FilledButton),
+      findsOneWidget,
+      reason: '首屏 FilledButton 超过一个，新手就不知道该点哪个了',
+    );
+    expect(
+      find.widgetWithText(TextButton, '选整个文件夹'),
+      findsOneWidget,
+      reason: '次入口（选文件夹）要弱化成文字按钮，不许跟主入口抢',
+    );
+  });
 }

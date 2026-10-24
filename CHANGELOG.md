@@ -283,6 +283,24 @@ target 存在的意义：只读 fuzz 再快也碰不到落盘。）
 验证：`flutter analyze` 只余 1 条预存 info（`engine.dart:253`，非本次改动）；
 `flutter test` 4 项全过。
 
+### 阶段 1 梯队四：首屏单一入口（补测试钉住）
+> 审计结论：**这项其实早就做对了** —— 首屏空态里「选择文件」是唯一的 FilledButton，
+> 「选整个文件夹」是弱化的 TextButton，注释还引着调研结论（第一屏只该有一个最强入口）。
+>
+> 但它只是**注释里的规矩**，没有任何东西拦着以后有人顺手再塞一个 FilledButton 进去。
+> 所以这项的实际交付是「把它变成会失败的测试」，不是重新设计界面。
+
+新增 widget 测试 `首屏只有一个最强入口`，三条断言：
+1. `选择文件` 是 FilledButton（主入口在）
+2. 空态里 **FilledButton 总数 == 1**（多一个新手就不知道该点哪个）
+3. `选整个文件夹` 必须是 TextButton（次入口不许抢）
+
+**验证这条测试不是摆设**：临时把次入口改成 `FilledButton.icon`，测试立刻报
+`Found 2 widgets with type "FilledButton"` 并按 reason 说明原因；改回后全绿。
+顺手在源码那条注释下补了一句「别改成 FilledButton —— widget_test 里有测试钉着」。
+
+验证：`flutter test` **5 项全过**（新增 1 项）；`flutter analyze` 只余 1 条预存 info。
+
 ### 已知缺口（已记进 `docs/TODO.md` 表尾）
 - **RAR 路径尚未接上**：`unrar` 的解压回调由库自己管理 writer 生命周期，无法在
   「条目写完那一刻」安全 `finish`（改错会删掉好文件）。需要先确认库的写结束语义，
