@@ -283,7 +283,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
     use std::io::Write;
 
     std::fs::create_dir_all(&opts.dest)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建输出目录失败: {e}")))?;
+        .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
 
     let password = match &opts.password {
         Some(p) => sevenz_rust2::Password::new(p),
@@ -386,6 +386,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
             let mut part = match crate::io::PartFile::create(&out_path) {
                 Ok(f) => f,
                 Err(e) => {
+                    report.note_io_error(&e);
                     report
                         .skipped
                         .push((name.clone(), format!("创建失败: {e}")));
@@ -423,6 +424,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                             return Ok(false); // 停止
                         }
                         if let Err(e) = part.as_file().write_all(&buf[..n]) {
+                            report.note_io_error(&e);
                             report
                                 .skipped
                                 .push((name.clone(), format!("写盘失败: {e}")));

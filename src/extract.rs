@@ -103,9 +103,27 @@ pub struct ExtractReport {
     /// （`ArchiveFlags::HEADERS_ERROR`）。事件是**给人看**的，这个字段是**给机器看**的，
     /// 两者不能混（BACKEND-SPEC §6.2 那条例）。
     pub repaired: Option<String>,
+    /// 落盘过程中遇到的**第一个可归类的 IO 错误**（没权限 / 空间不足 / 路径太长 / 目标不是文件夹）
+    ///
+    /// 为什么不靠 `skipped` 的文本判断：那文本来自系统（`Permission denied (os error 13)`），
+    /// 随系统语言变化，不可靠。上层要按「用户能不能自己解决」分流，就得有个稳定的码。
+    /// 用途见 `job.rs`：避免「一个都没解出来 + 有跳过」被误判成 [`ErrorCode::DataLost`]
+    /// （体检 T9-P3：只读目录被报成「中间有一段数据丢了」）。
+    pub io_error: Option<ErrorCode>,
 }
 
 impl ExtractReport {
+    /// 记下落盘时的 IO 错误分类（只记第一个可归类的；`Internal` 不算，那是真内部问题）
+    pub fn note_io_error(&mut self, e: &std::io::Error) {
+        if self.io_error.is_some() {
+            return;
+        }
+        let code = ErrorCode::from_io(e);
+        if code != ErrorCode::Internal {
+            self.io_error = Some(code);
+        }
+    }
+
     /// 是否一个文件都没解出来
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
@@ -300,8 +318,17 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
     };
     ctx.set_total(raw_total, file_count);
 
-    fs::create_dir_all(&opts.dest)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("mkdir dest: {e}")))?;
+    // T8-P5：目标位置如果已经是个文件，create_dir_all 只会给个含糊的 AlreadyExists，
+    // 用户看到的是「内部错误」。这里提前判断，直接说「这是文件不是文件夹」。
+    if opts.dest.exists() && !opts.dest.is_dir() {
+        return Err(Error::new(ErrorCode::DestIsFile)
+            .with("path", opts.dest.display().to_string()));
+    }
+    fs::create_dir_all(&opts.dest).map_err(|e| {
+        // T8-P5：目标位置是个文件 / 路径太长 / 没权限，别一律说「内部错误」
+        let m = format!("mkdir dest: {e}");
+        Error::from(e).context(m)
+    })?;
 
     let mut report = ExtractReport::default();
 
@@ -355,6 +382,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
 
         if is_dir {
             if let Err(e) = fs::create_dir_all(&out_path) {
+                report.note_io_error(&e);
                 report
                     .skipped
                     .push((name.clone(), format!("建目录失败: {e}")));
@@ -381,6 +409,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         if let Some(parent) = out_path.parent()
             && let Err(e) = fs::create_dir_all(parent)
         {
+            report.note_io_error(&e);
             report
                 .skipped
                 .push((name.clone(), format!("建父目录失败: {e}")));
@@ -447,6 +476,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         let mut part = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
+                report.note_io_error(&e);
                 report
                     .skipped
                     .push((name.clone(), format!("创建失败: {e}")));
@@ -477,6 +507,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                         break;
                     }
                     if let Err(e) = std::io::Write::write_all(part.as_file(), &buf[..n]) {
+                        report.note_io_error(&e);
                         read_err = Some(format!("写盘失败: {e}"));
                         break;
                     }

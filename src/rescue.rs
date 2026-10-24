@@ -426,7 +426,7 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
     }
 
     std::fs::create_dir_all(&opts.dest)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建输出目录失败: {e}")))?;
+        .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
 
     // 以"压缩数据总量"为分母做炸弹防护
     let packed_total: u64 = items.iter().map(|i| i.pack_size).sum::<u64>().max(1);
@@ -534,6 +534,7 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
         let mut part = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
+                report.note_io_error(&e);
                 report
                     .skipped
                     .push((item.path.clone(), format!("创建失败: {e}")));

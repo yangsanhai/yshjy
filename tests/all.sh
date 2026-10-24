@@ -107,6 +107,7 @@ if [ -n "$BIN" ]; then
     fi
   done
   run "冒烟测试（smoke.sh）" bash tests/smoke.sh "$BIN"
+  run "错误文案探针（errmsgs.sh）" bash tests/errmsgs.sh "$BIN"
 else
   skip "协议探针" "没有可执行文件"
 fi

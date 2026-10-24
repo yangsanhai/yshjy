@@ -252,7 +252,7 @@ where
     use std::rc::Rc;
 
     fs::create_dir_all(&opts.dest)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建输出目录失败: {e}")))?;
+        .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
 
     // 密码候选（UTF-8 → GBK → UTF-16LE）：RAR 与 ZIP 一样，密码只是任意字节，
     // 中文 Windows 的 WinRAR 写的是 CP936 —— 单用 UTF-8 必然报「密码错」。
@@ -390,6 +390,7 @@ where
         let f = match fs::File::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
+                rep2.borrow_mut().note_io_error(&e);
                 rep2.borrow_mut()
                     .skipped
                     .push((name.clone(), format!("创建失败: {e}")));

@@ -1235,6 +1235,8 @@ fn 失败文案(code: yshjy::error::ErrorCode) -> String {
         C::InvalidArgument => "error.invalid_argument",
         C::NotEnoughSpace => "error.no_space",
         C::PermissionDenied => "error.permission_denied",
+        C::PathTooLong => "error.path_too_long",
+        C::DestIsFile => "error.dest_is_file",
         C::NeedPassword => "error.password_missing",
         C::WrongPassword => "error.password_wrong",
         C::NotArchive => "error.not_archive",

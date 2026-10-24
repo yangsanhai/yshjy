@@ -64,6 +64,10 @@ pub enum ErrorCode {
     NotEnoughSpace,
     /// 没有写入权限
     PermissionDenied,
+    /// 路径太长（超过文件系统上限，常见于超长文件名或深层目录）
+    PathTooLong,
+    /// 目标位置是个文件，不是文件夹
+    DestIsFile,
 
     // ── 文件本身的问题 ──
     /// 需要密码
@@ -93,6 +97,30 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
+    /// 把 IO 错误归类成用户看得懂的码
+    ///
+    /// 由来（体检 T9-P3 / T8-P5）：以前所有 IO 错误都被 `From<io::Error>` 折成
+    /// [`ErrorCode::Internal`]，于是「目录不让写」「路径太长」「目标是个文件」全都显示
+    /// 成「内部错误」；更糟的是「一个都没解出来 + 有跳过记录」会被上层判成
+    /// [`ErrorCode::DataLost`]（「中间有一段数据丢了」），吓得用户以为包坏了。
+    ///
+    /// 这里只做**分类**，不做文案 —— 文案由外壳按码查语言包（D21/N1 架构）。
+    /// 用 `ErrorKind`（而非 errno）判断，Windows / Android 同样成立。
+    pub fn from_io(e: &std::io::Error) -> Self {
+        use std::io::ErrorKind as K;
+        match e.kind() {
+            // 用户自己能解决的四类
+            K::PermissionDenied => ErrorCode::PermissionDenied,
+            K::StorageFull => ErrorCode::NotEnoughSpace,
+            K::InvalidFilename => ErrorCode::PathTooLong,
+            K::NotADirectory => ErrorCode::DestIsFile,
+            K::NotFound => ErrorCode::PathNotFound,
+            K::IsADirectory => ErrorCode::InvalidArgument,
+            // 其他（含 EIO / 意外的 OS 错误）仍算内部问题，但日志里保留原始 io_kind
+            _ => ErrorCode::Internal,
+        }
+    }
+
     /// 粗档退出码（1 用户问题 / 2 文件问题 / 130 取消）
     ///
     /// 给「按大类分流」的场景用（如 GUI 决定弹哪种框）。
@@ -100,7 +128,8 @@ impl ErrorCode {
     pub fn exit_code(self) -> i32 {
         use ErrorCode::*;
         match self {
-            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | Internal => 1,
+            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
+            | DestIsFile | Internal => 1,
             NeedPassword | WrongPassword | NotArchive | Truncated | MissingVolume | DataLost
             | EncryptedUnbreakable | VideoUnplayable => 2,
             Cancelled => exit_code::CANCELLED,
@@ -111,9 +140,8 @@ impl ErrorCode {
     pub fn cli_exit_code(self) -> i32 {
         use ErrorCode::*;
         match self {
-            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | Internal => {
-                exit_code::ERROR
-            }
+            PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
+            | DestIsFile | Internal => exit_code::ERROR,
             NotArchive => exit_code::NOT_ARCHIVE,
             NeedPassword | WrongPassword | EncryptedUnbreakable => exit_code::PASSWORD,
             Truncated | MissingVolume | DataLost | VideoUnplayable => exit_code::ERROR,
@@ -131,6 +159,8 @@ impl ErrorCode {
             InvalidArgument => "INVALID_ARGUMENT",
             NotEnoughSpace => "NOT_ENOUGH_SPACE",
             PermissionDenied => "PERMISSION_DENIED",
+            PathTooLong => "PATH_TOO_LONG",
+            DestIsFile => "DEST_IS_FILE",
             NeedPassword => "NEED_PASSWORD",
             WrongPassword => "WRONG_PASSWORD",
             NotArchive => "NOT_ARCHIVE",
@@ -501,7 +531,9 @@ impl From<std::io::Error> for Error {
                 .context(format!("io error: {e}"))
                 .source(e);
         }
-        Error::new(ErrorCode::Internal)
+        // T9-P3 / T8-P5：分类而不是一律 Internal —— 没权限 / 空间不足 / 路径太长 /
+        // 目标不是文件夹，这几种用户自己能解决，得报对应的码
+        Error::new(ErrorCode::from_io(&e))
             .with("io_kind", format!("{:?}", e.kind()))
             .context(format!("io error: {e}"))
             .source(e)
@@ -519,6 +551,49 @@ impl std::error::Error for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn io错误按类型归类而不是一律内部错误() {
+        use std::io::{Error as Io, ErrorKind as K};
+        // 体检 T9-P3 / T8-P5 的四个场景：这几种用户自己能解决，必须报对应的码
+        assert_eq!(
+            ErrorCode::from_io(&Io::from(K::PermissionDenied)),
+            ErrorCode::PermissionDenied
+        );
+        assert_eq!(
+            ErrorCode::from_io(&Io::from(K::StorageFull)),
+            ErrorCode::NotEnoughSpace
+        );
+        assert_eq!(
+            ErrorCode::from_io(&Io::from(K::InvalidFilename)),
+            ErrorCode::PathTooLong
+        );
+        assert_eq!(
+            ErrorCode::from_io(&Io::from(K::NotADirectory)),
+            ErrorCode::DestIsFile
+        );
+        // 真内部问题还是要报内部错误 —— 别把什么都赖到用户头上
+        assert_eq!(ErrorCode::from_io(&Io::from(K::Other)), ErrorCode::Internal);
+        assert_eq!(
+            ErrorCode::from_io(&Io::from(K::UnexpectedEof)),
+            ErrorCode::Internal
+        );
+    }
+
+    #[test]
+    fn 报告只记第一个可归类的io错误() {
+        use std::io::{Error as Io, ErrorKind as K};
+        let mut rep = crate::extract::ExtractReport::default();
+        rep.note_io_error(&Io::from(K::PermissionDenied));
+        rep.note_io_error(&Io::from(K::StorageFull));
+        // 只留第一个：一次解压里用户最该看到的是最初那一下拦路的原因
+        assert_eq!(rep.io_error, Some(ErrorCode::PermissionDenied));
+
+        // 真内部问题不占坑，也不该让上层误以为是用户能解决的
+        let mut rep2 = crate::extract::ExtractReport::default();
+        rep2.note_io_error(&Io::from(K::Other));
+        assert_eq!(rep2.io_error, None);
+    }
 
     #[test]
     fn 错误码对应正确的退出码() {
