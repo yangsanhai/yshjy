@@ -465,13 +465,75 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
             ctx.entry_done(idx, &name, ItemResult::Ok, 0);
             continue;
         }
-        // 符号链接：明确跳过并说明（避免逃逸）
+        // 符号链接 / 硬链接：**安全地还原**（Linux 软件包的标准结构，X3）
+        //
+        // 规则：只接受「相对路径 + 逻辑规范化后仍在解压目录内」的链接；
+        // 绝对路径、用 `..` 爬出目标目录的一律拒绝并说明（不静默、不假装解出来了）。
         let et = ent.header().entry_type();
         if et.is_symlink() || et.is_hard_link() {
-            report.skipped.push((
-                name.clone(),
-                "链接类型条目已跳过（防止链接逃逸到目录外）".into(),
-            ));
+            let 链接目标 = ent
+                .link_name()
+                .ok()
+                .flatten()
+                .map(|p| p.to_string_lossy().into_owned());
+            let Some(目标) = 链接目标 else {
+                report
+                    .skipped
+                    .push((name.clone(), "链接条目没写目标，已跳过".into()));
+                continue;
+            };
+            let 链接路径 = match safety::resolve_safe(&opts.dest, &name) {
+                Ok(p) => p,
+                Err(e) => {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("链接的位置不安全，已跳过: {e}")));
+                    continue;
+                }
+            };
+            if !链接目标安全(&opts.dest, &链接路径, &目标) {
+                report.skipped.push((
+                    name.clone(),
+                    format!("链接指向「{目标}」，会跑到解压目录外，已拒绝（防逃逸）"),
+                ));
+                continue;
+            }
+            if let Some(parent) = 链接路径.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let r = if et.is_symlink() {
+                #[cfg(unix)]
+                {
+                    let _ = fs::remove_file(&链接路径);
+                    std::os::unix::fs::symlink(&目标, &链接路径)
+                }
+                #[cfg(not(unix))]
+                {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Unsupported,
+                        "这个系统不支持创建符号链接",
+                    ))
+                }
+            } else {
+                // 硬链接：目标必须是同一个解压目录里已经解出来的文件
+                let base = 链接路径.parent().unwrap_or(&opts.dest);
+                fs::hard_link(base.join(&目标), &链接路径)
+            };
+            match r {
+                Ok(()) => {
+                    report.files.push(crate::extract::ExtractedFile {
+                        name,
+                        out_path: 链接路径,
+                        size: 0,
+                        encrypted: false,
+                    });
+                }
+                Err(e) => {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("链接建不起来: {e}")));
+                }
+            }
             continue;
         }
 
@@ -615,6 +677,48 @@ impl Drop for TempFileReader {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
+}
+
+/// 链接目标是否安全：必须是相对路径，且逻辑规范化后仍在**解压目录内**
+///
+/// 为什么不跟随真实符号链接：解压过程中目录才刚建，很多目标文件还没落盘，
+/// `canonicalize` 会失败。这里做的是「纯字面规范化」—— 足够挡住 `../../etc/passwd`
+/// 这类逃逸，也不会因为文件还没解出来而误判。
+fn 链接目标安全(dest: &Path, 链接路径: &Path, 目标: &str) -> bool {
+    let t = Path::new(目标);
+    if t.is_absolute() {
+        return false;
+    }
+    // Windows 盘符式（`C:\...`）：在 Linux 上不算绝对路径，但同样是逃逸
+    if 目标.len() >= 2
+        && 目标.as_bytes()[1] == b':'
+        && 目标.as_bytes()[0].is_ascii_alphabetic()
+    {
+        return false;
+    }
+    let base = 链接路径.parent().unwrap_or(dest);
+    let Ok(绝对) = std::path::absolute(base.join(t)) else {
+        return false;
+    };
+    let Ok(根) = std::path::absolute(dest) else {
+        return false;
+    };
+    消点(&绝对).starts_with(消点(&根))
+}
+
+/// 纯字面消除 `.` / `..`（不碰文件系统）
+fn 消点(p: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in p.components() {
+        match c {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 fn unique_path_stream(path: &Path) -> PathBuf {

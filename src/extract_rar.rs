@@ -1,23 +1,21 @@
-//! RAR 解压（含加密）
+//! RAR 解压（含加密、含分卷）
 //!
-//! # 关于体积的诚实说明
-//! 底层库 `rars` 目前只提供**全量内存读**接口（`ArchiveReader::read(&[u8])`），
-//! 不像 ZIP / 7z 那样能流式处理。所以本模块设置了一个**大小上限**：
-//! 超过 [`MAX_SIZE`] 的 RAR 会直接拒绝并给出提示，避免把内存吃光。
-//!
-//! 对超大 RAR 的建议：先用官方 `unrar`（非自由许可，不随我们分发）解开。
-//! 我们的目标是"**别人的工具打不开的伪装包**"，这类包里 RAR 占比很小。
+//! # 读取方式（L1 批改造）
+//! `rars` 0.11 的 `ArchiveReader::read_path` / `read_reader` 是**按需读取**（解析头 + 解压时读载荷），
+//! 不像 `read(&[u8])` 那样要求整包进内存。所以：
+//! - **有文件路径** → 走 `read_path`，流式，**没有大小上限**（以前 256 MiB 的限制已删）
+//! - **只有一条不可 seek 的流**（管道 / stdin）→ 只能回退到整读内存，仍受 [`STREAM_FALLBACK_MAX`] 约束，
+//!   并如实告诉用户「请直接给文件路径」
+//! - **分卷** → 每卷 `read_path` 得到 `Archive`，再用 `rars::extract_volumes_to` 拼成一条逻辑流
 //!
 //! # 为什么 RAR 解出的文件没有原始时间戳
 //!
-//! 本模块走的是 `rars` 的**高层解压 API**（直接把数据流给你），拿不到 `FileHeader`，
-//! 也就读不到里面的 `file_time`。要支持得改成手工遍历 RAR 头 —— 工程不小，
-//! 而这类包里 RAR 占比很低（ZIP / TAR 的时间戳已经支持）。
-//! 这是**有意的取舍**，不是漏做。
+//! 走流式 API 时 `ExtractedEntryMeta` 带 `file_time` / `attr_source`，**现在能补时间戳和权限位**了
+//! （以前用 `read_member` 拿不到头信息，是有意取舍；L1 批一起补上）。
 //!
 //! # 许可
 //! RAR 的压缩算法是专有的，`rars` 是 Apache-2.0 的**纯 Rust 读取实现** ——
-//! 我们只做解压、不生成 RAR，符合许可边界。
+//! 我们只做解压、不生成 RAR（测试用的样本除外），符合许可边界。
 
 use crate::ctx::UnpackCtx;
 use crate::error::{Error, ErrorCode, ItemResult, Result};
@@ -27,8 +25,18 @@ use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
-/// RAR 全量读入内存的上限（256 MiB）—— 超过就拒绝，避免 OOM
-pub const MAX_SIZE: u64 = 256 * 1024 * 1024;
+/// 只有「不可 seek 的流」时才整读内存，此上限仅对该回退路径生效
+///
+/// 正常文件路径走 `read_path`，**不受这个数限制**（网盘 1–4 GB 的 RAR 照解）。
+pub const STREAM_FALLBACK_MAX: u64 = 256 * 1024 * 1024;
+
+/// 兼容旧名字（有调用方 / 测试引用过）
+#[deprecated(note = "改用 STREAM_FALLBACK_MAX：只约束「流式回退」路径，不约束文件路径")]
+pub const MAX_SIZE: u64 = STREAM_FALLBACK_MAX;
+
+/// 打开一个 RAR 条目时给库的 Writer 工厂
+type 打开条目<'a> =
+    Box<dyn FnMut(&rars::ExtractedEntryMeta) -> std::result::Result<Box<dyn std::io::Write>, rars::Error> + 'a>;
 
 /// RAR 解压参数
 #[derive(Debug, Clone)]
@@ -72,34 +80,103 @@ pub fn extract_rar_file_ctx(
     opts: &ExtractRarOptions,
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
-    let size = fs::metadata(path)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读文件信息失败: {e}")))?
-        .len();
-    if size > MAX_SIZE {
-        return Err(Error::new(ErrorCode::NotArchive)
-            .with("reason", "rar_too_large_for_memory")
-            .with("size", size)
-            .with("limit", MAX_SIZE)
-            .context(format!(
-                "这个 RAR 有 {:.0} MB，超过我们目前能处理的上限（{} MB）。\
-                 底层库还不支持流式读取 RAR —— 想处理超大 RAR 请用其它工具。",
-                size as f64 / 1_048_576.0,
-                MAX_SIZE / 1_048_576
-            )));
-    }
-    let data = fs::read(path)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读取失败: {e}")))?;
-    extract_rar_ctx(&data, opts, ctx)
+    let packed = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    // 流式读：read_path 按需取载荷，不再整包进内存（X2：RAR 大小上限已删除）
+    let archive = rars::ArchiveReader::read_path(path).map_err(|e| {
+        Error::new(ErrorCode::NotArchive)
+            .with("file", path.display().to_string())
+            .context(format!("不是有效的 RAR（或版本不支持）: {e}"))
+    })?;
+    单卷解压(archive, packed, opts, ctx)
 }
 
-/// 从**一条流**解 RAR —— 统一接口（[`crate::unpack`]）用的入口
+/// 解压一组 RAR 分卷（`volumes` 必须按序，**第一卷在前**）
 ///
-/// `rars` 只提供全量内存读接口（不像 ZIP/7z 能流式处理），所以这里先把流读进内存。
-/// 上限仍是 [`MAX_SIZE`]（256 MiB）：超了直接拒绝，而不是把内存吃光。
+/// 分卷是 L1 批补上的能力（X1）：每卷单独 `read_path` 解析成 `Archive`，
+/// 再交给 `rars::extract_volumes_to` 当成一条逻辑流解开。
+/// 单卷（长度 1）直接走 [`extract_rar_file_ctx`]。
+pub fn extract_rar_volumes_ctx(
+    volumes: &[PathBuf],
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    let Some(首卷) = volumes.first() else {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "rar_no_volumes")
+            .context("没给 RAR 分卷路径"));
+    };
+    if volumes.len() == 1 {
+        return extract_rar_file_ctx(首卷, opts, ctx);
+    }
+    let mut archives = Vec::with_capacity(volumes.len());
+    let mut packed = 0u64;
+    for (i, p) in volumes.iter().enumerate() {
+        let a = rars::ArchiveReader::read_path(p).map_err(|e| {
+            Error::new(ErrorCode::MissingVolume)
+                .with("volume", p.display().to_string())
+                .with("index", (i + 1).to_string())
+                .context(format!(
+                    "第 {} 卷读不出来（{}）—— 可能没下全或下坏了: {e}",
+                    i + 1,
+                    p.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                ))
+        })?;
+        packed = packed.saturating_add(fs::metadata(p).map(|m| m.len()).unwrap_or(0));
+        archives.push(a);
+    }
+    多卷解压(&archives, packed, opts, ctx)
+}
+
+/// 单卷：先 `test` 验密码（`rars` 解密失败不报错、只静默不写 → 必须先验），再流式解
+fn 单卷解压(
+    archive: rars::Archive,
+    packed_total: u64,
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    执行解压(
+        packed_total,
+        |pw| archive.test_with_options(读选项(pw)),
+        |pw, cb| archive.extract_to_with_options(读选项(pw), cb),
+        opts,
+        ctx,
+    )
+}
+
+/// 多卷：整组一起验密码、一起解（跨卷的逻辑成员也能正确拼起来）
+fn 多卷解压(
+    archives: &[rars::Archive],
+    packed_total: u64,
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport> {
+    执行解压(
+        packed_total,
+        |pw| rars::test_volumes_with_options(archives, 读选项(pw)),
+        |pw, cb| rars::extract_volumes_to_with_options(archives, 读选项(pw), cb),
+        opts,
+        ctx,
+    )
+}
+
+/// 读选项：只带密码。解压炸弹限额仍由我们自己的 `ExtractBudget` 管，
+/// 避免「两套限额语义打架、错误类型还对不上」。
+fn 读选项(pw: Option<&[u8]>) -> rars::ArchiveReadOptions<'_> {
+    match pw {
+        Some(p) => rars::ArchiveReadOptions::with_password(p),
+        None => rars::ArchiveReadOptions::new(),
+    }
+}
+
+/// 从**一条流**解 RAR —— 只在「手上真的没有文件路径」时退化成整读
 ///
-/// 与 [`extract_rar_file_ctx`] 的区别只是「数据从哪来」：那个要**路径**（自己 `fs::read`），
-/// 这个要**流**。统一接口只提供流，所以真正被用的是这一个；那个留着给「手上只有路径、
-/// 连流都不打开」的调用点。
+/// `rars` 的流式入口要求 `Read + Seek + Send + 'static`，统一接口给我们的是
+/// `&mut dyn ReadSeek`，转不成 owned。所以这条路径退回「整读进内存」，
+/// 上限是 [`STREAM_FALLBACK_MAX`]（管道 stdin 喂 300 MB 的 RAR 本来就不是正常用法）。
+///
+/// **正常解文件不走这里**：有路径时走 [`extract_rar_file_ctx`]（流式、无上限）。
 pub fn extract_rar_stream_ctx<R: Read + Seek>(
     src: &mut R,
     opts: &ExtractRarOptions,
@@ -110,23 +187,23 @@ pub fn extract_rar_stream_ctx<R: Read + Seek>(
     let size = src
         .seek(SeekFrom::End(0))
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("取流长度失败: {e}")))?;
-    if size > MAX_SIZE {
+    if size > STREAM_FALLBACK_MAX {
         return Err(Error::new(ErrorCode::NotArchive)
-            .with("reason", "rar_too_large_for_memory")
+            .with("reason", "rar_stream_too_large")
             .with("size", size)
-            .with("limit", MAX_SIZE)
+            .with("limit", STREAM_FALLBACK_MAX)
             .context(format!(
-                "这个 RAR 有 {:.0} MB，超过我们目前能处理的上限（{} MB）。\
-                 底层库还不支持流式读取 RAR —— 想处理超大 RAR 请用其它工具。",
+                "这条输入流喂了 {:.0} MB 的 RAR，超过管道方式的上限（{} MB）。\
+                 请直接把这个 RAR 的**文件路径**交给程序（给路径时没有大小限制）。",
                 size as f64 / 1_048_576.0,
-                MAX_SIZE / 1_048_576
+                STREAM_FALLBACK_MAX / 1_048_576
             )));
     }
     src.seek(SeekFrom::Start(0))
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("回到流开头失败: {e}")))?;
-    let mut data = Vec::with_capacity(size as usize);
+    let mut data = Vec::with_capacity(size.min(STREAM_FALLBACK_MAX) as usize);
     // 多读 1 字节：用来发现「流比 seek 报的长度还长」这种怪情况，别默默截断
-    src.take(MAX_SIZE + 1)
+    src.take(STREAM_FALLBACK_MAX + 1)
         .read_to_end(&mut data)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读取失败: {e}")))?;
     extract_rar_ctx(&data, opts, ctx)
@@ -141,18 +218,38 @@ pub fn extract_rar(data: &[u8], opts: &ExtractRarOptions) -> Result<crate::extra
 }
 
 /// 同 [`extract_rar`]，但带上事件 / 进度 / 取消上下文
+///
+/// 只有「手上已经是字节」的场景才走这条（管道 / 测试）；有文件路径请用
+/// [`extract_rar_file_ctx`]（流式、无大小上限）。
 pub fn extract_rar_ctx(
     data: &[u8],
     opts: &ExtractRarOptions,
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
-    use std::cell::RefCell;
-    use std::io::Write;
-    use std::rc::Rc;
-
     let archive = rars::ArchiveReader::read(data).map_err(|e| {
         Error::new(ErrorCode::NotArchive).context(format!("不是有效的 RAR（或版本不支持）: {e}"))
     })?;
+    单卷解压(archive, data.len().max(1) as u64, opts, ctx)
+}
+
+/// 解压主流程：验密码 → 逐条目写盘（单卷 / 多卷共用这一份）
+///
+/// `测` / `跑` 把「怎么用库」（单卷 `test` + `extract_to`、多卷 `test_volumes` +
+/// `extract_volumes_to`）与「解出来往哪写、怎么记账」解耦，避免同一套落盘逻辑写两遍。
+fn 执行解压<测, 跑>(
+    packed_total: u64,
+    测: 测,
+    跑: 跑,
+    opts: &ExtractRarOptions,
+    ctx: &UnpackCtx,
+) -> Result<crate::extract::ExtractReport>
+where
+    测: Fn(Option<&[u8]>) -> std::result::Result<(), rars::Error>,
+    跑: FnOnce(Option<&[u8]>, 打开条目<'_>) -> std::result::Result<(), rars::Error>,
+{
+    use std::cell::RefCell;
+    use std::io::Write;
+    use std::rc::Rc;
 
     fs::create_dir_all(&opts.dest)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建输出目录失败: {e}")))?;
@@ -181,7 +278,7 @@ pub fn extract_rar_ctx(
     match &候选 {
         Some(list) => {
             for cand in list {
-                match archive.test(Some(cand)) {
+                match 测(Some(cand)) {
                     Ok(()) => {
                         pw_bytes = Some(cand.clone());
                         break;
@@ -191,7 +288,7 @@ pub fn extract_rar_ctx(
             }
         }
         None => {
-            if let Err(e) = archive.test(None) {
+            if let Err(e) = 测(None) {
                 校验错误 = Some(e.to_string());
             }
         }
@@ -219,16 +316,16 @@ pub fn extract_rar_ctx(
 
     // 回调里要改报告，用 Rc<RefCell> 共享（单线程提取）
     let report = Rc::new(RefCell::new(crate::extract::ExtractReport::default()));
-    // 解压总量预算（以"内存中的压缩数据大小"为分母）
+    // 解压总量预算（分母 = 真实压缩后的总字节数：文件大小 / 各卷之和）
     let budget = Rc::new(RefCell::new(crate::safety::ExtractBudget::new(
         limits,
-        data.len().max(1) as u64,
+        packed_total.max(1),
     )));
 
     let rep2 = report.clone();
     let bud2 = budget.clone();
 
-    let res = archive.extract_to(pw_bytes.as_deref(), move |meta| {
+    let res = 跑(pw_bytes.as_deref(), Box::new(move |meta| {
         // RAR 回调不给条目序号，我们自己数（**1-based**，与预览显示的号一致）
         let idx = idx_ref.get() + 1;
         idx_ref.set(idx);
@@ -313,7 +410,7 @@ pub fn extract_rar_ctx(
             idx,
             cancelled: false,
         }) as Box<dyn Write>)
-    });
+    }));
 
     // 回调结束后把 Rc 里的结果取出来
     let mut final_report = Rc::try_unwrap(report)
@@ -487,6 +584,42 @@ mod tests {
         p
     }
 
+    /// X2 回归：超过旧上限（256 MiB）的 RAR 现在能正常解（流式，不再整包进内存）
+    ///
+    /// 慢测试，默认不跑：`cargo test --release -- --ignored 大rar`
+    #[test]
+    #[ignore = "慢测试：造 300 MiB 的 RAR（跑法：cargo test --release -- --ignored 大rar）"]
+    fn 大rar不再被大小上限拦住() {
+        use rars::ArchiveVersion;
+        let dir = scratch("big");
+        let p = dir.join("big.rar");
+        let 尺寸 = 300 * 1024 * 1024u64;
+        {
+            let mut b = rars::Builder::new(ArchiveVersion::Rar50).store(true);
+            b.add_bytes(
+                b"big.bin".to_vec(),
+                vec![7u8; 尺寸 as usize],
+                None,
+                None,
+            )
+            .unwrap();
+            fs::write(&p, b.to_bytes().unwrap()).unwrap();
+        }
+        let 实际 = fs::metadata(&p).unwrap().len();
+        assert!(
+            实际 > STREAM_FALLBACK_MAX,
+            "样本必须超过旧上限才有意义：{实际} 字节"
+        );
+        let dest = scratch("big_out");
+        let rep = extract_rar_file(&p, &ExtractRarOptions::new(&dest)).unwrap();
+        assert_eq!(rep.files.len(), 1, "应解出 1 个：{:?}", rep.skipped);
+        let 解出 = fs::metadata(dest.join("big.bin")).unwrap().len();
+        assert_eq!(解出, 尺寸, "解出的字节数要对得上");
+        println!("大 RAR 实测：包 {实际} 字节 → 解出 {解出} 字节");
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dest);
+    }
+
     /// 用 rars 的写侧造一个 RAR（仅测试用；主程序不含写侧）
     fn make_rar(files: &[(&str, &[u8])], password: Option<&str>) -> Vec<u8> {
         use rars::ArchiveVersion;
@@ -562,21 +695,25 @@ mod tests {
         let _ = fs::remove_dir_all(&dest);
     }
 
+    /// X2 的回归：**不再有「太大」这道门**
+    ///
+    /// 造一个「名字是 .rar、体积 300 MiB、内容不是 RAR」的稀疏文件：
+    /// 旧代码会先报「超过 256 MB 上限」，新代码不该再有大小门，而是老实说「这不是 RAR」。
     #[test]
-    fn 超大的_rar_会被明确拒绝而不是吃光内存() {
-        let dir = scratch("big");
+    fn 超大_rar_不再被大小检查拦住() {
+        let dir = scratch("huge");
         let p = dir.join("huge.rar");
         let f = fs::File::create(&p).unwrap();
-        f.set_len(MAX_SIZE + 1).unwrap();
+        f.set_len(300 * 1024 * 1024).unwrap();
         drop(f);
 
         let opts = ExtractRarOptions::new(dir.join("out"));
-        let r = extract_rar_file(&p, &opts);
-        assert!(r.is_err(), "超大 RAR 应当被拒绝");
-        let msg = format!("{}", r.unwrap_err());
+        let e = extract_rar_file(&p, &opts).unwrap_err();
+        let msg = format!("{e}");
+        assert!(!msg.contains("上限"), "不该再因为大小拒绝：{msg}");
         assert!(
-            msg.contains("上限") || msg.contains("MB"),
-            "错误信息要说清原因: {msg}"
+            msg.contains("不是有效的 RAR"),
+            "要说清是内容不对（不是太大）：{msg}"
         );
         let _ = fs::remove_dir_all(&dir);
     }

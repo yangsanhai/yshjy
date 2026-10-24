@@ -461,7 +461,8 @@ impl InArchive for RarUnpacker {
     }
 
     fn shapes(&self) -> &'static [Shape] {
-        &[Shape::Plain]
+        // 分卷（`.part1.rar` 那一族）现在真支持了（X1），所以把 Volumes 也声明上
+        &[Shape::Plain, Shape::Volumes]
     }
 
     fn caps(&self) -> Caps {
@@ -484,8 +485,16 @@ impl InArchive for RarUnpacker {
         ctx: &UnpackCtx,
     ) -> Result<ExtractReport> {
         let eopts = opts.to_rar();
-        // `rars` 只提供全量内存读接口，所以 `extract_rar_stream_ctx` 内部会把流读进内存
-        // （那里先做 256 MiB 上限检查再决定要不要拒绝，见 extract_rar::MAX_SIZE）
+        // 三条路，按「信息量」从多到少：
+        //   1. 多卷 → rars 的多卷流式 API
+        //   2. 单卷有路径 → read_path 流式（无大小上限，X2）
+        //   3. 只有流（管道/stdin）→ 回退整读，受 STREAM_FALLBACK_MAX 约束
+        if src.volumes.len() > 1 {
+            return crate::extract_rar::extract_rar_volumes_ctx(src.volumes, &eopts, ctx);
+        }
+        if let Some(单卷) = src.volumes.first() {
+            return crate::extract_rar::extract_rar_file_ctx(单卷, &eopts, ctx);
+        }
         let mut reader: &mut dyn ReadSeek = &mut *src.reader;
         crate::extract_rar::extract_rar_stream_ctx(&mut reader, &eopts, ctx)
     }
@@ -496,8 +505,10 @@ impl InArchive for RarUnpacker {
         _opts: &UnpackOptions,
         _ctx: &UnpackCtx,
     ) -> Result<Preview> {
-        // `rars` 也只支持全量内存读：预览函数内部会把流读进来（同样受 256 MiB 上限
-        // 保护，超了就如实报「无法预览」，不硬撑）
+        // 有卷路径 → 流式预览（分卷也支持）；只有流 → 回退（受 STREAM_FALLBACK_MAX）
+        if !src.volumes.is_empty() {
+            return crate::preview::preview_rar_paths(src.volumes);
+        }
         let mut reader: &mut dyn ReadSeek = &mut *src.reader;
         crate::preview::preview_rar(&mut reader)
     }

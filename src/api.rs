@@ -731,7 +731,12 @@ pub fn 结果json(out: &crate::batch::JobOutcome) -> Value {
         "dest": out.stats.dest.as_ref().map(|p| p.display().to_string()),
         "millis": out.stats.millis,
         "failed": out.stats.failed.iter()
-            .map(|(n, r)| json!({"path": n, "result": r.as_str()}))
+            .map(|(n, r, why)| json!({
+                "path": n,
+                "result": r.as_str(),
+                "human": r.人话(),
+                "reason": why,
+            }))
             .collect::<Vec<_>>(),
     })
 }

@@ -1102,7 +1102,7 @@ impl yshjy::event::EventSink for 终端出口 {
         if let Event::EntryFinished { path, result, .. } = ev
             && !result.is_ok()
         {
-            详细(format!("条目失败 {path}：{}", result.as_str()));
+            详细(format!("条目失败 {path}：{}", result.人话()));
         }
 
         // `--json`：原样把事件按行吐出去（脚本/其它前端消费）
@@ -1144,7 +1144,7 @@ impl yshjy::event::EventSink for 终端出口 {
             }
             Event::EntryFinished { path, result, .. } if !result.is_ok() => {
                 self.清行();
-                eprintln!("   ⚠ {} 没解开（{}）", path, result.as_str());
+                eprintln!("   ⚠ {} 没解开（{}）", path, result.人话());
             }
             Event::Diagnostic { code, note, .. } => {
                 // 「走了慢路」是性能诊断，跟用户无关；只有排查问题时才要
@@ -1375,8 +1375,11 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
             let abs = std::fs::canonicalize(d).unwrap_or_else(|_| d.clone());
             println!("     📁 {}", abs.display());
         }
-        for (name, res) in j.stats.failed.iter().take(5) {
-            println!("     ⚠ {name}（{}）", res.as_str());
+        for (name, res, why) in j.stats.failed.iter().take(5) {
+            match why {
+                Some(w) => println!("     ⚠ {name}（{}）—— {w}", res.人话()),
+                None => println!("     ⚠ {name}（{}）", res.人话()),
+            }
         }
     }
 
@@ -1463,8 +1466,8 @@ fn 汇总_json(report: &yshjy::batch::BatchReport) -> String {
                 "total": j.stats.entries_total,
                 "bytes": j.stats.bytes_written,
                 "dest": j.stats.dest.as_ref().map(|d| d.display().to_string()),
-                "failed": j.stats.failed.iter().map(|(n, r)| serde_json::json!({
-                    "path": n, "result": r.as_str()
+                "failed": j.stats.failed.iter().map(|(n, r, why)| serde_json::json!({
+                    "path": n, "result": r.as_str(), "human": r.人话(), "reason": why
                 })).collect::<Vec<_>>(),
             })
         })
