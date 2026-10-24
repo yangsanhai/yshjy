@@ -382,7 +382,8 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
             // 所以 7z 解出来的文件暂时保留不了原始时间戳（ZIP / TAR 已支持）。
             // 等这个库暴露访问器（或换库）再补，不要用"格式化再解析"那种脏办法。
 
-            let mut out = match File::create(&out_path) {
+            // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
+            let mut part = match crate::io::PartFile::create(&out_path) {
                 Ok(f) => f,
                 Err(e) => {
                     report
@@ -397,8 +398,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
             loop {
                 // 取消检查下沉到数据块级：单个大文件也能及时停
                 if ctx.is_cancelled() {
-                    drop(out);
-                    let _ = std::fs::remove_file(&out_path);
+                    drop(part);
                     report.cancelled = true;
                     ctx.entry_done(idx, &name, ItemResult::Skipped, 0);
                     return Ok(false);
@@ -409,8 +409,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                         if let Err(e) = budget.record(n as u64) {
                             // 跳过 / 取消：按取消收尾（不是"数据坏了"）
                             if e.is_cancelled() {
-                                drop(out);
-                                let _ = std::fs::remove_file(&out_path);
+                                drop(part);
                                 report.cancelled = true;
                                 ctx.entry_done(idx, &name, ItemResult::Skipped, 0);
                                 return Ok(false);
@@ -419,17 +418,15 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                             report
                                 .skipped
                                 .push((name.clone(), format!("安全限额中止: {e}")));
-                            drop(out);
-                            let _ = std::fs::remove_file(&out_path);
+                            drop(part);
                             ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                             return Ok(false); // 停止
                         }
-                        if let Err(e) = out.write_all(&buf[..n]) {
+                        if let Err(e) = part.as_file().write_all(&buf[..n]) {
                             report
                                 .skipped
                                 .push((name.clone(), format!("写盘失败: {e}")));
-                            drop(out);
-                            let _ = std::fs::remove_file(&out_path);
+                            drop(part);
                             ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                             return Ok(true);
                         }
@@ -440,14 +437,21 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                         report
                             .skipped
                             .push((name.clone(), format!("读取失败: {e}")));
-                        drop(out);
-                        let _ = std::fs::remove_file(&out_path);
+                        drop(part);
                         ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                         return Ok(true);
                     }
                 }
             }
 
+            // 原子落地：改名成功之前，正式文件名还不存在
+            if let Err(e) = part.finish() {
+                report
+                    .skipped
+                    .push((name.clone(), format!("落盘改名失败: {e}")));
+                ctx.entry_done(idx, &name, ItemResult::DataError, 0);
+                return Ok(true);
+            }
             report.bytes_written += written;
             ctx.entry_done(idx, &name, ItemResult::Ok, written);
             report.files.push(crate::extract::ExtractedFile {

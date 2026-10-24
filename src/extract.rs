@@ -442,7 +442,9 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         };
 
         // 流式写盘 + 边写边记限额（防炸弹）
-        let mut out = match fs::File::create(&out_path) {
+        // T9-P1/T8-P6：先写 .yshjy-part，全部写完再原子改名 ——
+        // 中途被杀 / 磁盘满 / 取消时，磁盘上不会出现「顶着正式名字的半截文件」
+        let mut part = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
                 report
@@ -474,7 +476,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                         }
                         break;
                     }
-                    if let Err(e) = std::io::Write::write_all(&mut out, &buf[..n]) {
+                    if let Err(e) = std::io::Write::write_all(part.as_file(), &buf[..n]) {
                         read_err = Some(format!("写盘失败: {e}"));
                         break;
                     }
@@ -490,9 +492,8 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         }
 
         if cancelled_now {
-            // 取消：这个文件写了一半就删掉；之前解好的文件全部保留
-            drop(out);
-            let _ = fs::remove_file(&out_path);
+            // 取消：part 由 Drop 删掉（不留半截正式文件）；之前解好的文件全部保留
+            drop(part);
             report.cancelled = true;
             break;
         }
@@ -509,12 +510,19 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         match read_err {
             Some(msg) => {
                 report.skipped.push((name.clone(), msg));
-                // 清理半成品（对齐 unar「失败即删输出文件」的做法）
-                drop(out);
-                let _ = fs::remove_file(&out_path);
+                // 清理半成品（对齐 unar「失败即删输出文件」的做法）：Drop 会把 part 删掉
+                drop(part);
                 ctx.entry_done(i as u64 + 1, &name, ItemResult::DataError, 0);
             }
             None => {
+                // 原子落地：改名成功之前，正式文件名还不存在
+                if let Err(e) = part.finish() {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("落盘改名失败: {e}")));
+                    ctx.entry_done(i as u64 + 1, &name, ItemResult::DataError, 0);
+                    continue;
+                }
                 report.bytes_written += written;
                 // 把归档里记录的时间戳 / 权限还原到刚解出来的文件上
                 // （尽力而为：设不上不该把一次成功解压变成失败）
