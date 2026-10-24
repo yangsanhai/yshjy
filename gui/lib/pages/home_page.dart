@@ -25,8 +25,13 @@ class _QueueItem {
   final int volumes;
   final bool archive;
 
-  /// pending / running / ok / partial / failed
+  /// pending / running / ok / partial / failed / cancelled
   String status = 'pending';
+
+  /// 引擎给这一行的任务号（`JOB_STARTED` 里带回来）；还没开始跑就是 null
+  ///
+  /// D5 用：单独取消某一行时要把这个号发给引擎，引擎才能只跳这一条。
+  int? jobNo;
 
   _QueueItem({
     required this.path,
@@ -77,6 +82,10 @@ class _HomePageState extends State<HomePage> {
   /// 队列（S13）与批量结果
   final List<_QueueItem> _queue = [];
   List<String> _batchOrder = [];
+
+  /// 用户在界面上单独取消掉的任务号（D5）——
+  /// 批量结果回来时要保住「已取消」这个状态，别被「失败」覆盖掉
+  final Set<int> _cancelled = {};
   Map<String, dynamic>? _batch;
   String? _password;
   /// 解压码是否显示明文（眼睛图标，调研 07:383「是标配，必须做」）
@@ -148,6 +157,7 @@ class _HomePageState extends State<HomePage> {
           if (idx >= 0) {
             setState(() {
               _queue[idx].status = 'running';
+              _queue[idx].jobNo = jobNo; // D5：记住任务号，才能单独取消这一行
               _current = _queue[idx].name;
             });
           }
@@ -357,6 +367,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 只取消这一行（D5）：其余任务照跑
+  ///
+  /// 两种情形都走同一条协议：
+  /// - 还在排队 → 直接本地标「已取消」，同时告诉引擎跳过它
+  /// - 正在跑 → 发给引擎，引擎判断「正在跑的就是它」才真的打断
+  Future<void> _cancelRow(int i) async {
+    if (i < 0 || i >= _queue.length) return;
+    final q = _queue[i];
+    if (!q.archive) return;
+    if (q.status == 'ok' || q.status == 'cancelled') return;
+    // 引擎任务号：跑过的用它记下的；还在排队的就是它在批次里的位置
+    final jobNo = q.jobNo ?? (_batchOrder.indexOf(q.path) + 1);
+    setState(() {
+      q.status = 'cancelled';
+      if (jobNo >= 1) _cancelled.add(jobNo);
+    });
+    if (jobNo >= 1 && _batch != null) {
+      await _client.cancelJob(jobNo);
+      if (mounted) widget.onStatus?.call('已取消这一项，其余继续');
+    } else if (mounted) {
+      widget.onStatus?.call('已跳过这一项（还没开始跑）');
+    }
+  }
+
   /// 开始批量解压（走引擎 `batch`，一次调用跑完整个队列）
   Future<void> _startQueue() async {
     final ready = _queue.where((q) => q.archive).toList();
@@ -366,8 +400,10 @@ class _HomePageState extends State<HomePage> {
       _batch = null;
       _progress = null;
       _current = null;
+      _cancelled.clear();
       for (final q in ready) {
         q.status = 'pending';
+        q.jobNo = null;
       }
       _batchOrder = ready.map((q) => q.path).toList();
     });
@@ -386,8 +422,14 @@ class _HomePageState extends State<HomePage> {
           final idx = _queue.indexWhere((q) => q.path == path);
           if (idx < 0) continue;
           final oc = j['outcome'] as String? ?? '';
-          _queue[idx].status =
-              oc == 'ok' ? 'ok' : (oc == 'partial' ? 'partial' : 'failed');
+          final no = (j['id'] as num?)?.toInt() ?? _queue[idx].jobNo;
+          // D5：用户单独取消过（或引擎回 cancelled）的行显示「已取消」，不是「失败」
+          if (oc == 'cancelled' || (no != null && _cancelled.contains(no))) {
+            _queue[idx].status = 'cancelled';
+          } else {
+            _queue[idx].status =
+                oc == 'ok' ? 'ok' : (oc == 'partial' ? 'partial' : 'failed');
+          }
         }
         _batch = r;
         _phase = Phase.done;
@@ -950,6 +992,17 @@ class _HomePageState extends State<HomePage> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // D5：只取消这一行（其余任务照跑，和「停掉整批」不是一回事）
+                      if (q.archive &&
+                          (q.status == 'pending' || q.status == 'running'))
+                        IconButton(
+                          icon: const Icon(Icons.block, size: 16),
+                          tooltip: q.status == 'running'
+                              ? '取消这一项（其余继续）'
+                              : '这一项不跑',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _cancelRow(i),
+                        ),
                       _queueStatusChip(q),
                       IconButton(
                         icon: const Icon(Icons.close, size: 16),
@@ -984,6 +1037,7 @@ class _HomePageState extends State<HomePage> {
       'ok' => ('完成', cs.primary),
       'partial' => ('部分', Colors.orange),
       'failed' => ('失败', cs.error),
+      'cancelled' => ('已取消', cs.onSurfaceVariant),
       _ => ('等待', cs.onSurfaceVariant),
     };
     if (q.status == 'pending' && !q.archive) {
@@ -1003,6 +1057,7 @@ class _HomePageState extends State<HomePage> {
               'ok' => Icons.check_circle_outline,
               'partial' => Icons.warning_amber_outlined,
               'failed' => Icons.error_outline,
+              'cancelled' => Icons.block,
               _ => Icons.schedule,
             },
             size: 14,

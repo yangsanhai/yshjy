@@ -436,6 +436,11 @@ where
     let mut out = Vec::with_capacity(tasks.len());
     let mut stopped = false;
     for job in tasks {
+        // D5：界面单独取消了这一行 → 只跳过它，其它任务照跑（不是整批取消）
+        if cancel.take_job_skip(job.id) {
+            out.push(skipped(job, "cancelled by user (queue)"));
+            continue;
+        }
         // 「跳过」在排队时按下 → 这一项直接跳过（还没开始跑）
         if cancel.take_skip() {
             out.push(skipped(job, "skipped by user (before start)"));
@@ -455,7 +460,10 @@ where
             path: job.input.to_string_lossy().to_string(),
             size: job.size,
         });
+        // D5：记下「正在跑的是哪一项」—— 界面点这一行的取消才敢真打断它
+        cancel.mark_running(job.id);
         let mut result = run_one(job, opts, sink, cancel);
+        cancel.clear_running();
         // 「跳过当前」在跑的时候按下：这一项已按取消收尾，把标记清掉，
         // **不要让下一项也被跳过**（skip 只影响它按下的那一刻）
         if cancel.take_skip() {
@@ -505,6 +513,11 @@ where
                 scope.spawn(move || {
                     let mut local = Vec::with_capacity(shard.len());
                     for job in &shard {
+                        // D5：这一行被单独取消 → 只跳过它，本线程继续跑下一项
+                        if cancel.take_job_skip(job.id) {
+                            local.push(skipped(job, "cancelled by user (queue)"));
+                            continue;
+                        }
                         // 取消或已停止：本线程直接跳过剩余
                         if cancel.is_cancelled() {
                             local.push(skipped(job, "cancelled before start"));
@@ -524,7 +537,11 @@ where
                             path: job.input.to_string_lossy().to_string(),
                             size: job.size,
                         });
+                        // D5：并行时这里只能记「最后一个开始的」——够用，
+                        // 因为并行下用 skip 打断本来就只能打到一个线程的当前任务
+                        cancel.mark_running(job.id);
                         let r = run_one(job, opts, sink, cancel);
+                        cancel.clear_running();
                         sink.emit(&Event::JobFinished {
                             job: job.id,
                             outcome: r.outcome.clone(),
@@ -581,6 +598,37 @@ mod tests {
     /// 批量测试用的空出口（Arc 形态，与 run_batch 的签名一致）
     fn 空出口() -> Arc<dyn EventSink> {
         Arc::new(NullSink)
+    }
+
+    #[test]
+    fn 界面单独取消某一行只跳过那一条() {
+        // D5：用户点第 2 行的「取消」→ 只跳过它，第 1、3 行照跑（不是整批停）
+        let sink = 空出口();
+        let token = CancelToken::new();
+        token.cancel_job(2);
+        let report = run_batch(
+            造任务(3),
+            &BatchOptions::default(),
+            &sink,
+            &token,
+            |job, _, _, _| JobOutcome::minimal(job.id, job.input.clone(), Outcome::Success),
+        );
+        assert_eq!(report.len(), 3);
+        assert_eq!(report.succeeded(), 2, "第 1、3 行应该照跑成功");
+        assert_eq!(report.cancelled(), 1, "第 2 行按取消算（不是失败）");
+        let 第二 = report.jobs.iter().find(|j| j.id == 2).expect("第 2 行");
+        assert!(matches!(第二.outcome, Outcome::Cancelled { .. }));
+        assert_eq!(token.pending_job_skips(), 0, "标记用过就该清掉");
+    }
+
+    #[test]
+    fn 运行中的任务号记得住也清得掉() {
+        let token = CancelToken::new();
+        assert_eq!(token.running_job(), None);
+        token.mark_running(7);
+        assert_eq!(token.running_job(), Some(7));
+        token.clear_running();
+        assert_eq!(token.running_job(), None);
     }
 
     #[test]
