@@ -277,7 +277,7 @@ impl ItemResult {
         matches!(self, ItemResult::Ok | ItemResult::Skipped)
     }
 
-    /// 稳定标识（日志用）
+    /// 稳定标识（日志 / 协议用；**界面不要直接显示这个**）
     pub fn as_str(self) -> &'static str {
         match self {
             ItemResult::Ok => "OK",
@@ -286,6 +286,18 @@ impl ItemResult {
             ItemResult::DataError => "DATA_ERROR",
             ItemResult::Encrypted => "ENCRYPTED",
             ItemResult::NotExtracted => "NOT_EXTRACTED",
+        }
+    }
+
+    /// 中国人话（CLI / 界面直接显示这个，D21：不许把原始码摆给用户）
+    pub fn 人话(self) -> &'static str {
+        match self {
+            ItemResult::Ok => "成功",
+            ItemResult::Skipped => "跳过",
+            ItemResult::CrcError => "校验不过（内容坏了）",
+            ItemResult::DataError => "数据损坏",
+            ItemResult::Encrypted => "加密，没解开",
+            ItemResult::NotExtracted => "没解出来",
         }
     }
 }

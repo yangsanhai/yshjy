@@ -429,7 +429,7 @@ fn 描述识别(t: &crate::job::Target, 脱敏: &mut 脱敏器) -> Value {
             "volume_count": volumes.len(),
             "volumes": volumes.iter().map(|p| 脱敏.路径(p)).collect::<Vec<_>>(),
         }),
-        T::Rar => json!({ "kind": "rar" }),
+        T::Rar { volumes } => json!({ "kind": "rar", "volumes": volumes.len() }),
         T::Stream {
             format,
             is_tar,

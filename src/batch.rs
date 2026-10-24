@@ -80,8 +80,10 @@ pub struct JobStats {
     pub entries_total: u64,
     /// 写出的字节数
     pub bytes_written: u64,
-    /// 失败条目（路径 + 结果）
-    pub failed: Vec<(String, ItemResult)>,
+    /// 失败条目（路径 + 结果 + **人话原因**）
+    ///
+    /// 第三项就是 D8 要的 `detail`：界面/脚本不必再自己猜「为什么失败」。
+    pub failed: Vec<(String, ItemResult, Option<String>)>,
     /// 实际输出目录
     pub dest: Option<PathBuf>,
     /// 归档级诊断位

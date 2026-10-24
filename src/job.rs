@@ -53,7 +53,13 @@ pub enum Target {
         volumes: Vec<PathBuf>,
     },
     /// RAR（只解不压）
-    Rar,
+    ///
+    /// `volumes` 按序、**第一卷在前**；单卷时长度 1。分卷交给 `rars` 的多卷 API，
+    /// 而「卷名怎么认」的知识留在识别层（[`as_rar_volumes`]），handler 不必再学一遍。
+    Rar {
+        /// 卷路径列表（长度 1 = 单卷）
+        volumes: Vec<PathBuf>,
+    },
     /// 单流压缩 / TAR 家族
     Stream {
         /// 外层压缩格式
@@ -72,7 +78,7 @@ impl Target {
             Target::Zip { .. } => "zip",
             Target::ZipSplit { .. } => "zip",
             Target::SevenZ { .. } => "7z",
-            Target::Rar => "rar",
+            Target::Rar { .. } => "rar",
             Target::Stream { format, is_tar, .. } => {
                 if *is_tar {
                     "tar"
@@ -104,6 +110,8 @@ pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     let vols = match &t {
         Target::SevenZ { volumes } => Some(volumes),
         Target::ZipSplit { volumes } => Some(volumes),
+        // RAR 分卷也算（命名规则认得出来才收得进 volumes；认不出就是单卷）
+        Target::Rar { volumes } if volumes.len() > 1 => Some(volumes),
         _ => None,
     };
     if let Some(v) = vols
@@ -123,15 +131,26 @@ pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
 pub fn 缺卷信息(vols: &[PathBuf]) -> Option<String> {
     let 末块 = vols.last()?;
     let name = 末块.file_name()?.to_string_lossy().to_string();
-    let (base, num, width) = split_volume_name(&name)?;
+    // 两种命名都要认：
+    // - `.001` / `.z01`：整名末尾就是数字（`片子.7z.001`）
+    // - `.part1.rar` / `_0.rar`：数字在**扩展名之前**（`片子.part1.rar`、`备份_0.rar`）
+    let (base, num, width, ext) = match split_volume_name(&name) {
+        Some((b, n, w)) => (b, n, w, String::new()),
+        None => {
+            let i = name.rfind('.')?;
+            let (stem, ext) = (&name[..i], &name[i..]);
+            let (b, n, w) = split_volume_name(stem)?;
+            (b, n, w, ext.to_string())
+        }
+    };
     let dir = 末块.parent().unwrap_or_else(|| Path::new("."));
     let 缺号 = num + 1;
-    let 缺 = dir.join(format!("{base}{缺号:0width$}"));
+    let 缺 = dir.join(format!("{base}{缺号:0width$}{ext}"));
     if 缺.exists() {
         return None;
     }
     for j in (缺号 + 1)..=(缺号 + 200) {
-        if dir.join(format!("{base}{j:0width$}")).exists() {
+        if dir.join(format!("{base}{j:0width$}{ext}")).exists() {
             return Some(缺.file_name()?.to_string_lossy().to_string());
         }
     }
@@ -167,9 +186,11 @@ fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     if let Some(volumes) = guess_renamed_volumes(path) {
         return Ok(Target::SevenZ { volumes });
     }
-    // ② RAR
+    // ② RAR（含分卷：X1。卷名规则在这里认，handler 只管解）
     if is_rar(path) {
-        return Ok(Target::Rar);
+        return Ok(Target::Rar {
+            volumes: as_rar_volumes(path),
+        });
     }
     // ③ 单流 / TAR
     if let Some(d) = sniff_stream(path) {
@@ -314,6 +335,106 @@ fn is_rar(path: &Path) -> bool {
         }
     }
     false
+}
+
+/// 文件头是否真的是 RAR（RAR4 `Rar!\x1a\x07\x00` / RAR5 `Rar!\x1a\x07\x01\x00`）
+fn rar_magic_ok(p: &Path) -> bool {
+    use std::io::Read;
+    match std::fs::File::open(p) {
+        Ok(mut f) => {
+            let mut buf = [0u8; 8];
+            f.read_exact(&mut buf).is_ok() && buf.starts_with(b"Rar!\x1a\x07")
+        }
+        Err(_) => false,
+    }
+}
+
+/// 认出 RAR 分卷组（X1）：返回**按序排好**的卷路径；单卷时长度 1
+///
+/// 三种主流命名都认：
+/// - `.part1.rar` / `.part01.rar` —— WinRAR `-v` 默认写法
+/// - `.rar` + `.r00` / `.r01` … —— 老式写法（主卷是 `.rar`）
+/// - 数字后缀 `名字_0.rar` / `名字-0.rar` / `名字0.rar` —— 第三方工具与测试样本常见
+///
+/// 只收「头部魔数确实是 RAR」的候选，避免把恰好同名编号的独立 RAR 误拼成一组。
+/// 万一仍拼错，`extract_rar_volumes_ctx` 会逐卷解析并报「第 N 卷读不出来」，不会静默出错。
+fn as_rar_volumes(path: &Path) -> Vec<PathBuf> {
+    let 单卷 = || vec![path.to_path_buf()];
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        return 单卷();
+    };
+    let dir = path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+    let lower = name.to_lowercase();
+
+    // ① `.partN.rar`：从 part1 起连续收（不依赖用户点的是哪一卷）
+    if let Some(pos) = lower.rfind(".part") {
+        let after = &name[pos + 5..];
+        let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if !digits.is_empty() && after[digits.len()..].eq_ignore_ascii_case(".rar") {
+            let width = digits.len();
+            let prefix = &name[..pos + 5];
+            let mut out = Vec::new();
+            for i in 1..=9999u32 {
+                let cand = dir.join(format!("{prefix}{i:0width$}.rar"));
+                if !rar_magic_ok(&cand) {
+                    break;
+                }
+                out.push(cand);
+            }
+            if out.len() > 1 {
+                return out;
+            }
+        }
+        return 单卷();
+    }
+
+    // ② `.r00` / `.r01` …（主卷是同名 `.rar`）
+    //
+    // 注意：`.rar` 后缀自己也会被 `rfind(".r")` 命中，所以这里**只有**尾部真的是
+    // 1–3 位数字（即 `.r00` 这种）时才处理；否则继续往下走 ③。
+    if let Some(pos) = lower.rfind(".r") {
+        let tail = &name[pos + 2..];
+        if !tail.is_empty() && tail.len() <= 3 && tail.chars().all(|c| c.is_ascii_digit()) {
+            let stem = &name[..pos];
+            let 主卷 = dir.join(format!("{stem}.rar"));
+            if rar_magic_ok(&主卷) {
+                let mut out = vec![主卷];
+                for i in 0..=9999u32 {
+                    let cand = dir.join(format!("{stem}.r{i:02}"));
+                    if !rar_magic_ok(&cand) {
+                        break;
+                    }
+                    out.push(cand);
+                }
+                if out.len() > 1 {
+                    return out;
+                }
+            }
+            return 单卷();
+        }
+    }
+
+    // ③ 数字后缀：先从 0 起试，再从 1 起试（两种起编法都有人用）
+    let stem = match name.rfind('.') {
+        Some(i) if name[i..].eq_ignore_ascii_case(".rar") => &name[..i],
+        _ => name.as_str(),
+    };
+    if let Some((base, _num, width)) = split_volume_name(stem) {
+        for 起 in [0u32, 1u32] {
+            let mut out = Vec::new();
+            for i in 起..=(起 + 9999) {
+                let cand = dir.join(format!("{base}{i:0width$}.rar"));
+                if !rar_magic_ok(&cand) {
+                    break;
+                }
+                out.push(cand);
+            }
+            if out.len() > 1 {
+                return out;
+            }
+        }
+    }
+    单卷()
 }
 
 /// 认出「ZIP 分卷」（`.z01` / `.z02` … + 最后一块 `.zip`）
@@ -775,16 +896,27 @@ fn extract_target(
                 stats,
             )
         }
-        Target::Rar => {
+        Target::Rar { volumes } => {
             let mut f = 打开输入(job)?;
-            // RAR 的炸弹防护分母由 handler 从流长度自己取（底层库要全量读进内存）
-            let mut src = unpack::Source::new(&mut f).with_packed_total(0);
+            // RAR 现在走流式（`read_path` 按需读载荷，不再整包进内存）：
+            // 分母用各卷真实字节数之和，并把握到的卷路径交给 handler。
+            let packed = volumes
+                .iter()
+                .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+                .sum::<u64>();
+            let mut src = unpack::Source::new(&mut f)
+                .with_volumes(volumes)
+                .with_packed_total(packed);
             走统一接口(
                 ctx,
                 &mut src,
                 &uopts,
                 ArchiveFormat::Rar4,
-                unpack::Shape::Plain,
+                if volumes.len() > 1 {
+                    unpack::Shape::Volumes
+                } else {
+                    unpack::Shape::Plain
+                },
                 stats,
             )
         }
@@ -938,10 +1070,12 @@ fn outcome_from(res: Result<ExtractReport>, stats: &mut JobStats, ctx: &UnpackCt
             stats.entries_done = rep.files.len() as u64;
             stats.entries_total = progress.total_files;
             stats.bytes_written = rep.bytes_written;
+            // 跳过 ≠ 数据坏了（X4）：符号链接被安全拒绝、同名跳过、权限不足、路径不安全……
+            // 都不是「数据损坏」。统一记 `Skipped`，并把**真实原因**一起带上（D8）。
             stats.failed = rep
                 .skipped
                 .iter()
-                .map(|(name, _why)| (name.clone(), ItemResult::DataError))
+                .map(|(name, why)| (name.clone(), ItemResult::Skipped, Some(why.clone())))
                 .collect();
             if rep.budget_hit {
                 stats.flags.insert(ArchiveFlags::DATA_ERROR);
@@ -1285,5 +1419,43 @@ mod tests {
         let e = identify(&p, &ctx).unwrap_err();
         assert_eq!(e.code, ErrorCode::NotArchive);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// L1 诊断：RAR 分卷命名探测（用仓库里现成的 RAR5 四卷样本）
+    #[test]
+    fn 认出_rar_四卷分卷() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("spike/testdata/rar_fixtures/golden");
+        let p = dir.join("stored_volume_0.rar");
+        if !p.exists() {
+            eprintln!("跳过：没有样本 {}", p.display());
+            return;
+        }
+        let vols = as_rar_volumes(&p);
+        println!("识别的卷: {vols:#?}");
+        assert_eq!(vols.len(), 4, "应当认出 4 卷");
+        assert_eq!(
+            vols[0].file_name().unwrap().to_string_lossy(),
+            "stored_volume_0.rar"
+        );
+        assert_eq!(
+            vols[3].file_name().unwrap().to_string_lossy(),
+            "stored_volume_3.rar"
+        );
+
+        // 从中间某卷进去也要能补回第一卷
+        let p2 = dir.join("stored_volume_2.rar");
+        let vols2 = as_rar_volumes(&p2);
+        println!("从第 3 卷进：{vols2:#?}");
+        assert_eq!(vols2.len(), 4);
+        assert_eq!(
+            vols2[0].file_name().unwrap().to_string_lossy(),
+            "stored_volume_0.rar"
+        );
+
+        // 单卷 RAR 不能被误当分卷
+        let 单 = dir.join("stored_rar50.rar");
+        let v = as_rar_volumes(&单);
+        assert_eq!(v.len(), 1, "单卷不该被拼成一组：{v:#?}");
     }
 }

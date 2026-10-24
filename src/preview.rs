@@ -185,10 +185,20 @@ fn preview_target(
             let mut src = crate::unpack::Source::new(&mut mf).with_packed_total(size);
             列清单(ctx, &mut src, &uopts, ArchiveFormat::SevenZ, Shape::Volumes)
         }
-        Target::Rar => {
+        Target::Rar { volumes } => {
             let mut f = 打开输入(input)?;
-            let mut src = crate::unpack::Source::new(&mut f);
-            列清单(ctx, &mut src, &uopts, ArchiveFormat::Rar4, Shape::Plain)
+            let mut src = crate::unpack::Source::new(&mut f).with_volumes(volumes);
+            列清单(
+                ctx,
+                &mut src,
+                &uopts,
+                ArchiveFormat::Rar4,
+                if volumes.len() > 1 {
+                    Shape::Volumes
+                } else {
+                    Shape::Plain
+                },
+            )
         }
         Target::Stream {
             format,
@@ -383,9 +393,9 @@ pub(crate) fn preview_7z<R: std::io::Read + std::io::Seek>(
     })
 }
 
-/// RAR：`rars` 要求数据在内存里，超过上限就降级（如实说明，不硬撑）
+/// RAR 预览（**只有流**时的回退路径；有文件路径走 [`preview_rar_paths`]，流式无上限）
 ///
-/// `pub(crate)` + 收**一条流**：统一接口（[`crate::unpack::RarUnpacker`]）也调它。
+/// `pub(crate)` + 收**一条流**：统一接口（[`crate::unpack::RarUnpacker`]）在没有卷路径时才调它。
 pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Result<Preview> {
     // 注：`seek` 能直接调，是因为 `R: Seek` 这个 bound；但 `take(...)` 返回的
     // `Take<&mut R>` 是**具体类型**，它的 `read_to_end` 需要 `Read` 在作用域里。
@@ -395,8 +405,8 @@ pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Resu
     let size = src
         .seek(std::io::SeekFrom::End(0))
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("取流长度失败: {e}")))?;
-    if size > crate::extract_rar::MAX_SIZE {
-        // 大 RAR 不预览（底层库限制），标注「不完整」让外壳显示「无法预览」
+    if size > crate::extract_rar::STREAM_FALLBACK_MAX {
+        // 管道喂超大 RAR 不预览（如实降级，不硬撑）；文件路径不会走到这里
         return Ok(Preview {
             format: "rar",
             complete: false,
@@ -406,7 +416,7 @@ pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Resu
     src.seek(std::io::SeekFrom::Start(0))
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("回到流开头失败: {e}")))?;
     let mut data = Vec::with_capacity(size as usize);
-    src.take(crate::extract_rar::MAX_SIZE + 1)
+    src.take(crate::extract_rar::STREAM_FALLBACK_MAX + 1)
         .read_to_end(&mut data)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read: {e}")))?;
     let archive = rars::ArchiveReader::read(&data)
@@ -441,6 +451,70 @@ pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Resu
         format: "rar",
         complete: false,
     })
+}
+
+/// 从**文件路径**预览 RAR（单卷 / 分卷都行）：`read_path` 流式，**没有大小上限**
+///
+/// 分卷用 `rars::volume_members` 把整组卷的成员拼成一份清单（跨卷的逻辑文件只出现一次）。
+/// 这里还能拿到真实大小 / 加密标记 —— 以前走流式 API 拿不到，只能报 0 并标 `complete=false`。
+pub(crate) fn preview_rar_paths(paths: &[std::path::PathBuf]) -> Result<Preview> {
+    if paths.is_empty() {
+        return Err(Error::new(ErrorCode::NotArchive).context("没有可预览的 RAR 路径"));
+    }
+    let mut archives = Vec::with_capacity(paths.len());
+    for (i, p) in paths.iter().enumerate() {
+        let a = rars::ArchiveReader::read_path(p).map_err(|e| {
+            Error::new(ErrorCode::MissingVolume)
+                .with("volume", p.display().to_string())
+                .with("index", (i + 1).to_string())
+                .context(format!(
+                    "第 {} 卷读不出来（{}）—— 可能没下全或下坏了: {e}",
+                    i + 1,
+                    p.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                ))
+        })?;
+        archives.push(a);
+    }
+    let members = rars::volume_members(&archives)
+        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("rar members: {e}")))?;
+    Ok(预览自成员(&members))
+}
+
+/// 由 `rars` 的成员元数据构造预览（单卷 / 分卷共用一份）
+fn 预览自成员(members: &[rars::ArchiveMember]) -> Preview {
+    let mut entries = Vec::with_capacity(members.len());
+    let mut total = 0u64;
+    let mut 加密数 = 0u64;
+    for (i, m) in members.iter().enumerate() {
+        let raw = String::from_utf8_lossy(&m.meta.name).to_string();
+        let name = raw.replace('\\', "/");
+        let is_dir = m.meta.is_directory;
+        if m.meta.is_encrypted {
+            加密数 += 1;
+        }
+        total = total.saturating_add(m.meta.unpacked_size);
+        entries.push(EntryView {
+            index: i as u64 + 1,
+            is_risky: !is_dir && safety::is_risky_executable(&name),
+            path: name,
+            size: m.meta.unpacked_size,
+            packed: Some(m.meta.packed_size),
+            encrypted: m.meta.is_encrypted,
+            is_dir,
+            modified: None,
+        });
+    }
+    Preview {
+        entries,
+        hints: Vec::new(),
+        total_size: total,
+        encrypted_count: 加密数,
+        enc_kind: None,
+        format: "rar",
+        complete: true,
+    }
 }
 
 /// 单流：只有一个产物，名字由**编排层**给（它手上有原始文件名）
