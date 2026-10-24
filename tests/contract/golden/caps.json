@@ -1,4 +1,103 @@
 {
-  "events": {},
+  "events": {
+    "_caps": {
+      "7z": {
+        "can_create": false,
+        "encrypted": true,
+        "encrypted_names": true,
+        "restores_mtime": false,
+        "selective": true,
+        "split_volumes": true
+      },
+      "brotli": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": false,
+        "selective": false,
+        "split_volumes": false
+      },
+      "bzip2": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": false,
+        "selective": false,
+        "split_volumes": false
+      },
+      "gzip": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": false,
+        "selective": false,
+        "split_volumes": false
+      },
+      "lz4": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": false,
+        "selective": false,
+        "split_volumes": false
+      },
+      "rar4": {
+        "can_create": false,
+        "encrypted": true,
+        "encrypted_names": false,
+        "restores_mtime": true,
+        "selective": true,
+        "split_volumes": true
+      },
+      "rar5": {
+        "can_create": false,
+        "encrypted": true,
+        "encrypted_names": false,
+        "restores_mtime": true,
+        "selective": true,
+        "split_volumes": true
+      },
+      "tar": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": true,
+        "selective": true,
+        "split_volumes": false
+      },
+      "xz": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": false,
+        "selective": false,
+        "split_volumes": false
+      },
+      "zip": {
+        "can_create": true,
+        "encrypted": true,
+        "encrypted_names": false,
+        "restores_mtime": true,
+        "selective": true,
+        "split_volumes": true
+      },
+      "zip（分卷）": {
+        "can_create": true,
+        "encrypted": true,
+        "encrypted_names": false,
+        "restores_mtime": true,
+        "selective": true,
+        "split_volumes": true
+      },
+      "zstd": {
+        "can_create": false,
+        "encrypted": false,
+        "encrypted_names": false,
+        "restores_mtime": false,
+        "selective": false,
+        "split_volumes": false
+      }
+    }
+  },
   "rc": 0
 }
