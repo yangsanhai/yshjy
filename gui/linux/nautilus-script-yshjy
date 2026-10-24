@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# 「用杨三海解压」—— 文件管理器右键脚本（N7）
+#
+# 装法（用户级，不用 sudo）：
+#   bash scripts/install-nautilus.sh
+# 装法（系统级）：打 deb 时会自动装到 /usr/share/nautilus/scripts/
+#
+# 用法：在文件管理器里选中一个或多个压缩包 → 右键 → 脚本 → 用杨三海解压
+#
+# 设计说明：
+# - 解到「包所在的文件夹」里，CLI 默认会建同名目录，不会把文件撒一地
+# - 不弹终端；结果用桌面通知说一句，详细输出写日志（右键菜单里看不到终端输出）
+# - 变量名一律英文（bash 的 local / 变量名不认中文，本项目踩过两次）
+
+set -uo pipefail
+
+LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/yshjy"
+LOG="$LOG_DIR/nautilus-last.log"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+
+notify() {
+  local title="$1"
+  local body="${2:-}"
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "杨三海解压" "$title" "$body"
+  fi
+  printf '%s %s\n' "$title" "$body"
+}
+
+# 找引擎：环境变量优先，其次 PATH，最后常见安装位置
+BIN="${YSHJY_BIN:-}"
+if [ -z "$BIN" ]; then
+  for c in yshjy /usr/bin/yshjy /usr/local/bin/yshjy "$HOME/.local/bin/yshjy"; do
+    if command -v "$c" >/dev/null 2>&1; then
+      BIN="$c"
+      break
+    fi
+  done
+fi
+if [ -z "$BIN" ]; then
+  notify "没找到杨三海解压" "yshjy 不在 PATH 里，先装一下"
+  exit 1
+fi
+
+# Nautilus 把选中项逐个换行塞进这个变量
+paths=()
+while IFS= read -r line; do
+  [ -n "$line" ] && paths+=("$line")
+done <<< "${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-}"
+
+if [ "${#paths[@]}" -eq 0 ]; then
+  notify "没选中文件" "先在文件管理器里选中压缩包，再右键"
+  exit 1
+fi
+
+{
+  echo "═══ $(date '+%F %T') 用杨三海解压（右键菜单）═══"
+  echo "引擎：$BIN"
+  printf '选中：%s\n' "${paths[@]}"
+} >>"$LOG" 2>&1
+
+ok=0
+bad=0
+for p in "${paths[@]}"; do
+  [ -e "$p" ] || continue
+  dir="$(dirname "$p")"
+  base="$(basename "$p")"
+  echo "── 正在解：$p" >>"$LOG" 2>&1
+  # 解到包所在目录（CLI 默认建同名文件夹）；--quiet 只留结果
+  if ( cd "$dir" && "$BIN" jy "$base" --quiet ) >>"$LOG" 2>&1; then
+    ok=$((ok + 1))
+  else
+    bad=$((bad + 1))
+  fi
+done
+
+if [ "$bad" -eq 0 ]; then
+  notify "解压完成" "$ok 个包已解开（跟包在同一个文件夹里）"
+else
+  notify "有 $bad 个没解开" "$ok 个成功；详细原因见 $LOG"
+fi
+
+# 有失败就返回非 0，方便别的脚本判断
+[ "$bad" -eq 0 ] || exit 1

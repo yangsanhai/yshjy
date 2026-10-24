@@ -86,6 +86,9 @@ class _HomePageState extends State<HomePage> {
   /// 用户在界面上单独取消掉的任务号（D5）——
   /// 批量结果回来时要保住「已取消」这个状态，别被「失败」覆盖掉
   final Set<int> _cancelled = {};
+
+  /// 这一轮扫的是几个文件夹（D6：拖文件夹进来要明说「会自动展开」）
+  int _foldersScanned = 0;
   Map<String, dynamic>? _batch;
   String? _password;
   /// 解压码是否显示明文（眼睛图标，调研 07:383「是标配，必须做」）
@@ -310,8 +313,12 @@ class _HomePageState extends State<HomePage> {
 
   /// 扫一批路径 → 队列（目录展开、分卷归并都在引擎里做）
   Future<void> _scan(List<String> paths) async {
+    // D6：传进来的是文件夹 → 队列顶部要明说「会自动展开里面的压缩包」
+    // 注意：Dart 和 bash 一样**不认中文变量名**（这个坑踩两次了）
+    final folderCount = paths.where((p) => Directory(p).existsSync()).length;
     setState(() {
       _phase = Phase.listing;
+      _foldersScanned = folderCount;
       _queue.clear();
       _batch = null;
       _notes.clear();
@@ -460,6 +467,7 @@ class _HomePageState extends State<HomePage> {
       _batch = null;
       _phase = Phase.empty;
       _file = null;
+      _foldersScanned = 0;
     });
   }
 
@@ -924,6 +932,16 @@ class _HomePageState extends State<HomePage> {
             TextButton(onPressed: _resetQueue, child: const Text('清空')),
           ],
         ),
+        // D6：拖/选的是文件夹 → 明说会怎么处理，别让人猜
+        if (_foldersScanned > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              '这是个文件夹，会自己翻开找里面的压缩包和分卷（只读文件头，不动你的文件）；'
+              '不是压缩包的文件会列出来但跳过',
+              style: TextStyle(fontSize: 11, height: 1.5, color: cs.primary),
+            ),
+          ),
         // P2 智能解压：规则在引擎里（Bandizip 三规则），但要让用户知道会发生什么
         Padding(
           padding: const EdgeInsets.only(bottom: 8),

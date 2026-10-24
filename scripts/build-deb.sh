@@ -60,6 +60,7 @@ mkdir -p "$STAGE/usr/share/bash-completion/completions"
 mkdir -p "$STAGE/usr/share/zsh/vendor-completions"
 mkdir -p "$STAGE/usr/share/fish/vendor_completions.d"
 mkdir -p "$STAGE/usr/share/doc/yshjy"
+mkdir -p "$STAGE/usr/share/nautilus/scripts"
 
 # ── 程序 ──
 install -m755 target/release/yshjy "$STAGE/usr/bin/yshjy"
@@ -75,6 +76,15 @@ sed "s|__EXEC__|/usr/lib/yshjy/gui/yshjy_gui|" gui/linux/yshjy.desktop \
   > "$STAGE/usr/share/applications/yshjy.desktop"
 chmod 644 "$STAGE/usr/share/applications/yshjy.desktop"
 install -m644 gui/linux/yshjy.png "$STAGE/usr/share/icons/hicolor/256x256/apps/yshjy.png"
+
+# ── 文件管理器右键菜单（N7）──
+# 在 Nautilus 里选中压缩包 → 右键 →「脚本」→「用杨三海解压」
+if [ -f gui/linux/nautilus-script-yshjy ]; then
+  install -m755 gui/linux/nautilus-script-yshjy \
+    "$STAGE/usr/share/nautilus/scripts/用杨三海解压"
+else
+  echo "!! 缺 gui/linux/nautilus-script-yshjy（右键菜单会缺）" >&2
+fi
 
 # ── 安装/卸载钩子：刷新菜单与图标缓存（否则要注销重登才看到）──
 cat > "$STAGE/DEBIAN/postinst" <<'EOF'
