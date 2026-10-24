@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../humanize.dart';
 import '../platform_paths.dart';
 
 /// 关于页：版本、边界、报障入口
@@ -29,7 +30,8 @@ class _AboutPageState extends State<AboutPage> {
     } on EngineError catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('生成失败：${e.code}')));
+          // 五态审计：同上，错误码要翻成人话
+          .showSnackBar(SnackBar(content: Text('生成失败：${errorText(e.code)}')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
