@@ -199,15 +199,9 @@ pub fn 解压(
         .and_then(|v| v.as_str())
         .ok_or_else(|| 错误值("BAD_PARAM", "缺少 path"))?;
 
-    // 挑选表达式暂时只支持「序号列表」；通配还没接进协议 —— 宁可报不支持，也不静默忽略
-    if let Some(s) = 参数.get("select").and_then(|v| v.as_str())
-        && !s.trim().is_empty()
-    {
-        return Err(错误值(
-            "UNSUPPORTED",
-            &format!("协议 v1 暂不支持 select（收到 {s}）"),
-        ));
-    }
+    // 挑选（P23-1）：与 CLI `--select` 同一套语法，字符串或序号数组都认。
+    // 非法表达式**报错**而不是静默全解 —— 用户以为只解了主程序、实际解了 16 GB（D20 同类教训）。
+    let selection = 挑选条件(参数)?;
 
     // 「只提封面、不解压」：§5.2① 的「只勾封面」就是这条路径。
     // 必须**在建输出目录之前**返回 —— 用户只想要封面，不该留下空文件夹。
@@ -231,7 +225,7 @@ pub fn 解压(
             .get("password")
             .and_then(|v| v.as_str())
             .map(str::to_string),
-        selection: crate::select::Selection::all(),
+        selection,
         dest: job.dest.clone(),
         smart_dir: true,
         force: 参数.get("force").and_then(|v| v.as_bool()).unwrap_or(false),
@@ -450,6 +444,17 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
         cover_ext: 扩展名.clone(),
         ..Default::default()
     };
+    // 压缩级别（P23-4）：0=仅存储（最快）/ 1-9 越大越小越慢，默认 6。
+    // 越界明确报错 —— 静默忽略会让用户以为「选了最大压缩」其实没生效（D20 教训）。
+    if let Some(v) = 参数.get("level") {
+        let n = v
+            .as_u64()
+            .ok_or_else(|| 错误值("BAD_PARAM", "level 只能是 0-9 的整数"))?;
+        if n > 9 {
+            return Err(错误值("BAD_PARAM", &format!("level 只能是 0-9（收到 {n}）")));
+        }
+        opts.level = n as u32;
+    }
     // 图片/文本内置素材不能用 MP4 的 free 原子（会写坏封面）—— 与 CLI 同一条规则。
     // 用户自带外壳不在这里判断：`pack::build` 会按魔数兜底降级。
     if 参数.get("tail").and_then(|v| v.as_bool()) == Some(true)
@@ -501,6 +506,7 @@ pub fn 打包(参数: &Value) -> Result<Value, Value> {
         "zip_size": rep.zip_size,
         "cover_size": rep.cover_size,
         "entries": rep.entries,
+        "level": opts.level,
         "layout": format!("{:?}", rep.layout),
         "warnings": rep.warnings,
         "volumes": post_rep.as_ref().map(|p| p.volumes.iter().map(|x| x.display().to_string()).collect::<Vec<_>>()).unwrap_or_default(),
@@ -568,6 +574,8 @@ pub fn 批量(
         .get("password")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    // 挑选（P23-1）：与单任务同一条规则 —— 界面选「只解这几个」时批量也照办
+    let selection = 挑选条件(参数)?;
     let smart_dir = 参数
         .get("smart_dir")
         .and_then(|v| v.as_bool())
@@ -584,7 +592,7 @@ pub fn 批量(
         jobs: 1, // 顺序跑：队列的进度才有意义，也不会把机械盘打成碎片
         continue_on_error: true,
         password,
-        selection: crate::select::Selection::all(),
+        selection,
         dest,
         smart_dir,
         force: false,
@@ -626,6 +634,51 @@ pub fn 批量(
 }
 
 // ───────────────────────── 小工具 ─────────────────────────
+
+/// 解析协议里的 `select`（P23-1 文件级挑选）
+///
+/// 两种情况都认：
+/// - 字符串：与 CLI `--select` 完全同一套语法（`all` / `1,3,5` / `*.exe` / `目录/**` / `required`）
+/// - 数组：界面勾选更顺手的写法（`[1, 3, 5]`，序号从 1 起，与 `PREVIEW_READY` 的 `index` 一致）
+///
+/// 缺省 / null / 空串 = 全都要（「只加不删」：老前端不传这个参数，行为不能变）。
+fn 挑选条件(参数: &Value) -> Result<crate::select::Selection, Value> {
+    match 参数.get("select") {
+        None | Some(Value::Null) => Ok(crate::select::Selection::all()),
+        Some(Value::String(s)) if s.trim().is_empty() => Ok(crate::select::Selection::all()),
+        Some(Value::String(s)) => crate::select::Selection::parse(s).map_err(|_| {
+            错误值(
+                "BAD_PARAM",
+                &format!(
+                    "select 表达式看不懂（{s}）；写法举例：all / 1,3,5 / *.exe / 目录/** / required"
+                ),
+            )
+        }),
+        Some(Value::Array(arr)) => {
+            let mut ids: Vec<u64> = Vec::with_capacity(arr.len());
+            for v in arr {
+                match v.as_u64() {
+                    Some(n) if n > 0 => ids.push(n),
+                    _ => {
+                        return Err(错误值(
+                            "BAD_PARAM",
+                            "select 数组只能放正整数序号（从 1 开始，与列表里的 index 一致）",
+                        ));
+                    }
+                }
+            }
+            if ids.is_empty() {
+                Ok(crate::select::Selection::all())
+            } else {
+                Ok(crate::select::Selection::only(ids))
+            }
+        }
+        Some(_) => Err(错误值(
+            "BAD_PARAM",
+            "select 只接受字符串（表达式）或正整数数组（序号）",
+        )),
+    }
+}
 
 /// 参数类错误（没有引擎 detail 可带）
 pub fn 错误值(码: &str, 备注: &str) -> Value {

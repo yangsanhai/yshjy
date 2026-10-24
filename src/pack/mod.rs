@@ -364,9 +364,12 @@ fn 条目选项<'a>(
     mtime: Option<std::time::SystemTime>,
     pw: Option<&'a str>,
 ) -> Result<zip::write::FileOptions<'a, 'a, ()>> {
-    let mut o = zip::write::SimpleFileOptions::default()
-        .compression_method(method)
-        .compression_level(Some(level));
+    let mut o = zip::write::SimpleFileOptions::default().compression_method(method);
+    // 「仅存储」（level=0）不能带压缩级别：zip crate 会直接拒
+    // `Unsupported compression level`（实测踩到 —— level=0 打包整个失败）。
+    if method != zip::CompressionMethod::Stored {
+        o = o.compression_level(Some(level));
+    }
     if let Some(dt) = mtime.and_then(系统时间转_zip_时间) {
         o = o.last_modified_time(dt);
     }

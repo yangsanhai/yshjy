@@ -6,6 +6,8 @@
 __pycache__/
 
 # 参考库：别人项目的源码不入库（体积大且非本项目代码）
+# 第 23 批收尾补：第 24 批参考项目浅克隆（283 MB，8 个项目）—— 磁盘留着，git 别管
+/refs/外部-归档软件/
 /refs/7zip
 /refs/PeaZip
 /refs/SteganographierGUI
