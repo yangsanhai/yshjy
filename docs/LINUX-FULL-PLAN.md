@@ -124,8 +124,8 @@
 | **N3** ✅ | **`tests/all.sh` 一条命令回归** | 一条命令跑完 语法 + `cargo test` + `clippy -D warnings` + 6 探针 + `flutter test`，默认 <60 秒；`--slow` 才跑大包/RAR 分卷 |
 | **N4** ✅ | **D5 批量单独取消某一行**（0.9.25-c 已完成）| 队列某行能单独取消，其余任务照跑。落地：`CancelToken` 加 `skip_jobs` 集合 + `cancel_job()` / `take_job_skip()` / `mark_running()` / `running_job()`；`batch.rs` 顺序与并行两条路都在每项开始前查；协议 `cancel` 带 `job` 只跳那一项（`running:true` 才是真打断）；界面队列行加「取消这一项」按钮 + `JOB_STARTED` 记任务号 + 结果显示「已取消」不显示「失败」。证据：单元测试 `界面单独取消某一行只跳过那一条`、协议探针 `tests/protocol_cancel_job.py`（80 MiB × 3，取消第 2 项 → `{1:'ok', 2:'cancelled', 3:'ok'}`） |
 | **N5** ✅ | **D4 队列条目 Del 键删除**（早批次已实现，本轮核实）| 选中行 `Del` / `Backspace` 移出队列（`onKeyEvent`），行尾也有「移出队列」按钮 |
-| **N6** | **D6 拖入目录的提示文案** | 拖目录进来时明确写「会自动展开其中的压缩包」 |
-| **N7** | **右键菜单**（Nautilus 脚本 + deb 提供） | 文件管理器右键压缩包出现「用杨三海解压」 |
+| **N6** ✅ | **D6 拖入目录的提示文案**（0.9.25-c 完成）| 拖/选文件夹进来后，队列顶部直接写清：「这是个文件夹，会自己翻开找里面的压缩包和分卷（只读文件头，不动你的文件）；不是压缩包的文件会列出来但跳过」。清空队列时提示跟着清掉 |
+| **N7** ✅ | **右键菜单**（0.9.25-c 完成）| 落地：`gui/linux/nautilus-script-yshjy`（右键脚本，解到包所在文件夹、不弹终端、结果用 notify-send 通知、详细输出写 `~/.cache/yshjy/nautilus-last.log`）；`scripts/install-nautilus.sh` 用户级安装（不用 sudo）；deb 装到 `/usr/share/nautilus/scripts/`。实测：模拟 `NAUTILUS_SCRIPT_SELECTED_FILE_PATHS` 跑 → 解出文件、日志正常。已核实 Nautilus 48.3 仍有 scripts 子菜单（二进制含 `scripts-submenu-section`）。**用法：选中压缩包 → 右键 →「脚本」→「用杨三海解压」**，正在跑需 `nautilus -q` 重启文件管理器 |
 
 **排在后面的（记账，不进下一轮）**：托盘/后台、断点续传（要动协议 + 状态持久化）、协议契约测试、
 五态审计（空/加载/成功/失败/部分成功逐页过）。

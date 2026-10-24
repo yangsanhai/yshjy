@@ -82,6 +82,8 @@ fi
 head_ "1. 编译与静态检查"
 run "cargo build --release" cargo build --release --quiet
 run "cargo clippy（-D warnings）" bash -c 'cargo clippy --quiet -- -D warnings'
+# 右键菜单脚本（N7）：语法 + 「能不能自己找到引擎」的干跑
+run "右键脚本语法检查" bash -c 'bash -n gui/linux/nautilus-script-yshjy && bash -n scripts/install-nautilus.sh && bash -n scripts/build-deb.sh'
 # 格式检查只作提示：本项目是手写紧凑风格 + 大量中文标识符，
 # rustfmt 会把整份代码重排（上千行 diff），不适合当「有没有砸坏东西」的判据。
 if cargo fmt --check >/dev/null 2>&1; then

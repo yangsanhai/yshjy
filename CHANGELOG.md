@@ -83,6 +83,23 @@
   （80 MiB × 3 个包，途中取消第 2 项 → `{1:'ok', 2:'cancelled', 3:'ok'}`，第 1、3 项照跑）
 - 顺带核实：D4（Del 键删队列条目）早批次已实现，本轮只确认在册
 
+### 拖入文件夹的提示（N6 / D6）
+- 拖/选文件夹进来后，队列顶部直接写明会怎么处理：
+  「这是个文件夹，会自己翻开找里面的压缩包和分卷（只读文件头，不动你的文件）；
+  不是压缩包的文件会列出来但跳过」
+- 清空队列时提示跟着清掉（不会残留）
+
+### 文件管理器右键菜单（N7）
+- 新增 `gui/linux/nautilus-script-yshjy`：选中压缩包 → 右键 →「脚本」→「用杨三海解压」
+  - 解到包所在文件夹（不把文件撒一地）
+  - 不弹终端；结果用 `notify-send` 说一句；详细输出写 `~/.cache/yshjy/nautilus-last.log`
+  - 引擎查找顺序：`YSHJY_BIN` → PATH → `/usr/bin` → `/usr/local/bin` → `~/.local/bin`
+- 新增 `scripts/install-nautilus.sh`：用户级安装/卸载（**不用 sudo**），已装到本机
+- `scripts/build-deb.sh` 打 deb 时一并装到 `/usr/share/nautilus/scripts/`（系统级）
+- 已核实 Nautilus 48.3 仍有 scripts 子菜单（二进制含 `scripts-submenu-section`）
+- 实测：模拟 `NAUTILUS_SCRIPT_SELECTED_FILE_PATHS` 跑一遍 → 解出 `a.txt`、日志正常
+- `tests/all.sh` 增加「右键脚本语法检查」一项
+
 ### 回归证据
 - `cargo test --release`：**303 passed / 0 failed**（新增「认出 RAR 四卷分卷」；
   改写「超大 RAR 不再被大小检查拦住」；新增 ignored「300 MiB 真包解压」）
