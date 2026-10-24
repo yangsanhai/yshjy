@@ -2,6 +2,58 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.24-c] · 2026-10-24（第 23 批「能力补齐」）
+
+用户原话：「都要」。7 项里 6 项落地，第 7 项（7z 写包）给出评估结论。
+
+### 文件级挑选（P23-1）
+- 协议 `extract` / `batch` 支持 `select`：字符串表达式（`all` / `1,3,5` / `*.exe` / `目录/**` /
+  `required`）或正整数数组（序号，与 `PREVIEW_READY` 的 `index` 一致）；不传 = 全解
+- 非法表达式回 `BAD_PARAM`（以前回 `UNSUPPORTED`，也不会静默全解）
+- 界面：解压页列表逐条勾选 + 已选 N/M + 全选/全不选；一个都没勾时主按钮置灰
+- 实测：取消勾 `readme.md` → 已选 3/4 → 解压 → 产物只有另外三个文件
+
+### 单任务输出目录（P23-2）
+- 解压页「高级选项」里可指定本次输出目录（默认仍是「包旁边」）；输码重试沿用同一目录
+
+### 文件名编码手动切换（P23-3）
+- 高级选项里下拉：自动 / GBK / Big5 / Shift-JIS / UTF-8，接引擎 `--encoding`
+
+### 压缩速度/体积档（P23-4）
+- 协议 `pack` 支持 `level: 0-9`（0 = 仅存储、9 = 最小体积，默认 6，结果回显实际值）
+- CLI 新增 `--level`，越界报错；界面打包页加「压缩级别」下拉
+- 顺带修：`level=0` 以前会以 `Unsupported compression level` 整个失败（Stored 不该带压缩级别）
+
+### 自解压增强（P23-5）
+- **支持解压码**：存根不再拒绝加密包，改为提示输入（脚本/批量用 `YSHJY_SFX_PASSWORD`）；
+  密码错在建目录之前就失败，不留空文件夹
+- **有进度显示**：逐条打百分比（原来双击后黑屏无感）
+- **Linux `.sh` 自解压**：`--sfx-linux` / 协议 `sfx:"linux"`，产物可执行、双击即解
+- 界面自解压开关下加「目标系统：Windows(.exe) / Linux(.sh)」
+- macOS 自解压需要 mac 构建机产出 Mach-O 存根，排在最后（不是不做）
+
+### 协议健壮性（P23-7）
+- `--serve` 一次性喂命令不再丢结果：stdin 断开后先等当前任务收尾再退出（D16 结案）
+  （第二条命令仍按协议回 `BUSY` —— 一次只跑一个任务是设计，脚本应逐条等待）
+
+### 7z 写包（P23-6）：本批不做，结论如下
+- `sevenz-rust2` 0.24 确实有写入能力（`SevenZWriter` / `push_archive_entry` / `set_encrypt_header`）
+- 但四条交付路径（伪装外壳 / 自解压 / 分卷 / 说明书+校验和）全部围绕 ZIP 实现，
+  加 7z 等于把这四条重做一遍；而用户实际场景（网盘躲审核）用的就是 ZIP 伪装
+- 结论：排到第 24 批「成熟度基线」再评估；文档写清，不做假选项
+
+### 安装层修正（顺手，用户已确认）
+- `~/.local/bin/yshjy` 曾指向旧手工安装（0.9.21-c）→ 改指 `/usr/bin/yshjy`
+- 桌面/菜单项曾指向旧 `~/.local/opt/yshjy` → 改指 `/usr/lib/yshjy/gui/yshjy_gui`
+- `.gitignore` 收掉第 24 批参考项目（283 MB，磁盘未删）
+
+### 验收
+- `cargo test` 316 通过 / `cargo clippy --all-targets -- -D warnings` 零警告
+- 新探针入库：`tests/protocol_select.py`、`protocol_level.py`、`protocol_serve_eof.py`、
+  `protocol_sfx_linux.py`；自解压旧探针补密码用例
+- 回归 6 个探针全 PASS（含 wine 跑真 Windows PE 存根）
+- 界面实机验证：勾选解压闭环、完成页、压缩级别下拉、自解压类型下拉
+
 ## [0.9.23-c] · 2026-10-18（23.5 批「成熟感最小集」，工作室接手）
 
 只补壳，引擎未改（`src/` 一行没动）。
