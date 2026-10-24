@@ -356,7 +356,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             break;
         }
         // 取名字（先不解码数据）
-        let (name, is_dir, _size, encrypted, out_path_result) = {
+        let (name, is_dir, _size, encrypted, out_path_result, is_symlink) = {
             let f = match archive.by_index_raw(i) {
                 Ok(f) => f,
                 Err(e) => {
@@ -378,7 +378,13 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             let _size = f.size();
             let encrypted = f.encrypted();
             let safe = safety::resolve_safe(&opts.dest, &raw_name);
-            (raw_name, is_dir, _size, encrypted, safe)
+            // zip 没有专门的「这是符号链接」类型位，只能看 external attributes 里
+            // 的 Unix mode：S_IFLNK = 0o120000。tar 有 header 类型，zip 只能这么认
+            let is_symlink = f
+                .unix_mode()
+                .map(|m| m & 0o170000 == 0o120000)
+                .unwrap_or(false);
+            (raw_name, is_dir, _size, encrypted, safe, is_symlink)
         };
 
         // 挑选：没被勾中的条目直接跳过（不写盘、不算错，见 docs/V0.5-ENGINE.md §5）
@@ -421,6 +427,65 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 Overwrite::Rename => out_path = unique_path(&out_path),
                 Overwrite::Replace => {}
             }
+        }
+
+        // ── 符号链接（对齐 tar：Linux 软件包的标准结构）──
+        // zip 把链接目标**直接写在条目内容里**（不压缩），所以这里读出来就是目标路径。
+        // 安全规则跟 tar 共用一套：只接受「相对路径 + 规范化后仍在解压目录内」，
+        // 绝对路径 / 用 `..` 爬出目录的一律拒绝并说明 —— 不静默、也不假装解出来了。
+        if is_symlink {
+            if let Some(parent) = out_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let 读出 = archive.by_index_raw(i).ok().and_then(|mut f| {
+                let mut buf = Vec::new();
+                std::io::Read::read_to_end(&mut f, &mut buf)
+                    .ok()
+                    .map(|_| buf)
+            });
+            let Some(buf) = 读出 else {
+                report
+                    .skipped
+                    .push((name.clone(), "链接条目读不出目标，已跳过".into()));
+                ctx.entry_done(i as u64 + 1, &name, ItemResult::Skipped, 0);
+                continue;
+            };
+            let 目标 = String::from_utf8_lossy(&buf).into_owned();
+            if 目标.is_empty() {
+                report
+                    .skipped
+                    .push((name.clone(), "链接条目没写目标，已跳过".into()));
+                ctx.entry_done(i as u64 + 1, &name, ItemResult::Skipped, 0);
+                continue;
+            }
+            if !crate::extract_stream::链接目标安全(&opts.dest, &out_path, &目标) {
+                report.skipped.push((
+                    name.clone(),
+                    format!("链接指向「{目标}」，会跑到解压目录外，已拒绝（防逃逸）"),
+                ));
+                ctx.entry_done(i as u64 + 1, &name, ItemResult::Skipped, 0);
+                continue;
+            }
+            // 同名已存在（Replace 策略或重解一遍）先删掉，否则 symlink 直接 EEXIST
+            let _ = fs::remove_file(&out_path);
+            match std::os::unix::fs::symlink(&目标, &out_path) {
+                Ok(_) => {
+                    ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
+                    report.files.push(ExtractedFile {
+                        name,
+                        out_path,
+                        size: 0,
+                        encrypted,
+                    });
+                }
+                Err(e) => {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("建链接失败: {e}")));
+                    ctx.entry_done(i as u64 + 1, &name, ItemResult::Skipped, 0);
+                }
+            }
+            continue;
         }
 
         if let Some(parent) = out_path.parent()
