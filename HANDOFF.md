@@ -1,6 +1,28 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **L 批（Linux 完全版）已开工：0.9.25-c 已交付 L1 + L2 第一刀（2026-10-24）**
+> **L3 轮（N1–N7）已全部交付：0.9.25-c（2026-10-24）**
+> 计划、清单与实测证据见 **`docs/LINUX-FULL-PLAN.md`**（§7 是 N1–N7 清单，§8 是待观察账）。
+> L3 轮做完的事（提交 352b135 / c6f729c / 64e4c4d）：
+> - **N1 界面文案表**：`gui/lib/humanize.dart` —— 错误码 17 / 诊断码 10 / 条目结果 6，全中文；
+>   查不到的码**不再显示原始码**；修掉「界面查 `PASSWORD_REQUIRED` 而引擎发 `NEED_PASSWORD`」的真 bug
+> - **N2 打包页进度条**：订阅 `PACK_PROGRESS`，进度条 + 百分比 + 当前文件
+> - **N3 `tests/all.sh`**：一条命令跑 编译 → clippy(-D warnings) → 单元测试 → 7 个协议探针 →
+>   冒烟 → 界面测试 → 右键脚本语法；`--slow` 跑大 RAR/分卷；**15 通过 / 0 失败**
+> - **N4 批量单行取消（D5）**：引擎 `CancelToken` 按任务号取消 + 协议 `cancel.job` +
+>   界面行内「取消这一项」；只有正在跑的就是它才真打断；显示「已取消」不显示「失败」
+> - **N5 核实**：D4（Del 键删队列条目）早批次已实现
+> - **N6 拖入文件夹提示**：队列顶部明说「会自己翻开找压缩包和分卷（只读文件头，不动文件）」
+> - **N7 右键菜单**：`gui/linux/nautilus-script-yshjy` + `scripts/install-nautilus.sh`（用户级，
+>   已装到本机）+ deb 装到 `/usr/share/nautilus/scripts/`；用法：选中压缩包 → 右键 →「脚本」→
+>   「用杨三海解压」
+> - 三个坑记在代码/脚本注释里：**bash 的 local 不认中文变量名**、**Dart 也不认中文变量名**、
+>   `cargo fmt --check` 只作提示（手写紧凑风格，rustfmt 会重排上千行）
+>
+> **下一轮候选**（按 `docs/LINUX-FULL-PLAN.md` 记账部分）：托盘/后台 → 断点续传 →
+> 协议契约测试 → 五态审计；另外**系统里装的还是 0.9.24-c，要重新 `scripts/build-deb.sh` 打包装上**
+> 才能看到这轮的界面改动。
+>
+> **L 批前两刀（0.9.25-c 首次交付，2026-10-24）**
 > 计划与实测盘点见 **`docs/LINUX-FULL-PLAN.md`**（X1–X6 + 老账 + L1–L7 分批）。
 > 本批做完（提交后）：
 > - **X1 RAR 分卷**：`as_rar_volumes` 认三种命名 + `rars::extract_volumes_to` 多卷流式；
