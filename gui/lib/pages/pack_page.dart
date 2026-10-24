@@ -37,6 +37,8 @@ class _PackPageState extends State<PackPage> {
   /// 解压码是否显示明文（眼睛图标）
   bool _showPw = false;
   /// 交付选项（DESIGN §17.8）：分卷 / 校验和 / 说明书
+  /// 压缩级别（P23-4）：0 = 仅存储最快 / 6 = 标准 / 9 = 最小体积
+  int _level = 6;
   bool _split = false;
   bool _checksum = true;
   bool _readme = true;
@@ -184,6 +186,7 @@ class _PackPageState extends State<PackPage> {
         cover: _mode == 'disguise' && !isSfx ? _coverPath : null,
         sfx: isSfx,
         splitBytes: !isSfx && _split ? _parseSize(_splitCtrl.text) : null,
+        level: _level,
         checksum: _checksum,
         // 普通压缩不写「这不是视频」的说明书（用户验收 2026-10-17）；自解压也不需要
         readme: _mode == 'disguise' && !isSfx ? _readme : false,
@@ -450,6 +453,27 @@ class _PackPageState extends State<PackPage> {
             ),
           ),
           const SizedBox(height: 12),
+          // 压缩级别（P23-4）：以前只在引擎里有，CLI/GUI 都没暴露
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.speed, size: 18),
+            title: const Text('压缩级别', style: TextStyle(fontSize: 13)),
+            subtitle: const Text('越小越快、越大越省空间（默认「标准」）',
+                style: TextStyle(fontSize: 11)),
+            trailing: DropdownButton<int>(
+              value: _level,
+              isDense: true,
+              style: const TextStyle(fontSize: 12),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('仅存储（最快）')),
+                DropdownMenuItem(value: 1, child: Text('很快')),
+                DropdownMenuItem(value: 6, child: Text('标准')),
+                DropdownMenuItem(value: 9, child: Text('最小体积（最慢）')),
+              ],
+              onChanged: _busy ? null : (v) => setState(() => _level = v ?? 6),
+            ),
+          ),
           // 交付选项：默认「校验和 + 说明书」开（DESIGN §14.2），分卷按需
           SwitchListTile(
             dense: true,

@@ -368,6 +368,10 @@ class EngineClient {
     bool wantExtract = true,
     bool drill = false,
     bool ask = true,
+    /// 文件级挑选（P23-1）：只解这些序号（来自 list 的 entries.index）；null/空 = 全解
+    List<int>? select,
+    /// 文件名编码（P23-3）：gbk / big5 / sjis / utf-8；null 或 'auto' = 引擎自动链
+    String? encoding,
   }) async {
     final r = await _call({
       'cmd': 'extract',
@@ -378,6 +382,11 @@ class EngineClient {
       'cover': cover,
       'extract': wantExtract,
       if (drill) 'drill': true,
+      // 文件级挑选（P23-1）：协议认正整数数组，序号与列表里的 index 一致
+      if (select != null && select.isNotEmpty) 'select': select,
+      // 文件名编码（P23-3）：「自动」不传，交给引擎的自动链
+      if (encoding != null && encoding.isNotEmpty && encoding != 'auto')
+        'encoding': encoding,
       // 声明「我能处理 ASK_USER」—— 不写的话引擎遇到限额直接失败（协议设计如此）
       if (ask) 'ask': true,
     });
@@ -399,6 +408,8 @@ class EngineClient {
     String mode = 'disguise',
     String? cover,
     bool sfx = false,
+    /// 压缩级别（P23-4）：0 = 仅存储最快 / 6 = 标准 / 9 = 最小体积
+    int? level,
   }) async {
     final r = await _call({
       'cmd': 'pack',
@@ -409,6 +420,7 @@ class EngineClient {
       if (cover != null) 'cover': cover,
       if (sfx) 'sfx': true,
       if (splitBytes != null) 'split': splitBytes,
+      if (level != null) 'level': level,
       'checksum': checksum,
       'readme': readme,
     }, timeout: const Duration(hours: 2));
@@ -429,12 +441,16 @@ class EngineClient {
     required List<String> paths,
     String? dest,
     String? password,
+    /// 文件名编码（P23-3）：整批用同一个代码页
+    String? encoding,
   }) async =>
       _unwrap(await _call({
         'cmd': 'batch',
         'paths': paths,
         if (dest != null) 'dest': dest,
         if (password != null) 'password': password,
+        if (encoding != null && encoding.isNotEmpty && encoding != 'auto')
+          'encoding': encoding,
         'ask': true,
       }, timeout: const Duration(hours: 6)));
 

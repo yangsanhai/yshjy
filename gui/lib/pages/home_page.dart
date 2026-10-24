@@ -98,6 +98,13 @@ class _HomePageState extends State<HomePage> {
   /// 解压页那两个勾选（GUI-PLAN §5.2①）：封面和内容各管各的
   bool _wantCover = true;
   bool _wantExtract = true;
+
+  /// 文件级挑选（P23-1）：勾中的条目序号；等于全部时不传给引擎（保持老行为）
+  final Set<int> _picked = {};
+  /// 单任务输出目录（P23-2）：null = 解到包所在目录（引擎默认，用户验收定的规则）
+  String? _outDir;
+  /// 文件名编码（P23-3）：auto = 引擎自动链（UTF-8 → 0x7075 → GB18030）
+  String _encoding = 'auto';
   /// 引擎的 ASK_USER 已经在弹窗里等答案（防止重复弹）
   bool _askOpen = false;
 
@@ -457,6 +464,12 @@ class _HomePageState extends State<HomePage> {
         // 有封面区才默认勾「伪装封面」；普通 zip 不显示那一行，也不提取
         _wantCover = pv.hasCover;
         _wantExtract = true;
+        // 新包默认全选（取消勾选才是「只解一部分」）；输出目录/编码回默认
+        _picked
+          ..clear()
+          ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
+        _outDir = null;
+        _encoding = 'auto';
       });
       widget.onStatus?.call('已识别：${pv.fileCount} 个文件');
     } on EngineError catch (e) {
@@ -475,11 +488,18 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       widget.onStatus?.call('正在解压…');
+      final pv = _preview;
+      // 全勾 = 不传 select（引擎默认全解，与以前行为完全一致）
+      final pickedAll = pv == null ||
+          _picked.length == pv.entries.where((e) => !e.isDir).length;
       final r = await _client.extract(
         path,
         password: _password,
         cover: _wantCover,
         wantExtract: _wantExtract,
+        dest: _outDir,
+        select: (_wantExtract && !pickedAll) ? _picked.toList() : null,
+        encoding: _encoding,
       );
       if (!mounted) return;
       setState(() {
@@ -570,7 +590,16 @@ class _HomePageState extends State<HomePage> {
       _current = null;
     });
     try {
-      final r = await _client.extract(_file!, password: pw);
+      final pv = _preview;
+      final pickedAll = pv == null ||
+          _picked.length == pv.entries.where((e) => !e.isDir).length;
+      final r = await _client.extract(
+        _file!,
+        password: pw,
+        dest: _outDir,
+        select: pickedAll ? null : _picked.toList(),
+        encoding: _encoding,
+      );
       if (!mounted) return;
       setState(() {
         _result = r;
@@ -1198,6 +1227,96 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(height: 12),
+        // 文件级挑选（P23-1）：列表所见即所解 —— 取消勾选的条目不会解出来
+        Row(
+          children: [
+            Text(
+              '已选 ${_picked.length} / ${pv.entries.where((e) => !e.isDir).length} 个文件',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() {
+                _picked
+                  ..clear()
+                  ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
+              }),
+              child: const Text('全选', style: TextStyle(fontSize: 12)),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _picked.clear()),
+              child: const Text('全不选', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+        // 高级选项（P23-2 输出目录 / P23-3 文件名编码）：默认收起，新手不用管
+        Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          clipBehavior: Clip.antiAlias,
+          child: ExpansionTile(
+            key: const ValueKey('advanced'),
+            dense: true,
+            leading: const Icon(Icons.tune, size: 18),
+            title: const Text('高级选项（输出位置 / 文件名编码）',
+                style: TextStyle(fontSize: 13)),
+            subtitle: Text(
+              '${_outDir == null ? '输出：包旁边' : '输出：$_outDir'}'
+              ' · 编码：${_encoding == 'auto' ? '自动' : _encoding.toUpperCase()}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
+            ),
+            children: [
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.drive_folder_upload_outlined, size: 18),
+                title: const Text('输出到指定目录', style: TextStyle(fontSize: 13)),
+                subtitle: Text(
+                  _outDir ?? '默认：解到包所在目录旁边（推荐）',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_outDir != null)
+                      IconButton(
+                        tooltip: '改回默认（包旁边）',
+                        icon: const Icon(Icons.restart_alt, size: 18),
+                        onPressed: () => setState(() => _outDir = null),
+                      ),
+                    TextButton(
+                      onPressed: () async {
+                        final d = await getDirectoryPath(confirmButtonText: '就解到这里');
+                        if (d != null && mounted) setState(() => _outDir = d);
+                      },
+                      child: const Text('选择', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.translate, size: 18),
+                title: const Text('文件名编码', style: TextStyle(fontSize: 13)),
+                subtitle: const Text('老包在中文/日文 Windows 上打的，名字变乱码时手动指定',
+                    style: TextStyle(fontSize: 11)),
+                trailing: DropdownButton<String>(
+                  value: _encoding,
+                  isDense: true,
+                  style: const TextStyle(fontSize: 12),
+                  items: const [
+                    DropdownMenuItem(value: 'auto', child: Text('自动')),
+                    DropdownMenuItem(value: 'gbk', child: Text('GBK 中文')),
+                    DropdownMenuItem(value: 'big5', child: Text('Big5 繁体')),
+                    DropdownMenuItem(value: 'sjis', child: Text('Shift-JIS 日文')),
+                    DropdownMenuItem(value: 'utf-8', child: Text('UTF-8')),
+                  ],
+                  onChanged: (v) => setState(() => _encoding = v ?? 'auto'),
+                ),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
@@ -1208,10 +1327,34 @@ class _HomePageState extends State<HomePage> {
                 final e = pv.entries[i];
                 return ListTile(
                   dense: true,
-                  leading: Icon(
-                    e.isDir ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
-                    size: 20,
-                    color: e.isDir ? cs.primary : cs.onSurfaceVariant,
+                  onTap: e.isDir
+                      ? null
+                      : () => setState(() {
+                            if (!_picked.remove(e.index)) _picked.add(e.index);
+                          }),
+                  leading: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!e.isDir)
+                        SizedBox(
+                          width: 30,
+                          child: Checkbox(
+                            value: _picked.contains(e.index),
+                            onChanged: (v) => setState(() {
+                              if (v == true) {
+                                _picked.add(e.index);
+                              } else {
+                                _picked.remove(e.index);
+                              }
+                            }),
+                          ),
+                        ),
+                      Icon(
+                        e.isDir ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
+                        size: 20,
+                        color: e.isDir ? cs.primary : cs.onSurfaceVariant,
+                      ),
+                    ],
                   ),
                   title: Text(
                     e.path,
@@ -1256,13 +1399,16 @@ class _HomePageState extends State<HomePage> {
             ),
             const Spacer(),
             FilledButton.icon(
-              onPressed: (_wantExtract || (pv.hasCover && _wantCover)) ? _extract : null,
+              onPressed: (_wantExtract && _picked.isEmpty) ||
+                      (!_wantExtract && !(pv.hasCover && _wantCover))
+                  ? null
+                  : _extract,
               icon: Icon(_wantExtract ? Icons.download : Icons.movie_outlined),
               label: Text(
                 _wantExtract
                     ? ((pv.hasCover && _wantCover)
-                        ? '开始解压 + 提取封面'
-                        : '开始解压（${pv.fileCount} 个文件）')
+                        ? '开始解压 ${_picked.length} 个 + 提取封面'
+                        : '开始解压（${_picked.length} 个文件）')
                     : (pv.hasCover && _wantCover ? '只提取封面' : '请勾选要提取的内容'),
               ),
               style: FilledButton.styleFrom(
