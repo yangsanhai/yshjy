@@ -27,23 +27,13 @@
 
 ---
 
-## 2. 老账（文档里记着、至今没结案的）
+## 2. 老账（**已合并，不再在这里维护**）
 
-| 编号 | 项 | 出处 | 现状 |
-|---|---|---|---|
-| D4 | 队列条目不能按 `Del` 删除 | GUI-PLAN §7 | 未做 |
-| D5 | 批量执行时不能单独取消某一行 | GUI-PLAN §7 | 未做（要引擎支持逐条跳过） |
-| D6 | 拖入目录时界面没说明「会自动展开」 | GUI-PLAN §7 | 未做（文案） |
-| D8 | 批量结果不带结构化 `detail`，界面只能猜失败原因 | GUI-PLAN §7 | ✅ 0.9.25-c：`(名字, 码, 原因)` + 协议 `human`/`reason` |
-| D21 | 所有 `DIAGNOSTIC` / 错误码都要有中文人话 | GUI-PLAN §7 | 🟡 0.9.25-c 第一刀（ItemResult 人话 + CLI）；GUI 侧 + DIAGNOSTIC 码待做 |
-| — | `pack` 没有进度事件（打大包界面是死的） | GUI-PLAN §8 24.4 | 未做 |
-| — | 协议没有契约测试（golden JSON） | GUI-PLAN 24 批 B 组 | 未做 |
-| — | 无右键菜单（Nautilus 脚本/扩展） | GUI-PLAN 24 批 C 组 | 未做 |
-| — | 无托盘 / 后台任务 | GUI-PLAN 24 批 D 组 | 未做（`caps.background=false`） |
-| — | 无断点续传 | 协议 `caps.resume=false` | 未做（声明老实） |
-| — | 7z 写包 | D18 / D22 | **决定不做**（理由已写） |
-| — | `tests/all.sh` 一条命令跑完验证 | GUI-PLAN 24.2 | 未做 |
-| D3 | GNOME Shell Introspect 未授权（自动化测试受限） | GUI-PLAN §7 | 不阻塞，不动 |
+- **已结案**：D4 / D5 / D6 / D8 / D21、打包进度事件、文件管理器右键菜单、`tests/all.sh`
+  —— 全部在 0.9.25-c 解决，证据见 `CHANGELOG.md`
+- **还没做**：协议契约测试、`caps` 能力位、托盘/后台、断点续传、五态审计等
+  —— 见 **[`docs/TODO.md`](TODO.md)**（唯一真源）
+- **决定不做**：7z 写包、Windows/macOS 那套、D3 GNOME Introspect 授权
 
 ---
 
@@ -115,32 +105,15 @@
 
 ---
 
-## 7. 下一轮（L3）清单 —— 定于 2026-10-24，**按这个顺序做，不插队**
+## 6. 待办与纪律
 
-| 编号 | 内容 | 验收标准（做到什么算完） |
-|---|---|---|
-| **N1** | **GUI 文案表 + 错误码人话**（D21 的后半截）：Dart 侧建 `码 → 中文` 映射，覆盖 `ItemResult` 6 码、`DiagnosticCode` 10 码、`Outcome` | 界面任何位置都不再出现 `DATA_ERROR` / `RiskyEntry` 这类原始码；解恶意包时显示「包里有不安全的路径，已跳过」这类人话 |
-| **N2** | **GUI 打包页接 `PACK_PROGRESS`** | 打 1 GB 包时打包页进度条在动、界面不假死 |
-| **N3** ✅ | **`tests/all.sh` 一条命令回归** | 一条命令跑完 语法 + `cargo test` + `clippy -D warnings` + 6 探针 + `flutter test`，默认 <60 秒；`--slow` 才跑大包/RAR 分卷 |
-| **N4** ✅ | **D5 批量单独取消某一行**（0.9.25-c 已完成）| 队列某行能单独取消，其余任务照跑。落地：`CancelToken` 加 `skip_jobs` 集合 + `cancel_job()` / `take_job_skip()` / `mark_running()` / `running_job()`；`batch.rs` 顺序与并行两条路都在每项开始前查；协议 `cancel` 带 `job` 只跳那一项（`running:true` 才是真打断）；界面队列行加「取消这一项」按钮 + `JOB_STARTED` 记任务号 + 结果显示「已取消」不显示「失败」。证据：单元测试 `界面单独取消某一行只跳过那一条`、协议探针 `tests/protocol_cancel_job.py`（80 MiB × 3，取消第 2 项 → `{1:'ok', 2:'cancelled', 3:'ok'}`） |
-| **N5** ✅ | **D4 队列条目 Del 键删除**（早批次已实现，本轮核实）| 选中行 `Del` / `Backspace` 移出队列（`onKeyEvent`），行尾也有「移出队列」按钮 |
-| **N6** ✅ | **D6 拖入目录的提示文案**（0.9.25-c 完成）| 拖/选文件夹进来后，队列顶部直接写清：「这是个文件夹，会自己翻开找里面的压缩包和分卷（只读文件头，不动你的文件）；不是压缩包的文件会列出来但跳过」。清空队列时提示跟着清掉 |
-| **N7** ✅ | **右键菜单**（0.9.25-c 完成）| 落地：`gui/linux/nautilus-script-yshjy`（右键脚本，解到包所在文件夹、不弹终端、结果用 notify-send 通知、详细输出写 `~/.cache/yshjy/nautilus-last.log`）；`scripts/install-nautilus.sh` 用户级安装（不用 sudo）；deb 装到 `/usr/share/nautilus/scripts/`。实测：模拟 `NAUTILUS_SCRIPT_SELECTED_FILE_PATHS` 跑 → 解出文件、日志正常。已核实 Nautilus 48.3 仍有 scripts 子菜单（二进制含 `scripts-submenu-section`）。**用法：选中压缩包 → 右键 →「脚本」→「用杨三海解压」**，正在跑需 `nautilus -q` 重启文件管理器 |
+**所有待办只看 [`docs/TODO.md`](TODO.md) —— 那是唯一真源。** 本文件只留历史、实测证据与批次记录，
+不再另记待办（以前这里有过「老账 18 项 / L1–L7 / 下一轮 N1–N7 / 待观察」四套，已合并）。
 
-**排在后面的（记账，不进下一轮）**：托盘/后台、断点续传（要动协议 + 状态持久化）、协议契约测试、
-五态审计（空/加载/成功/失败/部分成功逐页过）。
+已完成、不必再查的：L3 轮 N1 文案表、N2 打包页进度条、N3 `tests/all.sh`、N4 单行取消、
+N5 核实 D4、N6 拖入文件夹提示、N7 右键菜单（证据在 `CHANGELOG.md`）。
 
-## 8. 待观察（本轮发现、**留到以后**的问题，不跑偏）
-
-- GUI 侧目前还没接文案表与打包进度（N1/N2 就是收这个）
-- zip 格式里的符号链接（不是 tar）没实测；本轮只修了 TAR 那条路
-- RAR 现在能拿到 `file_time` 了，修改时间还没还原（可以做，非阻塞）
-- 打包路径只有「普通压缩」接了进度；伪装 / 自解压路径的进度还没接
-- 缺卷判定对 RAR 的「最后一卷没下完」还判不出来（只有中间断卷能判）
-
----
-
-## 6. 每批的固定动作（纪律）
+### 每批的固定动作（纪律）
 
 1. 改前先读 `HANDOFF.md` 顶部 + 本文件对应批次
 2. 改引擎 → `cargo test` + 相关探针；改界面 → `flutter build linux --release` **再** `cp` 引擎（D11）
