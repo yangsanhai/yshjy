@@ -1223,6 +1223,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 8),
               // 次入口弱化成文字按钮（调研 07:921-923：第一屏只该有一个最强入口）
+              // ⚠️ 别改成 FilledButton —— widget_test 里有条测试专门钉着这件事
               TextButton.icon(
                 onPressed: _pickFolder,
                 icon: const Icon(Icons.folder_open_outlined, size: 16),
