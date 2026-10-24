@@ -229,7 +229,7 @@ pub fn decompress_stream_ctx<R: Read>(
     if fmt == ArchiveFormat::Xz {
         let src = src;
         let mut out = BudgetWriter {
-            inner: fs::File::create(out_path).map_err(|e| {
+            inner: crate::io::PartWriter::create(out_path).map_err(|e| {
                 Error::new(ErrorCode::Internal).context(format!("创建输出失败: {e}"))
             })?,
             budget: &mut budget,
@@ -243,9 +243,13 @@ pub fn decompress_stream_ctx<R: Read>(
             .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("xz 解压失败: {e}")))?;
         let written = out.written;
         if out.cancelled {
-            let _ = fs::remove_file(out_path);
+            // part 由 Drop 删掉：不留半截正式文件
             return Err(Error::cancelled());
         }
+        // 原子落地：改名成功之前，正式文件名还不存在
+        out.inner.finish().map_err(|e| {
+            Error::new(ErrorCode::Internal).context(format!("落盘改名失败: {e}"))
+        })?;
         ctx.entry_done(0, &out_label, ItemResult::Ok, written);
         return Ok(written);
     }
@@ -269,15 +273,15 @@ pub fn decompress_stream_ctx<R: Read>(
         }
     };
 
-    let mut out = fs::File::create(out_path)
+    // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
+    let mut part = crate::io::PartFile::create(out_path)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("创建输出失败: {e}")))?;
     let mut buf = vec![0u8; 64 * 1024];
     let mut total = 0u64;
     loop {
         // 取消检查下沉到数据块级
         if ctx.is_cancelled() {
-            drop(out);
-            let _ = fs::remove_file(out_path);
+            // part 由 Drop 删掉
             return Err(Error::cancelled());
         }
         let n = match reader.read(&mut buf) {
@@ -289,19 +293,22 @@ pub fn decompress_stream_ctx<R: Read>(
             }
         };
         budget.record(n as u64)?;
-        out.write_all(&buf[..n])
+        part.as_file().write_all(&buf[..n])
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("写盘失败: {e}")))?;
         total += n as u64;
         ctx.advance(n as u64, Some(&out_label));
     }
-    out.flush().ok();
+    // 原子落地
+    part.finish()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("落盘改名失败: {e}")))?;
     ctx.entry_done(0, &out_label, ItemResult::Ok, total);
     Ok(total)
 }
 
 /// 带限额统计的 Writer（给 XZ 用）
 struct BudgetWriter<'a> {
-    inner: fs::File,
+    /// 原子写入守卫（写 `.yshjy-part`，成功后再改名）
+    inner: crate::io::PartWriter,
     budget: &'a mut crate::safety::ExtractBudget,
     written: u64,
     /// 事件 / 进度 / 取消上下文
@@ -583,7 +590,8 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
             }
         };
 
-        let mut out = match fs::File::create(&out_path) {
+        // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
+        let mut part = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
                 report
@@ -613,7 +621,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                         }
                         break;
                     }
-                    if let Err(e) = out.write_all(&buf[..n]) {
+                    if let Err(e) = part.as_file().write_all(&buf[..n]) {
                         err = Some(format!("写盘失败: {e}"));
                         break;
                     }
@@ -626,19 +634,26 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 }
             }
         }
-        drop(out);
         if cancelled_now {
-            let _ = fs::remove_file(&out_path);
+            drop(part);
             report.cancelled = true;
             break;
         }
         match err {
             Some(msg) => {
+                drop(part);
                 report.skipped.push((name.clone(), msg));
-                let _ = fs::remove_file(&out_path);
                 ctx.entry_done(idx, &name, ItemResult::DataError, 0);
             }
             None => {
+                // 原子落地：改名成功之前，正式文件名还不存在
+                if let Err(e) = part.finish() {
+                    report
+                        .skipped
+                        .push((name.clone(), format!("落盘改名失败: {e}")));
+                    ctx.entry_done(idx, &name, ItemResult::DataError, 0);
+                    continue;
+                }
                 report.bytes_written += written;
                 // 还原归档里记的时间戳 / 权限（尽力而为：设不上不影响"解压成功"这个结论）
                 if !attrs.is_empty()

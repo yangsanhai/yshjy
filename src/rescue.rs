@@ -419,7 +419,6 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
     use crate::safety::{self, ExtractBudget};
-    use std::io::Write;
 
     let items = rescue_by_locals(r, base, file_size, &RescueOptions::default())?;
     if items.is_empty() {
@@ -531,7 +530,8 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
         }
         let limited = (&mut *r).take(take);
 
-        let mut out = match std::fs::File::create(&out_path) {
+        // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名（救援模式的残片另行改名成 .partial）
+        let mut part = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
                 report
@@ -548,7 +548,7 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
 
         // 按方法解码
         let copy_to = |reader: &mut dyn std::io::Read,
-                       out: &mut std::fs::File,
+                       out: &mut dyn std::io::Write,
                        crc: &mut Crc32,
                        written: &mut u64,
                        budget: &mut ExtractBudget,
@@ -583,7 +583,7 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
                 let mut limited = limited;
                 copy_to(
                     &mut limited,
-                    &mut out,
+                    part.as_file(),
                     &mut crc,
                     &mut written,
                     &mut budget,
@@ -595,7 +595,7 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
                 let mut dec = flate2::read::DeflateDecoder::new(limited);
                 copy_to(
                     &mut dec,
-                    &mut out,
+                    part.as_file(),
                     &mut crc,
                     &mut written,
                     &mut budget,
@@ -607,15 +607,13 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
             }
         }
 
-        drop(out);
-
         if let Some(msg) = err {
             // 救援模式的精神是「能救多少救多少」：解压流中途断掉时，
             // 前面已经解出来的部分**不能丢**（用户拿个残卷可能还有用）。
             // 但要如实标注是残缺的，并且改成 `.partial` 后缀避免被误当成完好的。
             if written > 0 {
                 let partial = partial_path(&out_path);
-                match std::fs::rename(&out_path, &partial) {
+                match part.rename_to(&partial) {
                     Ok(()) => {
                         report.bytes_written += written;
                         report.warnings.push(format!(
@@ -636,13 +634,13 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
                         });
                     }
                     Err(_) => {
+                        // rename 失败：part 由 Drop 清掉，不留半截正式文件
                         report.skipped.push((item.path.clone(), msg));
-                        let _ = std::fs::remove_file(&out_path);
                     }
                 }
             } else {
+                drop(part);
                 report.skipped.push((item.path.clone(), msg));
-                let _ = std::fs::remove_file(&out_path);
             }
             ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::DataError, written);
             continue;
@@ -658,11 +656,27 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
                     out_path.display()
                 ),
             ));
+            // CRC 对不上但内容按设计保留给用户 → 落到正式名
+            if let Err(e) = part.finish() {
+                report
+                    .skipped
+                    .push((item.path.clone(), format!("落盘改名失败: {e}")));
+                ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::DataError, written);
+                continue;
+            }
             report.bytes_written += written;
             ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::CrcError, written);
             continue;
         }
 
+        // 原子落地：改名成功之前，正式文件名还不存在
+        if let Err(e) = part.finish() {
+            report
+                .skipped
+                .push((item.path.clone(), format!("落盘改名失败: {e}")));
+            ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::DataError, written);
+            continue;
+        }
         report.bytes_written += written;
         ctx.entry_done(idx as u64 + 1, &item.path, ItemResult::Ok, written);
         report.files.push(crate::extract::ExtractedFile {

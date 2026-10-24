@@ -2,6 +2,46 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.26-c] · 2026-10-24（阶段 1 梯队一·第 1 项：解压原子写入）
+
+> 由来：阶段 0 体检 T9-P1 / T8-P6 实测（证据见 `docs/AUDIT-PHASE0.md`）——
+> 解压写到一半被中断（磁盘满 / 拔盘 / 取消 / 崩溃 / SIGKILL）时，磁盘上留下的是
+> **顶着正式文件名**的半截文件；重试又因为「同名改名」策略绕开它、生成 `(1)` 副本，
+> 坏文件永远修不好。实测 1 GB 包被杀一次再重试：目录变 12 个文件、1.15 GB，
+> `part1.bin` 永远是 49 MB 的坏文件。
+
+### 新增 `io::PartFile` / `io::PartWriter`（原子写入守卫）
+- 先写 `<名字>.yshjy-part`，全部写完再 `rename` 成正式名（同目录改名是原子的）
+- **进程被杀 / 断电**：磁盘上只留 `.yshjy-part`，一眼能看出「没写完」
+- **正常失败**（读错 / 校验不过 / 限额中止 / 取消）：`Drop` 自动删 part，目录保持干净
+- **重试**：part 直接覆盖重写，坏文件被替换，不再产生 `(1)` 副本
+- 文件名过长时按字符边界截断再拼后缀（不 panic、不超 `NAME_MAX`）
+- `rename_to()`：救援模式用它把残片直接改名成 `.partial`，不先占正式名
+
+### 六条落盘路径全部接上
+| 路径 | 改法 |
+|---|---|
+| ZIP（`extract.rs`） | `PartFile` + 写完后 `finish()` |
+| 7z（`extract7z.rs`） | 同上；5 处「drop + remove_file」折成一行 `drop(part)` |
+| 单流 gz/zstd/bz2/lz4/brotli（`extract_stream.rs` 普通分支） | `PartFile`；**顺带修好「写盘失败直接 `?` 返回、留半截文件」** |
+| xz（writer 交给 `lzma-rs`） | 新 `PartWriter`（实现 `Write`），成功后 `finish()` |
+| tar（`extract_stream.rs` tar 分支） | `PartFile` + 收尾三分支重排 |
+| 救援模式（`rescue.rs`） | `PartFile` + `rename_to()`；残片仍存成 `.partial`，但不再先占正式名 |
+
+### 实测（真机械盘 TOSHIBA MQ01ABF050）
+- 1 GB 包解到 0.4 秒时 `SIGKILL` → 目录里**只有** `big/part0.bin.yshjy-part`（32 MB），
+  没有顶着正式名的半截文件
+- 重试一次 → 10 个文件全部完整、**0 个 `(1)` 副本**、0 残留 part、总大小正好 1 GB
+- 五种格式正常解压：zip 5 / 7z 2 / tar.gz 2 / xz 1 / gz 1 个文件，全部 rc=0、零残留、字节数一致
+- 单测 312 通过（新增 7 个原子写入用例）；`clippy -D warnings` 干净；`tests/all.sh` 全绿
+
+### 已知缺口（已记进 `docs/TODO.md` 表尾）
+- **RAR 路径尚未接上**：`unrar` 的解压回调由库自己管理 writer 生命周期，无法在
+  「条目写完那一刻」安全 `finish`（改错会删掉好文件）。需要先确认库的写结束语义，
+  或改成「`written == entry.unpacked_size` 时立即 `finish`」，单独一批做。
+- 改名之前没有 `fsync`：真断电（不是进程被杀）仍可能得到 0 字节正式文件。
+  彻底防断电要接受「10 万碎文件从 8.6 秒涨到几十秒」的代价，暂不做。
+
 ## [0.9.25-c] · 2026-10-24（L 批 1–2：RAR 彻底修 + 文案审计第一刀）
 
 > 由来：2026-10-24 实测盘点（`docs/LINUX-FULL-PLAN.md` §1 的 X1–X5），用户拍板
