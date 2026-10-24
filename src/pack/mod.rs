@@ -498,10 +498,6 @@ pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
-    if opts.password.is_some() {
-        return Err(Error::new(ErrorCode::InvalidArgument)
-            .context("自解压包暂不支持解压码（存根不做密码输入）"));
-    }
 
     let tmp = std::env::temp_dir().join(format!(
         "yshjy_sfx_{}_{}.zip",

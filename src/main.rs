@@ -1557,10 +1557,6 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
     // 自解压（第 23 批）：产物是能双击运行的 exe，和「伪装 / 分卷 / 解压码」互斥。
     // 这些限制都**明确报错**，不静默忽略（D20 的教训）。
     if sfx {
-        if password.is_some() {
-            eprintln!("❌ 自解压包暂不支持解压码（存根不做密码输入）");
-            return ExitCode::from(code::USAGE);
-        }
         if split.is_some() {
             eprintln!("❌ 自解压包不能分卷（双击要是一个完整文件）");
             return ExitCode::from(code::USAGE);

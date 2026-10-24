@@ -1,23 +1,26 @@
-//! 杨三海解压 —— Windows 自解压存根
+//! 杨三海解压 —— 自解压存根（Windows / Linux 同一份源码）
 //!
-//! 一个极小的 exe：双击后把自己尾部藏着的 ZIP 解到旁边的新文件夹，再打开目录。
+//! 双击后把自己尾部藏着的 ZIP 解到旁边的新文件夹，再打开目录。
 //!
-//! # 文件结构（打包端 `src/sfx.rs` 负责写）
+//! # 文件结构（打包端 `src/pack/mod.rs` 的 `build_sfx` 负责写）
 //! ```text
-//! [ 存根 exe ][ ZIP 数据 ][ 尾标 24 字节 ]
-//!                                     ├─ "YSHSFX01"  8 字节
-//!                                     ├─ zip_offset  u64 小端
-//!                                     └─ zip_size    u64 小端
+//! [ 存根 ][ ZIP 数据 ][ 尾标 24 字节 ]
+//!                        ├─ "YSHSFX01"  8 字节
+//!                        ├─ zip_offset  u64 小端
+//!                        └─ zip_size    u64 小端
 //! ```
 //! 用显式尾标而不是「让 zip 库自己找」：zip 的中央目录偏移是相对 ZIP 起点的，
 //! 从文件中间开始读时，库会 seek 到错误位置。尾标把偏移写死，谁也别猜。
 //!
+//! # 第 23 批（P23-5）改了什么
+//! - **支持解压码**：加密包不再直接拒绝 —— 提示输入（静默模式读 `YSHJY_SFX_PASSWORD`）
+//! - **有进度显示**：逐条打百分比（这就是「进度窗口」；控制台比自绘 GUI 可靠）
+//! - **不再用 MessageBox 弹窗**：改成控制台交互 —— Linux 上能真测，Windows 上双击
+//!   会自动开控制台窗口，中文靠 `SetConsoleOutputCP(65001)` 保证不乱码
+//!
 //! # 故意不做的
-//! - **不弹进度窗口**：初版只保证「双击能解出来」；进度条等主界面那套 UX 稳了再说
-//! - **不支持解压码**：加密包直接提示用主程序打开（存根不做密码输入，免得成钓鱼模板）
 //! - **不删自己**：解压完留着，用户想再解一次也行
-
-#![cfg_attr(windows, windows_subsystem = "windows")]
+//! - **不写注册表 / 不创建快捷方式**：那是安装程序的事，本程序只解压
 
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -28,45 +31,34 @@ const 尾标: &[u8; 8] = b"YSHSFX01";
 const 尾标长度: u64 = 24;
 
 fn main() {
-    let exe = match std::env::current_exe() {
-        Ok(p) => p,
-        Err(e) => {
-            提示(&format!("找不到自己：{e}"), true);
-            return;
-        }
-    };
+    设控制台编码();
+    if let Err(e) = 运行() {
+        // 错误走 stderr：控制台照样能看到，脚本 / 测试也能单独抓到
+        eprintln!("\n❌ {e}");
+        收尾();
+        std::process::exit(1);
+    }
+}
 
-    let (偏移, 长度) = match 读布局(&exe) {
-        Ok(v) => v,
-        Err(e) => {
-            提示(&e, true);
-            return;
-        }
-    };
-
+fn 运行() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("找不到自己：{e}"))?;
+    let (偏移, 长度) = 读布局(&exe)?;
     let 目标 = 唯一目录(&exe);
-    if !确认(&format!(
-        "把内容解压到：\n{}\n\n现在开始？",
-        目标.display()
-    )) {
-        return;
+
+    println!("杨三海自解压包");
+    println!("将解压到：{}", 目标.display());
+    if !确认("现在开始？(y/N) ") {
+        println!("已取消。");
+        收尾();
+        return Ok(());
     }
 
-    提示(
-        "正在解压，完成后会自动打开文件夹。\n大文件可能要几分钟，这期间窗口不会动，别急。",
-        false,
-    );
-
-    match 解压(&exe, 偏移, 长度, &目标) {
-        Ok(数量) => {
-            打开目录(&目标);
-            提示(
-                &format!("解压完成：{数量} 个文件\n\n{}", 目标.display()),
-                false,
-            );
-        }
-        Err(e) => 提示(&format!("解压失败：\n{e}"), true),
-    }
+    let 数量 = 解压(&exe, 偏移, 长度, &目标)?;
+    打开目录(&目标);
+    println!("\n✅ 完成：{数量} 个文件");
+    println!("   {}", 目标.display());
+    收尾();
+    Ok(())
 }
 
 /// 读尾部 24 字节，拿到 ZIP 段的起点和长度
@@ -122,7 +114,7 @@ fn 唯一目录(exe: &Path) -> PathBuf {
     ))
 }
 
-/// 只读 exe 里 [基址, 基址+长度) 这一段，对 zip 库表现为「一个独立文件」
+/// 只读存根文件里 [基址, 基址+长度) 这一段，对 zip 库表现为「一个独立文件」
 struct 偏移读取器 {
     文件: File,
     基址: u64,
@@ -179,86 +171,149 @@ fn 解压(exe: &Path, 偏移: u64, 长度: u64, 目标: &Path) -> Result<usize, 
     let mut 归档 = zip::ZipArchive::new(读取)
         .map_err(|e| format!("压缩数据读不了（包可能坏了）：{e}"))?;
 
+    // 先探有没有加密条目：只要有，就在**写盘之前**把解压码要到
+    //
+    // 必须用 `by_index_raw`（不校验密码的接口）：`by_index` 碰到加密条目会直接
+    // 返回 `Password required` —— 用它做检测永远探不到「有密码」（实测踩到）。
+    let 有加密 = (0..归档.len()).any(|i| {
+        归档
+            .by_index_raw(i)
+            .map(|e| e.encrypted())
+            .unwrap_or(false)
+    });
+    let 密码: Option<String> = if 有加密 { Some(问密码()?) } else { None };
+
+    // 密码先验一次再建目录：验证 = 只读第一个加密条目的开头（zip 库在这里做校验），
+    // 不验就建目录的话，密码错会留下一个空文件夹（实测踩到）。
+    if let Some(pw) = &密码 {
+        let 第一条加密 = (0..归档.len())
+            .find(|&i| 归档.by_index_raw(i).map(|e| e.encrypted()).unwrap_or(false));
+        if let Some(i) = 第一条加密 {
+            归档
+                .by_index_decrypt(i, pw.as_bytes())
+                .map_err(|_| "解压码不对（或这个包用的加密方式自解压不支持）".to_string())?;
+        }
+    }
+
     fs::create_dir_all(目标).map_err(|e| format!("建不了文件夹 {}：{e}", 目标.display()))?;
 
+    let 总数 = 归档.len();
     let mut 数量 = 0usize;
-    for i in 0..归档.len() {
-        let mut 条目 = 归档
-            .by_index(i)
-            .map_err(|e| format!("第 {} 个条目读不了：{e}", i + 1))?;
-        if 条目.encrypted() {
-            return Err(
-                "这个包带解压码，自解压程序暂时不支持。\n请用「杨三海解压」打开它并输入解压码。"
-                    .into(),
-            );
-        }
+    for i in 0..总数 {
+        let mut 条目 = match &密码 {
+            Some(pw) => 归档.by_index_decrypt(i, pw.as_bytes()).map_err(|_| {
+                "解压码不对（或这个包用的加密方式自解压不支持）".to_string()
+            })?,
+            None => 归档
+                .by_index(i)
+                .map_err(|e| format!("第 {} 个条目读不了：{e}", i + 1))?,
+        };
         // enclosed_name 已经拦掉 ../ 和绝对路径；再兜一层，宁可跳过也不写出去
-        let Some(相对) = 条目.enclosed_name() else {
+        let Some(相对) = 条目.enclosed_name().map(|p| p.to_path_buf()) else {
             continue;
         };
         let 输出 = 目标.join(&相对);
         if 条目.is_dir() {
             fs::create_dir_all(&输出)
                 .map_err(|e| format!("建不了文件夹 {}：{e}", 输出.display()))?;
+            // zip 9 的 name() 返回 Result<Cow<str>, _>，取不到就显示空
+            打进度(i + 1, 总数, &条目.name().map(|c| c.to_string()).unwrap_or_default());
             continue;
         }
         if let Some(父) = 输出.parent() {
             fs::create_dir_all(父).map_err(|e| format!("建不了文件夹 {}：{e}", 父.display()))?;
         }
-        let mut 写 = File::create(&输出)
-            .map_err(|e| format!("写不了 {}：{e}", 输出.display()))?;
+        let mut 写 =
+            File::create(&输出).map_err(|e| format!("写不了 {}：{e}", 输出.display()))?;
         io::copy(&mut 条目, &mut 写)
             .map_err(|e| format!("写 {} 时出错：{e}", 输出.display()))?;
         let _ = 写.flush();
         数量 += 1;
+        打进度(数量, 总数, &条目.name().map(|c| c.to_string()).unwrap_or_default());
+    }
+    if 总数 > 0 && !静默() {
+        println!();
     }
     Ok(数量)
 }
 
-#[cfg(windows)]
-fn 弹窗(文本: &str, 标题: &str, 图标: u32) -> i32 {
-    #[link(name = "user32")]
-    extern "system" {
-        fn MessageBoxW(
-            hwnd: *mut core::ffi::c_void,
-            text: *const u16,
-            caption: *const u16,
-            ty: u32,
-        ) -> i32;
+/// 进度行（同一行刷新：这就是双击后用户能看见的「进度窗口」）
+fn 打进度(当前: usize, 总数: usize, 名: &str) {
+    if 静默() {
+        return;
     }
-    let t: Vec<u16> = 文本.encode_utf16().chain(std::iter::once(0)).collect();
-    let c: Vec<u16> = 标题.encode_utf16().chain(std::iter::once(0)).collect();
-    unsafe { MessageBoxW(std::ptr::null_mut(), t.as_ptr(), c.as_ptr(), 图标) }
+    let 百分比 = if 总数 == 0 {
+        100
+    } else {
+        当前 * 100 / 总数
+    };
+    let 短名: String = 名.chars().take(36).collect();
+    print!("\r[{:>3}%] {}/{}  {:<36}", 百分比, 当前, 总数, 短名);
+    let _ = io::stdout().flush();
 }
 
-/// 非 Windows（开发机上 cargo check）只打到 stderr，方便调试
-#[cfg(not(windows))]
-fn 弹窗(文本: &str, 标题: &str, _图标: u32) -> i32 {
-    eprintln!("[{标题}] {文本}");
-    6
-}
-
-/// MB_ICONERROR = 0x10 / MB_ICONINFORMATION = 0x40 / MB_YESNO|MB_ICONQUESTION = 0x24
-/// 测试时设 `YSHJY_SFX_SILENT=1`：不弹窗、确认当「是」（wine 里也能自动跑）
+/// 测试时设 `YSHJY_SFX_SILENT=1`：不问确认、不刷进度、不等回车
 fn 静默() -> bool {
     std::env::var_os("YSHJY_SFX_SILENT").is_some()
 }
 
-fn 提示(文本: &str, 错误: bool) {
-    if 静默() {
-        eprintln!("{}", if 错误 { "错误" } else { "提示" });
-        eprintln!("{文本}");
-        return;
-    }
-    弹窗(文本, "杨三海解压", if 错误 { 0x10 } else { 0x40 });
-}
-
-fn 确认(文本: &str) -> bool {
+fn 确认(提示: &str) -> bool {
     if 静默() {
         return true;
     }
-    弹窗(文本, "杨三海解压", 0x24) == 6
+    print!("{提示}");
+    let _ = io::stdout().flush();
+    let mut s = String::new();
+    if io::stdin().read_line(&mut s).is_err() {
+        return false;
+    }
+    matches!(s.trim().to_ascii_lowercase().as_str(), "y" | "yes")
 }
+
+/// 要解压码：静默模式从环境变量取（测试 / 批量场景），否则从控制台读
+fn 问密码() -> Result<String, String> {
+    if 静默() {
+        return std::env::var("YSHJY_SFX_PASSWORD").map_err(|_| {
+            "这个包有解压码：静默模式下请用环境变量 YSHJY_SFX_PASSWORD 提供".to_string()
+        });
+    }
+    println!("这个包有解压码，请输入后回车（输入会显示在屏幕上）：");
+    let mut s = String::new();
+    io::stdin()
+        .read_line(&mut s)
+        .map_err(|e| format!("读不到输入：{e}"))?;
+    let pw = s.trim_end_matches(['\r', '\n']).to_string();
+    if pw.is_empty() {
+        return Err("没输入解压码".into());
+    }
+    Ok(pw)
+}
+
+/// 双击场景：跑完别让窗口一闪就消失，等用户看一眼
+fn 收尾() {
+    if 静默() {
+        return;
+    }
+    println!("\n按回车关闭这个窗口…");
+    let mut s = String::new();
+    let _ = io::stdin().read_line(&mut s);
+}
+
+/// Windows 控制台默认代码页是 GBK，Rust 打的是 UTF-8 → 中文会乱码。
+/// 切成 65001（UTF-8）就正常了。
+#[cfg(windows)]
+fn 设控制台编码() {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetConsoleOutputCP(cp: u32) -> i32;
+    }
+    unsafe {
+        SetConsoleOutputCP(65001);
+    }
+}
+
+#[cfg(not(windows))]
+fn 设控制台编码() {}
 
 #[cfg(windows)]
 fn 打开目录(p: &Path) {

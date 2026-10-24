@@ -86,10 +86,20 @@ r2 = subprocess.run(runner + [str(out)], cwd=str(W), env=env,
 目标 = W / "自解压包" / "内容" / "说明.txt"
 断言(目标.read_text(encoding="utf-8") == "自解压测试\n", "双击（直接运行）能解出内容")
 
-# 3. 互斥项都明确报错
-r = 收(发(cmd="pack", inputs=[str(SRC)], out=str(W / "带密码.exe"), mode="disguise",
-         sfx=True, password="123"))
-断言(not r.get("ok") and r["error"]["code"] == "BAD_PARAM", "sfx + 解压码 → BAD_PARAM")
+# 3. 解压码（第 23 批 P23-5）：以前直接拒绝，现在能打包、运行时也能解
+pw包 = W / "带密码.exe"
+r = 收(发(cmd="pack", inputs=[str(SRC)], out=str(pw包), mode="disguise",
+         sfx=True, password="123", checksum=False, readme=False))
+断言(r.get("ok"), f"sfx + 解压码 能打包（{r.get('error')}）")
+env["YSHJY_SFX_PASSWORD"] = "123"
+if STUB[:2] != b"MZ":
+    pw包.chmod(0o755)
+subprocess.run(runner + [str(pw包)], cwd=str(W), env=env,
+               capture_output=True, text=True, timeout=180)
+断言((W / "带密码" / "内容" / "说明.txt").exists(),
+   "带解压码的自解压包能解出来（密码走 YSHJY_SFX_PASSWORD）")
+
+# 4. 仍然互斥的项要明确报错
 
 r = 收(发(cmd="pack", inputs=[str(SRC)], out=str(W / "分卷.exe"), mode="disguise",
          sfx=True, split=1024 * 1024))

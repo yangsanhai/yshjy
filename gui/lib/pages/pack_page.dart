@@ -182,7 +182,7 @@ class _PackPageState extends State<PackPage> {
       final r = await _client.pack(
         inputs: _inputs,
         out: out,
-        password: isSfx || _pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim(),
+        password: _pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim(),
         cover: _mode == 'disguise' && !isSfx ? _coverPath : null,
         sfx: isSfx,
         splitBytes: !isSfx && _split ? _parseSize(_splitCtrl.text) : null,
@@ -435,10 +435,10 @@ class _PackPageState extends State<PackPage> {
           const SizedBox(height: 10),
           TextField(
             controller: _pwCtrl,
-            enabled: !_sfx,
             obscureText: !_showPw,
             decoration: InputDecoration(
-              labelText: _sfx ? '解压码（自解压暂不支持）' : '解压码（可选，留空就不加密）',
+              // 第 23 批 P23-5：自解压也支持解压码了（存根会提示输入）
+              labelText: '解压码（可选，留空就不加密）',
               isDense: true,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock_outline, size: 18),
