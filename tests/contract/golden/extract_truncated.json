@@ -1,0 +1,67 @@
+{
+  "events": {
+    "Diagnostic": {
+      "code": "str",
+      "flags": "int",
+      "job": "int",
+      "note": "str"
+    },
+    "ExtractProgress": {
+      "current": "NoneType",
+      "job": "int",
+      "progress": {
+        "done_bytes": "int",
+        "done_files": "int",
+        "total_bytes": "int",
+        "total_files": "int"
+      }
+    },
+    "JobFinished": {
+      "job": "int",
+      "outcome": {
+        "Failed": "Truncated"
+      }
+    },
+    "JobStarted": {
+      "job": "int",
+      "path": "str",
+      "size": "int"
+    },
+    "ScanProgress": {
+      "bytes": [
+        "int"
+      ],
+      "files": "NoneType",
+      "job": "int"
+    },
+    "StageFinished": {
+      "job": "int",
+      "millis": "int",
+      "stage": "str"
+    },
+    "StageStarted": {
+      "job": "int",
+      "stage": "str"
+    },
+    "cancelled": "int",
+    "engine": "str",
+    "exit_code": "int",
+    "failed": "int",
+    "jobs": [
+      {
+        "bytes": "int",
+        "dest": "str",
+        "done": "int",
+        "exit_code": "int",
+        "failed": [],
+        "input": "str",
+        "outcome": "str",
+        "total": "int"
+      }
+    ],
+    "ok": "int",
+    "partial": "int",
+    "total": "int"
+  },
+  "rc": 1
+}

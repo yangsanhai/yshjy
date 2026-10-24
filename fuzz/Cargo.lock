@@ -1109,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "yshjy"
-version = "0.9.25-c"
+version = "0.9.26-c"
 dependencies = [
  "brotli",
  "bzip2-rs",

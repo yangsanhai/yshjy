@@ -33,6 +33,71 @@ mod code {
     pub const PARTIAL: u8 = yshjy::error::exit_code::PARTIAL as u8;
 }
 
+/// 各格式的能力表（阶段 1 梯队三·第 3 项）
+///
+/// 由来：`Caps` 以前只是引擎内部的说法（`InArchive::caps()`，连单测都在守着
+/// 「7z 还原不了时间戳别写 true」），但**界面完全拿不到** —— 界面只能硬写「都支持」，
+/// 用户点到不支持的格式才撞墙。现在这个表能查了，界面按位显示就行。
+///
+/// `--json` 给外壳消费，不带就是给人看的表。
+fn 打印各格式能力(json: bool) -> ExitCode {
+    use yshjy::layout::ArchiveFormat;
+    use yshjy::unpack::{self, Shape};
+
+    let 组合: &[(&str, ArchiveFormat, Shape)] = &[
+        ("zip", ArchiveFormat::Zip, Shape::Plain),
+        ("zip（分卷）", ArchiveFormat::Zip, Shape::Volumes),
+        ("7z", ArchiveFormat::SevenZ, Shape::Volumes),
+        ("rar4", ArchiveFormat::Rar4, Shape::Plain),
+        ("rar5", ArchiveFormat::Rar5, Shape::Plain),
+        ("tar", ArchiveFormat::Tar, Shape::Tar),
+        ("gzip", ArchiveFormat::Gzip, Shape::Single),
+        ("xz", ArchiveFormat::Xz, Shape::Single),
+        ("zstd", ArchiveFormat::Zstd, Shape::Single),
+        ("bzip2", ArchiveFormat::Bzip2, Shape::Single),
+        ("brotli", ArchiveFormat::Brotli, Shape::Single),
+        ("lz4", ArchiveFormat::Lz4, Shape::Single),
+    ];
+
+    if json {
+        let mut 行: Vec<String> = Vec::new();
+        for (名, fmt, shape) in 组合 {
+            let Some(h) = unpack::find(*fmt, *shape) else {
+                continue;
+            };
+            let c = h.caps();
+            行.push(format!(
+                "{{\"format\":\"{名}\",\"encrypted\":{},\"encrypted_names\":{},\"split_volumes\":{},\"selective\":{},\"restores_mtime\":{},\"can_create\":{}}}",
+                c.encrypted, c.encrypted_names, c.split_volumes, c.selective, c.restores_mtime, c.can_create
+            ));
+        }
+        println!("[{}]", 行.join(","));
+        return ExitCode::from(code::OK);
+    }
+
+    // 给人看的表：✓ 支持 / - 不支持
+    println!("各格式能力（✓ 支持，- 不支持）");
+    println!("格式          密码  密名  分卷  选择  时间  打包");
+    for (名, fmt, shape) in 组合 {
+        let Some(h) = unpack::find(*fmt, *shape) else {
+            continue;
+        };
+        let c = h.caps();
+        let m = |b: bool| if b { "✓" } else { "-" };
+        println!(
+            "{:<12} {:>4} {:>5} {:>5} {:>5} {:>5} {:>5}",
+            名,
+            m(c.encrypted),
+            m(c.encrypted_names),
+            m(c.split_volumes),
+            m(c.selective),
+            m(c.restores_mtime),
+            m(c.can_create)
+        );
+    }
+    ExitCode::from(code::OK)
+}
+
 /// `--version` 的输出（**文字来自语言包**，档位是编译期定死的）
 fn 版本信息() -> String {
     let t = 文案();
@@ -76,6 +141,7 @@ const 带值的选项: &[&str] = &[
 const 无值选项: &[&str] = &[
     "--list", "-l", "--rescue", "--extract-cover", "--json", "--quiet", "-q",
     "--help", "-h", "--version", "-V", "--show-config", "--report", "--no-paths",
+    "--caps",
     "--force", "-f", "--no-smart-dir", "--no-checksum", "--no-readme", "--tail",
     "--sfx", "--sfx-linux", "--serve", "--debug-crash", "--no-auto-password", "--no-color",
     "--keep",
@@ -309,6 +375,11 @@ fn main() -> ExitCode {
     if has("--version") || has("-V") {
         print!("{}", 版本信息());
         return ExitCode::from(code::OK);
+    }
+
+    // 各格式支持什么 —— 界面据此决定显示/隐藏功能（以前只在引擎内部，外面查不到）
+    if has("--caps") {
+        return 打印各格式能力(has("--json"));
     }
 
     // 看当前配置（改了哪个文件、每一项现在是什么值）

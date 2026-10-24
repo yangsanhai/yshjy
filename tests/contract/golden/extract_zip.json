@@ -1,0 +1,75 @@
+{
+  "events": {
+    "EntryFinished": {
+      "bytes": "int",
+      "index": "int",
+      "job": "int",
+      "path": "str",
+      "result": "str"
+    },
+    "ExtractProgress": {
+      "current": "str",
+      "job": "int",
+      "progress": {
+        "done_bytes": "int",
+        "done_files": "int",
+        "total_bytes": "int",
+        "total_files": "int"
+      }
+    },
+    "JobFinished": {
+      "job": "int",
+      "outcome": "str"
+    },
+    "JobStarted": {
+      "job": "int",
+      "path": "str",
+      "size": "int"
+    },
+    "PreviewReady": {
+      "entries": [
+        {
+          "encrypted": "bool",
+          "index": "int",
+          "is_dir": "bool",
+          "is_risky": "bool",
+          "modified": "NoneType",
+          "packed": "int",
+          "path": "str",
+          "size": "int"
+        }
+      ],
+      "hints": [],
+      "job": "int"
+    },
+    "StageFinished": {
+      "job": "int",
+      "millis": "int",
+      "stage": "str"
+    },
+    "StageStarted": {
+      "job": "int",
+      "stage": "str"
+    },
+    "cancelled": "int",
+    "engine": "str",
+    "exit_code": "int",
+    "failed": "int",
+    "jobs": [
+      {
+        "bytes": "int",
+        "dest": "str",
+        "done": "int",
+        "exit_code": "int",
+        "failed": [],
+        "input": "str",
+        "outcome": "str",
+        "total": "int"
+      }
+    ],
+    "ok": "int",
+    "partial": "int",
+    "total": "int"
+  },
+  "rc": 0
+}
