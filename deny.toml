@@ -5,23 +5,26 @@
 all-features = true
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "deny"
+# 新版 cargo-deny（0.20+）已把 vulnerability / yanked 变成内置默认行为，不再接受这两个键
+# 默认：有漏洞即 deny；用到被撤回（yanked）的版本即 deny。
+# unmaintained 只报工作区直接依赖的未维护项（"all" 噪音太大）
+unmaintained = "workspace"
 
 [licenses]
 # 只允许这些开源许可证（与本项目 MIT 兼容）
+# 注：BSD-2-Clause / ISC 当前没有依赖用到（cargo-deny 会报 license-not-encountered 警告），
+#     将来真引入时再加回来。
 allow = [
     "MIT",
     "MIT-0",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
     "BSD-3-Clause",
-    "ISC",
     "Unicode-3.0",
     "Zlib",
     "CC0-1.0",
+    # libbz2-rs-sys（bzip2 → sevenz-rust2）：宽松自由许可证，与 MIT 兼容
+    "bzip2-1.0.6",
 ]
 confidence-threshold = 0.93
 
