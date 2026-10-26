@@ -13,6 +13,54 @@ import 'pages/pack_page.dart';
 import 'pages/settings_page.dart';
 import 'tray.dart';
 
+/// 托盘状态行的一次决策结果
+///
+/// - [text]：这次要写进托盘的文字；null = 这次**不写**（没到该写的时候）
+/// - [lastPct]：更新后的节流基准（上次真正写出去的百分比；-1 = 还没写过）
+typedef TrayStatus = ({String? text, double lastPct});
+
+/// 节流步长：百分比变化不到 2 就不重发托盘
+///
+/// 为什么是 2：进度事件是**每块数据**一次（几 MB 一条），一个几百 MB 的包
+/// 能刷出几千条。托盘状态行是原生 GTK 菜单项，每次 set_status 都要过一趟
+/// MethodChannel —— 全发的话只是浪费，用户还看不出区别（1% 的跳动谁看得见）。
+/// 2% 是「用户能看出在动」和「别刷屏」之间的折中。
+const double kTrayThrottleStep = 2.0;
+
+/// 引擎事件 → 托盘状态行文案（**唯一真源**）
+///
+/// 为什么单独抽成纯函数：这段逻辑是「规则」而不是「状态机」——
+/// 规则可以脱离界面单测，界面只负责把结果搬到托盘上。
+///
+/// 规则（照着写，别另设一套）：
+/// 1. `EXTRACT_PROGRESS` / `PACK_PROGRESS` 且读得出百分比 → 「正在解压 N%」/「正在打包 N%」；
+///    百分比涨了至少 [kTrayThrottleStep] 才发（100% 一定发 —— 那是用户最关心的）
+/// 2. `JOB_FINISHED` → 「空闲」，并把节流基准重置成 -1（下一个任务从头算）
+/// 3. 其他事件 → 不写托盘（null）
+TrayStatus trayStatusForEvent(EngineEvent e, double lastPct) {
+  switch (e.kind) {
+    case 'EXTRACT_PROGRESS':
+    case 'PACK_PROGRESS':
+      final f = e.progress?.fraction;
+      if (f == null) {
+        // 总字节还不知道（total_bytes == 0）→ 没有百分比可言，不写
+        return (text: null, lastPct: lastPct);
+      }
+      final pct = (f * 100).floor().clamp(0, 100).toInt();
+      // 已经写过百分比、且涨得不够 → 跳过这一条
+      if (pct < 100 && lastPct >= 0 && pct - lastPct < kTrayThrottleStep) {
+        return (text: null, lastPct: lastPct);
+      }
+      final verb = e.kind == 'PACK_PROGRESS' ? '正在打包' : '正在解压';
+      return (text: '$verb $pct%', lastPct: pct.toDouble());
+    case 'JOB_FINISHED':
+      // 任务收工：托盘回到空闲，节流基准也清零（下一单从头算百分比）
+      return (text: '空闲', lastPct: -1);
+    default:
+      return (text: null, lastPct: lastPct);
+  }
+}
+
 /// 应用外壳：左侧导航 + 内容区 + 状态栏
 ///
 /// 为什么用左侧窄导航（NavigationRail）而不是顶部 Tab：
@@ -39,11 +87,24 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   String _engineVersion = '…';
   String _status = '就绪';
 
+  /// 引擎事件订阅（托盘进度行的数据源）
+  StreamSubscription<EngineEvent>? _eventSub;
+
+  /// 上次真正写进托盘的百分比（-1 = 还没写过）
+  ///
+  /// 这是节流基准：进度事件很密，只有涨够步长才值得过一趟原生通道。
+  double _lastTrayPct = -1;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (widget.bootstrapEngine) _bootstrap();
+    // 订阅引擎事件：托盘状态行要显示**真实进度**，不能只抄底部状态栏
+    // （底部状态栏是给人看的碎文字：「找到 3 个可解包」之类，跟进度无关）。
+    // 只订阅一次 —— 引擎事件流是广播流，多订一份就多一份开销。
+    // EngineClient.instance 是静态单例，永远可用（不会 null）。
+    _eventSub = _client.events.listen(_onEngineEvent);
     // 首帧之后再弹引导（initState 里直接 showDialog 会拿不到 Navigator）
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboarding());
   }
@@ -88,7 +149,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _eventSub?.cancel();
     super.dispose();
+  }
+
+  /// 引擎事件来了：按规则决定要不要更新托盘状态行
+  ///
+  /// 规则在 [trayStatusForEvent] 里（唯一真源），这里只负责把结果搬过去。
+  void _onEngineEvent(EngineEvent e) {
+    final r = trayStatusForEvent(e, _lastTrayPct);
+    _lastTrayPct = r.lastPct;
+    final text = r.text;
+    if (text == null) return;
+    // 不 await：进度事件很密，不能让原生往返把事件流堵住。
+    // Tray.setStatus 自己把异常吃掉了，失败无所谓（托盘只是锦上添花）。
+    unawaited(Tray.setStatus(text));
   }
 
   /// 关闭窗口时（D13 → D14）：正在处理就**藏到托盘**，让它在后台跑完。
@@ -130,11 +205,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _setStatus(String s) {
     if (!mounted) return;
     setState(() => _status = s);
-    // 托盘状态行是底部状态栏的第二个出口：窗口藏起来之后，用户只能从托盘
-    // 看到进度，所以两边文字必须一致。
-    // 这里不 await —— 状态更新是 UI 动作，不能等原生往返；托盘那边失败也
-    // 无所谓（Tray.setStatus 已经把异常吃掉了）。
-    unawaited(Tray.setStatus(s));
+    // 底部状态栏的文字**不再**直接抄进托盘。
+    //
+    // 为什么：底部状态栏说的是「人话流水账」（「找到 3 个可解包」「已识别：12 个文件」…），
+    // 托盘状态行只有一个位置、宽度有限，而且是窗口藏起来之后用户唯一的进度出口 ——
+    // 那里应该是**进度**（正在解压 42%），不是碎碎念。所以托盘只接受两种：
+    //   ① 引擎事件算出来的真实百分比（见 _onEngineEvent）
+    //   ② 引擎忙但还没有百分比时的「正在处理…」
+    // 别的状态一律不上托盘，免得把进度行冲掉。
+    //
+    // 「正在处理…」只在「引擎正忙、且还没有百分比」时才写：
+    // 有百分比之后就不再抢（不然「正在处理…」会把「正在解压 42%」盖掉）。
+    if (_client.busy && _lastTrayPct < 0) {
+      unawaited(Tray.setStatus('正在处理…'));
+    }
   }
 
   @override
