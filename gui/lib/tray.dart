@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 /// Flutter 够不着 GTK 的 widget，所以开了条 MethodChannel 让 Dart 指挥原生：
 /// - [hideWindow]：把主窗口藏起来，进程和引擎照跑（解压继续）
 /// - [setStatus]：把底部状态栏的文字同步到托盘菜单的状态行
+/// - [onQuitRequest]：接住原生侧的「用户点了退出」，由 Dart 决定何时真退
+/// - [quitNow]：Dart 收拾好了，让原生真的退出进程
 ///
 /// 为什么异常必须全吃掉：
 /// 1. widget 测试里没有原生实现，invokeMethod 会抛 MissingPluginException；
@@ -35,6 +37,39 @@ class Tray {
       await _ch.invokeMethod<void>('set_status', <String, dynamic>{
         'text': text,
       });
+    } catch (_) {
+      // 同上
+    }
+  }
+
+  /// 接住原生侧的「用户点了退出」，交给 [cb] 决定什么时候真退。
+  ///
+  /// 为什么要有这一层：引擎是**子进程**，进程一没它读 stdin 就撞 EOF、
+  /// 立刻自己退，正在解的那一项被硬中断。所以退出不能由原生单方面决定，
+  /// 得先绕回 Dart：让 Dart 取消引擎、给它时间在数据块边界收好尾，
+  /// 完了再由 Dart 调 [quitNow] 才真退。
+  ///
+  /// 传 null 表示撤掉处理器（比如界面被拆了，别让回调打到废对象上）。
+  static void onQuitRequest(void Function()? cb) {
+    if (cb == null) {
+      _ch.setMethodCallHandler(null);
+      return;
+    }
+    _ch.setMethodCallHandler((MethodCall call) async {
+      if (call.method == 'request_quit') {
+        cb();
+      }
+      // 原生侧不要回包（它传的 callback 是 nullptr），回什么它都不看
+      return null;
+    });
+  }
+
+  /// 让原生真的退出进程（走 GApplication 的正常退出流程）。
+  ///
+  /// 异常照样吃掉：退不出去也不能因此崩界面 —— 顶多进程还留着。
+  static Future<void> quitNow() async {
+    try {
+      await _ch.invokeMethod<void>('quit_now');
     } catch (_) {
       // 同上
     }

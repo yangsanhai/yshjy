@@ -135,6 +135,15 @@ static GtkMenuItem* g_status_item = nullptr;
 // 不去 g_object_unref（省得跟引擎析构顺序打架）。
 static FlMethodChannel* g_tray_channel = nullptr;
 
+// GApplication 本体。
+//
+// 为什么要有这个全局：Dart 的「quit_now」命令是从通道回调里发过来的，
+// 那时手里只有 FlMethodCall，没有 GApplication；而 g_application_quit()
+// 必须传一个 GApplication*。与其在通道回调里想办法把 self 传回来
+// （user_data 已经被托盘菜单项占用了），不如在 activate 里存一份全局 ——
+// 整个进程只有一个 GApplication 实例，不会指错。
+static GApplication* g_app = nullptr;
+
 // ── 通道回调：hide_window（藏窗口）/ set_status（改托盘状态行）────────────
 //
 // 为什么要有这一层：GTK 的「关窗口」是 delete-event，引擎会把它转成
@@ -147,6 +156,9 @@ static void tray_method_call(FlMethodChannel* channel,
   (void)user_data;
   const gchar* name = fl_method_call_get_name(method_call);
   g_autoptr(FlMethodResponse) response = nullptr;
+  // 「Dart 说可以退了」—— 但**要等回包发出去之后**再真退。
+  // g_application_quit() 一执行主循环就结束、进程就退，响应还在路上就丢了。
+  gboolean 要退出 = FALSE;
   if (g_strcmp0(name, "hide_window") == 0) {
     // 只是藏起来，不是销毁：进程和引擎照跑，解压继续。
     if (g_main_window != nullptr) gtk_widget_hide(GTK_WIDGET(g_main_window));
@@ -167,10 +179,22 @@ static void tray_method_call(FlMethodChannel* channel,
                               text != nullptr ? text : "杨三海解压");
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (g_strcmp0(name, "quit_now") == 0) {
+    // Dart 说「可以退了」—— 托盘「退出」绕了一圈 Dart 之后才会走到这里。
+    //
+    // 为什么不让 C++ 自己直接退：那一下会让进程立刻消失，引擎子进程读 stdin
+    // 碰到 EOF 就自己退了，正在解的那一项被硬中断。绕一圈是为了让 Dart
+    // 先把引擎 cancel 掉、给它 400ms 在数据块边界收好尾。
+    要退出 = TRUE;
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
   fl_method_call_respond(method_call, response, nullptr);
+  // 回包发完了再退：quit 早一步的话，响应还在路上进程就没了。
+  if (要退出 && g_app != nullptr) {
+    g_application_quit(g_app);
+  }
 }
 
 // 「显示窗口」：把藏起来的窗口叫回前台。
@@ -186,11 +210,28 @@ static void on_tray_show_window(GtkMenuItem* item, gpointer user_data) {
   gtk_window_present(window);
 }
 
-// 「退出」：走 GApplication 的正常退出流程，Flutter 引擎和 Rust 侧都能
-// 收到 shutdown 信号，不靠 gtk_widget_destroy 硬拆。
+// 「退出」：**不直接退**，先问 Dart 一下。
+//
+// 为什么绕这一圈：引擎是子进程，进程一没它读 stdin 就撞 EOF、立刻自己退，
+// 正在解的那一项被硬中断（只会留个 .yshjy-part，不算干净）。
+// 所以这里改成：请 Dart 先把引擎 cancel 掉、给它时间在数据块边界收尾，
+// Dart 觉得可以退了再通过通道回一句 "quit_now"，那才真退。
+//
+// 通道还没建好（极早期点退出）时没得商量，只能直接退 —— 那时候引擎
+// 还没起来，不存在正在跑的活。
 static void on_tray_quit(GtkMenuItem* item, gpointer user_data) {
   (void)item;
-  g_application_quit(G_APPLICATION(user_data));
+  (void)user_data;
+  if (g_tray_channel == nullptr) {
+    if (g_app != nullptr) {
+      g_application_quit(g_app);
+    }
+    return;
+  }
+  // args 传 nullptr、callback 传 nullptr：只发通知，不要回包。
+  // Flutter 侧会把 nullptr 编成 null，正好是标准 MethodCodec 认的空参数。
+  fl_method_channel_invoke_method(g_tray_channel, "request_quit", nullptr,
+                                  nullptr, nullptr, nullptr);
 }
 
 // 建托盘图标 + 右键菜单。
@@ -241,7 +282,7 @@ static void create_tray_indicator(MyApplication* self, GtkWindow* window) {
   g_signal_connect(show_item, "activate", G_CALLBACK(on_tray_show_window), window);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), show_item);
 
-  // ④ 「退出」：self 走 user_data 传进来，回调里 g_application_quit
+  // ④ 「退出」：不再直接退，改成先问 Dart（见 on_tray_quit 的说明）
   GtkWidget* quit_item = gtk_menu_item_new_with_label("退出");
   g_signal_connect(quit_item, "activate", G_CALLBACK(on_tray_quit), self);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
@@ -260,6 +301,12 @@ static void create_tray_indicator(MyApplication* self, GtkWindow* window) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  // 存一份 GApplication 全局：通道回调里收到 Dart 的 "quit_now" 时，
+  // 手里只有 FlMethodCall，没有 GApplication 可传，而 g_application_quit()
+  // 必须有一个。整个进程只有一个实例，存全局最省事也不会指错。
+  g_app = application;
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
