@@ -83,7 +83,9 @@ pub fn hello() -> Value {
             "preview": true,
             "selective": true,
             "resume": false,
-            "background": false
+            // 关掉窗口后引擎还在后台跑（藏到托盘继续解），这是真做出来了，
+            // 所以能力位如实写 true —— 前端可以据此显示「后台继续」。
+            "background": true
         }
     })
 }

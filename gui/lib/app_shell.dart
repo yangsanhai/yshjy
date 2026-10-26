@@ -105,6 +105,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // 只订阅一次 —— 引擎事件流是广播流，多订一份就多一份开销。
     // EngineClient.instance 是静态单例，永远可用（不会 null）。
     _eventSub = _client.events.listen(_onEngineEvent);
+    // 托盘「退出」：先让 Dart 收拾，再让原生真退（见 _onQuitRequest 的说明）
+    Tray.onQuitRequest(_onQuitRequest);
     // 首帧之后再弹引导（initState 里直接 showDialog 会拿不到 Navigator）
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboarding());
   }
@@ -150,7 +152,33 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _eventSub?.cancel();
+    // 撤掉退出回调：界面都没了，再收到「请退出」没人接得住，
+    // 而且回调里会碰 _client / setState，打到废对象上会炸。
+    Tray.onQuitRequest(null);
     super.dispose();
+  }
+
+  /// 托盘「退出」：先把引擎安顿好，再让原生真退。
+  ///
+  /// 为什么退出要绕一圈 Dart（这是这一整段的核心）：
+  /// 引擎是**子进程**，它靠我们这条 stdin 管道活着。进程一没，引擎读 stdin
+  /// 立刻撞 EOF，自己就退了 —— 正在解的那一项被硬中断，只剩一个
+  /// .yshjy-part 半成品（原子写入兜底，但不算干净）。
+  ///
+  /// 所以「退出」不能由原生单方面拍板：原生先问 Dart，Dart 说「可以退」
+  /// 才真的退。中间这段时间正好用来干两件事：
+  /// 1. `_client.cancel()` —— 让引擎在**数据块边界**停下（不是立刻砍断），
+  ///    已解出来的部分完整保留；
+  /// 2. 等 400ms —— 引擎取消是异步的，得给它收尾的时间，
+  ///    免得进程先没、引擎还在往半截文件上写。
+  ///
+  /// 引擎不忙的时候没什么可保的，直接退。
+  Future<void> _onQuitRequest() async {
+    if (_client.busy) {
+      await _client.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    await Tray.quitNow();
   }
 
   /// 引擎事件来了：按规则决定要不要更新托盘状态行
