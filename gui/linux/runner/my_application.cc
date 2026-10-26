@@ -130,6 +130,49 @@ static GtkWindow* g_main_window = nullptr;
 static AppIndicator* g_indicator = nullptr;
 static GtkMenuItem* g_status_item = nullptr;
 
+// Flutter 侧叫我们改窗口/改托盘状态用的通道。
+// 跟进程同寿：程序退了它自然也没了，所以用 static 全局存指针，
+// 不去 g_object_unref（省得跟引擎析构顺序打架）。
+static FlMethodChannel* g_tray_channel = nullptr;
+
+// ── 通道回调：hide_window（藏窗口）/ set_status（改托盘状态行）────────────
+//
+// 为什么要有这一层：GTK 的「关窗口」是 delete-event，引擎会把它转成
+// Dart 侧的 didRequestAppExit；而「藏到托盘」是纯 GTK 动作（gtk_widget_hide），
+// Flutter 那边够不着，只能由 C++ 代劳，所以开一条 MethodChannel 让 Dart 指挥。
+static void tray_method_call(FlMethodChannel* channel,
+                             FlMethodCall* method_call,
+                             gpointer user_data) {
+  (void)channel;
+  (void)user_data;
+  const gchar* name = fl_method_call_get_name(method_call);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (g_strcmp0(name, "hide_window") == 0) {
+    // 只是藏起来，不是销毁：进程和引擎照跑，解压继续。
+    if (g_main_window != nullptr) gtk_widget_hide(GTK_WIDGET(g_main_window));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (g_strcmp0(name, "set_status") == 0) {
+    // args 是借用指针（归 method_call 所有），lookup 出来的值也是借用，
+    // 所以这里都不用 unref —— 否则反而是把别人的东西释放了。
+    FlValue* args = fl_method_call_get_args(method_call);
+    const gchar* text = nullptr;
+    if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
+      FlValue* v = fl_value_lookup_string(args, "text");
+      if (v != nullptr && fl_value_get_type(v) == FL_VALUE_TYPE_STRING) {
+        text = fl_value_get_string(v);
+      }
+    }
+    if (g_status_item != nullptr) {
+      gtk_menu_item_set_label(g_status_item,
+                              text != nullptr ? text : "杨三海解压");
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  fl_method_call_respond(method_call, response, nullptr);
+}
+
 // 「显示窗口」：把藏起来的窗口叫回前台。
 // 用 user_data 传窗口指针，而不是用全局 g_main_window —— 这样回调自洽，
 // 万一以后有第二个窗口也不会指错。
@@ -349,6 +392,15 @@ static void my_application_activate(GApplication* application) {
 
   // 系统托盘：放在插件注册之后建，图标菜单和 Flutter 侧互不干扰
   create_tray_indicator(self, window);
+
+  // Dart ←→ C++ 的托盘通道。
+  // 通道挂在引擎的 binary messenger 上，所以「藏窗口」「改托盘状态行」
+  // 这类 GTK 动作可以由 Dart 发起。生命周期跟进程，不用手动释放。
+  g_tray_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)), "yshjy/tray",
+      FL_METHOD_CODEC(fl_standard_method_codec_new()));
+  fl_method_channel_set_method_call_handler(g_tray_channel, tray_method_call,
+                                            nullptr, nullptr);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

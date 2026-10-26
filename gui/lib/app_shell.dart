@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'pages/home_page.dart';
 import 'pages/history_page.dart';
 import 'pages/pack_page.dart';
 import 'pages/settings_page.dart';
+import 'tray.dart';
 
 /// 应用外壳：左侧导航 + 内容区 + 状态栏
 ///
@@ -89,37 +91,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// 关闭窗口时（D13）：正在处理就先问一句，确定后让引擎**优雅取消**。
+  /// 关闭窗口时（D13 → D14）：正在处理就**藏到托盘**，让它在后台跑完。
   ///
-  /// 以前是直接断管道、引擎读 stdin 碰到 EOF 自己退出 —— 正在解的那个包会被硬中断，
-  /// 半成品留在那里也没人知道。现在先 cancel，让引擎在数据块级停下并保留已解出的部分。
+  /// 背景（为什么以前是硬中断）：最早是直接断管道、引擎读 stdin 碰到 EOF
+  /// 自己退出 —— 正在解的那个包会被硬中断，半成品留在那里也没人知道。
+  /// 上一批改成「弹对话框问一句 → 确定后 cancel 引擎再退出」，让引擎在
+  /// 数据块级停下并保留已解出的部分。
+  ///
+  /// 现在为什么不问了：对话框挡在中间 —— 用户明明只想「先别挡着我干活」，
+  /// 却被要求在「继续处理 / 关闭」之间做选择，还一按「关闭」就等于把活停了。
+  /// 而托盘已经在上一批做好了（顶栏图标 + 显示窗口/退出菜单），所以正忙时
+  /// 关窗口直接**藏起来**：进程、引擎、正在解的包全都继续跑，用户从托盘
+  /// 菜单点「显示窗口」随时回来，状态也写在托盘状态行里，一眼看得见。
+  /// 引擎不忙的时候没什么可保的，照旧直接退出。
   @override
   Future<AppExitResponse> didRequestAppExit() async {
     if (!_client.busy) return AppExitResponse.exit;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('还在处理中，确定关闭？'),
-        content: const Text('已经解出来的文件会保留；正在解的那一个会停下，不会继续写。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('继续处理'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return AppExitResponse.cancel;
-    try {
-      await _client.cancel();
-    } catch (_) {}
-    // 给引擎一点时间在数据块边界收尾（它在每 64 KiB 检查一次取消）
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    return AppExitResponse.exit;
+    // 藏窗口 = 取消这次退出请求（return cancel），窗口关不掉是故意的：
+    // 引擎还在跑，退出请求一旦放行进程就没了。
+    await Tray.hideWindow();
+    return AppExitResponse.cancel;
   }
 
   Future<void> _bootstrap() async {
@@ -139,6 +130,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _setStatus(String s) {
     if (!mounted) return;
     setState(() => _status = s);
+    // 托盘状态行是底部状态栏的第二个出口：窗口藏起来之后，用户只能从托盘
+    // 看到进度，所以两边文字必须一致。
+    // 这里不 await —— 状态更新是 UI 动作，不能等原生往返；托盘那边失败也
+    // 无所谓（Tray.setStatus 已经把异常吃掉了）。
+    unawaited(Tray.setStatus(s));
   }
 
   @override
