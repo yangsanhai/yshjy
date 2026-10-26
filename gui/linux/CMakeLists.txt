@@ -53,6 +53,8 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
+# 系统托盘图标（GNOME 顶栏）；只用系统库，不引 pub 依赖
+pkg_check_modules(APPINDICATOR REQUIRED IMPORTED_TARGET ayatana-appindicator3-0.1)
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
