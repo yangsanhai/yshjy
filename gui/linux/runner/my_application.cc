@@ -5,6 +5,9 @@
 #include <gdk/gdkx.h>
 #endif
 
+// 系统托盘：GNOME 顶栏
+#include <libayatana-appindicator/app-indicator.h>
+
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -116,6 +119,99 @@ static void on_destroy_save_size(GtkWidget* widget, gpointer data) {
   g_free(path);
   g_free(dir);
   g_free(st);
+}
+
+// ── 系统托盘（GNOME 顶栏）──────────────────────────────────────────────
+//
+// 为什么用 static 全局：托盘的生命周期比窗口长（关窗口不代表退出程序），
+// 而 GtkApplication 只有一个实例，所以放全局最省事，不用再往
+// _MyApplication 里加字段、也不用改头文件。
+static GtkWindow* g_main_window = nullptr;
+static AppIndicator* g_indicator = nullptr;
+static GtkMenuItem* g_status_item = nullptr;
+
+// 「显示窗口」：把藏起来的窗口叫回前台。
+// 用 user_data 传窗口指针，而不是用全局 g_main_window —— 这样回调自洽，
+// 万一以后有第二个窗口也不会指错。
+static void on_tray_show_window(GtkMenuItem* item, gpointer user_data) {
+  (void)item;
+  GtkWindow* window = GTK_WINDOW(user_data);
+  if (window == nullptr) {
+    return;
+  }
+  gtk_widget_show(GTK_WIDGET(window));
+  gtk_window_present(window);
+}
+
+// 「退出」：走 GApplication 的正常退出流程，Flutter 引擎和 Rust 侧都能
+// 收到 shutdown 信号，不靠 gtk_widget_destroy 硬拆。
+static void on_tray_quit(GtkMenuItem* item, gpointer user_data) {
+  (void)item;
+  g_application_quit(G_APPLICATION(user_data));
+}
+
+// 建托盘图标 + 右键菜单。
+//
+// ⚠️ 两个 GTK3 / ayatana 的坑：
+// 1. GTK3 新建的 widget 默认是 hidden，不 gtk_widget_show 的话菜单点开是空的
+//    （本文件第 154 行已经踩过同一个坑，这里菜单项同理）。
+// 2. app_indicator_new 在 libayatana-appindicator3 0.5.94 里被标了
+//    G_GNUC_DEPRECATED，而本项目开的是 -Wall -Werror，直接调用会编译失败。
+//    但它是唯一能一次性设好 id/category/icon 的公开构造函数
+//    （app_indicator_new_with_path 同样被弃用），所以就地屏蔽这条告警。
+static void create_tray_indicator(MyApplication* self, GtkWindow* window) {
+  g_main_window = window;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  AppIndicator* ind =
+      app_indicator_new("yshjy", "yshjy", APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
+#pragma GCC diagnostic pop
+  g_indicator = ind;
+
+  // 图标：优先用应用自己的 "yshjy" 图标（打包进 hicolor 主题后才会命中），
+  // 没有就退回 GNOME 自带的通用解压包图标，至少不显示成空白。
+  if (gtk_icon_theme_has_icon(gtk_icon_theme_get_default(), "yshjy")) {
+    app_indicator_set_icon_full(ind, "yshjy", "杨三海解压");
+  } else {
+    app_indicator_set_icon_full(ind, "package-x-generic", "杨三海解压");
+  }
+
+  GtkWidget* menu = gtk_menu_new();
+
+  // ① 状态行：只显示当前状态，纯文字、不可点。
+  //    set_sensitive(FALSE) 让它看起来是灰的灰色提示而不是可操作项。
+  GtkWidget* status_item = gtk_menu_item_new_with_label("杨三海解压 · 空闲");
+  gtk_widget_set_sensitive(status_item, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), status_item);
+  g_status_item = GTK_MENU_ITEM(status_item);
+
+  // ② 分隔线
+  GtkWidget* separator = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
+
+  // ③ 「显示窗口」
+  //
+  // 注意：GtkMenuItem **没有** "clicked" 信号（只有 GtkButton 之类才有），
+  // 它用的是 "activate"。连 "clicked" 的话连不上、点了也没反应。
+  GtkWidget* show_item = gtk_menu_item_new_with_label("显示窗口");
+  g_signal_connect(show_item, "activate", G_CALLBACK(on_tray_show_window), window);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), show_item);
+
+  // ④ 「退出」：self 走 user_data 传进来，回调里 g_application_quit
+  GtkWidget* quit_item = gtk_menu_item_new_with_label("退出");
+  g_signal_connect(quit_item, "activate", G_CALLBACK(on_tray_quit), self);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
+
+  // 菜单项必须显式 show，否则右键菜单是空的
+  gtk_widget_show(status_item);
+  gtk_widget_show(separator);
+  gtk_widget_show(show_item);
+  gtk_widget_show(quit_item);
+  gtk_widget_show(menu);
+
+  app_indicator_set_menu(ind, GTK_MENU(menu));
+  app_indicator_set_status(ind, APP_INDICATOR_STATUS_ACTIVE);
 }
 
 // Implements GApplication::activate.
@@ -250,6 +346,9 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  // 系统托盘：放在插件注册之后建，图标菜单和 Flutter 侧互不干扰
+  create_tray_indicator(self, window);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
