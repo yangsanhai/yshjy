@@ -330,6 +330,38 @@ Nautilus —— GLib 判定 desktop 无效就静默忽略。换成真实的 `/us
 | `gio mime application/zip` | ✅ 「默认应用程序：yshjy.desktop」 |
 | `--restore` 之后 | ✅ 退回 `org.gnome.Nautilus.desktop` |
 
+### 阶段 1 梯队四·第 9 项：托盘 / 后台（2026-10-27）
+
+> 由来：解大包时用户想干别的，最小化或关窗口就整个任务没了。目标是「关窗口 = 藏到托盘继续跑」。
+
+四批提交（`ba64554` / `0b052e4` / `e11c16f` / `2e9b048`）：
+
+| 批次 | 做了什么 |
+|---|---|
+| 第十三批 | GNOME 顶栏图标 + 右键菜单（显示窗口 / 退出）；`libayatana-appindicator3` 从 CMake 引入 |
+| 第十四批 | 解压中关窗口 → `didRequestAppExit` 里改成藏到托盘 + `AppExitResponse.cancel`；新增 `gui/lib/tray.dart` |
+| 第十五批 | 托盘状态行显示**真实百分比**（`trayStatusForEvent` 纯函数，涨 2% 才刷一次，100% 必发，跳过的进度不推进基线） |
+| 第十六批 | 托盘「退出」不再硬掐：先调 Dart `request_quit` → 引擎 `cancel()` → 等 400ms 在数据块边界收尾 → `quit_now` 真退；`caps.background` 改 true |
+
+技术要点：
+- **通道**：`MethodChannel("yshjy/tray")` 双向 —— Dart→C++ 的 `hide_window` / `set_status` / `quit_now`，
+  C++→Dart 的 `request_quit`。`quit_now` 里 `g_application_quit()` 放在 `fl_method_call_respond` **之后**，
+  否则响应还在路上进程就没了。GApplication 存成 `static g_app`（activate 里赋值）。
+- **进度节流**：`kTrayThrottleStep = 2.0`，变化幅度够 2% 才发；100% 无条件发；
+  被跳过的中位事件**不推进基线**（否则几次小步会被吞掉）。
+- **退出为什么绕一圈 Dart**：引擎是子进程，进程一没它读 stdin 撞 EOF 就自己退，
+  正在解的那项被硬中断（原子写入只保得住 `.yshjy-part`，不算干净）。
+
+坑（都记在代码注释里）：
+- `GtkMenuItem` 没有 `"clicked"` 信号，得连 `"activate"`
+- `app_indicator_new` 在 0.5.94 已弃用，`-Wall -Werror` 下会直接编不过 → 局部 `#pragma` 压掉
+- 判断托盘注册**不能** grep DBus `ListNames` 找 "yshjy"（ayatana 用匿名连接），
+  要读 `org.kde.StatusNotifierWatcher` 的 `RegisteredStatusNotifierItems`
+
+验收：界面测试 **13 通过 / 0 失败**（含节流规则、JOB_FINISHED→空闲、mock 通道）；
+`flutter build linux --debug` 成功；`cargo test` **333 通过 / 0 失败**；`cargo clippy -- -D warnings` 干净。
+用户实机确认：顶栏图标在、右键三个菜单项都对。
+
 ### 已知缺口（已记进 `docs/TODO.md` 表尾）
 - **RAR 路径尚未接上**：`unrar` 的解压回调由库自己管理 writer 生命周期，无法在
   「条目写完那一刻」安全 `finish`（改错会删掉好文件）。需要先确认库的写结束语义，
