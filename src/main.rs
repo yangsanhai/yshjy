@@ -1139,6 +1139,10 @@ struct 终端出口 {
     /// stderr 是不是终端：不是（管道/重定向）就不画进度条，免得刷出一堆 \r
     tty: bool,
     last_draw: std::sync::Mutex<std::time::Instant>,
+    /// 速度 / 剩余时间估算（复用引擎里那个 EtaEstimator：α=0.3 指数滑动平均）
+    eta: std::sync::Mutex<yshjy::progress::EtaEstimator>,
+    /// 终端列数（构造时取一次就够；取不到按 80）
+    cols: usize,
 }
 
 impl 终端出口 {
@@ -1149,6 +1153,11 @@ impl 终端出口 {
             json,
             tty: std::io::stderr().is_terminal(),
             last_draw: std::sync::Mutex::new(std::time::Instant::now()),
+            eta: std::sync::Mutex::new(yshjy::progress::EtaEstimator::new()),
+            cols: crossterm::terminal::size()
+                .map(|(c, _)| c as usize)
+                .unwrap_or(80)
+                .clamp(40, 300),
         }
     }
 
@@ -1206,16 +1215,15 @@ impl yshjy::event::EventSink for 终端出口 {
                     }
                     *last = now;
                 }
-                let pct = progress
-                    .fraction()
-                    .map(|f| format!("{:>5.1}%", f * 100.0))
-                    .unwrap_or_else(|| "  …  ".into());
-                let what = current.as_deref().unwrap_or("");
-                eprint!(
-                    "\r   {pct}  {}/{}  {what}\x1b[K",
-                    人类可读(progress.done_bytes),
-                    人类可读(progress.total_bytes)
-                );
+                let eta = match self.eta.lock() {
+                    Ok(mut e) => e.observe(progress.done_bytes, progress.total_bytes),
+                    // 锁中毒（别处 panic 过）不该让进度条罢工：取回内部值继续用
+                    Err(p) => p
+                        .into_inner()
+                        .observe(progress.done_bytes, progress.total_bytes),
+                };
+                let line = 画进度行(progress, &eta, current.as_deref(), self.cols);
+                eprint!("\r{line}\x1b[K");
             }
             Event::EntryFinished { path, result, .. } if !result.is_ok() => {
                 self.清行();
@@ -1568,6 +1576,159 @@ fn 汇总_json(report: &yshjy::batch::BatchReport) -> String {
         "jobs": items,
     })
     .to_string()
+}
+
+// ───────────────────── 终端进度仪表盘（第二十二批） ─────────────────────
+//
+// 之前终端只画「百分比 + 字节 + 文件名」一行数字，看不出还要等多久；界面上却有
+// 进度条和剩余时间 —— 同一份数据在两边显示不一致。这里把 CLI 也做成一行仪表盘：
+//   条 + 百分比 + 字节 + 第几项 + 速度 + 剩余时间 + 当前文件
+//
+// 速度与剩余时间**复用引擎里的 `EtaEstimator`**（α=0.3 指数滑动平均、样本 <3 不给估算），
+// 不在这里重写一遍算法 —— 那个坑 7-Zip 已经踩过（见 src/progress.rs 注释）。
+
+/// 进度条填充字符：UTF-8 终端用方块，其余退回 ASCII
+///
+/// 非 UTF-8 终端（LANG=C 之类）画 █░ 会变成一堆问号或方框，宁可难看也别乱码。
+fn 进度条字符() -> (char, char) {
+    let utf8 = ["LC_ALL", "LC_CTYPE", "LANG"]
+        .iter()
+        .filter_map(|k| std::env::var(k).ok())
+        .any(|v| v.to_ascii_uppercase().contains("UTF-8"));
+    if utf8 { ('█', '░') } else { ('#', '-') }
+}
+
+/// 剩余时间的说法：45 秒 / 3 分 20 秒 / 1 小时 5 分
+fn 时长可读(d: std::time::Duration) -> String {
+    let 总秒 = d.as_secs();
+    if 总秒 < 60 {
+        format!("{总秒} 秒")
+    } else if 总秒 < 3600 {
+        let (分, 秒) = (总秒 / 60, 总秒 % 60);
+        if 秒 == 0 {
+            format!("{分} 分")
+        } else {
+            format!("{分} 分 {秒} 秒")
+        }
+    } else {
+        let (时, 分) = (总秒 / 3600, (总秒 % 3600) / 60);
+        if 分 == 0 {
+            format!("{时} 小时")
+        } else {
+            format!("{时} 小时 {分} 分")
+        }
+    }
+}
+
+/// 按**显示宽度**截断（中文占两列 —— 按字符数截断会让中文文件名错位）
+fn 截断显示宽度(s: &str, width: usize) -> String {
+    use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+    if s.width() <= width {
+        return s.to_string();
+    }
+    if width <= 1 {
+        return String::new();
+    }
+    let mut out = String::new();
+    let mut used = 0usize;
+    for ch in s.chars() {
+        let w = ch.width().unwrap_or(0);
+        if used + w > width - 1 {
+            break; // 留一格给省略号
+        }
+        out.push(ch);
+        used += w;
+    }
+    out.push('…');
+    out
+}
+
+/// 画一行进度条（**纯函数**，不碰终端，便于单测）
+///
+/// 放不下时**从右往左依次丢**：当前文件名 → 速度/剩余 → 第几项，
+/// 保证「进度条 + 百分比 + 字节」这三样永远在。
+fn 画进度行(
+    progress: &yshjy::progress::ProgressView,
+    eta: &yshjy::progress::Eta,
+    current: Option<&str>,
+    cols: usize,
+) -> String {
+    use unicode_width::UnicodeWidthStr;
+
+    let (满, 空) = 进度条字符();
+    let 条宽 = if cols >= 110 {
+        24
+    } else if cols >= 90 {
+        18
+    } else if cols >= 60 {
+        12
+    } else {
+        8
+    };
+    let 已填 = progress
+        .fraction()
+        .map(|f| (f * 条宽 as f64).round() as usize)
+        .unwrap_or(0)
+        .min(条宽);
+    let mut bar = String::with_capacity(条宽);
+    for i in 0..条宽 {
+        bar.push(if i < 已填 { 满 } else { 空 });
+    }
+
+    let 百分比 = progress
+        .fraction()
+        .map(|f| format!("{:>5.1}%", f * 100.0))
+        .unwrap_or_else(|| "  …  ".into());
+    let mut line = format!("   [{bar}] {百分比}");
+
+    // 字节：总量未知时就只报已解，别硬凑一个「/0 B」
+    let 字节段 = if progress.total_bytes > 0 {
+        format!(
+            "  {}/{}",
+            人类可读(progress.done_bytes),
+            人类可读(progress.total_bytes)
+        )
+    } else {
+        format!("  {}", 人类可读(progress.done_bytes))
+    };
+    line.push_str(&字节段);
+
+    let 项段 = if progress.total_files > 0 {
+        format!("  {}/{} 项", progress.done_files, progress.total_files)
+    } else {
+        String::new()
+    };
+    let 速度段 = eta
+        .speed_bps
+        .map(|s| format!("  {}/s", 人类可读(s as u64)))
+        .unwrap_or_default();
+    let 剩余段 = eta
+        .remaining
+        .map(|d| format!("  剩 {}", 时长可读(d)))
+        .unwrap_or_default();
+
+    // 先加「第几项」，再加速度/剩余 —— 宽度不够就从后往前放弃
+    if line.width() + 项段.width() <= cols {
+        line.push_str(&项段);
+    }
+    if line.width() + 速度段.width() <= cols {
+        line.push_str(&速度段);
+    }
+    if line.width() + 剩余段.width() <= cols {
+        line.push_str(&剩余段);
+    }
+
+    // 剩下的位置给当前文件名
+    if let Some(name) = current
+        && !name.is_empty()
+    {
+        let 剩余宽 = cols.saturating_sub(line.width() + 2); // 两个空格分隔
+        if 剩余宽 >= 8 {
+            line.push_str("  ");
+            line.push_str(&截断显示宽度(name, 剩余宽));
+        }
+    }
+    line
 }
 
 /// 人类可读的体量（1.2 GB / 345 MB）
@@ -2145,5 +2306,98 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
             );
             ExitCode::from(code::ERR)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use yshjy::progress::{Eta, ProgressView};
+
+    #[test]
+    fn 时长说法分档() {
+        assert_eq!(时长可读(Duration::from_secs(45)), "45 秒");
+        assert_eq!(时长可读(Duration::from_secs(60)), "1 分");
+        assert_eq!(时长可读(Duration::from_secs(200)), "3 分 20 秒");
+        assert_eq!(时长可读(Duration::from_secs(3600)), "1 小时");
+        assert_eq!(时长可读(Duration::from_secs(3900)), "1 小时 5 分");
+    }
+
+    #[test]
+    fn 中文文件名按显示宽度截断() {
+        // 中文占两列：10 列宽最多放 4 个汉字 + 省略号
+        let got = 截断显示宽度("我的世界整合包.zip", 10);
+        assert!(got.ends_with('…'), "截断了要带省略号，实际 {got}");
+        use unicode_width::UnicodeWidthStr;
+        assert!(
+            got.width() <= 10,
+            "不能超出 10 列，实际 {}",
+            got.width()
+        );
+        // 放得下就原样返回，不加省略号
+        assert_eq!(截断显示宽度("a.zip", 20), "a.zip");
+    }
+
+    #[test]
+    fn 进度行含速度与剩余时间() {
+        let p = ProgressView {
+            done_bytes: 1024 * 1024 * 300,
+            total_bytes: 1024 * 1024 * 600,
+            done_files: 3,
+            total_files: 10,
+        };
+        let eta = Eta {
+            speed_bps: Some(12.4 * 1024.0 * 1024.0),
+            remaining: Some(Duration::from_secs(72)),
+        };
+        let line = 画进度行(&p, &eta, Some("data/game.bin"), 100);
+        assert!(line.contains("50.0%"), "要有百分比：{line}");
+        assert!(line.contains('█') && line.contains('░'), "要有条状进度：{line}");
+        assert!(line.contains("12.4 MB/s"), "要有速度：{line}");
+        assert!(line.contains("剩 1 分 12 秒"), "要有剩余时间：{line}");
+        assert!(line.contains("3/10 项"), "要有第几项：{line}");
+        assert!(line.contains("data/game.bin"), "要有当前文件：{line}");
+    }
+
+    #[test]
+    fn 窄终端不超宽也不缺关键项() {
+        let p = ProgressView {
+            done_bytes: 100,
+            total_bytes: 1000,
+            done_files: 1,
+            total_files: 9,
+        };
+        let eta = Eta {
+            speed_bps: Some(1_000_000.0),
+            remaining: Some(Duration::from_secs(5)),
+        };
+        for cols in [40usize, 60, 80, 120, 200] {
+            let line = 画进度行(&p, &eta, Some("很长的中文文件名要截断/并且/还有/子目录/文件.bin"), cols);
+            use unicode_width::UnicodeWidthStr;
+            assert!(
+                line.width() <= cols,
+                "{cols} 列下画出了 {} 列宽的行：{line}",
+                line.width()
+            );
+            assert!(line.contains("10.0%"), "{cols} 列下百分比不能丢：{line}");
+        }
+    }
+
+    #[test]
+    fn 总量未知时不硬凑分母() {
+        let p = ProgressView {
+            done_bytes: 5 * 1024 * 1024,
+            total_bytes: 0,
+            done_files: 2,
+            total_files: 0,
+        };
+        let eta = Eta::default();
+        let line = 画进度行(&p, &eta, None, 80);
+        assert!(!line.contains("/0 B"), "总量未知别显示 /0 B：{line}");
+        assert!(line.contains("5.0 MB"), "已解量要显示：{line}");
+        assert!(line.contains("…"), "未知进度用省略号表示：{line}");
+        // 没有速度样本时不该出现 /s
+        assert!(!line.contains("/s"), "没有估算就别瞎写速度：{line}");
     }
 }
