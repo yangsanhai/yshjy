@@ -192,6 +192,55 @@
 
 ---
 
+## 10. 覆盖对账：下载了的参考项目，哪些真拆过、哪些漏了（2026-10-28）
+
+> 由来：用户问「原先拆过一遍，看看有没有漏的」。做法：把 `refs/` 下**下载了什么**与
+> `analysis/` + `tech/` + `docs/` 里**写了什么**逐项对账。判定标准：
+> **「拆过」= 有专门文档或带行号的台账**；只被提名字一律算「没拆」。
+
+### 10.1 已系统拆解（不用再动）
+
+| 参考项目 | 拆解文档 |
+|---|---|
+| SteganographierGUI（隐写者） | `analysis/steganographier-hide.md`、`-reveal.md`、`tech/sevenz-rust+steganographier.md`、`refs/README.md` §2 |
+| zip2（zip-rs） | `analysis/zip2.md`、`tech/zip2.md` |
+| 7zip | `analysis/7zip-scan.md`、`tech/7zip.md`、`tech/7zip-工程层.md` |
+| XADMaster（unar） | `analysis/xadmaster.md`、`analysis/formats-unar.md`、`tech/xadmaster.md` |
+| PeaZip | `tech/peazip.md`、`tech/peazip-工程层.md`、`analysis/07` §7 |
+| sevenz-rust | `analysis/sevenz-rust.md`、`tech/sevenz-rust+steganographier.md` |
+| 竞品界面 12 个（`ui-reference/`） | `analysis/07` §1–§9.3 **全有专门小节**（含 OnlyUnzip 截图抓不到这类缺口都记了） |
+| indicatif / dialoguer / comfy-table | §8 台账（带源码行号） |
+| hatchzip / delete_when_unzip / ReclaimArc | `docs/INPLACE-EXTRACT.md`（三档路线拆解） |
+
+### 10.2 漏的（下载了，但没有拆解文档）
+
+| # | 项目 | 现状 | 要紧程度 |
+|---|---|---|---|
+| 1 | **`clap_complete` / `clap_mangen` 源码**（`upstream/clap/`） | 刚拉，**一行没读**；只有台账里写了「可以引它」 | 🔴 最高 —— 第 1 行（补全/man 自动生成）就要用 |
+| 2 | **`hiddify-core` 的 C ABI 设计**（`upstream/hiddify-app/`） | 只抄了 `pubspec.yaml` 里 ffigen 那 6 行配置，**头文件怎么设计没拆** | 🔴 高 —— 第 4 步安卓就要用，我们 `ffi/include/yshjy.h` 正好可以对照 |
+| 3 | **`libarchive`**（`外部-归档软件/`） | 只在格式总矩阵里当**格式来源**引用，架构（格式注册表/过滤器链）没拆 | 🟡 中 —— 是「加格式不改主流程」的教科书 |
+| 4 | **`Ark`**（KDE）、**`FileRoller`**（GNOME） | Ark 只有 `GUI-PLAN.md:603` 一句「桌面集成学 File Roller / Ark」；**FileRoller 全仓零提及**（唯一连名字都没进文档的） | 🟡 中 —— 桌面右键/托盘/通知/默认打开那条线才用 |
+| 5 | **`Keka`**、**`NanaZip`** | 各只有一句（NanaZip 的「Core-Codec 分离」提了但没拆） | 🟢 低 —— 格式扩展时才用 |
+| 6 | `flutter_rust_bridge`（`frb_example/`） | 拉了，**零提及**（只在 pubspec 对比里出现过项目名） | 🟢 低 —— 已定走 ffigen，不用它 |
+| 7 | `fastforge` / `cargo-dist` | 只看了配置文件头部几十行 | 🟢 低 —— 等真要做安装器/一键装再看 |
+| 8 | `inquire` | 只抄了 `KEY_BINDINGS.md` 的文档格式，键位实现没拆 | 🟢 低 —— 用 dialoguer 已经够 |
+| 9 | `ratatui` | §8 记了「不做鼠标」，算**有意排除**，不算漏 | — |
+
+### 10.3 顺手发现的两笔冗余（**没删，等用户点头**）
+
+- `外部-归档软件/` 里的 **`LocalSend`** 与 **`RustDesk`** 是 2026-10-16 的浅克隆，与 `upstream/` 新拉的同名项目重复。
+- `外部-归档软件/PeaZip` 与 `refs/PeaZip` 重复（后者才是被拆解的那份）。
+- 合计约占 283 MB 里的一百多 MB；按项目铁律**先问不删**。
+
+### 10.4 补拆顺序（按「马上要用」排，不按项目大小）
+
+1. `clap_complete` / `clap_mangen` —— 第 1 行开工前先读（半小时）
+2. `hiddify-core` 的 C ABI 头文件设计 —— 第 4 步安卓开工前读（一小时）
+3. `libarchive` 格式注册表 —— 想加格式时读
+4. `Ark` / `FileRoller` —— 做桌面集成时读
+
+---
+
 ## 7. 台账维护
 
 `refs/tech/` 共 383 处 🔄，其中约三成其实已实现（例：`7zip-工程层.md:131-133`
