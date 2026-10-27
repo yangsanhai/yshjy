@@ -123,3 +123,28 @@ sudo apt remove yshjy                              # 卸载（不留垃圾：包
 安装后**验三件事**（这三件正是新手会撞上的）：① 应用菜单里能找到「杨三海解压」
 ② 双击一个 zip 打开的是我们（`xdg-mime query default application/zip` → `yshjy.desktop`）
 ③ `yshjy --version` 与菜单里「关于」页显示的号一致。
+
+---
+
+## 6. 0.9.26 真实装机验收（2026-10-28，用户亲手装的）
+
+出包 → 装包 → 装机后实测，全部通过。这一节是**装机态**证据，不是「在 build 目录里点的」。
+
+| 查什么 | 命令 | 结果 |
+|---|---|---|
+| 装的版本 | `dpkg -l yshjy` | `ii  yshjy  0.9.26` ✅ |
+| 终端敲到的是哪个 | `command -v yshjy` → `~/.local/bin/yshjy` → 软链 `/usr/bin/yshjy` | 0.9.26（没踩「旧手工安装抢先」的坑）✅ |
+| 系统级引擎 | `/usr/bin/yshjy --version` | 0.9.26 ✅ |
+| **双击归谁** | `xdg-mime query default` 逐个查 14 种格式 | **14/14 全是 `yshjy.desktop`**（装之前 14 种全被 Nautilus 抢）✅ |
+| postinst 有没有写对你的账号 | `~/.config/mimeapps.list` | 14 条全指向 `yshjy.desktop`，时间戳是装包那一刻 ✅ |
+| 桌面项认领格式数 | 系统级 `yshjy.desktop` | 14 种 ✅ |
+| 界面能不能起 | `timeout 6 /usr/lib/yshjy/gui/yshjy_gui` | 正常起，只有两条无害警告（光标主题、appindicator 弃用），无新崩溃日志 ✅ |
+| **双击真实行为** | 造一个 zip → `gio open 测试压缩包.zip` | 拉起 `/usr/lib/yshjy/gui/yshjy_gui <该 zip 路径>` ✅ |
+
+### 遗留：用户级旧桌面项（7 种格式）还在
+
+`~/.local/share/applications/yshjy.desktop`（2026-10-24 由 `scripts/install-gui.sh` 留下）
+仍在，只认领 7 种格式。`mimeapps.list` 的 `[Default Applications]` 优先级更高，所以双击已归我们；
+但文件管理器「打开方式」列表等多处会读到用户级这份，看起来像「只支持 7 种」。
+**处理建议：删掉这份用户级副本**（`Exec` 本来就指系统级路径，删掉后完全由 deb 里的那份接管）。
+删之前要问用户 —— 属于「删用户的文件」，按项目铁律不擅自动手。
