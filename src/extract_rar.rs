@@ -469,7 +469,7 @@ where
             ctx.diagnostic(crate::event::DiagnosticCode::RiskyEntry, name.clone());
         }
 
-        let f = match fs::File::create(&out_path) {
+        let f = match crate::io::PartFile::create(&out_path) {
             Ok(f) => f,
             Err(e) => {
                 rep2.borrow_mut().note_io_error(&e);
@@ -494,7 +494,7 @@ where
 
         // 包一层：边写边记限额与统计
         Ok(Box::new(CountingWriter {
-            inner: f,
+            part: Some(f),
             written: 0,
             budget: bud2.clone(),
             report: rep2.clone(),
@@ -556,8 +556,29 @@ where
 }
 
 /// 带限额与统计的 Writer：库每写一段，我们就记账
+///
+/// # 为什么写 `.yshjy-part` 而不是直接写正式名（梯队四第 12 项）
+///
+/// RAR 是**唯一**一条以前直接写正式名的落盘路径（另外六条都走 `PartFile`）。
+/// 后果：解到一半被 `kill -9` / 断电时，磁盘上留下的是**顶着正式文件名**的半截文件，
+/// 外观与好文件无异，重试还会因为「同名改名」策略绕开它、长出 `(1)` 副本。
+///
+/// # 为什么在 `Drop` 里就 `finish()`，而不是等整包结束
+///
+/// `rars` 的 `ExtractedEntryMeta` **只给名字/时间/属性/是否目录，没有条目大小，
+/// 也没有 CRC** —— 回调这一层拿不到「应该有 734003200 字节」这种信息。
+/// 所以没法在 `Drop` 里判断「库是写完了还是中途出错」，`Drop` 只能当作
+/// 「库对这个条目的写入结束了」。
+///
+/// 权衡（有意接受的）：库因为 CRC / 解密失败而提前 `drop` writer 时，
+/// 已经写出的字节仍会落地（和改之前一样会落地，**不是新增的退步**）；
+/// 换来的是「进程被杀 / 断电不再留半截正式名」这个真实收益。
+/// 想彻底解决「坏数据落地」，得迁到 `extract_with_control_and_errors` 拿逐条目错误
+/// —— 那要重写整个回调层（`decide` 用 `ArchiveMember`，写出机制也不同），
+/// 风险和收益不匹配，先记账（见 `docs/TODO.md` 第 12 项备注）。
 struct CountingWriter {
-    inner: fs::File,
+    /// 原子写入守卫：写 `<名字>.yshjy-part`，`Drop` 时被关闭
+    part: Option<crate::io::PartFile>,
     written: u64,
     budget: std::rc::Rc<std::cell::RefCell<crate::safety::ExtractBudget>>,
     report: std::rc::Rc<std::cell::RefCell<crate::extract::ExtractReport>>,
@@ -591,25 +612,48 @@ impl std::io::Write for CountingWriter {
                 .push((self.name.clone(), format!("安全限额中止: {e}")));
             return Err(std::io::Error::other(format!("安全限额中止: {e}")));
         }
-        let n = self.inner.write(buf)?;
+        let Some(part) = self.part.as_mut() else {
+            // 已经 finish/abort 过了，库不该再写；静默吞掉比 panic 好（不能因为
+            // 库多写一次就把已经解好的整包弄崩）
+            return Ok(buf.len());
+        };
+        let n = part.as_file().write(buf)?;
         self.written += n as u64;
         self.ctx.advance(n as u64, Some(&self.name));
         Ok(n)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.inner.flush()
+        match self.part.as_mut() {
+            Some(part) => part.as_file().flush(),
+            None => Ok(()),
+        }
     }
 }
 
 impl Drop for CountingWriter {
     fn drop(&mut self) {
-        // 取消：删掉写了一半的这个文件（之前解好的全部保留）
+        let Some(part) = self.part.take() else {
+            return;
+        };
+        // 取消 / 限额中止：part 由 `Drop` 删掉，**正式文件名不会出现**
+        // （以前这里是 `remove_file(&out_path)` —— 也就是先写坏正式名再删，
+        //  进程在中间被杀就永久留下半截文件）
         if self.cancelled {
-            let _ = fs::remove_file(&self.out_path);
+            drop(part);
             return;
         }
-        // 成功写完才登记
+        // 原子落地：改名成功之前，正式文件名还不存在
+        if let Err(e) = part.finish() {
+            let mut r = self.report.borrow_mut();
+            r.note_io_error(&e);
+            r.skipped
+                .push((self.name.clone(), format!("落盘改名失败: {e}")));
+            self.ctx
+                .entry_done(self.idx, &self.name, ItemResult::DataError, 0);
+            return;
+        }
+        // 成功落地才登记
         let mut r = self.report.borrow_mut();
         r.bytes_written += self.written;
         // 断点续传：Drop 只在「写成功、没被取消」这条路上走到这里，正是该记的时刻
@@ -801,6 +845,17 @@ mod tests {
             "hello rar world"
         );
         assert_eq!(fs::read(dest.join("b.bin")).unwrap().len(), 2000);
+
+        // 梯队四第 12 项：RAR 也改成「先写 .yshjy-part，写完再原子改名」了 ——
+        // 解完目录里不该留下任何中间态
+        let 残留: Vec<String> = fs::read_dir(&dest)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".yshjy-part"))
+            .collect();
+        assert!(残留.is_empty(), "解完不该残留 part：{残留:?}");
+
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&dest);
     }
@@ -889,5 +944,65 @@ mod tests {
         assert!(safety::resolve_safe(&root, "/etc/passwd").is_err());
         assert!(safety::resolve_safe(&root, "ok/inside.txt").is_ok());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    // ── 梯队四第 12 项：RAR 落盘改走 .yshjy-part 之后的两条语义 ──
+    //
+    // 为什么用单测盯这件事：这台机器上没有 `rar` 命令，仓库里的 RAR 样本又只有几 KB，
+    // **造不出「解到一半被 kill -9」的实测场景**。而这两条语义（写的时候不许有正式名、
+    // 取消时什么都不留）正是那次改造的全部意义，必须靠单测钉死。
+
+    /// 造一个只差「写多少」的 CountingWriter
+    fn 造写入器(目标: &std::path::Path) -> CountingWriter {
+        CountingWriter {
+            part: Some(crate::io::PartFile::create(目标).unwrap()),
+            written: 0,
+            budget: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::safety::ExtractBudget::new(crate::safety::Limits::default(), 1),
+            )),
+            report: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::extract::ExtractReport::default(),
+            )),
+            name: "a.bin".into(),
+            out_path: 目标.to_path_buf(),
+            encrypted: false,
+            ctx: crate::ctx::UnpackCtx::quiet(0),
+            idx: 1,
+            cancelled: false,
+        }
+    }
+
+    #[test]
+    fn rar写入器_写的过程中只有part_结束后才出现正式名() {
+        use std::io::Write;
+        let d = scratch("rar_atomic_ok");
+        let out = d.join("a.bin");
+        let part = d.join("a.bin.yshjy-part");
+        {
+            let mut w = 造写入器(&out);
+            w.write_all(b"hello rar").unwrap();
+            assert!(!out.exists(), "还在写的时候绝不能有正式文件名（这正是要修的老毛病）");
+            assert!(part.exists(), "应该先写 .yshjy-part");
+        } // drop → 原子改名
+        assert!(out.exists(), "写完并 Drop 后必须有正式文件名");
+        assert!(!part.exists(), "改名后不该留 part");
+        assert_eq!(fs::read(&out).unwrap(), b"hello rar");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn rar写入器_取消时既不留正式名也不留part() {
+        use std::io::Write;
+        let d = scratch("rar_atomic_cancel");
+        let out = d.join("a.bin");
+        let part = d.join("a.bin.yshjy-part");
+        {
+            let mut w = 造写入器(&out);
+            w.write_all(b"half").unwrap();
+            w.cancelled = true; // 用户取消 / 限额中止
+        }
+        assert!(!out.exists(), "取消后不该有正式文件名");
+        assert!(!part.exists(), "取消后 part 也该清掉");
+        let _ = fs::remove_dir_all(&d);
     }
 }
