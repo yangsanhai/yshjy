@@ -113,7 +113,7 @@ if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] \
              application/gzip application/x-xz application/zstd \
              application/x-bzip2 application/x-brotli application/x-lz4; do
       su -s /bin/sh "$SUDO_USER" -c \
-        "HOME='$UHOME' XDG_CONFIG_HOME='$UHOME/.config' xdg-mime default yshjy.desktop '$m'" \
+        "mkdir -p '$UHOME/.config' && HOME='$UHOME' XDG_CONFIG_HOME='$UHOME/.config' xdg-mime default yshjy.desktop '$m'" \
         2>/dev/null || true
     done
   fi
