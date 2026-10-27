@@ -203,16 +203,20 @@ impl UnpackCtx {
         self.maybe_progress(current);
     }
 
-    /// 打包时上报「又写出去了 n 字节」（500 ms 节流，`PACK_PROGRESS` 事件）
+    /// 打包时上报「又写出去了 n 字节」（200 ms 节流，`PACK_PROGRESS` 事件）
     ///
     /// 为什么不复用 `advance`：`advance` 发的是 `EXTRACT_PROGRESS`，
     /// 界面会当成解压进度画到解压页上 —— 阶段不同，事件必须分开。
+    ///
+    /// 节流从 500 ms 收紧到 200 ms：打 2 GB 包时 500 ms 才刷一次进度条，
+    /// 看着像一卡一卡的；200 ms 跟解压进度（`PROGRESS_INTERVAL`）一个手感。
+    /// 事件量级仍是「每秒 5 条」，界面顶得住。
     pub fn advance_pack(&self, bytes: u64, current: Option<&str>) {
         self.progress.add_bytes(bytes);
         let now = Instant::now();
         let 该发 = match self.last_emit.lock() {
             Ok(mut t) => {
-                if now.duration_since(*t).as_millis() >= 500 {
+                if now.duration_since(*t).as_millis() >= 200 {
                     *t = now;
                     true
                 } else {

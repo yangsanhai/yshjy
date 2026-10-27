@@ -521,22 +521,31 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
     let (总字节, 总文件) = 预扫输入(&opts.inputs);
     ctx.set_total(总字节, 总文件);
 
+    // 三条打包路径共用同一个上报闭包。
+    //
+    // 以前只有「普通压缩」传了回调，伪装 / 自解压走的是空回调 ——
+    // 打 2 GB 伪装包时界面进度条一动不动，用户以为卡死了（梯队四第 11 项）。
+    // - `Wrote`：压缩阶段报「已读输入字节」，拼装阶段报「已写输出字节」
+    // - `TotalHint`：压缩结束，把分母放大成「输入总字节 + 中间 ZIP」，
+    //   进度条才能接着走而不是停在压缩阶段的百分比上
+    let mut 报 = |t: crate::pack::PackTick| match t {
+        crate::pack::PackTick::Wrote(n, 名字) => ctx.advance_pack(n, 名字.as_deref()),
+        crate::pack::PackTick::TotalHint(额外) => ctx.set_total(总字节 + 额外, 总文件),
+    };
+
     let rep = if 普通压缩 {
-        let r = {
-            let mut 报 = |n: u64, 名字: &str| ctx.advance_pack(n, Some(名字));
-            crate::pack::build_plain_ctx(&opts, &mut bw, &mut 报)
-        };
-        ctx.force_pack_progress(None);
-        r
+        crate::pack::build_plain_ctx(&opts, &mut bw, &mut 报)
     } else if 自解压 == Some("linux") {
         // Linux 自解压：shell 脚本 + ZIP（偏移写死在脚本里，不靠尾标）
-        crate::pack::build_sfx_sh(&opts, &mut bw)
+        crate::pack::build_sfx_sh_ctx(&opts, &mut bw, &mut 报)
     } else if 自解压.is_some() {
-        crate::pack::build_sfx(&opts, &mut bw)
+        crate::pack::build_sfx_ctx(&opts, &mut bw, &mut 报)
     } else {
-        crate::pack::build(&opts, &mut bw)
+        crate::pack::build_ctx(&opts, &mut bw, &mut 报)
     }
     .map_err(错误对象)?;
+    // 收尾补一条终态，保证界面看到的进度是最终值
+    ctx.force_pack_progress(None);
     use std::io::Write;
     let _ = bw.flush();
     // Linux 自解压产物要能直接双击/执行

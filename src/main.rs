@@ -589,6 +589,7 @@ fn main() -> ExitCode {
                 None
             },
             level,
+            json: has("--json"),
         });
     }
 
@@ -1608,6 +1609,8 @@ struct 打包参数<'a> {
     sfx: Option<&'static str>,
     /// `--level 0-9`：压缩级别（P23-4）
     level: Option<u32>,
+    /// `--json`：事件按行输出（打包进度也要走这条路，否则脚本拿不到）
+    json: bool,
 }
 
 fn do_pack(a: 打包参数<'_>) -> ExitCode {
@@ -1624,6 +1627,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         cover,
         sfx,
         level,
+        json,
     } = a;
     // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
     // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
@@ -1763,11 +1767,26 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         }
     };
     let mut bw = std::io::BufWriter::new(f);
-    let 打包结果 = match sfx {
-        Some("linux") => yshjy::pack::build_sfx_sh(&opts, &mut bw),
-        Some(_) => yshjy::pack::build_sfx(&opts, &mut bw),
-        None => yshjy::pack::build(&opts, &mut bw),
+
+    // 打包进度（梯队四第 11 项）：CLI 以前**一条进度事件都不发** —— 打 2 GB 包时
+    // 终端几十秒没有任何动静，跟卡死没区别（实测 2 GB 用了 194 秒，全程无声）。
+    // 分母 = 输入总字节；拼装阶段由 `TotalHint` 把分母放大成「输入 + 中间 ZIP」。
+    let sink: std::sync::Arc<dyn yshjy::event::EventSink> =
+        std::sync::Arc::new(终端出口::new(quiet, json));
+    let ctx = yshjy::ctx::UnpackCtx::new(1, sink);
+    let (总字节, 总文件) = yshjy::pack::输入统计(&opts.inputs);
+    ctx.set_total(总字节, 总文件);
+    let mut 报 = |t: yshjy::pack::PackTick| match t {
+        yshjy::pack::PackTick::Wrote(n, 名字) => ctx.advance_pack(n, 名字.as_deref()),
+        yshjy::pack::PackTick::TotalHint(额外) => ctx.set_total(总字节 + 额外, 总文件),
     };
+    let 打包结果 = match sfx {
+        Some("linux") => yshjy::pack::build_sfx_sh_ctx(&opts, &mut bw, &mut 报),
+        Some(_) => yshjy::pack::build_sfx_ctx(&opts, &mut bw, &mut 报),
+        None => yshjy::pack::build_ctx(&opts, &mut bw, &mut 报),
+    };
+    // 收尾补一条终态，保证终端/脚本看到的进度是最终值
+    ctx.force_pack_progress(None);
     match 打包结果 {
         Ok(rep) => {
             use std::io::Write;

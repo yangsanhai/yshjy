@@ -120,12 +120,92 @@ pub fn 保留中间产物已开启() -> bool {
     保留中间产物.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// 统计输入的总字节与文件数（打包进度的分母）
+///
+/// 目录要递归。拿不到 stat 的条目直接跳过 —— 进度分母少算一点，不该让打包失败。
+pub fn 输入统计(inputs: &[PathBuf]) -> (u64, u64) {
+    fn 走(p: &Path, 字节: &mut u64, 文件: &mut u64) {
+        let Ok(m) = fs::metadata(p) else {
+            return;
+        };
+        if m.is_dir() {
+            if let Ok(rd) = fs::read_dir(p) {
+                for e in rd.flatten() {
+                    走(&e.path(), 字节, 文件);
+                }
+            }
+        } else {
+            *字节 = 字节.saturating_add(m.len());
+            *文件 += 1;
+        }
+    }
+    let (mut b, mut f) = (0u64, 0u64);
+    for i in inputs {
+        走(i, &mut b, &mut f);
+    }
+    (b, f.max(1))
+}
+
+/// 打包进度事件（`PACK_PROGRESS` 的数据源）
+///
+/// # 为什么不是简单的 `FnMut(u64, &str)`
+///
+/// 伪装包和自解压都是**两段式**的：先把内容压进临时 ZIP，再把那个 ZIP 拼到
+/// 外壳 / 存根后面。两段的「分母」不是一个东西 —— 压缩阶段的分母是「输入文件总字节」，
+/// 拼装阶段的分母是「中间 ZIP 的大小」。
+///
+/// 只给 `(已写, 名字)` 的话，外壳没法知道「压缩完了、接下来总量变了」，
+/// 进度条要么停在某个百分比、要么冲过 100%。所以多一个 [`PackTick::TotalHint`]：
+/// 外壳收到它就把分母放大，进度条才走得平滑。
+pub enum PackTick {
+    /// 又处理了 n 字节
+    ///
+    /// `Some(名字)` = 压缩阶段正在压的条目；`None` = 拼装输出阶段（没有「当前文件」可言）
+    Wrote(u64, Option<String>),
+    /// 压缩阶段结束，接下来还要往输出写这么多字节
+    TotalHint(u64),
+}
+
+/// 把临时 ZIP 流式拼到输出，并按块报进度
+///
+/// 以前这里是 `std::io::copy`（一次拷完、零进度）：2 GB 的包在机械盘上要几十秒，
+/// 界面进度条从压缩阶段结束后就一动不动，用户看起来就是「卡死了」。
+fn 拷贝带进度(源: &Path, 出: &mut impl Write, 进度: &mut dyn FnMut(PackTick)) -> Result<u64> {
+    use std::io::Read as _;
+    let mut f = fs::File::open(源)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
+    let mut buf = vec![0u8; 4 * 1024 * 1024];
+    let mut 总 = 0u64;
+    loop {
+        let n = f
+            .read(&mut buf)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read tmp: {e}")))?;
+        if n == 0 {
+            break;
+        }
+        出.write_all(&buf[..n])
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+        总 += n as u64;
+        进度(PackTick::Wrote(n as u64, None));
+    }
+    Ok(总)
+}
+
 /// **把输入打成伪装包**
 ///
 /// 数据流：`封面 → [free 原子头] → 随机 pad → ZIP 数据`
 ///
 /// 为了不被大文件撑爆内存，ZIP 先落在临时文件，最后流式拼接。
 pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    build_ctx(opts, out, &mut |_| {})
+}
+
+/// 同 [`build`]，但逐块报进度（`PACK_PROGRESS` 的数据源）
+pub fn build_ctx<W: Write>(
+    opts: &PackOptions,
+    out: &mut W,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<PackReport> {
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
@@ -147,7 +227,7 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts, &mut |_, _| {})?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, 进度)?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -169,13 +249,13 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
     out.write_all(&cover)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover: {e}")))?;
 
+    // 压缩完了：告诉外壳「接下来还要写 zip_size 字节」，进度条才不会停在压缩阶段的百分比
+    进度(PackTick::TotalHint(zip_size));
+
     let mut atom_overhead = 0u64;
     match layout {
         PackLayout::TailAppend => {
-            let mut f = fs::File::open(&tmp)
-                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
-            std::io::copy(&mut f, out)
-                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+            拷贝带进度(&tmp, out, 进度)?;
         }
         PackLayout::FreeAtom => {
             let pad = make_pad(opts.pad_range);
@@ -184,10 +264,7 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
             out.write_all(&pad)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write pad: {e}")))?;
 
-            let mut f = fs::File::open(&tmp)
-                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
-            std::io::copy(&mut f, out)
-                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+            拷贝带进度(&tmp, out, 进度)?;
         }
     }
 
@@ -217,14 +294,14 @@ pub fn build<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
 /// 那个结构体在测试里有十几处**逐字段**构造，加一个字段就得把所有测试一起改，
 /// 而且改漏一处就是编译错误（HANDOFF「给广泛构造的结构体加字段」那条教训）。
 pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
-    build_plain_ctx(opts, out, |_, _| {})
+    build_plain_ctx(opts, out, &mut |_| {})
 }
 
 /// 同 [`build_plain`]，但把「已写多少」逐块报出来（`PACK_PROGRESS` 的数据源）
 pub fn build_plain_ctx<W: Write>(
     opts: &PackOptions,
     out: &mut W,
-    mut 进度: impl FnMut(u64, &str),
+    进度: &mut dyn FnMut(PackTick),
 ) -> Result<PackReport> {
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
@@ -238,18 +315,14 @@ pub fn build_plain_ctx<W: Write>(
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let mut 报 = |n: u64, name: &str| 进度(n, name);
-    let entries = write_zip(&opts.inputs, &tmp, opts, &mut 报)?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, 进度)?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
 
-    {
-        let mut f = fs::File::open(&tmp)
-            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
-        std::io::copy(&mut f, out)
-            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
-    }
+    // 拼装阶段（这里以前也没有进度：2 GB 的普通 ZIP 同样会卡住不动）
+    进度(PackTick::TotalHint(zip_size));
+    拷贝带进度(&tmp, out, 进度)?;
     if 保留中间产物已开启() {
         // `--keep`：留着中间 ZIP
     } else {
@@ -320,7 +393,7 @@ fn write_zip(
     inputs: &[PathBuf],
     tmp: &Path,
     opts: &PackOptions,
-    进度: &mut dyn FnMut(u64, &str),
+    进度: &mut dyn FnMut(PackTick),
 ) -> Result<usize> {
     let file = fs::File::create(tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("create tmp: {e}")))?;
@@ -371,7 +444,7 @@ fn write_zip(
                 zw.write_all(&buf[..n]).map_err(|e| {
                     Error::new(ErrorCode::Internal).context(format!("zip write: {e}"))
                 })?;
-                进度(n as u64, &name);
+                进度(PackTick::Wrote(n as u64, Some(name.clone())));
             }
             count += 1;
         }
@@ -430,7 +503,7 @@ fn add_dir<W: Write + Seek>(
     method: zip::CompressionMethod,
     level: i64,
     pw: Option<&str>,
-    进度: &mut dyn FnMut(u64, &str),
+    进度: &mut dyn FnMut(PackTick),
 ) -> Result<usize> {
     let mut n = 0usize;
     let rd = fs::read_dir(dir)
@@ -465,7 +538,7 @@ fn add_dir<W: Write + Seek>(
                 zw.write_all(&buf[..k]).map_err(|e| {
                     Error::new(ErrorCode::Internal).context(format!("zip write: {e}"))
                 })?;
-                进度(k as u64, &arc);
+                进度(PackTick::Wrote(k as u64, Some(arc.clone())));
             }
             n += 1;
         }
@@ -592,6 +665,15 @@ exit 0
 ///
 /// 暂不支持的（明确报错，不静默降级）：解压码、分卷。
 pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    build_sfx_ctx(opts, out, &mut |_| {})
+}
+
+/// 同 [`build_sfx`]，但逐块报进度（`PACK_PROGRESS` 的数据源）
+pub fn build_sfx_ctx<W: Write>(
+    opts: &PackOptions,
+    out: &mut W,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<PackReport> {
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
@@ -604,7 +686,7 @@ pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts, &mut |_, _| {})?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, 进度)?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -612,10 +694,8 @@ pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport
     let 存根大小 = SFX_STUB.len() as u64;
     out.write_all(SFX_STUB)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write stub: {e}")))?;
-    let mut f = fs::File::open(&tmp)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
-    std::io::copy(&mut f, out)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+    进度(PackTick::TotalHint(zip_size));
+    拷贝带进度(&tmp, out, 进度)?;
     // 尾标：存根只认最后 24 字节，偏移是「ZIP 起点在 exe 里的绝对位置」
     out.write_all(SFX_MAGIC)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write magic: {e}")))?;
@@ -646,6 +726,15 @@ pub fn build_sfx<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport
 /// 与 Windows 版共用同一份 ZIP（`write_zip`），差别只在「外壳」是文本脚本：
 /// 偏移和长度作为常量写进脚本里（定宽占位替换，前后长度一致），不需要尾标。
 pub fn build_sfx_sh<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
+    build_sfx_sh_ctx(opts, out, &mut |_| {})
+}
+
+/// 同 [`build_sfx_sh`]，但逐块报进度（`PACK_PROGRESS` 的数据源）
+pub fn build_sfx_sh_ctx<W: Write>(
+    opts: &PackOptions,
+    out: &mut W,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<PackReport> {
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
@@ -658,7 +747,7 @@ pub fn build_sfx_sh<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackRep
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts, &mut |_, _| {})?;
+    let entries = write_zip(&opts.inputs, &tmp, opts, 进度)?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -684,10 +773,8 @@ pub fn build_sfx_sh<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackRep
 
     out.write_all(脚本.as_bytes())
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write sh stub: {e}")))?;
-    let mut f = fs::File::open(&tmp)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open tmp: {e}")))?;
-    std::io::copy(&mut f, out)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy zip: {e}")))?;
+    进度(PackTick::TotalHint(zip_size));
+    拷贝带进度(&tmp, out, 进度)?;
 
     if 保留中间产物已开启() {
         // `--keep`：留着中间 ZIP
@@ -716,6 +803,78 @@ mod tests {
         let _ = fs::remove_dir_all(&p);
         fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    /// 伪装 / 自解压打包原来走的是空回调 + `io::copy`，进度条整段是死的。
+    /// 这两条盯着「三件事都得有」：压缩阶段逐块报、拼装前告知新总量、拼装阶段逐块报。
+    #[test]
+    fn 伪装打包会逐块报进度并把拼装总量告知外壳() {
+        let d = scratch("progress_disguise");
+        let 大小 = 512 * 1024;
+        fs::write(d.join("大文件.bin"), vec![7u8; 大小]).unwrap();
+        let opts = PackOptions {
+            inputs: vec![d.clone()],
+            ..Default::default()
+        };
+        let mut 出 = Vec::new();
+        let mut 记录: Vec<PackTick> = Vec::new();
+        let rep = {
+            let mut 报 = |t: PackTick| 记录.push(t);
+            build_ctx(&opts, &mut 出, &mut 报).unwrap()
+        };
+
+        let 压缩: u64 = 记录
+            .iter()
+            .filter_map(|t| match t {
+                PackTick::Wrote(n, Some(_)) => Some(*n),
+                _ => None,
+            })
+            .sum();
+        assert_eq!(压缩, 大小 as u64, "压缩阶段报的字节数应等于输入字节数");
+
+        let 提示 = 记录
+            .iter()
+            .find_map(|t| match t {
+                PackTick::TotalHint(n) => Some(*n),
+                _ => None,
+            })
+            .expect("拼装前必须告知外壳新总量，否则进度条会卡在压缩阶段的百分比上");
+        assert_eq!(提示, rep.zip_size);
+
+        let 拼装: u64 = 记录
+            .iter()
+            .filter_map(|t| match t {
+                PackTick::Wrote(n, None) => Some(*n),
+                _ => None,
+            })
+            .sum();
+        assert_eq!(拼装, rep.zip_size, "拼装阶段报的字节数应等于中间 ZIP 大小");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn 自解压打包也报进度() {
+        let d = scratch("progress_sfx");
+        fs::write(d.join("a.bin"), vec![9u8; 256 * 1024]).unwrap();
+        let opts = PackOptions {
+            inputs: vec![d.clone()],
+            ..Default::default()
+        };
+        let mut 出 = Vec::new();
+        let mut 条数 = 0usize;
+        let mut 总量提示 = None;
+        {
+            let mut 报 = |t: PackTick| {
+                条数 += 1;
+                if let PackTick::TotalHint(n) = t {
+                    总量提示 = Some(n);
+                }
+            };
+            let rep = build_sfx_sh_ctx(&opts, &mut 出, &mut 报).unwrap();
+            assert!(条数 > 2, "自解压打包以前是空回调，一条进度都没有");
+            assert_eq!(总量提示, Some(rep.zip_size));
+        }
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]
