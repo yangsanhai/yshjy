@@ -7,9 +7,11 @@
 > 原则是「真人会撞上的概率优先」，不看实现难度。
 > 每次开工只做最上面那一行的「下一项」，出现的新问题不插队，加到表尾。
 
-最后更新：2026-10-28（黑屏重启后复验：`tests/all.sh` 24 通过 / 0 失败；表尾加一条偶发待查）
+最后更新：2026-10-28（黑屏重启后复验：`tests/all.sh` 24 通过 / 0 失败；表尾加一条偶发待查；
+之后补：装机版本已核实为 **0.9.26**、帮助三条补勾、补全条目改成「构建期自动生成」并数准 35/18/17）
 
-**当前状态**：**0.9.26 已出包**（`dist/yshjy_0.9.26_amd64.deb` 9.7M + 两档 tar.gz；`scripts/test-packages.sh` **33 项全绿**），装机仍是 0.9.25-c（等用户装新版体验）；`bash tests/all.sh` 24 通过 / 0 失败；
+**当前状态**：**0.9.26 已出包并已装机**（`dpkg -l yshjy` = 0.9.26；`dist/yshjy_0.9.26_amd64.deb` 9.7M + 两档 tar.gz；
+`scripts/test-packages.sh` **33 项全绿**）；`bash tests/all.sh` 24 通过 / 0 失败；
 依赖漏洞已清零（cargo audit 0 漏洞 / cargo deny 四项全绿）。
 **梯队四已全清，阶段 0 的 T5 也已完成（2026-10-28）** —— 0.9.26 的 deb 与 tar.gz 都在 `dist/`，验收 33 项全绿。
 下一步：装上新版让用户亲手验（断点续传 / 进度条 / 双击压缩包归我们），确认可用后再考虑对外发布。
@@ -79,13 +81,17 @@
   另外照 `refs/upstream/inquire/KEY_BINDINGS.md` 的表格形式写一份中文键位表进文档。
   验收：① 键盘选出「第 2、5、9 个」的结果与 `--select "2,5,9"` 逐字节一致；
   ② 管道里跑不进全屏、给出降级提示；③ 中文文件名不错行；④ 退出后终端复原（`stty -a` 与进入前一致）。
-- [ ] **帮助补三条**：`--level`（压缩级别 0-9，界面打包页已有滑块）、`--sfx` / `--sfx-linux`（自解压包，
+- [x] **帮助补三条**（✅ 9c749ee 已完成，2026-10-28 补勾）：`--level`（压缩级别 0-9，界面打包页已有滑块）、`--sfx` / `--sfx-linux`（自解压包，
   界面已有开关）、`--caps`（各格式能力表，界面设置页已有按钮）。三处引擎都实现了，就是 `--help` 没写。
   验收：`yshjy --help` 能搜到这三个词，且文案与界面上的说法一致。
-- [ ] **三个补全脚本补齐**：`scripts/completions/yshjy.bash` / `_yshjy`（zsh）/ `yshjy.fish` 现在只登记 18 个，
-  实际有 31 个，缺 `--config --cover --encoding --extract-cover --keep --layout --log --no-auto-password
-  --no-checksum --no-color --no-readme --password-file --split`（外加上面三条）。
-  验收：三个脚本的选项集合 == `yshjy --help` 的选项集合（写个对账脚本进 `tests/all.sh`，别靠人眼）。
+- [ ] **补全与 man 页改成构建期自动生成**（**不许再手写副本**，做法见 `docs/REFERENCE-INDEX.md` §9.1）：
+  现状实测（2026-10-28 用 `target/release/yshjy --help` 数）：**`--help` 共 35 个长选项，手写补全只登记 18 个，
+  缺 17 个** —— `--caps --config --cover --encoding --extract-cover --keep --layout --level --log
+  --no-auto-password --no-checksum --no-color --no-readme --password-file --sfx --sfx-linux --split`。
+  根因不是「漏抄」，是**手抄副本必然漂移**；照 `upstream/ouch/build.rs:20-39` 用 `clap_complete` + `clap_mangen`
+  从同一份 clap 定义生成，打包时塞进 deb。`scripts/completions/` 手写三件套退休。
+  验收：① `cargo build` 能生成补全与 man；② 生成的补全选项集合 == `yshjy --help` 的选项集合（对账进 `tests/all.sh`）；
+  ③ 包里 man 页版本号与二进制一致（不许再出现 man 停在旧版本）。
 
 ### 功能（新增，用户点名）
 
@@ -117,11 +123,17 @@
 
 > 背景：**用户没有 Mac 设备，也不买 Apple 开发者账号（99 美元/年）**。所以不出官方签名/上架版本，
 > 改为「公开源码 + 免费 CI 出**未签名**包 + iOS 由懂的人自编自装」。**花的钱 = 0。**
-> 依据（已查证）：GitHub Actions 对**公开仓库免费**（含 macOS runner）；macOS 未签名 app 用户右键「打开」即可，
+> **2026-10-28 用户改口径：先不上 GitHub** —— 顺序改成「先把本机能出的包和界面功能做出来」，
+> 下面 ①~⑥ 保留为将来上 CI 时的配方。本机能力实测：
+> · 能出：Linux deb/tar（现成）、Windows **命令行** exe（`x86_64-pc-windows-gnu` 目标 + mingw 已装，可用 wine 本机验）、
+>   安卓 APK（需先装 Android SDK + NDK，约 8–10 G 下载，待用户点头）。
+> · 出不了：Windows **图形界面**版、macOS、iOS —— Flutter 的这三个平台必须在对应系统上编。
+> 参考依据（已查证）：GitHub Actions 对**公开仓库免费**（含 macOS runner）；macOS 未签名 app 用户右键「打开」即可，
 > 不需要开发者账号；iOS 用免费 Apple ID 可自装到真机（**7 天有效期**，SideStore 之类可续签）。
-> 参考项目：`rustdesk/rustdesk`（Rust+Flutter 全平台，CI 矩阵与各平台打包脚本）、
-> `localsend/localsend`（Flutter 全平台，Android 分区存储权限处理得干净）；
-> 工具链：`flutter_distributor`、`cargo-ndk`、`flutter_rust_bridge`。
+> 参考项目（真身已在 `refs/upstream/`，台账见 `docs/REFERENCE-INDEX.md` §9）：
+> `rustdesk/`（Rust+Flutter 全平台，CI 矩阵与打包脚本）、`localsend/`（Flutter 全平台，一平台一个 reusable workflow）、
+> `hiddify-app/`（ffigen 接 Rust 核心）、`tauri-bundler/`（各平台安装包规范）；
+> 工具链：`ffigen`（**选它，不选 flutter_rust_bridge**）、`cargo-ndk`、`fastforge`（原 flutter_distributor）、`cargo-dist`。
 
 - [ ] **① 仓库上 GitHub（公开）+ CI 骨架** —— 这是后面所有平台的前置。
   push 触发 `tests/all.sh`；打 tag 触发构建矩阵。验收：push 后 CI 自动跑绿；`git tag v0.9.26` 能触发构建。
