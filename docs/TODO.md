@@ -9,12 +9,12 @@
 
 最后更新：2026-10-27（梯队四第 12 项 RAR 原子写入完成；梯队四全清）
 
-**当前状态**：0.9.25-c 已装机；源码已到 0.9.26-c（梯队一/二/三/四全做完，未打包）；`bash tests/all.sh` 23 通过 / 0 失败；
+**当前状态**：0.9.25-c 已装机；源码已到 0.9.26-c（梯队一/二/三/四全做完，未打包）；`bash tests/all.sh` 24 通过 / 0 失败；
 依赖漏洞已清零（cargo audit 0 漏洞 / cargo deny 四项全绿）。
 **梯队四已全清** —— 下一步等用户定：要么进 T5（装包检查），要么打包发版（用户说「完全能用再发」）。
 > 已知小账（不阻塞发版）：RAR 在「库因 CRC 失败提前 drop writer」时，已写字节仍会落地；
 > 彻底解决要迁 `rars::extract_with_control_and_errors` 重写回调层（见 CHANGELOG 第 12 项）。
-> 另一个验证缺口：本机没有 `rar` 命令、仓库 RAR 样本只有几 KB，做不了「解到一半 kill -9」的实测。
+> RAR 的中断实测已补上（装 `rar` 后加 `tests/rar_atomic.sh`，SIGKILL 打断 → 只剩 part、重试零副本）。
 
 ## 阶段 0：体检（✅ 已完成，证据在 `docs/AUDIT-PHASE0.md`）
 
@@ -56,7 +56,7 @@
 
 ## 做完的（留个记号，详细证据在 CHANGELOG.md / AUDIT-PHASE0.md）
 
-- ✅ **RAR 接原子写入**（`CountingWriter` 改走 `PartFile`，Drop 时原子改名；调研确认 `rars` 回调**拿不到条目大小/CRC**，只能「Drop 即落地」——CRC 失败时落地与改前相同、不算退步；真实样本与 `7z` 内容 sha256 完全一致 + 分卷正常 + 2 条落盘语义单测）—— 0.9.26-c
+- ✅ **RAR 接原子写入**（`CountingWriter` 改走 `PartFile`，Drop 时原子改名；调研确认 `rars` 回调**拿不到条目大小/CRC**，只能「Drop 即落地」——CRC 失败时落地与改前相同、不算退步；真实样本与 `7z` 内容 sha256 完全一致 + 分卷正常 + 2 条落盘语义单测 + **`tests/rar_atomic.sh` 真打断**：SIGKILL 后只剩 part、正式名一个没出现、重试零副本零残留、删文件能自愈）—— 0.9.26-c
 
 - ✅ **打包进度**（伪装 / 自解压 / 普通三条路径都报；新增 `PackTick::TotalHint` 让拼装段换分母，进度条不再卡在压缩段百分比；拼装用 `拷贝带进度` 替掉 `io::copy`；**CLI 与协议两条代码路径都接**；节流 500→200 ms；实测 2 GB 伪装包 82 条事件、0→100% 无回退；新探针 `tests/pack_progress.sh` 7 项）—— 0.9.26-c
 
