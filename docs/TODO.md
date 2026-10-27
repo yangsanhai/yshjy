@@ -113,6 +113,38 @@
   协议里还没有这个命令，要加 `rescue` 命令 + Dart 侧入口 + 契约测试。
   验收：拿一个索引被改坏的样本，界面点「救援」也能救出文件；`tests/contract/` 补一份 golden。
 
+### 全平台（零成本路线，2026-10-28 定）
+
+> 背景：**用户没有 Mac 设备，也不买 Apple 开发者账号（99 美元/年）**。所以不出官方签名/上架版本，
+> 改为「公开源码 + 免费 CI 出**未签名**包 + iOS 由懂的人自编自装」。**花的钱 = 0。**
+> 依据（已查证）：GitHub Actions 对**公开仓库免费**（含 macOS runner）；macOS 未签名 app 用户右键「打开」即可，
+> 不需要开发者账号；iOS 用免费 Apple ID 可自装到真机（**7 天有效期**，SideStore 之类可续签）。
+> 参考项目：`rustdesk/rustdesk`（Rust+Flutter 全平台，CI 矩阵与各平台打包脚本）、
+> `localsend/localsend`（Flutter 全平台，Android 分区存储权限处理得干净）；
+> 工具链：`flutter_distributor`、`cargo-ndk`、`flutter_rust_bridge`。
+
+- [ ] **① 仓库上 GitHub（公开）+ CI 骨架** —— 这是后面所有平台的前置。
+  push 触发 `tests/all.sh`；打 tag 触发构建矩阵。验收：push 后 CI 自动跑绿；`git tag v0.9.26` 能触发构建。
+- [ ] **② Windows**：`flutter create --platforms=windows` 补平台目录；
+  引擎 `cargo build --release --target x86_64-pc-windows-gnu`。产物 zip（exe + 界面目录）。
+  **未签名** → 用户首次点「仍要运行」，README 写明怎么点。验收：Windows 10/11 上双击能开界面、能解压、能打包。
+- [ ] **③ Android**：`cargo-ndk` 编 arm64-v8a / armeabi-v7a 的 `.so`，`flutter build apk --release`；
+  keystore 用 `keytool` 自己生成（免费，**别丢**，丢了以后没法覆盖升级）。
+  **重点风险 = 分区存储**：必须说清"能解到哪、不能解到哪"，别做成静默失败。
+  验收：真机装 APK → 选一个伪装包 → 解压到指定目录成功，或给出明确的权限提示。
+- [ ] **④ macOS（未签名，靠 CI 的免费 Mac 机器）**：`flutter build macos` 出 dmg，**不签名、不公证**。
+  README 写明：首次要**右键 →「打开」**（或系统设置 → 隐私与安全性里允许）。
+  验收：CI 产出 dmg；在真 Mac 上右键打开能跑（需要借一台或找朋友试）。
+- [ ] **⑤ FFI 层**（`src/ffi.rs` 现在不存在，只有 `docs/FFI.md` 设计）—— iOS 的唯一道路，顺带给 Android 提速。
+  用 `flutter_rust_bridge` 生成绑定，**别手写 `extern "C"`**。
+  验收：Dart 侧 `FfiTransport` 在桌面上跑通一次 list + extract，结果与 `ProcessTransport` 逐字节一致。
+- [ ] **⑥ iOS 工程 + `BUILD-iOS.md`**（给愿意自己编的人）：`flutter create --platforms=ios` + Xcode 工程 +
+  一页说明（装 Xcode、免费 Apple ID、**7 天有效期**、怎么续）。
+  验收：照文档在一台 Mac 上从零编到真机装上（需要借 Mac 或 CI 验证）。
+
+**这个方向明确不做（写死，别反复讨论）**：App Store 上架 / TestFlight（99 美元/年）、macOS 公证、
+Windows 代码签名证书（几百到几千/年，用户点「仍要运行」即可）、购买 Mac 设备。
+
 ### 已评估、本轮不做
 
 - AppImage 打包 —— 理由与完整配方见 `docs/RELEASE-CHECK.md` §4（本机 glibc 2.41 当基线做出来没人能跑）。
