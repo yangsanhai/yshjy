@@ -120,6 +120,12 @@ if [ -n "$BIN" ]; then
   fi
   # 打包进度（伪装 / 自解压 / 普通都要报）：150 MB 约 10 秒
   run "打包进度（pack_progress.sh）" bash tests/pack_progress.sh 150
+  # RAR 原子落盘：中断后只能剩 .yshjy-part。要 rar 造样本（仅测试用，不进发布物）
+  if command -v rar >/dev/null 2>&1; then
+    run "RAR 原子落盘（rar_atomic.sh 80MB）" bash tests/rar_atomic.sh 80
+  else
+    skip "RAR 原子落盘" "没装 rar（sudo apt install -y rar 后才会跑）"
+  fi
   run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
 else
   skip "协议探针" "没有可执行文件"
