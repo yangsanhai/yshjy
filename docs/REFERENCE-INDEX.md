@@ -119,6 +119,28 @@
 
 ---
 
+## 8. 终端 UI（CLI 外壳）与「解完删源」
+
+> 2026-10-28 补：用户要求「别纯手搓，先看别人怎么做」。标杆项目已拉到
+> **`refs/upstream/`**（`--depth 1`，共 22 MB）：`indicatif` / `inquire` / `dialoguer` /
+> `ratatui` / `comfy-table`。下面是逐项对上我们的落点。
+
+| 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
+|---|---|---|---|---|
+| **进度条模板** | `upstream/indicatif/src/style.rs:270-350`（模板变量：`{percent} {bytes} {total_bytes} {elapsed} {eta} {bytes_per_sec} {wide_msg}`）、`examples/download-speed.rs:10-12` | 模板变量集；`{wide_bar}` 自动铺满终端宽度；`progress_chars("#>-")` 指定填充字符；`{eta}` 由库自己算 | `src/main.rs` 的 `画进度行` | 🟡 手搓版已通（条/速度/剩余/项号），**缺 `{elapsed}` 已用时** |
+| **多任务并发进度** | `upstream/indicatif/src/multi.rs`、`examples/multi-tree-ext.rs`、`examples/multi.rs`（截图见 README） | `MultiProgress` 给每个任务一条独立进度行，统一在顶部重绘 —— 我们 `-j 2` 时不再是两行互相覆盖 | 同上（需重写为 indicatif） | ❌ 未做 |
+| **多选交互（`--pick`）** | `upstream/dialoguer/src/prompts/multi_select.rs:253-302`（键位：`↓/Tab/j` 下移、`↑/BackTab/k` 上移、`←/h` 上页、`→/l` 下页、`空格` 勾选、`a` 全选、`Esc/q` 取消、`Enter` 确认）；`upstream/inquire/KEY_BINDINGS.md`（键位文档写法）、`inquire/inquire/src/terminal/crossterm.rs:338-353`（终端后端抽象） | **别自己写 raw mode 循环**：直接用 `dialoguer::MultiSelect`，上面那套键位是业界共识；文档照 `KEY_BINDINGS.md` 的表格形式写一份中文的 | 新增 `src/pick.rs`，`--pick` 走它 | ❌ 未做 |
+| **列表/表格输出** | `upstream/comfy-table/README.md:205,255-283`（宽度来源优先级：显式 `set_width` → `crossterm::terminal::size`；依赖 `unicode-width` 算中文宽度） | 列宽自适应算法；`--list` 的结果按「序号 / 大小 / 加密 / 路径」四列对齐，中文不歪 | `src/main.rs` 的 `--list` 输出 | ❌ 未做 |
+| **解压后删除源压缩包** | `unzip -m`（move 语义，成功即删）；WinRAR 解压对话框「删除压缩文件：永不 / 总是 / 询问」；Bandizip 同功能 + 更安全的「移到回收站」变体；7-Zip 的 `-sdel` 是**压缩**后删源、解压侧没有该功能（p7zip issue #154 里官方建议自己 `rm`） | 「只在**完全成功**后删」「可改成移到回收站」「分卷要整组处理」「删之前说清不可恢复」 | 新增 `--delete-source` / `--trash-source`；界面解压页一个开关（默认关） | ❌ 未做 |
+
+**两条教训（写在这里，免得下次又手搓）**：
+1. 交互式终端界面（raw mode、分页、过滤、非 TTY 降级、退出复原）是**成堆的边界情况**，
+   `dialoguer` / `inquire` 已经把它们全覆盖了 —— 手写 60 行只是把坑推迟到用户机器上。
+2. 进度条同理，但我们有一个额外约束：**ETA 要复用引擎里那个 `EtaEstimator`**（α=0.3、样本 <3 不给估算），
+   否则 CLI 和界面显示的剩余时间会不一致。用 indicatif 时只能用它的 `set_position`，ETA 自己塞进 `{msg}`。
+
+---
+
 ## 7. 台账维护
 
 `refs/tech/` 共 383 处 🔄，其中约三成其实已实现（例：`7zip-工程层.md:131-133`

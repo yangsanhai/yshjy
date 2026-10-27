@@ -15,6 +15,7 @@ __pycache__/
 /refs/zip2
 /refs/sevenz-rust
 /refs/ui-reference
+/refs/upstream
 
 # 保留：我们的分析报告与文档
 # /refs/analysis  ← 故意不忽略
