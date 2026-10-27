@@ -1154,10 +1154,13 @@ impl 终端出口 {
             tty: std::io::stderr().is_terminal(),
             last_draw: std::sync::Mutex::new(std::time::Instant::now()),
             eta: std::sync::Mutex::new(yshjy::progress::EtaEstimator::new()),
-            cols: crossterm::terminal::size()
-                .map(|(c, _)| c as usize)
-                .unwrap_or(80)
-                .clamp(40, 300),
+            // 注意：非交互环境（script / CI / 管道）下 ioctl 常常返回 0 列 ——
+            // 直接 clamp 到 40 会让后面「速度 / 剩余 / 第几项」全被丢掉。
+            // 拿到 0 或异常就按 80 列算，宁可保守也别把信息丢光。
+            cols: match crossterm::terminal::size() {
+                Ok((c, _)) if c >= 20 => (c as usize).clamp(20, 300),
+                _ => 80,
+            },
         }
     }
 
@@ -1694,7 +1697,10 @@ fn 画进度行(
     line.push_str(&字节段);
 
     let 项段 = if progress.total_files > 0 {
-        format!("  {}/{} 项", progress.done_files, progress.total_files)
+        // 显示「正在处理第几个」而不是「已完成几个」—— 后者解到一半时永远是 0/1 项，
+        // 看着像一点没动。并行（-j>1）时这个数字是近似值，够用。
+        let 当前项 = (progress.done_files + 1).min(progress.total_files);
+        format!("  {当前项}/{} 项", progress.total_files)
     } else {
         String::new()
     };
@@ -1702,8 +1708,10 @@ fn 画进度行(
         .speed_bps
         .map(|s| format!("  {}/s", 人类可读(s as u64)))
         .unwrap_or_default();
+    // 不足 1 秒不显示「剩 0 秒」—— 那比不显示更让人困惑
     let 剩余段 = eta
         .remaining
+        .filter(|d| d.as_secs() >= 1)
         .map(|d| format!("  剩 {}", 时长可读(d)))
         .unwrap_or_default();
 
@@ -2356,8 +2364,26 @@ mod tests {
         assert!(line.contains('█') && line.contains('░'), "要有条状进度：{line}");
         assert!(line.contains("12.4 MB/s"), "要有速度：{line}");
         assert!(line.contains("剩 1 分 12 秒"), "要有剩余时间：{line}");
-        assert!(line.contains("3/10 项"), "要有第几项：{line}");
+        // 显示的是「正在处理第几个」：done_files=3 → 第 4/10 项
+        assert!(line.contains("4/10 项"), "要有第几项：{line}");
         assert!(line.contains("data/game.bin"), "要有当前文件：{line}");
+    }
+
+    #[test]
+    fn 剩余不足一秒不显示剩零秒() {
+        let p = ProgressView {
+            done_bytes: 990,
+            total_bytes: 1000,
+            done_files: 0,
+            total_files: 1,
+        };
+        let eta = Eta {
+            speed_bps: Some(100.0),
+            remaining: Some(Duration::from_millis(300)),
+        };
+        let line = 画进度行(&p, &eta, None, 100);
+        assert!(!line.contains("剩 0 秒"), "别写「剩 0 秒」：{line}");
+        assert!(!line.contains("剩"), "不足一秒就别显示剩余：{line}");
     }
 
     #[test]
