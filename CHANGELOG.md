@@ -2,6 +2,54 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.26-c] · 2026-10-27（阶段 1 梯队四·第 12 项：RAR 路径接原子写入）
+
+> 由来：`docs/TODO.md` 梯队四表尾那条 —— 「RAR 暂未接 `PartFile`，库自己管 writer 生命周期」。
+> 后果和梯队一第 1 项修的那个老毛病一样：解到一半被 `kill -9` / 断电 / 磁盘满时，磁盘上留下的是
+> **顶着正式文件名**的半截文件（外观与好文件无异），重试还会因为「同名改名」策略绕开它、
+> 长出 `(1)` 副本。这是七条落盘路径里**最后一条**没走原子写入的。
+
+### 先做了调研：为什么当时没敢接
+
+`rars` 的 `ExtractedEntryMeta`（回调参数）只有这些字段：
+
+```
+name_is_unicode / name / file_time / file_attr / attr_source / mtime_refinement / is_directory
+```
+
+**没有条目大小，也没有 CRC** —— 所以回调这一层根本拿不到「这个条目应该有 734003200 字节」，
+也就没法在 `Drop` 里判断「库是写完了还是中途出错」。`Drop` 只能当作「库对这个条目的写入结束了」。
+
+### 做法（以及有意保留的局限）
+
+- `CountingWriter` 的 `inner: fs::File` 换成 `part: Option<PartFile>`，回调里
+  `fs::File::create(&out_path)` → `PartFile::create(&out_path)`
+- `Drop` 时：取消/限额中止 → 直接丢掉 part（**正式文件名从头到尾没出现过**）；
+  否则 `finish()` 原子改名
+- **有意接受的局限**：库因为 CRC / 解密失败而提前 `drop` writer 时，已经写出的字节仍会落地
+  （改之前同样会落地，**不是新增的退步**）。换到的是「进程被杀 / 断电不再留半截正式名」。
+- **没做的方案（记账，不硬上）**：`rars` 有 `extract_with_control_and_errors(decide, on_error)`，
+  `on_error` 能拿到逐条目错误，理论上能精确判断哪一条失败。但那要重写整个回调层
+  （`decide` 收的是 `ArchiveMember` 而不是 `ExtractedEntryMeta`，写出机制也不同），
+  RAR 是主力解压路径之一，风险和收益不匹配。
+
+### 验证
+
+| 项 | 结果 |
+|---|---|
+| 真实样本 `rar_mtime_sample.rar` | yshjy 解出的文件 sha256 清单与 `7z x` **完全一致**，退出码 0，**0 个 part 残留** |
+| 分卷样本 `rar_vol_sample/`（4 卷） | 正常解出 `split.bin`，0 个 part 残留 |
+| 单测 `rar写入器_写的过程中只有part_结束后才出现正式名` | 写的时候断言正式名不存在、part 存在；Drop 后正式名出现、part 消失、内容一致 |
+| 单测 `rar写入器_取消时既不留正式名也不留part` | 取消后两样都不存在（改之前是「先写坏正式名再删」，中间被杀就永久留半截） |
+| 原有 `无密码_rar_能解出` | 追加断言：解完目录里不许有 `.yshjy-part` |
+
+**诚实交代一个验证缺口**：这台机器上没有 `rar` 命令，仓库里的 RAR 样本又只有几 KB（9.3 KB / 1.7 KB），
+**造不出「解到一半被 kill -9」的实测场景**，所以那一条只有单测覆盖（`PartFile` 本身另有 7 条单测）。
+ZIP / 7z / tar 的同类场景是在 `tests/resume.sh` 里真打断过的。
+
+回归：单测 **334** 通过 / 0 失败（新增 2 条 + 1 处断言）、协议 12、doctest 2；
+`clippy --all-targets -D warnings` 干净；`tests/all.sh` 23 通过 / 0 失败。
+
 ## [0.9.26-c] · 2026-10-27（阶段 1 梯队四·第 11 项：伪装 / 自解压打包也报进度）
 
 > 由来：`docs/TODO.md` 梯队四第 11 项 ——「打 2 GB 伪装包时进度条在动」。
