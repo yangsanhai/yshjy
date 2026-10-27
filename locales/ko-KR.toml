@@ -148,6 +148,7 @@ password_tried = "   🔒 이 압축 파일은 잠겨 있습니다 ({count}회 �
 show_config = "현재 설정 (파일: {path})"
 import_done = "✅ 비밀번호 {added}개를 가져왔습니다 (총 {total}개) → {path}"
 diag_line = "   ℹ {text}: {detail}"
+resume_line = "   ⏩ 지난번에 멈춘 곳부터 이어서 합니다 (완료 {done}개)"
 fail_line = "❌ {input}: {reason}"
 pack_start = "📦 {count}개 항목 패킹 → {out}"
 pack_locked = "   암호화: {mask} (표시하지 않음)"

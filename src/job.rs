@@ -789,6 +789,26 @@ pub fn run_job(
         }
     }
 
+    // ①'' 断点续传：上次没解完的话，从这里接着来
+    //
+    // 放在空间预检**之后**：预检就把人拦下来的话，没必要在配置目录里留一份空记录。
+    // 记录本身是「增强」——打不开就静默从头解，绝不让解压因为这个失败。
+    let resume = crate::resume::ResumeLog::open(&job.input, &dest);
+    let ctx = match &resume {
+        Some(log) => {
+            if log.有记录() {
+                // 让外壳能说一句「接着上次的进度来」——否则用户看着一开始就有一大截进度、
+                // 前面一堆文件没动，会以为是 bug
+                ctx.emit(&crate::event::Event::Resumed {
+                    job: job.id,
+                    done: log.原有条数(),
+                });
+            }
+            ctx.with_resume(log.clone())
+        }
+        None => ctx,
+    };
+
     // ② 解压
     let outcome = match prepared {
         Err(e) => {
@@ -809,6 +829,18 @@ pub fn run_job(
     // 收尾：保证界面看到的进度是最终值
     stats.millis = elapsed_ms(started);
     ctx.force_progress(None);
+
+    // 续传记录怎么处置：
+    // - 全解完了 → 删（留着只会让下次误跳过）
+    // - 部分成功 / 用户取消 → **留**（这正是下次要接着解的）
+    // - 别的情况且一条记录都没攒下（不是压缩包、空间不够…）→ 删，别在配置目录里留垃圾
+    if let Some(log) = &resume {
+        if matches!(outcome, Outcome::Success) {
+            log.finish();
+        } else if log.已记录条数() == 0 {
+            log.discard();
+        }
+    }
 
     // 解压完原包怎么办（DESIGN §17.2）：默认留着；配置成 trash 才移回收站。
     // 只在成功 / 部分成功时动 —— 失败时原包是用户重试的唯一材料。

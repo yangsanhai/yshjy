@@ -43,6 +43,7 @@ pub mod repair;
 pub mod report;
 pub mod rescue;
 pub mod restore;
+pub mod resume;
 pub mod safety;
 pub mod scan;
 pub mod select;

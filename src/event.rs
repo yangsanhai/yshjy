@@ -279,6 +279,16 @@ pub enum Event {
         /// 触发的上限
         limit: u64,
     },
+    /// 这次是**接着上次没解完的**往下解（断点续传）
+    ///
+    /// 界面收到后给一句「接着上次的进度来（已完成 N 项）」，让用户知道
+    /// 为什么一开始就有一大截进度、为什么跳过了前面那些文件。
+    Resumed {
+        /// 任务号
+        job: u64,
+        /// 上次已经解完的条目数
+        done: u64,
+    },
     /// 诊断提醒（不打断流程）
     Diagnostic {
         /// 任务号
@@ -309,6 +319,7 @@ impl Event {
             | Event::PasswordTry { job, .. }
             | Event::SpaceShortage { job, .. }
             | Event::AskUser { job, .. }
+            | Event::Resumed { job, .. }
             | Event::Diagnostic { job, .. } => *job,
         }
     }
@@ -341,6 +352,7 @@ impl Event {
             Event::PasswordTry { .. } => "PASSWORD_TRY",
             Event::SpaceShortage { .. } => "SPACE_SHORTAGE",
             Event::AskUser { .. } => "ASK_USER",
+            Event::Resumed { .. } => "RESUMED",
             Event::Diagnostic { .. } => "DIAGNOSTIC",
         }
     }

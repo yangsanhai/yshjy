@@ -404,20 +404,48 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         };
 
         if is_dir {
+            // 断点续传：上次已经建过这个目录 → 跳
+            if ctx.resume_skip(&name, &out_path, crate::resume::条目种类::目录) {
+                ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
+                continue;
+            }
             if let Err(e) = fs::create_dir_all(&out_path) {
                 report.note_io_error(&e);
                 report
                     .skipped
                     .push((name.clone(), format!("建目录失败: {e}")));
             }
+            ctx.resume_record(&name, &out_path, crate::resume::条目种类::目录);
             // 目录也算一个「做完了」的条目，否则界面上的总数对不上
             ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
             continue;
         }
 
+        // 断点续传：上次已经完整解出过这一条（且磁盘上大小对得上）→ 不重解
+        let 续传种类 = if is_symlink {
+            crate::resume::条目种类::链接
+        } else {
+            crate::resume::条目种类::文件
+        };
+        if ctx.resume_skip(&name, &out_path, 续传种类) {
+            let 大小 = if is_symlink {
+                0
+            } else {
+                std::fs::metadata(&out_path).map(|m| m.len()).unwrap_or(0)
+            };
+            ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
+            report.files.push(ExtractedFile {
+                name,
+                out_path,
+                size: 大小,
+                encrypted,
+            });
+            continue;
+        }
+
         // 同名处理
         if out_path.exists() {
-            match opts.overwrite {
+            match ctx.同名策略(opts.overwrite) {
                 Overwrite::Skip => {
                     report
                         .skipped
@@ -470,6 +498,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             let _ = fs::remove_file(&out_path);
             match std::os::unix::fs::symlink(&目标, &out_path) {
                 Ok(_) => {
+                    ctx.resume_record(&name, &out_path, crate::resume::条目种类::链接);
                     ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
                     report.files.push(ExtractedFile {
                         name,
@@ -640,6 +669,8 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 // 把归档里记录的时间戳 / 权限还原到刚解出来的文件上
                 // （尽力而为：设不上不该把一次成功解压变成失败）
                 还原条目属性(&out_path, &file, &mut report);
+                // 断点续传：到这一步文件才算**真的完整落地**（原子改名 + 属性还原都过了）
+                ctx.resume_record(&name, &out_path, crate::resume::条目种类::文件);
                 ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, written);
                 report.files.push(ExtractedFile {
                     name,

@@ -381,6 +381,8 @@ where
 
     let rep2 = report.clone();
     let bud2 = budget.clone();
+    // 闭包里要用「有没有密码」这个事实，但 `pw_bytes` 已经被 move 进去了 —— 先取值
+    let 有密码 = pw_bytes.is_some();
 
     let res = 跑(pw_bytes.as_deref(), Box::new(move |meta| {
         // RAR 回调不给条目序号，我们自己数（**1-based**，与预览显示的号一致）
@@ -397,7 +399,13 @@ where
         if meta.is_directory {
             let dir = safety::resolve_safe(&dest, &name)
                 .unwrap_or_else(|_| dest.join(name.replace(['/', '\\'], "_")));
+            // 断点续传：上次已经建过 → 跳
+            if ctx_owned.resume_skip(&name, &dir, crate::resume::条目种类::目录) {
+                ctx_owned.entry_done(idx, &name, ItemResult::Ok, 0);
+                return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
+            }
             let _ = fs::create_dir_all(&dir);
+            ctx_owned.resume_record(&name, &dir, crate::resume::条目种类::目录);
             ctx_owned.entry_done(idx, &name, ItemResult::Ok, 0);
             return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
         }
@@ -420,8 +428,25 @@ where
 
         // 同名策略
         let mut out_path = safe_path;
+
+        // 断点续传：上次完整解过这条 → 不重解（必须在同名处理之前，理由同 7z）
+        if ctx_owned.resume_skip(&name, &out_path, crate::resume::条目种类::文件) {
+            let 大小 = std::fs::metadata(&out_path).map(|m| m.len()).unwrap_or(0);
+            ctx_owned.entry_done(idx, &name, ItemResult::Ok, 0);
+            {
+                let mut r = rep2.borrow_mut();
+                r.files.push(crate::extract::ExtractedFile {
+                    name: name.clone(),
+                    out_path: out_path.clone(),
+                    size: 大小,
+                    encrypted: 有密码,
+                });
+            }
+            return Ok(Box::new(std::io::sink()) as Box<dyn Write>);
+        }
+
         if out_path.exists() {
-            match overwrite {
+            match ctx_owned.同名策略(overwrite) {
                 crate::extract::Overwrite::Skip => {
                     rep2.borrow_mut()
                         .skipped
@@ -587,6 +612,9 @@ impl Drop for CountingWriter {
         // 成功写完才登记
         let mut r = self.report.borrow_mut();
         r.bytes_written += self.written;
+        // 断点续传：Drop 只在「写成功、没被取消」这条路上走到这里，正是该记的时刻
+        self.ctx
+            .resume_record(&self.name, &self.out_path, crate::resume::条目种类::文件);
         self.ctx
             .entry_done(self.idx, &self.name, ItemResult::Ok, self.written);
         r.files.push(crate::extract::ExtractedFile {

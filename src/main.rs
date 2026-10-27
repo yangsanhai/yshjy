@@ -1220,6 +1220,14 @@ impl yshjy::event::EventSink for 终端出口 {
                 self.清行();
                 eprintln!("   ⚠ {} 没解开（{}）", path, result.人话());
             }
+            Event::Resumed { done, .. } => {
+                // 断点续传：让用户明白「为什么一上来就有一大截进度、前面那堆文件没动」
+                self.清行();
+                eprintln!(
+                    "{}",
+                    文案().t("cli.resume_line", &[("done", &done.to_string())])
+                );
+            }
             Event::Diagnostic { code, note, .. } => {
                 // 「走了慢路」是性能诊断，跟用户无关；只有排查问题时才要
                 // （想看就 --json 拿事件流，那里是完整的）

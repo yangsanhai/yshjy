@@ -43,6 +43,7 @@ pub const 事件种类: &[&str] = &[
     "PASSWORD_TRY",
     "SPACE_SHORTAGE",
     "ASK_USER",
+    "RESUMED",
     "DIAGNOSTIC",
 ];
 
@@ -82,7 +83,13 @@ pub fn hello() -> Value {
         "caps": {
             "preview": true,
             "selective": true,
-            "resume": false,
+            // 断点续传做出来了，但**粒度是「条目之间」**：解到一半被打断，
+            // 已完整解出的文件不再重解；正在写的那个文件要重来。
+            // 这个词是从 itchio/savior 的三级定义借的（none / entry / block），
+            // 用字符串而不是布尔，是因为将来真做了块级续传（peel 那种 frame checkpoint）
+            // 只要把值改成 "block"，前端不用改代码就知道能力升级了。
+            "resume": true,
+            "resume_level": "entry",
             // 关掉窗口后引擎还在后台跑（藏到托盘继续解），这是真做出来了，
             // 所以能力位如实写 true —— 前端可以据此显示「后台继续」。
             "background": true

@@ -148,6 +148,7 @@ password_tried = "   🔒 この圧縮ファイルはロックされています
 show_config = "現在の設定（ファイル：{path}）"
 import_done = "✅ パスワードを {added} 件取り込みました（合計 {total} 件）→ {path}"
 diag_line = "   ℹ {text}：{detail}"
+resume_line = "   ⏩ 前回の続きから再開します（完了済み {done} 件）"
 fail_line = "❌ {input}：{reason}"
 pack_start = "📦 {count} 項目を梱包 → {out}"
 pack_locked = "   暗号化：{mask}（表示しません）"

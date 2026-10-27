@@ -112,6 +112,12 @@ if [ -n "$BIN" ]; then
   run "RAR 缺卷判定（rar_volume.sh）" bash tests/rar_volume.sh "$BIN"
   run "zip 符号链接（zip_symlink.sh）" bash tests/zip_symlink.sh "$BIN"
   run "默认打开方式（mime_default.sh）" bash tests/mime_default.sh gui/linux/yshjy.desktop
+  # 断点续传：默认跑小包（约 10 秒）；--slow 时用大包，中断点更稳
+  if [ "$SLOW" = 1 ]; then
+    run "断点续传（resume.sh 120MB）" bash tests/resume.sh 120
+  else
+    run "断点续传（resume.sh 30MB）" bash tests/resume.sh 30
+  fi
   run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
 else
   skip "协议探针" "没有可执行文件"
