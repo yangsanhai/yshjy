@@ -141,6 +141,57 @@
 
 ---
 
+## 9. 全平台 GUI 与发布流水线（2026-10-28 第二批）
+
+> 由来：用户定下「核心已完成、剩下是把全平台都能用起来」，要求先看业界怎么做再动手。
+> 全部拉到 **`refs/upstream/`**（`--depth 1`；tauri 与 frb 用 `--sparse` 只取需要的目录，共约 260 MB）。
+
+| 目录 | 来源 | 体量 | 为什么选它 |
+|---|---|---|---|
+| `rustdesk/` | rustdesk/rustdesk ⭐127k | 29M | Rust 核心 + Flutter 界面，Win/macOS/Linux/Android/iOS 全齐；打包脚本（`build.py` + `res/DEBIAN` + `msi/` + `PKGBUILD` + `osx-dist.sh`）与 CI 都在仓库里 |
+| `localsend/` | localsend/localsend ⭐96k | 27M | Flutter 全平台 + `packages/localsend_isolates/rust_builder`；CI 拆成「一平台一个 reusable workflow + release.yml 汇总」 |
+| `hiddify-app/` | hiddify/hiddify-app ⭐33k | 114M | Flutter + Rust 核心，**用 ffigen 直连 C ABI**（不是 flutter_rust_bridge）—— 跟我们 `ffi/` 的 JSON 进出设计同路 |
+| `ouch/` | ouch-org/ouch ⭐3.8k | 1.1M | Rust 压缩/解压 CLI 标杆：clap derive + **构建期生成补全与 man 页** + 说人话的错误 |
+| `tauri-bundler/` | tauri-apps/tauri（sparse） | 4.1M | 各平台安装包的权威实现：deb / rpm / AppImage(linuxdeploy) / dmg / msi / nsis |
+| `cargo-dist/` | axodotdev/cargo-dist ⭐2.1k | 15M | 纯 Rust CLI 的发布流水线（shell/powershell/npm/homebrew 安装器 + CI 矩阵） |
+| `fastforge/` | LeanFlutter/flutter_distributor（已改名 fastforge） | 21M | Flutter 桌面一键出 deb/rpm/AppImage/exe/dmg |
+| `flutter_rust_bridge/` | fzyzcjy（sparse：codegen + docs + 集成示例） | 12M | 另一条 FFI 路（rustdesk 走这条），需要自动生成桥接时才看 |
+| `clap/` | clap-rs/clap ⭐16.8k | 6.5M | `clap_complete` / `clap_mangen` 源码 |
+
+### 9.1 终端外壳（CLI）
+
+| 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
+|---|---|---|---|---|
+| **补全与 man 页不手写** | `upstream/ouch/build.rs:20-39`（`include!("src/cli/args.rs")` 拿到同一份 clap 定义，`clap_mangen::generate_to` + `clap_complete::generate_to` 写进 `OUCH_ARTIFACTS_FOLDER`）、`upstream/ouch/Cargo.toml:77-79`（`clap_complete` / `clap_complete_nushell` / `clap_mangen`） | 补全和 man **由 clap 定义在构建期生成**，打包时塞进 deb；`scripts/completions/` 手写副本整个退休 | 新增 `build.rs` 生成段 | ❌ 未做 —— TODO 里「三个补全脚本补齐」应当改成这条（根因是手抄副本会漂移，不是缺内容） |
+| 表格输出 | comfy-table（§8 已有） | 列宽自适应 | `--list` | ❌ |
+| 多任务进度 | indicatif（§8 已有） | `MultiProgress` | `-j 2` | ❌ |
+| 交互多选 | dialoguer（§8 已有） | `MultiSelect` 键位 | `--pick` | ❌ |
+
+### 9.2 全平台 GUI
+
+| 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
+|---|---|---|---|---|
+| **移动端桥接走哪条路** | `upstream/hiddify-app/pubspec.yaml:197-203`（`ffigen:` 配置：`entry-points: hiddify-core/bin/desktop.h` → 输出 `lib/gen/hiddify_core_generated_bindings.dart`）、`:43`（`ffi: ^2.1.2`）、`:139`（`ffigen: ^19.1.0`）；对照 `upstream/rustdesk/build.py:200`（走 `flutter_rust_bridge_codegen` 从 Rust 侧生成 bridge） | **走 ffigen，直打我们已有的 `include/yshjy.h`**，不引 flutter_rust_bridge —— 我们 C ABI 已经是 JSON 进 / 事件出，桥就在 Dart 侧生成，引擎一行不用改 | 新增 `gui/lib/gen/yshjy_bindings.dart` + `FfiTransport` | ❌ 未做，**计划改了**（`docs/BACKEND-SPEC.md:29` 原写 flutter_rust_bridge） |
+| Android 分区存储 | `upstream/localsend/app/lib/util/native/channel/android_channel.dart:10-11`（「Android 10+ 必须用 SAF 访问文件」）+ 全仓 SAF 用法 | 一律「App 私有目录直接写 / 外部目录走 SAF 授权后写」，**不做静默失败** | 移动端「解压到哪」的设计前提 | ❌ 待定设计（先定政策再写码） |
+| 仓库布局 | `upstream/localsend/`（`app/` + `packages/…/rust_builder` + `server/`）、`upstream/hiddify-app/`（`android/ ios/ linux/ macos/ windows/` + `hiddify-core/`） | Rust 核心独立 crate + Flutter app 一层 + 每平台目录 | 我们 `src/` + `ffi/` + `gui/` 已经同构 | ✅ 已同构 |
+| 桌面打包脚本 | `upstream/rustdesk/build.py:737`（deb）/`:849`（从已有二进制组 deb）/`:934`（dmg）/`:958`（Manjaro）/`:969`（Windows）；`upstream/rustdesk/res/DEBIAN/{preinst,postinst,prerm,postrm}` 四件套 | `postinst` 用 `$1 = configure` 分派、`preinst` 里先停服务、`postrm purge` 才删用户配置 —— **按参数分派**正是我们那个「postinst 写错 HOME」事故的根本教训 | `scripts/build-deb.sh`（补 prerm/postrm + 参数分派） | 🟡 部分 |
+
+### 9.3 发布流水线
+
+| 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
+|---|---|---|---|---|
+| **工作流怎么拆** | `upstream/localsend/.github/workflows/`：15 个平台文件（`build_linux_deb_x64.yml` …）+ `release.yml` 只做 `uses:` 汇总（文件头注释写明「各平台单独工作流与发版工作流不会漂移」）+ `winget.yml` | 一平台一个 reusable workflow，`release.yml` 只汇总；版本号各工作流自己从 `pubspec.yaml` 取 | 新建 `.github/workflows/` | ❌ 未做 |
+| 单文件骨架 | `upstream/localsend/.github/workflows/build_linux_deb_x64.yml:1-45`（`workflow_call` + `ubuntu-22.04` 老基线 + 装 gtk3/ayatana + `subosito/flutter-action` + rust toolchain） | **出包别用 `ubuntu-latest`**：基线太新正是我们 AppImage 评估翻车的原因（本机 glibc 2.41）；22.04 是 glibc 2.35 | 同上 | ❌ |
+| 纯 Rust CLI 发版 | `upstream/cargo-dist/dist-workspace.toml:1-20`（`installers = ["shell","powershell","npm","homebrew"]`、`targets = [...目标三元组...]`、`publish-jobs`） | 将来要让终端用户 `brew`/`npm` 一键装时用它，别手写安装脚本 | 暂不做 | ⏸ |
+| 安装包规范 | `upstream/tauri-bundler/crates/tauri-bundler/src/bundle/linux/debian.rs:204-215`（`Depends` 只认配置里给的，**不自动推 ldd**）、`.../linux/appimage/linuxdeploy-plugin-gtk.sh`、`.../windows/nsis/`、`.../macos/dmg/` | 依赖闭包必须自己算（我们 `build-deb.sh` 已经这么做，方向是对的）；AppImage = linuxdeploy + gtk 插件 + 老基线 | `scripts/build-deb.sh` | ✅ 已对 |
+
+**三条结论（写死，免得下次重新推演）**：
+1. 终端那几件「补齐」活儿的本质是**删手写副本、换成 clap 派生**（补全 + man 页一次解决漂移）。
+2. 移动端桥接**选 ffigen 不选 flutter_rust_bridge**：我们 `ffi/` 的 C ABI 已就绪，ffigen 只在 Dart 侧生成绑定；flutter_rust_bridge 要从 Rust 侧改导出层。
+3. 出包 CI **必须钉老 Ubuntu 基线**（22.04），否则做出来的包在用户机器上跑不起来 —— 与 AppImage 那次评估同一个坑。
+
+---
+
 ## 7. 台账维护
 
 `refs/tech/` 共 383 处 🔄，其中约三成其实已实现（例：`7zip-工程层.md:131-133`
