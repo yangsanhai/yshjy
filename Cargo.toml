@@ -53,6 +53,8 @@ tar = "0.4.46"
 thiserror = "2.0.21"
 toml = "1.1.8"
 zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2", "aes-crypto"] }
+crossterm = "0.29.0"
+unicode-width = "0.2.2"
 
 [dev-dependencies]
 rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }
