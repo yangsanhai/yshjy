@@ -101,14 +101,22 @@ fi
 # 只给**装包这个人**设默认（$SUDO_USER），不动其他用户，也不用 system 级默认。
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] \
    && command -v xdg-mime >/dev/null 2>&1; then
-  for m in application/zip application/x-zip-compressed \
-           application/x-7z-compressed application/vnd.rar \
-           application/x-rar application/x-rar-compressed \
-           application/x-tar application/x-compressed-tar \
-           application/gzip application/x-xz application/zstd \
-           application/x-bzip2 application/x-brotli application/x-lz4; do
-    su -s /bin/sh "$SUDO_USER" -c "xdg-mime default yshjy.desktop $m" 2>/dev/null || true
-  done
+  # 注意 HOME：`su -s /bin/sh user -c …`（不带横杠）会继承 root 的 HOME，
+  # xdg-mime 于是把默认项写进 /root/.config/mimeapps.list —— 用户账号里一条都没写成，
+  # 装完双击压缩包还是 Nautilus。所以 HOME / XDG_CONFIG_HOME 必须显式指回用户家目录。
+  UHOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+  if [ -n "$UHOME" ] && [ -d "$UHOME" ]; then
+    for m in application/zip application/x-zip-compressed \
+             application/x-7z-compressed application/vnd.rar \
+             application/x-rar application/x-rar-compressed \
+             application/x-tar application/x-compressed-tar \
+             application/gzip application/x-xz application/zstd \
+             application/x-bzip2 application/x-brotli application/x-lz4; do
+      su -s /bin/sh "$SUDO_USER" -c \
+        "HOME='$UHOME' XDG_CONFIG_HOME='$UHOME/.config' xdg-mime default yshjy.desktop '$m'" \
+        2>/dev/null || true
+    done
+  fi
 fi
 exit 0
 EOF
@@ -124,6 +132,9 @@ chmod 755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 
 # ── 手册与补全 ──
 gzip -9c docs/yshjy.1 > "$STAGE/usr/share/man/man1/yshjy.1.gz"
+# gzip 重定向出来的文件跟着 shell 的 umask 走，实测打进去是 664（组可写），
+# Debian 规范要求 644 —— 显式改一次，别指望 umask。
+chmod 644 "$STAGE/usr/share/man/man1/yshjy.1.gz"
 install -m644 scripts/completions/yshjy.bash "$STAGE/usr/share/bash-completion/completions/yshjy"
 install -m644 scripts/completions/_yshjy     "$STAGE/usr/share/zsh/vendor-completions/_yshjy"
 install -m644 scripts/completions/yshjy.fish "$STAGE/usr/share/fish/vendor_completions.d/yshjy.fish"
@@ -180,10 +191,17 @@ LIST=$(dpkg-deb -c "$OUT" | awk '{print $6}' | sed 's|^\./||')
 fail=0
 for f in \
   usr/bin/yshjy \
+  usr/bin/yshys \
   usr/lib/yshjy/gui/yshjy_gui \
   usr/lib/yshjy/gui/lib/libapp.so \
+  usr/lib/yshjy/gui/data/icudtl.dat \
   usr/share/applications/yshjy.desktop \
-  usr/share/icons/hicolor/256x256/apps/yshjy.png; do
+  usr/share/icons/hicolor/256x256/apps/yshjy.png \
+  usr/share/man/man1/yshjy.1.gz \
+  usr/share/bash-completion/completions/yshjy \
+  usr/share/zsh/vendor-completions/_yshjy \
+  usr/share/fish/vendor_completions.d/yshjy.fish \
+  usr/share/nautilus/scripts/用杨三海解压; do
   if ! printf '%s\n' "$LIST" | grep -qx "$f"; then
     echo "!! 包里缺：$f" >&2
     fail=1
@@ -191,9 +209,32 @@ for f in \
 done
 PKG_V=$(dpkg-deb -f "$OUT" Version)
 [ "$PKG_V" = "$V" ] || { echo "!! 包版本 $PKG_V ≠ 代码版本 $V" >&2; fail=1; }
+
+# ① 包里的桌面项必须是 14 种格式（0.9.25-c 就是打了旧 desktop、只 7 种，装完双击仍归 Nautilus）
+MIME_N=$( (dpkg-deb --fsys-tarfile "$OUT" | tar -xO ./usr/share/applications/yshjy.desktop \
+         2>/dev/null | grep '^MimeType' | tr ';' '\n' | sed '/^$/d' | wc -l) || echo 0 )
+[ "$MIME_N" = "14" ] || { echo "!! 桌面项只认领 $MIME_N 种格式（应为 14）—— 是不是打了旧 desktop？" >&2; fail=1; }
+
+# ② 包内引擎自称的版本必须跟包版本一致（否则界面状态栏和 dpkg 说的不是一个号）
+TMPX=$(mktemp -d); trap 'rm -rf "$STAGE" "$TMPX"' EXIT
+dpkg-deb -x "$OUT" "$TMPX"
+# 注意：--version 的输出是「yshjy 0.9.26（常用版）—— …」，版本号后面紧跟中文括号，
+# awk '{print $2}' 会把「0.9.26（常用版）」整块取出来 —— 必须用正则抠版本号本身。
+ENG_V=$( ("$TMPX/usr/bin/yshjy" --version 2>/dev/null | head -1 \
+          | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.-]*' | head -1) || echo "<跑不起来>" )
+[ "$ENG_V" = "$V" ] || { echo "!! 包内引擎自称 $ENG_V ≠ 包版本 $V（是不是拿了旧二进制？）" >&2; fail=1; }
+
+# ③ 安装钩子里不许出现「不带 HOME 的 su + xdg-mime」（那个组合会把默认项写进 /root）
+if dpkg-deb -e "$OUT" "$TMPX/DEBIAN" 2>/dev/null || dpkg-deb --control "$OUT" "$TMPX/DEBIAN" 2>/dev/null; then
+  if grep -q 'xdg-mime default' "$TMPX/DEBIAN/postinst" 2>/dev/null \
+     && ! grep -q "HOME=" "$TMPX/DEBIAN/postinst" 2>/dev/null; then
+    echo "!! postinst 里的 xdg-mime 没带 HOME——会写进 /root/.config/mimeapps.list" >&2
+    fail=1
+  fi
+fi
 [ "$fail" -eq 0 ] || { echo "!! 自查未通过" >&2; exit 1; }
 
-echo "   ✅ 自查通过：CLI + GUI + 菜单项 + 图标 + 版本 $PKG_V 全在"
+echo "   ✅ 自查通过：CLI + GUI + 菜单项(14 种格式) + 图标 + man + 三种补全 + 右键脚本，版本 $PKG_V"
 echo
 echo "安装： sudo apt install ./$OUT"
 echo "卸载： sudo apt remove yshjy"

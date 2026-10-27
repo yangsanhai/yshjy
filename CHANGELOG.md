@@ -2,7 +2,56 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.9.26-c] · 2026-10-27（阶段 1 梯队四·第 12 项：RAR 路径接原子写入）
+## [0.9.26] · 2026-10-28（第二十一批 · 阶段 0 T5：装包与发布检查）
+
+> 由来：阶段 0 体检的 T5「装包与发布检查」是最后一项（用户要求放最后）。这轮做了三件事：
+> **对外版本号去掉 `-c`**、**deb 逐项核对并把两个真事故固化成断言**、**AppImage 评估**（结论本轮不做）。
+> 完整核对表与 AppImage 配方见 **`docs/RELEASE-CHECK.md`**。
+
+### 一、对外版本号 `0.9.26`（用户定：就在现号上去掉 `-c`，保留老习惯）
+
+五处同时改，少一处就会出现「dpkg 说一个号、界面状态栏说另一个号」：
+`Cargo.toml` / `gui/pubspec.yaml` / `docs/yshjy.1` 的 `.TH` / `docs/PROTOCOL.md` 两份示例的 `engine` /
+`CHANGELOG` + `HANDOFF`。改前实际状态是**三处落后**：man 页与 PROTOCOL 示例还停在 `0.9.24-c`。
+
+### 二、deb 逐项核对（`scripts/test-packages.sh` 重写，32 项通过 / 0 失败）
+
+原来的验收脚本把版本号写死成 `0.9.21-c` —— 跑起来「全 PASS」，验的却是三个月前的老包。
+现在自动取 `dist/` 里最新的 deb 与 tar.gz，并把这些固化成断言：
+
+- 元数据六项齐全、包名/架构对得上、Depends 含 `libc6` 与 `libgtk-3`
+- 文件表 11 项（CLI / GUI / `libapp.so` / `icudtl.dat` / 桌面项 / 图标 / man / 三种补全 / Nautilus 右键脚本）
+- 属性：全部 `root/root`、man 页必须 `644`
+- **依赖是否真够**：`libgtk-3-0t64` 递归闭包 279 个包 vs GUI 实测 70 个 `.so` 逐个反查归属 → 无缺口
+  （唯一报警的 `libdl.so.2` 是 dpkg 把 `libc6-i386` 的 32 位副本认错了，干净机器不会缺）
+- 功能：用**包里**的二进制真打包成伪装视频 → 真解回来 → `cmp` 逐字节一致
+- tar.gz：sha256、解包可运行、**版本必须与 deb 同源**
+
+### 三、修掉两个真事故（都加了断言，不许再犯）
+
+1. **装完 deb，双击压缩包还是被 Nautilus 抢走**：`postinst` 里
+   `su -s /bin/sh "$SUDO_USER" -c "xdg-mime default …"` —— 不带横杠的 `su` **继承 root 的 HOME**，
+   默认项写进了 `/root/.config/mimeapps.list`，用户账号里一条都没写成。
+   修法：先 `getent passwd` 取真家目录，再在 `su -c` 里显式设 `HOME=` / `XDG_CONFIG_HOME=`。
+   断言：postinst 里有 `xdg-mime default` 就必须同时出现 `HOME=`。
+2. **0.9.25-c 的桌面项只认领 7 种格式**（源码早已 14 种）——多出来的 7 种用户根本摸不到，
+   说明那个包是拿旧 desktop 打的。修法：`build-deb.sh` 自查加死断言「包内 MimeType 计数 = 14」，
+   数不对拒绝出包。
+
+顺带：man 页打进包是 `664`（gzip 重定向跟 umask 走）→ 显式 `chmod 644`；
+`build-deb.sh` 的自检从 5 项扩到 11 项 + 三条事故断言（含「包内引擎自称版本 = 包版本」——
+它当场抓到 `dist/` 里躺着的 tar.gz 还是 `0.9.23-c`）。
+
+### 四、AppImage 评估：本轮不做（配方已留档）
+
+不是做不出来，是**在本机（Debian 13，glibc 2.41）构建出来的 AppImage 基本没人能跑** ——
+glibc 向后兼容不向前兼容。要做必须用容器（Debian 12 bookworm，glibc 2.36）当基线，
+外加按 KDAB 的实战结论排除图形栈（`libGL*/libEGL*/libGLES*/libgbm*/libdrm*/libwayland-*`、
+`libc6/libstdc++6/libgcc-s1/zlib1g`）而只捆 GTK3 + gdk-pixbuf loaders，体积约 60–80 MB
+（deb 才 9.7 MB，因为用宿主 GTK）。用户和朋友的机器都是 Debian/Ubuntu 系，收益对不上代价。
+完整配方写进 `docs/RELEASE-CHECK.md` §4，将来要做照着做，不用重新调研。
+
+## [0.9.26] · 2026-10-27（第二十批 · 阶段 1 梯队四·第 12 项：RAR 路径接原子写入）
 
 > 由来：`docs/TODO.md` 梯队四表尾那条 —— 「RAR 暂未接 `PartFile`，库自己管 writer 生命周期」。
 > 后果和梯队一第 1 项修的那个老毛病一样：解到一半被 `kill -9` / 断电 / 磁盘满时，磁盘上留下的是
@@ -73,7 +122,7 @@ RAR 原子落盘探针：7 通过
 回归：单测 **334** 通过 / 0 失败（新增 2 条 + 1 处断言）、协议 12、doctest 2；
 `clippy --all-targets -D warnings` 干净；`tests/all.sh` **24 通过 / 0 失败 / 171 秒**（新增 RAR 探针）。
 
-## [0.9.26-c] · 2026-10-27（阶段 1 梯队四·第 11 项：伪装 / 自解压打包也报进度）
+## [0.9.26] · 2026-10-27（阶段 1 梯队四·第 11 项：伪装 / 自解压打包也报进度）
 
 > 由来：`docs/TODO.md` 梯队四第 11 项 ——「打 2 GB 伪装包时进度条在动」。
 > 实测（真机械盘）：打 2 GB 伪装包用了 **183 秒，全程零进度事件**，
@@ -138,7 +187,7 @@ PACK_PROGRESS 事件数：82（修之前 0）
 界面侧不用改：`pack_page.dart` 与 `app_shell.dart` 早就订阅了 `PACK_PROGRESS`，
 只是以前没有数据可收。
 
-## [0.9.26-c] · 2026-10-27（阶段 1 梯队四·第 10 项：断点续传）
+## [0.9.26] · 2026-10-27（阶段 1 梯队四·第 10 项：断点续传）
 
 > 由来：`docs/TODO.md` 梯队四第 10 项。真人会撞上的场景是**大的包解到一半被打断**
 > —— 关机、断电、关窗口、误点取消。以前只能从头再来一遍（14 GB 的包 = 40 分钟白干）。
@@ -241,7 +290,7 @@ PACK_PROGRESS 事件数：82（修之前 0）
 `clippy --all-targets -D warnings` 干净；协议契约 12 项符合 golden；
 `flutter test` 13 条全过；`flutter build linux --debug` 成功。
 
-## [0.9.26-c] · 2026-10-24（阶段 1 梯队一·第 1 项：解压原子写入）
+## [0.9.26] · 2026-10-24（阶段 1 梯队一·第 1 项：解压原子写入）
 
 > 由来：阶段 0 体检 T9-P1 / T8-P6 实测（证据见 `docs/AUDIT-PHASE0.md`）——
 > 解压写到一半被中断（磁盘满 / 拔盘 / 取消 / 崩溃 / SIGKILL）时，磁盘上留下的是
