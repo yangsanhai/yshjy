@@ -18,7 +18,17 @@
 > **AppImage：本轮不做**（不是做不出来，是本机 glibc 2.41 为基线做出来的没人能跑；要用 bookworm
 > 容器基线 + 排除图形栈 + 只捆 GTK3，体积 60–80 MB vs deb 9.7 MB，收益对不上）。完整配方留在
 > `docs/RELEASE-CHECK.md` §4，将来要做照抄，不用重新调研。
-> **下一步**：装 0.9.26 让用户亲手验（断点续传 / 打包进度条 / 双击 zip 归我们），确认好用再谈对外发布。
+> **2026-10-28 第二批（参考项目 + 方向定调）**：用户拍板「核心已完成，剩下是**终端界面 + 各平台图形界面**」，
+> 并要求先看业界怎么做。九份参考真身已拉到 **`refs/upstream/`**（`rustdesk` / `localsend` / `hiddify-app` /
+> `ouch` / `tauri-bundler` / `cargo-dist` / `fastforge` / `flutter_rust_bridge` / `clap`，约 260 MB），
+> 台账写在 **`docs/REFERENCE-INDEX.md` §9**（含源码行号，下次照抄不用重查）。**三条结论**：
+> ① 补全与 man 页改成 **clap 构建期自动生成** —— 实测 `--help` 有 35 个长选项、手写补全只登记 18 个，手抄必然漂移；
+> ② 移动端桥接走 **ffigen**（我们 `ffi/` 的 C ABI 已就绪，引擎不用改），**不走 flutter_rust_bridge**；
+> ③ 出包 CI **必须钉 ubuntu-22.04 基线**（同 AppImage 那次翻车的坑）。
+> **用户改口径：先不上 GitHub** —— 先做「本机能出的包 + 界面功能」：Linux deb/tar 现成；Windows **命令行** exe 可交叉编译
+> （目标与 mingw 已装，wine 可本机验）；安卓 APK 可出但需装 Android SDK + NDK（8–10 G，待用户点头）。
+> **出不了**：Windows 图形界面版、macOS、iOS —— 这三个平台必须在对应系统上编，别承诺。
+> **下一步**：开工第 1 行 —— CLI 收口（补全/man 自动生成 → `--pick` 全屏勾选 → `--list` 表格）。
 
 > **2026-10-27 状态：梯队四第 12 项（RAR 接原子写入）已完成 —— 梯队四全清** —— 伪装 / 自解压 / 普通三条路径都报
 > `PACK_PROGRESS`；新增 `pack::PackTick`（`Wrote` + `TotalHint`，拼装段换分母）、
