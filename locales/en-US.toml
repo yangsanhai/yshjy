@@ -66,6 +66,9 @@ COMMON OPTIONS:
   --log <file>                    write a log file (for bug reports)
   --no-color                      disable colors (pipe/log friendly)
   --keep                          keep the intermediate ZIP when packing
+  --level 0-9                     pack compression level: 0 = store (fastest), 9 = smallest (default 6)
+  --sfx / --sfx-linux             pack a self-extracting archive (.exe / .sh) that unpacks itself
+  --caps                          show the capability table per format (extract / pack / encryption / volumes / resume)
 
 EXAMPLES:
   yshjy movie.mp4                 extract the archive hidden inside a video

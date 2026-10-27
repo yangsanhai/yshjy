@@ -60,6 +60,9 @@ OPCIONES HABITUALES:
   --log <archivo>                 escribir un registro en archivo (para reportes)
   --no-color                      sin colores (para tuberías/registros)
   --keep                          conservar el ZIP intermedio al empaquetar
+  --level 0-9                     nivel de compresión al empaquetar: 0 = sin comprimir (rápido), 9 = tamaño mínimo (por defecto 6)
+  --sfx / --sfx-linux             empaquetar como archivo autoextraíble (.exe / .sh)
+  --caps                          mostrar la tabla de capacidades por formato (extraer / empaquetar / cifrado / volúmenes / reanudar)
 
 EJEMPLOS:
   yshjy movie.mp4                 extraer el archivo escondido dentro de un vídeo
