@@ -44,6 +44,11 @@ pub struct UnpackCtx {
     ///
     /// 自动链对 Big5/SJIS 名字常常「合法但解错」（静默乱码），只能让用户手动指定。
     pub encoding: Option<String>,
+    /// 断点续传记录（`None` = 没开续传，行为与以前完全一致）
+    ///
+    /// 挂在 ctx 上而不是塞进 `UnpackOptions`：解码器拿到的参数结构体是**纯配置**，
+    /// 而这个是「会边跑边变的运行期状态」（要写盘、要计数），本质是上下文不是参数。
+    pub resume: Option<Arc<crate::resume::ResumeLog>>,
     /// 上次发进度事件的时间（节流用）
     last_emit: Arc<Mutex<Instant>>,
 }
@@ -57,6 +62,7 @@ impl UnpackCtx {
             progress: ProgressSnapshot::new(),
             cancel: CancelToken::new(),
             encoding: None,
+            resume: None,
             // 初始时间戳往前推一个间隔，保证**第一条进度就能发出去**
             // （否则小任务会一条进度事件都没有，界面看起来像卡住了）
             last_emit: Arc::new(Mutex::new(
@@ -71,6 +77,76 @@ impl UnpackCtx {
     pub fn with_encoding(mut self, encoding: Option<String>) -> Self {
         self.encoding = encoding;
         self
+    }
+
+    /// 挂上断点续传记录（见 [`UnpackCtx::resume`]）
+    pub fn with_resume(mut self, log: Arc<crate::resume::ResumeLog>) -> Self {
+        self.resume = Some(log);
+        self
+    }
+
+    /// 这个条目上次已经完整解完了吗？
+    ///
+    /// 判定通过时**顺手把它的字节数补进进度** —— 否则断点续传会让进度条
+    /// 永远停在断点位置（跳过的条目没人上报），用户看起来像卡死。
+    ///
+    /// 调用方拿到 `true` 时该做的三件事：`entry_done(Ok)`、
+    /// 往报告的 `files` 里补一条、`continue` 到下一项。
+    pub fn resume_skip(
+        &self,
+        name: &str,
+        out_path: &std::path::Path,
+        种类: crate::resume::条目种类,
+    ) -> bool {
+        let Some(log) = &self.resume else {
+            return false;
+        };
+        if !log.should_skip(name, out_path, 种类) {
+            return false;
+        }
+        if let Some(n) = log.记录大小(name) {
+            self.advance(n, Some(name));
+        }
+        true
+    }
+
+    /// 本次是不是「接着上次解」的会话（有历史记录）
+    pub fn 是续传会话(&self) -> bool {
+        self.resume.as_ref().map(|l| l.有记录()).unwrap_or(false)
+    }
+
+    /// 同名文件已存在时，这一次实际该用哪套策略
+    ///
+    /// # 为什么续传会话里要无视用户配置、强制覆盖
+    ///
+    /// 续传会话里存在一个**很窄但真实**的危险状态：「磁盘上已经有这个文件、
+    /// 续传记录里却没有它」。成因是上次崩在了
+    /// `原子改名成功` → `续传记录写下去` 之间的那几微秒（随机 kill 压测抓到过）。
+    ///
+    /// 这时如果按默认的 `Rename` 策略走，会多出一个「第033集 (1).bin」——
+    /// 用户看到的是莫名其妙的重复文件，而真正的成品其实早就在那儿了。
+    /// 所以续传会话里一律按「覆盖重解」处理：记录里没有的条目，
+    /// 磁盘上那份就是**来历不明**的，重解一遍最安全（`PartFile` 保证不会留半截）。
+    ///
+    /// 普通解压（没有续传记录）照旧听用户的：宁可多一个 `(1)` 也绝不误删。
+    pub fn 同名策略(&self, 用户配置: crate::extract::Overwrite) -> crate::extract::Overwrite {
+        if self.是续传会话() {
+            crate::extract::Overwrite::Replace
+        } else {
+            用户配置
+        }
+    }
+
+    /// 记下一个**真的解完了**的条目（必须在原子改名成功之后调）
+    pub fn resume_record(
+        &self,
+        name: &str,
+        out_path: &std::path::Path,
+        种类: crate::resume::条目种类,
+    ) {
+        if let Some(log) = &self.resume {
+            log.record(name, out_path, 种类);
+        }
     }
 
     /// 什么都不报告的上下文（测试、内部调用、纯批量模式）

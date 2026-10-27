@@ -188,6 +188,12 @@ class _HomePageState extends State<HomePage> {
         final code = e.data['code']?.toString() ?? '';
         final text = _diagText(code);
         if (!_notes.contains(text)) setState(() => _notes.add(text));
+      case 'RESUMED':
+        // 断点续传：上次没解完，这次接着来。
+        // 必须给用户一句话，否则「一上来就有一大截进度、前面那堆文件没动」会被当成 bug。
+        final done = (e.data['done'] as num?)?.toInt() ?? 0;
+        final text = '接着上次没解完的来（上次已完成 $done 项）';
+        if (!_notes.contains(text)) setState(() => _notes.add(text));
       case 'PASSWORD_TRY':
         setState(() {
           _pwTry = (e.data['index'] as num?)?.toInt() ?? 0;

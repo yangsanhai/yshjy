@@ -148,6 +148,7 @@ password_tried = "   🔒 Архив зашифрован (попыток: {coun
 show_config = "Текущие настройки (файл: {path})"
 import_done = "✅ Импортировано паролей: {added} (всего {total}) → {path}"
 diag_line = "   ℹ {text}: {detail}"
+resume_line = "   ⏩ Продолжаем с места прошлой остановки (уже готово записей: {done})"
 fail_line = "❌ {input}: {reason}"
 pack_start = "📦 Упаковка {count} элемент(ов) → {out}"
 pack_locked = "   Шифрование: {mask} (скрыто)"

@@ -320,11 +320,17 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
             }
 
             if entry.is_directory() {
+                // 断点续传：上次已经建过 → 跳
+                if ctx.resume_skip(&name, dest_path, crate::resume::条目种类::目录) {
+                    ctx.entry_done(idx, &name, ItemResult::Ok, 0);
+                    return Ok(true);
+                }
                 if let Err(e) = std::fs::create_dir_all(dest_path) {
                     report
                         .skipped
                         .push((name.clone(), format!("建目录失败: {e}")));
                 }
+                ctx.resume_record(&name, dest_path, crate::resume::条目种类::目录);
                 ctx.entry_done(idx, &name, ItemResult::Ok, 0);
                 return Ok(true);
             }
@@ -347,8 +353,28 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
 
             // 同名策略
             let mut out_path = safe_path;
+
+            // 断点续传：上次完整解过这条（磁盘大小也对）→ 跳过写盘
+            //
+            // 注意这一步**必须**在同名处理之前：否则「同名跳过」策略会把续传要跳的
+            // 文件当成「已存在冲突」记进跳过列表，用户会看到一堆莫名其妙的「已跳过」。
+            //
+            // 7z 固实压缩无法真的跳过解码（后面的条目位置依赖前面的数据流），
+            // 这里省掉的是写盘那一步；非固实包则连解码都省了。
+            if ctx.resume_skip(&name, &out_path, crate::resume::条目种类::文件) {
+                let 大小 = std::fs::metadata(&out_path).map(|m| m.len()).unwrap_or(0);
+                ctx.entry_done(idx, &name, ItemResult::Ok, 0);
+                report.files.push(crate::extract::ExtractedFile {
+                    name,
+                    out_path,
+                    size: 大小,
+                    encrypted: opts.password.is_some(),
+                });
+                return Ok(true);
+            }
+
             if out_path.exists() {
-                match overwrite {
+                match ctx.同名策略(overwrite) {
                     crate::extract::Overwrite::Skip => {
                         report
                             .skipped
@@ -455,6 +481,8 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                 return Ok(true);
             }
             report.bytes_written += written;
+            // 断点续传：原子改名成功才算完整落地
+            ctx.resume_record(&name, &out_path, crate::resume::条目种类::文件);
             ctx.entry_done(idx, &name, ItemResult::Ok, written);
             report.files.push(crate::extract::ExtractedFile {
                 name,

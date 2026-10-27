@@ -225,6 +225,15 @@ pub fn decompress_stream_ctx<R: Read>(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "output".to_string());
 
+    // 断点续传：单流压缩整包只有一个输出文件，上次解完 → 直接算完成（0 秒）
+    //
+    // 单流**没法**中途续（破坏性压缩没有「第几个文件」的概念），
+    // 但「解完过一次」这个事实仍然值得记住：上次解到 90% 断了要重来，
+    // 上次其实已经解完了却被判失败（比如设置属性时出错），下次就该瞬间过。
+    if ctx.resume_skip(&out_label, out_path, crate::resume::条目种类::文件) {
+        return Ok(std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0));
+    }
+
     // XZ 特殊：`lzma-rs` 的接口是「输入 reader + 输出 writer」，不走 Read 适配
     if fmt == ArchiveFormat::Xz {
         let src = src;
@@ -250,6 +259,7 @@ pub fn decompress_stream_ctx<R: Read>(
         out.inner.finish().map_err(|e| {
             Error::new(ErrorCode::Internal).context(format!("落盘改名失败: {e}"))
         })?;
+        ctx.resume_record(&out_label, out_path, crate::resume::条目种类::文件);
         ctx.entry_done(0, &out_label, ItemResult::Ok, written);
         return Ok(written);
     }
@@ -304,6 +314,7 @@ pub fn decompress_stream_ctx<R: Read>(
     // 原子落地
     part.finish()
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("落盘改名失败: {e}")))?;
+    ctx.resume_record(&out_label, out_path, crate::resume::条目种类::文件);
     ctx.entry_done(0, &out_label, ItemResult::Ok, total);
     Ok(total)
 }
@@ -470,7 +481,13 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
         // 目录
         if ent.header().entry_type().is_dir() {
             if let Ok(d) = safety::resolve_safe(&opts.dest, &name) {
+                // 断点续传：上次已经建过 → 跳
+                if ctx.resume_skip(&name, &d, crate::resume::条目种类::目录) {
+                    ctx.entry_done(idx, &name, ItemResult::Ok, 0);
+                    continue;
+                }
                 let _ = fs::create_dir_all(&d);
+                ctx.resume_record(&name, &d, crate::resume::条目种类::目录);
             }
             ctx.entry_done(idx, &name, ItemResult::Ok, 0);
             continue;
@@ -511,6 +528,17 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
             if let Some(parent) = 链接路径.parent() {
                 let _ = fs::create_dir_all(parent);
             }
+            // 断点续传：上次链接已经建好 → 跳
+            if ctx.resume_skip(&name, &链接路径, crate::resume::条目种类::链接) {
+                ctx.entry_done(idx, &name, ItemResult::Ok, 0);
+                report.files.push(crate::extract::ExtractedFile {
+                    name,
+                    out_path: 链接路径,
+                    size: 0,
+                    encrypted: false,
+                });
+                continue;
+            }
             let r = if et.is_symlink() {
                 #[cfg(unix)]
                 {
@@ -531,6 +559,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
             };
             match r {
                 Ok(()) => {
+                    ctx.resume_record(&name, &链接路径, crate::resume::条目种类::链接);
                     report.files.push(crate::extract::ExtractedFile {
                         name,
                         out_path: 链接路径,
@@ -557,8 +586,21 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 continue;
             }
         };
+        // 断点续传：上次完整解过这条 → 不重解（必须在同名处理之前，理由同 7z）
+        if ctx.resume_skip(&name, &out_path, crate::resume::条目种类::文件) {
+            let 大小 = std::fs::metadata(&out_path).map(|m| m.len()).unwrap_or(0);
+            ctx.entry_done(idx, &name, ItemResult::Ok, 0);
+            report.files.push(crate::extract::ExtractedFile {
+                name,
+                out_path,
+                size: 大小,
+                encrypted: false,
+            });
+            continue;
+        }
+
         if out_path.exists() {
-            match opts.overwrite {
+            match ctx.同名策略(opts.overwrite) {
                 crate::extract::Overwrite::Skip => {
                     report
                         .skipped
@@ -667,6 +709,8 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 {
                     report.warnings.push(format!("属性没还原上：{e}"));
                 }
+                // 断点续传：原子改名 + 属性还原都过了才算完整落地
+                ctx.resume_record(&name, &out_path, crate::resume::条目种类::文件);
                 ctx.entry_done(idx, &name, ItemResult::Ok, written);
                 report.files.push(crate::extract::ExtractedFile {
                     name,
