@@ -118,6 +118,8 @@ if [ -n "$BIN" ]; then
   else
     run "断点续传（resume.sh 30MB）" bash tests/resume.sh 30
   fi
+  # 打包进度（伪装 / 自解压 / 普通都要报）：150 MB 约 10 秒
+  run "打包进度（pack_progress.sh）" bash tests/pack_progress.sh 150
   run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
 else
   skip "协议探针" "没有可执行文件"
