@@ -102,7 +102,7 @@
 - [x] **帮助补三条**（✅ 9c749ee 已完成，2026-10-28 补勾）：`--level`（压缩级别 0-9，界面打包页已有滑块）、`--sfx` / `--sfx-linux`（自解压包，
   界面已有开关）、`--caps`（各格式能力表，界面设置页已有按钮）。三处引擎都实现了，就是 `--help` 没写。
   验收：`yshjy --help` 能搜到这三个词，且文案与界面上的说法一致。
-- [ ] **补全改成自动生成 ✅ 已完成（2026-10-28，`92ae618`+后续提交）；man 页仍手写 ⬜ 待做**
+- [x] **补全与 man 页都改成自动生成 ✅ 已完成（2026-10-28）** —— 三处手写副本全部退休
   （**不许再手写副本**，做法见 `docs/REFERENCE-INDEX.md` §9.1）：
   原状实测（2026-10-28 用 `target/release/yshjy --help` 数）：**`--help` 共 35 个长选项，手写补全只登记 18 个，
   缺 17 个** —— `--caps --config --cover --encoding --extract-cover --keep --layout --level --log
@@ -113,8 +113,11 @@
   `tests/cli_spec_match.sh` 五条对账探针并挂进 `tests/all.sh`。手写三件套已退休（文件头写明「别手改」）。
   实测：bash 里 `yshjy --imp<TAB>` → `--import-passwords`、`-j<TAB>` → `1 2 4 8`、`--lang<TAB>` → 7 种语言；
   三份补全都从 18 项变 36 项对外选项全在；`bash -n` / `zsh -n` 语法过。
-  **剩下（man 页）**：`docs/yshjy.1` 仍是手写，缺的选项要补齐；版本号那行要从 `CARGO_PKG_VERSION` 取
-  （历史上落后过三个版本）。验收：① 包里 man 页版本号与二进制一致；② man 页里的选项集合 == 表（对账加进探针）。
+  **man 页也已完成**：`docs/yshjy.1` 改由 `docs/yshjy.1.tmpl` + 生成器产出（说明优先取 help 文案；
+  help 里只出现在「用法」段的 6 个选项 —— `--list/--rescue/--report/--no-paths/--help/--version` ——
+  由 `MAN_DESC_OVERRIDES` 补），版本号从 `Cargo.toml` 读（**不再手写**），`build-deb.sh` 打包前自动重新生成。
+  探针已扩到 7 条（补全/man 的选项集合 + man 版本号全部对账）。
+  实测 man 页从 22 个选项变 **36 个**，`groff -man -Kutf8` 只剩 3 条「cannot adjust line」排版微告警（中文长行，无害）。
 
 ### 功能（新增，用户点名）
 

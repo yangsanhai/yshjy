@@ -64,9 +64,40 @@ bash: yshjy --lang<TAB>   → zh-CN zh-TW en-US ja-JP ko-KR ru-RU es-ES
 1. **`cargo test` 不重建 `target/debug/yshjy`** —— 第一轮实测跑的是旧二进制，自报 `0.9.26-c` 露的馅；
 2. **bash 不认中文变量名** —— 探针第一版写成 `通过=$((通过+1))`，直接 "未找到命令"。
 
-### 六、下一步
+### 六、man 页也接进生成器（22 个选项 → 36 个）
 
-man 页仍是手写（`docs/yshjy.1`）：补齐缺的选项、版本号改从 `CARGO_PKG_VERSION` 取、把选项集合对账加进探针。
+- `docs/yshjy.1` 不再手写，改由 `docs/yshjy.1.tmpl` + 生成器产出；说明**优先取 `help.text`**，
+  help 里只出现在「用法」段的 6 个选项（`--list/--rescue/--report/--no-paths/--help/--version`）
+  由 `MAN_DESC_OVERRIDES` 补
+- `.TH` 的版本号从 `Cargo.toml` 读（**不再手写** —— 历史上落后过三个版本）
+- 选项按用途分组（解压 / 打包 / 输出与配置 / 诊断 / 帮助），共 36 项全部覆盖
+- `scripts/build-deb.sh` 打包前自动重新生成（不做人工核对）
+- 探针扩到 7 条：补全三份 + man 页的选项集合、man 版本号与 `Cargo.toml` 一致
+- 实测：man 页 22 → 36 个选项；`groff -man -Kutf8` 只剩 3 条「cannot adjust line」排版微告警（中文长行，无害）
+
+### 七、老命令文案校准（用户要求：功能更新了，老命令也得跟）
+
+逐条拿**代码真实行为**跟文案对，10 处不一致，其中 3 处是真说错了：
+
+| # | 选项/位置 | 原文案 | 实际行为 |
+|---|---|---|---|
+| 1 | `--dest` | 默认「当前目录」下的同名文件夹 | 默认「**包所在目录**」下的同名文件夹（D19 改过，文案没跟） |
+| 2 | man 环境变量 | `YSHTY_LANG` | `YSHJY_LANG`（拼写 bug） |
+| 3 | `--encoding` | help 只写 `big5/sjis/gbk`；报错文案又说只认 `auto/gbk/big5/sjis/utf-8` | 实际认 `auto/gbk/gb18030/big5/sjis/shift-jis/utf-8`，三处已统一 |
+| 4 | `--sfx` / `--sfx-linux` | 只说「双击自己解开」 | 还会**跳过 `.说明.txt`**、**不能与 `--split` 同用**、**不需要 `--cover`** |
+| 5 | `--import-passwords` | 只说「每行一个，# 注释」 | 还支持 **Tab 分隔取第一列**（兼容隐写者 PW.txt）、自动去重、中文不过滤 |
+| 6 | `--tail` | 只说「尾部追加布局」 | 封面是**图片/文本**时会**自动**用它 |
+| 7 | `--verbose` | help 只列 `-v, -vv` | `--verbose` 是 `-v` 的长写法（已补进 help） |
+| 8 | `--split` | 只说「2G / 500M」 | 也认**纯字节数**（如 `1048576`） |
+| 9 | man 选项段 | 22 项 | 36 项全列（见上一节） |
+| 10 | 5 种语言 help | `--force` / `--show-config` / `--import-passwords` 整行都没有 | 已按中文顺序补齐 |
+
+**7 种语言全部同步**（zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES），不是只改中文 ——
+否则外国用户看到的还是错的。复核脚本确认 7 份 help 都不再缺任何对外选项。
+
+### 八、下一步
+
+终端侧还剩：`--list` 改表格（comfy-table）、`--pick` 全屏勾选（dialoguer）、`-j 2` 多行进度（indicatif）。
 
 ---
 

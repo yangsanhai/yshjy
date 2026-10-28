@@ -32,7 +32,7 @@ text = """
   yshjy -V, --version             看版本和档位（常用版 / 全能版）
 
 常用选项：
-  -o, --dest <目录>               解压到哪（默认：当前目录下的同名文件夹）
+  -o, --dest <目录>               解压到哪（默认：包所在目录下的同名文件夹）
   -p, --password <密码>           解压码 / 打包密码
   -j, --jobs <N>                  同时跑几个（默认 1，按顺序来最省磁盘）
   --select <条件>                 只解一部分：
@@ -47,24 +47,24 @@ text = """
   --force                         跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）
   --lang <语言>                   切换界面语言（如 en、ja、ko、ru、es）
   --show-config                   看当前配置（配置文件在哪、各项现在是什么值）
-  --import-passwords <文件>       导入密码本（每行一个解压码，# 开头是注释）
+  --import-passwords <文件>       导入密码本（每行一个解压码，# 开头是注释；Tab 分隔取第一列，自动去重）
   yshjy --report [包]             生成诊断包（报障用；加 --no-paths 脱敏路径）
-  --split <大小>                  打包时分卷（如 2G / 500M）
+  --split <大小>                  打包时分卷（如 2G / 500M，也认纯字节数）
   --no-checksum                   不生成 .sha256 校验和（默认生成）
   --no-readme                     不生成 .说明.txt（默认生成）
-  --encoding <编码>              手动指定压缩包里的文件名编码（big5 / sjis / gbk）
-  --tail                          打包用"尾部追加"布局（默认藏进 free 原子）
+  --encoding <编码>              手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）
+  --tail                          打包用"尾部追加"布局（默认藏进 free 原子；封面是图片/文字时自动用它）
   --config <文件>                 用指定的配置文件（默认 ~/.config/yshjy/config.toml）
   --layout L1|L2                  打包布局：L1 尾部追加 / L2 藏进 free 原子（默认）
   --cover <文件>                  用自己的图片/视频当封面（默认用内置素材）
   --password-file <文件>          密码本：每行一个（# 注释），只对这次命令有效
   --no-auto-password              不自动从「说明.txt」和密码本找解压码
-  -v, -vv                         详细 / 调试输出（配合 --log 排错）
+  -v, -vv, --verbose              详细 / 调试输出（-vv 更详细；配合 --log 排错）
   --log <文件>                    把日志写进文件（报错时发给开发者）
   --no-color                      不上色（管道 / 日志友好）
   --keep                          打包时保留中间 ZIP（排错用）
   --level 0-9                     打包压缩级别：0 = 仅存储（最快），9 = 最小体积（默认 6）
-  --sfx / --sfx-linux             打包成自解压包（.exe / .sh），拿到别的电脑上双击自己就解开
+  --sfx / --sfx-linux             打包成自解压包（.exe / .sh），双击自己解开；不能与 --split 同用、不用 --cover，这种包不生成 .说明.txt
   --caps                          看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 续传）
 
 例子：

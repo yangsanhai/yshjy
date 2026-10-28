@@ -30,14 +30,14 @@ USO:
   yshjy --extract-cover <archivo> extraer solo el vídeo/imagen original (sin descomprimir)
   yshjy --help                    esta ayuda
   yshjy --report <archivo>        crear un paquete de diagnóstico (--no-paths oculta rutas)
-  --split <tamaño>                dividir el paquete (ej. 2G / 500M)
+  --split <tamaño>                dividir el paquete (ej. 2G / 500M; también acepta bytes)
   --no-checksum                   no generar .sha256 (se genera por defecto)
   --no-readme                     no generar 说明.txt (se genera por defecto)
-  --encoding <nombre>            forzar codificación de nombres (big5 / sjis / gbk)
+  --encoding <nombre>            forzar codificación de nombres (auto / gbk / big5 / sjis / utf-8; gb18030 y shift-jis son alias)
   yshjy -V, --version             versión y edición (común / completa)
 
 OPCIONES HABITUALES:
-  -o, --dest <carpeta>            dónde extraer (por defecto: carpeta con el mismo nombre)
+  -o, --dest <carpeta>            dónde extraer (por defecto: carpeta con el mismo nombre junto al archivo)
   -p, --password <clave>          contraseña para extraer / empaquetar
   -j, --jobs <N>                  cuántos a la vez (por defecto 1; secuencial es más suave con el disco)
   --select <regla>                extraer solo una parte:
@@ -49,19 +49,22 @@ OPCIONES HABITUALES:
   --no-smart-dir                  desactivar la «extracción inteligente»: por defecto, si hay una sola
                                   carpeta de primer nivel, se extrae directamente en el destino
   -q, --quiet                     mostrar solo el resultado (para scripts)
+  --force saltar la comprobación de espacio en disco (si no alcanza, se rechaza el inicio)
   --lang <idioma>                 cambiar el idioma (p. ej. zh-CN, en, ja, ko, ru)
-  --tail                          empaquetar «añadiendo al final» (por defecto: dentro de un free atom)
+  --show-config ver la configuración actual (dónde está el archivo y qué valores)
+  --tail                          empaquetar «añadiendo al final» (por defecto: free atom; se usa solo si la portada es imagen/texto)
   --config <archivo>              usar este archivo de configuración
   --layout L1|L2                  diseño: L1 al final / L2 dentro de un free atom (por defecto)
   --cover <archivo>               usar tu propia imagen/vídeo como portada
   --password-file <archivo>       lista de contraseñas (una por línea, # comentarios)
   --no-auto-password              no buscar contraseñas en notas ni en la lista
-  -v, -vv                         salida detallada / depuración (con --log)
+  --import-passwords <archivo>    importar una lista de contraseñas (una por línea, # inicia comentario; con tabulador se toma la 1ª columna, sin duplicados)
+  -v, -vv, --verbose              salida detallada / depuración (-vv más detalle, con --log)
   --log <archivo>                 escribir un registro en archivo (para reportes)
   --no-color                      sin colores (para tuberías/registros)
   --keep                          conservar el ZIP intermedio al empaquetar
   --level 0-9                     nivel de compresión al empaquetar: 0 = sin comprimir (rápido), 9 = tamaño mínimo (por defecto 6)
-  --sfx / --sfx-linux             empaquetar como archivo autoextraíble (.exe / .sh)
+  --sfx / --sfx-linux             empaquetar como archivo autoextraíble (.exe / .sh); no se puede con --split, --cover no hace falta, no se crea .说明.txt
   --caps                          mostrar la tabla de capacidades por formato (extraer / empaquetar / cifrado / volúmenes / reanudar)
 
 EJEMPLOS:
