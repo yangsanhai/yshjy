@@ -20,7 +20,9 @@
 （`refs/tech/{clap-complete-mangen,hiddify-core-c-abi,libarchive,ark-fileroller,keka-nanazip-inquire-etc}.md`），
 其中 **1 个真 bug**（bash 补全带空格文件名）与 **1 条根因确认**（`--pick` 的 Ctrl-C）已记到本文件表尾。
 Keka 无法拆（上游闭源，仓里只有 Bin/ + 翻译）。
-所以现在盘面上只剩四件，**都等用户发话，不自己找活**：
+**2026-10-28 夜：对照审计完成** → `docs/ROADMAP.md`（台账 14 条失真 / 9 条真缺口 /
+Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-28 对照审计」那一节。
+所以现在盘面上是「下面那一节 + 这四件」，**都等用户发话，不自己找活**：
 1. 表尾四条待查（`cargo test --release` 偶发失败 / `--pick` 被 Ctrl-C 后光标不恢复 /
    bash 补全空格文件名 bug / 缺 `tests/ffi-header-sync.sh` 探针）
 2. 「多平台适配」整块（用户口径：**最后做**，探测结论已在下面那张表里，别重复调研）
@@ -133,6 +135,56 @@ Keka 无法拆（上游闭源，仓里只有 Bin/ + 翻译）。
 - [ ] 🟢 `--test`（测试包完整性）作为独立能力位 —— `Ark` 的插件元数据里 `SupportsTesting: true`
   是一个独立能力（`refs/tech/ark-fileroller.md` §2）。我们现在只有打包侧的 `--no-checksum`，
   解压侧没有「只测不写」的动作。另记：Ark 的能力是**按 MIME 声明**的，我们的 `caps` 是全局一份。
+
+## 2026-10-28 对照审计：真缺口与平台前置（路线见 `docs/ROADMAP.md`）
+
+> 由来：拿「5 份参考项目拆解 + `docs/INTERNALS.md` 内部全景」对 64 条台账逐条核实，
+> 结论是 **14 条台账标 ❌ 但代码里早做了**（清单在 `ROADMAP.md` §2.2，`REFERENCE-INDEX.md`
+> 的状态列要照它重写），**9 条是真缺口**，外加 Windows 编译的一个实锤阻塞。
+> 这一节只记「要做的动作」，为什么这么排、平台怎么切全在 `ROADMAP.md`。
+
+### 第一批：半天内能全清（风险低）
+
+- [ ] **重写 `docs/REFERENCE-INDEX.md` 的状态列**（14 条失真，逐条证据在 `ROADMAP.md` §2.2）。
+  **排第一是因为不修它，后面所有人都在拿错地图打仗**。改完抽查 10 条与代码一致。
+- [ ] **`src/extract.rs:499` cfg 隔离**（Windows 路线第一个实锤阻塞，实测 `E0433: cannot find unix in os`）。
+  `#[cfg(unix)]` 用 `std::os::unix::fs::symlink`；`#[cfg(windows)]` 用 `std::os::windows::fs::symlink_file`，
+  失败退回「复制一份」并标 `SLOW_PATH`（不静默）。**顺手全仓扫一遍** `grep -rn "std::os::unix\|std::os::linux\|libc::" src/`
+  —— 别修一个编一次，一次扫完再编。
+- [ ] **进度条补「已用时」**（clap 参考里 `{elapsed}` 是标准字段；我们现在只有速度/剩余/项号）。
+  位置 `main.rs` 的 `进度消息()` / `画进度行()`，注意 CLI 与界面必须同一个 ETA 源。
+
+> 第一批另外两件（bash 补全 IFS、`tests/ffi-header-sync.sh`）已记在上面「待查 / 改进」节里，不重复登记。
+
+### 第二批：用户能感觉到的缺口（1–2 天）
+
+- [ ] **界面：窗口尺寸/位置记忆**（每次开都要手动拉窗口）。要引 `window_manager`，加依赖前先看许可证。
+- [ ] **界面：密码卡「这次不保存」勾选**（已有 `_recentPw` 近期密码 chips，只差这个布尔）。
+- [ ] **界面：「解完把原包移回收站」开关**（引擎早支持 `config.output.on_done == "trash"`，
+  只差界面上一个开关；`job.rs:845-855` 已按「成功/部分成功才动」写好）。
+- [ ] **CLI：`--trash-source` / `--delete-source`**（`trash.rs` 现成，只是没接 CLI 选项；
+  `--delete-source` 要**二次确认**且说明不可恢复，默认关）。
+- [ ] **引擎：条目 packSize 校验**（按头部声明大小给输出封顶，多写丢弃、少写报截断）。
+  语义照 libarchive 的 `entry_bytes_declared`（`refs/tech/libarchive.md` §4）；这条在台账里挂了很久，是数据正确性问题。
+
+### 第三批：要设计的（等第二批清完）
+
+- [ ] 预览树 + 部分解压（界面）—— 引擎有 `select`，界面还是平铺
+- [ ] 干扰数据 / 假签名（打包）—— 要定「打多少、怎么打、会不会影响播放」
+- [ ] 移动端 seek 三档 —— 跟 Android 一起做（SAF 不支持随机定位）
+- [ ] `caps` 按格式声明（Ark 的做法，协议面升版，影响 GUI + FFI 两侧）
+- [ ] 7z 头加密专门提示（现在有 `encrypted` / `encrypted_count`，但「头加密时无密码连清单都列不出」没做提示）
+- [ ] `build-deb.sh` 补 `prerm`（现在有 postinst + postrm，缺 prerm）
+- [ ] GitHub 发布流水线（现在只有单平台 `ci.yml`，没有多平台矩阵与 release 汇总）
+
+### 平台（详见 `ROADMAP.md` §4）
+
+- [ ] **Windows CLI**：cfg 隔离 → `cargo build --target x86_64-pc-windows-gnu` → wine 实测 4 样本 + 1 坏包 → zip 出包
+- [ ] Windows GUI：**只能在 Win 上编**，写 `docs/BUILD-Windows.md` 交给用户自己编，不承诺交叉出图形包
+- [ ] **Android**：JDK 17（独立目录）→ SDK/NDK（15–20 G，要用户授权）→ `cargo-ndk` → ffigen 绑定 →
+  `FfiTransport` → 分区存储政策（私有目录直写 / 外部 SAF / 不许静默失败）→ `flutter build apk` 自签
+- [ ] **苹果**：GitHub Actions `macos` runner 出未签名包；不上架不公证不买账号（口径已定，别再问）；
+  上 GitHub 前必修：`.git` 300 MB 历史里的编译产物要清 + 个人路径脱敏
 
 ## 优化建议（终端 ↔ 界面对账出来的缺口，2026-10-28）
 
