@@ -54,6 +54,88 @@ HEADER = (
     "# 要加/改选项：改 src/cli_spec.rs 的 OPTS 表，然后跑一次生成器。\n"
 )
 
+# ── man 页用：help.text 里没有说明的选项，在这里补 ──
+#
+# 为什么不能直接改 help.text：`--help` 是"常用选项"清单，有些选项（--extract-cover、
+# --caps、--sfx 之类）只出现在「用法」和「例子」段落里，没有选项行。
+# man 页要覆盖**全部**选项，所以缺的那些在这里补齐（这些说明只在 man 里出现）。
+MAN_DESC_OVERRIDES = {
+    # 这几个在 help.text 里只出现在「用法」段（`yshjy --list <文件>` 那种写法），
+    # 解析正则抓不到，所以在这里补齐
+    "--list": "只列出包里的内容（ZIP / 7z / RAR / TAR / 单流都支持），不解压、不写盘。",
+    "--rescue": "救援模式：中央目录坏了也按每个文件的头逐个抢救。",
+    "--report": "生成诊断包（报障用）。包里不含文件内容，命令行里的密码会被抹掉。",
+    "--no-paths": "配合 --report：把路径换成占位符，可以直接贴到公开的地方。",
+    "--help": "显示这份帮助。",
+    "--version": "显示版本、档位（常用版 / 全能版）与支持的格式。",
+    "--extract-cover": "只把伪装包里的原版视频/图片切出来，不解压内层内容。",
+    "--password-file": "密码本文件：每行一个，`#` 开头是注释。只对这次命令有效。",
+    "--no-auto-password": "不自动从「说明.txt」和密码本里找解压码。",
+    "--keep": "打包时保留中间 ZIP（排错用）。",
+    "--caps": "显示各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 续传）。",
+    "--no-checksum": "打包时不生成 .sha256 校验和（默认生成）。",
+    "--no-readme": "打包时不生成 .说明.txt（默认生成；自解压包本来就不生成）。",
+    "--sfx": "打包成 Windows 自解压包（.exe），双击自己解开。",
+    "--sfx-linux": "打包成 Linux 自解压包（.sh），双击自己解开。",
+    "--no-color": "不上色（管道 / 日志友好）。",
+    "--verbose": "详细输出（等同于 -v；-vv 更详细）。",
+    "--config": "用指定的配置文件（默认 ~/.config/yshjy/config.toml）。",
+    "--log": "把日志写进文件（报错时发给开发者）。",
+    "--cover": "用自己的图片/视频当封面（默认用内置素材）。",
+    "--layout": "打包布局：L1 尾部追加 / L2 藏进 free 原子（默认 L2）。",
+    "--level": "打包压缩级别 0-9：0 = 仅存储（最快），9 = 最小体积（默认 6）。",
+    "--split": "打包时分卷（如 2G / 500M，也认纯字节数）。",
+}
+
+# man 页的分组：遇到这些选项时插入一个 .SS 小标题
+MAN_GROUPS = [
+    ("--split", "打包（把目录做成伪装包）"),
+    ("--json", "输出与配置"),
+    ("--report", "诊断与报障"),
+    ("--help", "帮助与版本"),
+]
+
+
+def load_version() -> str:
+    """从 Cargo.toml 取版本（man 页的 .TH 行不许再手写 —— 历史上落后过三个版本）"""
+    m = re.search(r'^version\s*=\s*"([^"]+)"', (ROOT / "Cargo.toml").read_text(encoding="utf-8"), re.M)
+    return m.group(1) if m else "0.0.0"
+
+
+def man_escape(s: str) -> str:
+    """groff 里的行首 `.` / `'` 会被当成宏，行内的反斜杠要转义"""
+    s = s.replace("\\", "\\\\")
+    return ("\\&" + s) if s[:1] in (".", "'") else s
+
+
+def gen_man(opts: list[dict], descs: dict[str, str], version: str, date: str) -> tuple[str, list[str]]:
+    """生成 man 页。返回 (内容, 缺说明的选项列表)"""
+    tmpl = (ROOT / "docs" / "yshjy.1.tmpl").read_text(encoding="utf-8")
+    blocks: list[str] = []
+    no_desc: list[str] = []
+    public = [o for o in opts if not o["internal"]]
+
+    for o in public:
+        for marker, title in MAN_GROUPS:
+            if o["long"] == marker:
+                blocks.append(f".SS {title}")
+
+        desc = descs.get(o["long"]) or MAN_DESC_OVERRIDES.get(o["long"], "")
+        if not desc:
+            no_desc.append(o["long"])
+            desc = "（本选项暂无说明）"
+
+        name = ", ".join(x for x in [o["short"], o["long"]] if x)
+        if o["value"]:
+            name += f" \\fI{o['value']}\\fR"
+        blocks += [".TP", f".B {name}", man_escape(desc)]
+
+    out = tmpl.replace("{{OPTIONS}}", "\n".join(blocks))
+    out = out.replace("{{OPTIONS_COUNT}}", str(len(public)))
+    out = out.replace("{{VERSION}}", version)
+    out = out.replace("{{DATE}}", date)
+    return out, no_desc
+
 
 def die(msg: str) -> NoReturn:
     sys.exit(f"❌ {msg}")
@@ -106,10 +188,15 @@ def parse_descriptions(help_text: str) -> dict[str, str]:
         m = pat.match(line)
         if m:
             long, desc = m.group(1), m.group(2).strip()
-            # 去掉末尾的「（默认…）」之类，补全里太长
-            desc = re.sub(r"\s*（默认[^）]*）", "", desc).strip()
+            # 这里**保留完整说明**（含「（默认：…）」）—— man 页需要它；
+            # 补全里嫌长，由 short_desc() 现裁。
             out.setdefault(long, desc)
     return out
+
+
+def short_desc(d: str) -> str:
+    """补全里只放一句话：剥掉「（默认…）」这类尾巴"""
+    return re.sub(r"\s*（默认[^）]*）", "", d).strip()
 
 
 def q(s: str) -> str:
@@ -224,7 +311,7 @@ def gen_zsh(opts: list[dict], descs: dict[str, str]) -> str:
     for o in opts:
         if o["internal"]:
             continue
-        desc = zn_comments(descs.get(o["long"], ""))
+        desc = zn_comments(short_desc(descs.get(o["long"], "")))
         spec = f"[{desc}]" if desc else ""
         if o["value"]:
             action, cand = VALUE_ACTIONS.get(o["long"], ("file", None))
@@ -295,7 +382,7 @@ def gen_fish(opts: list[dict], descs: dict[str, str]) -> str:
                 parts.append("-x -a " + q(" ".join(cand or [])))
             else:  # none
                 parts.append("-x")
-        desc = descs.get(o["long"], "")
+        desc = short_desc(descs.get(o["long"], ""))
         if desc:
             parts.append("-d " + q(desc))
         lines.append(" ".join(parts))
@@ -317,34 +404,47 @@ def main() -> None:
     repeat = spec.get("repeat_shorts", [])
     descs = parse_descriptions(load_help_text())
 
+    version = load_version()
+    # 日期写进 .TH；--check 模式会归一化掉这一行，否则每天都会「假红」
+    date = __import__("datetime").date.today().isoformat()
+    man_content, no_desc = gen_man(opts, descs, version, date)
+    if no_desc:
+        print("⚠️  这些选项没有说明（help.text 与 MAN_DESC_OVERRIDES 里都没有）：" + " ".join(no_desc))
+
     # 重复计数型短选项（-v / -vv）也要进 bash 的候选
-    targets = {
-        "yshjy.bash": gen_bash(opts, descs),
-        "_yshjy": gen_zsh(opts, descs),
-        "yshjy.fish": gen_fish(opts, descs),
-    }
+    bash = gen_bash(opts, descs)
     if repeat:
-        targets["yshjy.bash"] = targets["yshjy.bash"].replace(
-            " jy ys\"", " " + " ".join(repeat) + ' jy ys"'
-        )
+        bash = bash.replace(" jy ys\"", " " + " ".join(repeat) + ' jy ys"')
+
+    targets = {
+        OUT_DIR / "yshjy.bash": bash,
+        OUT_DIR / "_yshjy": gen_zsh(opts, descs),
+        OUT_DIR / "yshjy.fish": gen_fish(opts, descs),
+        ROOT / "docs" / "yshjy.1": man_content,
+    }
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     changed = []
-    for name, content in targets.items():
-        p = OUT_DIR / name
+    for p, content in targets.items():
         old = p.read_text(encoding="utf-8") if p.exists() else None
-        if old != content:
-            changed.append(name)
+        # man 页的 .TH 行含生成日期 —— 比对时归一化掉，否则每天第一次跑都会「假红」
+        if p.suffix == ".1":
+            norm = lambda s: re.sub(r"^\.TH .*$", ".TH NORMALIZED", s, flags=re.M) if s else s
+            same = norm(old) == norm(content)
+        else:
+            same = old == content
+        if not same:
+            changed.append(p.name)
             if not check:
                 p.write_text(content, encoding="utf-8")
 
     if check:
         if changed:
             die(
-                "补全脚本与 CLI 表不一致（" + "、".join(changed) + "）\n"
+                "生成物与 CLI 表不一致（" + "、".join(changed) + "）\n"
                 "   跑一次：python3 scripts/gen-cli-assets.py"
             )
-        print("✅ 补全脚本与 CLI 表一致")
+        print("✅ 补全脚本与 man 页都与 CLI 表一致")
         return
 
     if changed:

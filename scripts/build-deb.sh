@@ -16,6 +16,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# ── 补全与 man 页：打包前从 CLI 选项表重新生成 ──
+# 手写副本必然漂移（2026-10-28 实测：补全漏 17 个选项、man 漏 17 个），
+# 所以出包前一律重新生成，不做人工核对。做法见 docs/CLI-GUI-PLAN.md §1。
+if [ -x target/release/yshjy ]; then
+    python3 scripts/gen-cli-assets.py
+else
+    echo "⚠️  没有 target/release/yshjy，跳过补全/man 重新生成（沿用现有生成物）"
+fi
+
 # ── 版本一致性（PRD 验收标准 3/4）──
 V_CARGO=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
 V_GUI=$(grep -m1 '^version:' gui/pubspec.yaml | awk '{print $2}')

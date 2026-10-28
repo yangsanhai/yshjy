@@ -17,13 +17,13 @@ for bin in yshjy yshys
     complete -c $bin -s p -l password -x -d '解压码 / 打包密码'
     complete -c $bin -l password-file -r -F -d '密码本：每行一个（# 注释），只对这次命令有效'
     complete -c $bin -l no-auto-password -d '不自动从「说明.txt」和密码本找解压码'
-    complete -c $bin -l encoding -x -a 'utf-8 gbk big5 sjis' -d '手动指定压缩包里的文件名编码（big5 / sjis / gbk）'
+    complete -c $bin -l encoding -x -a 'utf-8 gbk big5 sjis' -d '手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）'
     complete -c $bin -l select -x -d '只解一部分：'
     complete -c $bin -s j -l jobs -x -a '1 2 4 8' -d '同时跑几个'
     complete -c $bin -s f -l force -d '跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）'
     complete -c $bin -l no-smart-dir -d '关掉「智能解压」：默认会看包里有没有单一顶层目录来决定'
     complete -c $bin -l keep -d '打包时保留中间 ZIP（排错用）'
-    complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M）'
+    complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M，也认纯字节数）'
     complete -c $bin -l level -x
     complete -c $bin -l layout -x -a 'L1 L2'
     complete -c $bin -l cover -r -F -d '用自己的图片/视频当封面'
@@ -41,7 +41,7 @@ for bin in yshjy yshys
     complete -c $bin -l config -r -F -d '用指定的配置文件'
     complete -c $bin -l show-config -d '看当前配置（配置文件在哪、各项现在是什么值）'
     complete -c $bin -l caps -d '看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 续传）'
-    complete -c $bin -l import-passwords -r -F -d '导入密码本（每行一个解压码，# 开头是注释）'
+    complete -c $bin -l import-passwords -r -F -d '导入密码本（每行一个解压码，# 开头是注释；Tab 分隔取第一列，自动去重）'
     complete -c $bin -l report
     complete -c $bin -l no-paths
     complete -c $bin -s h -l help

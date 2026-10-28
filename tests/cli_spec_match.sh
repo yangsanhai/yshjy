@@ -90,6 +90,37 @@ print(f"  ✓ --help 里的 {len(in_help)} 个长选项都是真的")
 PY
 if [ $? -eq 0 ]; then n_pass=$((n_pass+1)); else n_fail=$((n_fail+1)); fi
 
+echo "── 4b. man 页 ↔ 表的选项集合 ──"
+python3 - "$BIN" <<'PY'
+import json, re, subprocess, sys
+from pathlib import Path
+bin_path = sys.argv[1]
+spec = json.loads(subprocess.run([bin_path, "--dump-cli-spec"],
+                                 capture_output=True, text=True).stdout)
+table = {o["long"] for o in spec["options"] if not o["internal"]}
+all_long = {o["long"] for o in spec["options"]}
+txt = Path("docs/yshjy.1").read_text(encoding="utf-8")
+in_man = set(re.findall(r"(?<![\w-])--[a-z][a-z0-9-]+", txt))
+missing = table - in_man          # man 页没写到的对外选项
+extra = in_man - all_long         # man 页写了表里没有的（假选项）
+if missing:
+    print(f"  ✗ man 页漏了 {len(missing)} 个选项：{sorted(missing)}")
+    sys.exit(1)
+if extra:
+    print(f"  ✗ man 页里有表里不存在的选项：{sorted(extra)}")
+    sys.exit(1)
+print(f"  ✓ man 页 {len(table)} 个对外选项全在")
+PY
+if [ $? -eq 0 ]; then n_pass=$((n_pass+1)); else n_fail=$((n_fail+1)); fi
+
+# man 页版本号必须与 Cargo.toml 一致（历史上落后过三个版本）
+V_CARGO=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+if grep -q "yshjy ${V_CARGO}" docs/yshjy.1; then
+    ok "man 页版本号与 Cargo.toml 一致（${V_CARGO}）"
+else
+    bad "man 页版本号与 Cargo.toml 不一致（应为 ${V_CARGO}）"
+fi
+
 echo "── 5. 补全脚本语法 ──"
 if command -v bash >/dev/null && bash -n scripts/completions/yshjy.bash 2>/dev/null; then
     ok "bash 补全语法通过（bash -n）"

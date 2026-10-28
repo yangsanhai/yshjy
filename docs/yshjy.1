@@ -1,5 +1,8 @@
-.\" yshjy 的 man 手册页
-.\" 查看：man ./docs/yshjy.1    安装：install.sh 会装到 ~/.local/share/man/man1
+.\" yshjy 的 man 手册页 —— **这是模板，别直接改生成物**
+.\"
+.\" 生成：python3 scripts/gen-cli-assets.py   （读 src/cli_spec.rs 的选项表 + locales/zh-CN.toml 的 help.text）
+.\" 模板占位符（由生成器替换）：日期 / 版本号 / 选项段 / 选项总数
+.\" 查看：man ./docs/yshjy.1        安装：deb 包或 install.sh 装到 man1
 .TH YSHJY 1 "2026-10-28" "yshjy 0.9.26" "用户命令"
 .SH 名称
 yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件，也能反向打包
@@ -38,61 +41,119 @@ yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件�
 .B yshjy --rescue \fI文件\fR
 救援模式：中央目录坏了也按每个文件的头逐个抢救。
 .SH 选项
+以下是全部 36 个选项（按用途分组）。
 .TP
-.B \-h, --help
-显示帮助。
-.TP
-.B --version
-显示版本、档位（常用版/全能版）与支持的格式。
-.TP
-.B \-q, --quiet
-安静模式：只输出结果路径（给脚本用）。
-.TP
-.B \-l, --list
-列出包里的内容（ZIP / 7z / RAR / TAR / 单流都支持）。
+.B -l, --list
+只列出包里的内容（ZIP / 7z / RAR / TAR / 单流都支持），不解压、不写盘。
 .TP
 .B --rescue
-救援模式。
+救援模式：中央目录坏了也按每个文件的头逐个抢救。
+.TP
+.B --extract-cover
+只把伪装包里的原版视频/图片切出来，不解压内层内容。
+.TP
+.B -o, --dest \fI目录\fR
+解压到哪（默认：包所在目录下的同名文件夹）
+.TP
+.B -p, --password \fI密码\fR
+解压码 / 打包密码
+.TP
+.B --password-file \fI文件\fR
+密码本：每行一个（# 注释），只对这次命令有效
+.TP
+.B --no-auto-password
+不自动从「说明.txt」和密码本找解压码
+.TP
+.B --encoding \fI编码\fR
+手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）
+.TP
+.B --select \fI条件\fR
+只解一部分：
+.TP
+.B -j, --jobs \fIN\fR
+同时跑几个（默认 1，按顺序来最省磁盘）
+.TP
+.B -f, --force
+跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）
+.TP
+.B --no-smart-dir
+关掉「智能解压」：默认会看包里有没有单一顶层目录来决定
+.TP
+.B --keep
+打包时保留中间 ZIP（排错用）
+.SS 打包（把目录做成伪装包）
+.TP
+.B --split \fI大小\fR
+打包时分卷（如 2G / 500M，也认纯字节数）
+.TP
+.B --level \fI0-9\fR
+打包压缩级别 0-9：0 = 仅存储（最快），9 = 最小体积（默认 6）。
+.TP
+.B --layout \fIL1|L2\fR
+打包布局：L1 尾部追加 / L2 藏进 free 原子（默认 L2）。
+.TP
+.B --cover \fI文件\fR
+用自己的图片/视频当封面（默认用内置素材）
+.TP
+.B --tail
+打包用"尾部追加"布局（默认藏进 free 原子；封面是图片/文字时自动用它）
+.TP
+.B --no-checksum
+不生成 .sha256 校验和（默认生成）
+.TP
+.B --no-readme
+不生成 .说明.txt（默认生成）
+.TP
+.B --sfx
+打包成 Windows 自解压包（.exe），双击自己解开。
+.TP
+.B --sfx-linux
+打包成 Linux 自解压包（.sh），双击自己解开。
+.SS 输出与配置
+.TP
+.B --json
+按行输出事件流/结果（给脚本用）
+.TP
+.B -q, --quiet
+只输出结果（脚本用）
+.TP
+.B --no-color
+不上色（管道 / 日志友好）
+.TP
+.B --verbose
+详细输出（等同于 -v；-vv 更详细）。
+.TP
+.B --log \fI文件\fR
+把日志写进文件（报错时发给开发者）
+.TP
+.B --lang \fI语言\fR
+切换界面语言（如 en、ja、ko、ru、es）
+.TP
+.B --config \fI文件\fR
+用指定的配置文件（默认 ~/.config/yshjy/config.toml）
+.TP
+.B --show-config
+看当前配置（配置文件在哪、各项现在是什么值）
+.TP
+.B --caps
+看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 续传）
+.TP
+.B --import-passwords \fI文件\fR
+导入密码本（每行一个解压码，# 开头是注释；Tab 分隔取第一列，自动去重）
+.SS 诊断与报障
 .TP
 .B --report
 生成诊断包（报障用）。包里不含文件内容，命令行里的密码会被抹掉。
 .TP
 .B --no-paths
-配合 \fB--report\fR：把路径换成占位符，可以直接贴到公开的地方。
+配合 --report：把路径换成占位符，可以直接贴到公开的地方。
+.SS 帮助与版本
 .TP
-.B --json
-事件流按行输出（JSON），给脚本或其它前端消费。
+.B -h, --help
+显示这份帮助。
 .TP
-.B --show-config
-显示配置文件路径与当前生效的配置项。
-.TP
-.B --tail
-打包时用「尾部追加」布局（默认是 free 原子；图片/文本封面会自动用它）。
-.TP
-.B --force
-跳过安全预检（压缩比、磁盘余量）。请确认你清楚后果。
-.TP
-.B --no-smart-dir
-关掉「智能解压」的目录规则（默认：单一顶层目录就直接解，散文件就建同名目录）。
-.TP
-.B \-o, --dest \fI目录\fR
-输出到指定目录。
-.TP
-.B \-p, --password \fI解压码\fR
-手动给解压码。注意：命令行参数在 \fBps\fR 里对同机其他用户可见；
-更安全的做法是写进密码本（见 \fB--import-passwords\fR）或用配置文件。
-.TP
-.B \-j, --jobs \fIN\fR
-并行任务数（默认 1，对机械盘最友好）。
-.TP
-.B --select \fI表达式\fR
-只解一部分：序号（\fB1,3\fR）、通配（\fB"*.exe"\fR）、\fBrequired\fR。
-.TP
-.B --lang \fI语言\fR
-界面语言：zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES。
-.TP
-.B --import-passwords \fI文件\fR
-把「一行一个」的密码本导入配置目录。
+.B -V, --version
+显示版本、档位（常用版 / 全能版）与支持的格式。
 .SH 退出码
 .TP
 .B 0
@@ -130,7 +191,7 @@ yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件�
 崩溃日志（panic 时自动生成，只保留最近 10 份，权限 0600）。
 .SH 环境变量
 .TP
-.B YSHTY_LANG
+.B YSHJY_LANG
 界面语言（同 \fB--lang\fR，优先级更低）。
 .TP
 .B XDG_CONFIG_HOME
@@ -151,6 +212,7 @@ yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件�
     yshjy --rescue 坏掉的包.zip       # 索引全坏也按文件头救
     yshjy 下载/                       # 整个目录排队解
     yshjy --select "*.exe" 包.mp4     # 只解一部分
+.fi
 .SH 说明
 本工具\fB不联网\fR、\fB不做字典/爆破\fR、\fB不内置密码表\fR，抓到的解压码只试不存。
 详细说明见项目目录下的 README.md 与「本工具不做的事」一节。

@@ -30,14 +30,14 @@ text = """
   yshjy --extract-cover <檔案>    只把偽裝包裡的原版影片/圖片拿出來（不解壓）
   yshjy --help                    看這份說明
   yshjy --report <檔案>           產生診斷包（報障用；--no-paths 去識別路徑）
-  --split <大小>                  打包時分卷（如 2G / 500M）
+  --split <大小>                  打包時分卷（如 2G / 500M，也認純位元組數）
   --no-checksum                   不生成 .sha256 校驗和（預設生成）
   --no-readme                     不生成 .說明.txt（預設生成）
-  --encoding <編碼>              手動指定壓縮檔裡的檔名編碼（big5 / sjis / gbk）
+  --encoding <編碼>              手動指定檔名編碼（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是別名）
   yshjy -V, --version             看版本與版本檔次（常用版 / 全能版）
 
 常用選項：
-  -o, --dest <目錄>               解到哪（預設：目前目錄下的同名資料夾）
+  -o, --dest <目錄>               解到哪（預設：壓縮檔所在目錄下的同名資料夾）
   -p, --password <密碼>           解壓縮密碼 / 打包密碼
   -j, --jobs <N>                  同時跑幾個（預設 1，依序最省磁碟）
   --select <條件>                 只解一部分：
@@ -49,19 +49,22 @@ text = """
   --no-smart-dir                  關掉「智慧解壓縮」：預設會看壓縮檔裡有沒有單一頂層目錄來決定
                                   要不要多套一層同名資料夾，加這個就永遠建同名資料夾
   -q, --quiet                     只輸出結果（腳本用）
+  --force 跳過解壓前的磁碟空間預檢（空間不夠時會直接拒絕開始）
   --lang <語言>                   切換介面語言（如 en、ja、ko、ru、es）
-  --tail                          打包用「附加到檔尾」佈局（預設藏進 free 原子）
+  --show-config 看目前設定（設定檔在哪、各項現在是什麼值）
+  --tail                          打包用「附加到檔尾」佈局（預設藏進 free 原子；封面是圖片/文字時自動用它）
   --config <檔案>                 用指定的設定檔（預設 ~/.config/yshjy/config.toml）
   --layout L1|L2                  打包佈局：L1 附加到檔尾 / L2 藏進 free 原子（預設）
   --cover <檔案>                  用自己的圖片/影片當封面（預設用內建素材）
   --password-file <檔案>          密碼本：每行一個（# 註解），只對這次指令有效
   --no-auto-password              不自動從「說明.txt」和密碼本找解壓碼
-  -v, -vv                         詳細 / 偵錯輸出（配合 --log 排錯）
+  --import-passwords <檔案>       匯入密碼本（每行一個解壓碼，# 開頭是註解；Tab 分隔取第一欄，自動去重）
+  -v, -vv, --verbose              詳細 / 偵錯輸出（-vv 更詳細；配合 --log 排錯）
   --log <檔案>                    把日誌寫進檔案（報錯時發給開發者）
   --no-color                      不上色（管線 / 日誌友善）
   --keep                          打包時保留中間 ZIP（排錯用）
   --level 0-9                     打包壓縮級別：0 = 僅儲存（最快），9 = 最小體積（預設 6）
-  --sfx / --sfx-linux             打包成自解壓包（.exe / .sh），拿到別的電腦上雙擊自己就解開
+  --sfx / --sfx-linux             打包成自解壓包（.exe / .sh），雙擊自己解開；不能與 --split 同用、不用 --cover，這種包不產生 .說明.txt
   --caps                          看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 續傳）
 
 範例：

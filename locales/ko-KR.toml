@@ -30,14 +30,14 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   yshjy --extract-cover <파일>    위장 패키지의 원본 영상/이미지만 추출 (압축 해제 안 함)
   yshjy --help                    이 도움말
   yshjy --report <파일>           진단 패키지 생성 (--no-paths는 경로를 숨김)
-  --split <크기>                  분할 출력 (예: 2G / 500M)
+  --split <크기>                  분할 출력 (예: 2G / 500M, 순수 바이트 수도 가능)
   --no-checksum                   .sha256 생성 안 함 (기본 생성)
   --no-readme                     说明.txt 생성 안 함 (기본 생성)
-  --encoding <이름>              파일명 인코딩 지정 (big5 / sjis / gbk)
+  --encoding <이름>              파일명 인코딩 지정 (auto / gbk / big5 / sjis / utf-8; gb18030, shift-jis 는 별칭)
   yshjy -V, --version             버전과 에디션 (common / full)
 
 자주 쓰는 옵션:
-  -o, --dest <폴더>               압축을 풀 위치 (기본: 같은 이름의 폴더)
+  -o, --dest <폴더>               압축을 풀 위치 (기본: 압축 파일 옆의 같은 이름 폴더)
   -p, --password <비밀번호>       압축 풀기/묶기 비밀번호
   -j, --jobs <N>                  동시에 처리할 개수 (기본 1, 디스크에 부담이 적음)
   --select <조건>                 일부만 풀기:
@@ -49,19 +49,22 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   --no-smart-dir                  '스마트 압축 풀기' 해제: 기본값은 최상위 폴더가 하나뿐이면
                                   같은 이름의 폴더를 겹치지 않고 대상 폴더에 바로 풉니다
   -q, --quiet                     결과만 출력 (스크립트용)
+  --force 압축 풀기 전 디스크 공간 점검 건너뛰기 (부족하면 시작을 거부)
   --lang <언어>                   인터페이스 언어 변경 (예: zh-CN, en, ja, ru, es)
-  --tail                          '끝에 덧붙이기' 레이아웃으로 묶기 (기본: free atom 안)
+  --show-config 현재 설정 보기 (설정 파일 위치와 각 항목 값)
+  --tail                          '끝에 덧붙이기' 레이아웃으로 묶기 (기본: free atom 안, 표지가 그림/텍스트면 자동)
   --config <파일>                 설정 파일 지정 (기본: ~/.config/yshjy/config.toml)
   --layout L1|L2                  패키지 배치: L1 끝에 추가 / L2 free atom (기본)
   --cover <파일>                  직접 만든 이미지/영상을 표지로 사용
   --password-file <파일>          비밀번호 목록 (한 줄에 하나, # 주석)
   --no-auto-password              설명 파일/목록에서 비밀번호를 자동으로 찾지 않음
-  -v, -vv                         상세 / 디버그 출력 (--log 와 함께)
+  --import-passwords <파일>       비밀번호 목록 가져오기 (한 줄에 하나, # 은 주석; Tab 구분 시 첫 열 사용, 중복 자동 제거)
+  -v, -vv, --verbose              상세 / 디버그 출력 (-vv 는 더 자세히, --log 와 함께)
   --log <파일>                    로그를 파일로 저장 (버그 신고용)
   --no-color                      색상 없이 출력 (파이프/로그용)
   --keep                          패키징 중간 ZIP 보관 (조사용)
   --level 0-9                     패킹 압축 수준: 0 = 저장(가장 빠름), 9 = 최소 크기 (기본 6)
-  --sfx / --sfx-linux             자동 압축 풀림 파일(.exe / .sh)로 패킹
+  --sfx / --sfx-linux             자동 압축 풀림 파일(.exe / .sh). --split 과 함께 쓸 수 없고 --cover 도 불필요, .설명.txt 는 만들지 않음
   --caps                          형식별 지원표(해제 / 패킹 / 암호화 / 분할 / 이어받기) 보기
 
 예시:

@@ -15,13 +15,13 @@ _yshjy() {
         '(-p --password)'{-p,--password}'[解压码 / 打包密码]:密码:' \
         '--password-file[密码本：每行一个（# 注释），只对这次命令有效]:文件:_files' \
         '--no-auto-password[不自动从「说明.txt」和密码本找解压码]' \
-        '--encoding[手动指定压缩包里的文件名编码（big5 / sjis / gbk）]:编码:(utf-8 gbk big5 sjis)' \
+        '--encoding[手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）]:编码:(utf-8 gbk big5 sjis)' \
         '--select[只解一部分：]:条件:' \
         '(-j --jobs)'{-j,--jobs}'[同时跑几个]:N:(1 2 4 8)' \
         '(-f --force)'{-f,--force}'[跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）]' \
         '--no-smart-dir[关掉「智能解压」：默认会看包里有没有单一顶层目录来决定]' \
         '--keep[打包时保留中间 ZIP（排错用）]' \
-        '--split[打包时分卷（如 2G / 500M）]:大小:' \
+        '--split[打包时分卷（如 2G / 500M，也认纯字节数）]:大小:' \
         '--level:0-9:' \
         '--layout:L1|L2:(L1 L2)' \
         '--cover[用自己的图片/视频当封面]:文件:_files' \
@@ -39,7 +39,7 @@ _yshjy() {
         '--config[用指定的配置文件]:文件:_files' \
         '--show-config[看当前配置（配置文件在哪、各项现在是什么值）]' \
         '--caps[看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 续传）]' \
-        '--import-passwords[导入密码本（每行一个解压码，# 开头是注释）]:文件:_files' \
+        '--import-passwords[导入密码本（每行一个解压码，# 开头是注释；Tab 分隔取第一列，自动去重）]:文件:_files' \
         '--report' \
         '--no-paths' \
         '(-h --help)'{-h,--help}'' \
