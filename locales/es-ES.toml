@@ -45,6 +45,7 @@ OPCIONES HABITUALES:
                                     --select "data/**"   solo esa carpeta
                                     --select "1,3,5"     solo las entradas 1, 3 y 5
                                     --select required    omitir basura como .DS_Store
+  --pick <archivo>                elegir entradas en una lista a pantalla completa (espacio · a · Enter)
   --json                          emitir eventos y resultados como líneas JSON (para scripts)
   --no-smart-dir                  desactivar la «extracción inteligente»: por defecto, si hay una sola
                                   carpeta de primer nivel, se extrae directamente en el destino
@@ -92,6 +93,10 @@ tier_full = "  Edición completa: se van añadiendo formatos raros (ISO/UDF, CAB
 
 [preview]
 title = "📦 {input} ({format})"
+th_index = "Nº"
+th_size = "Tamaño"
+th_lock = "Cifrado"
+th_path = "Ruta"
 incomplete = "   ⚠ Este formato solo expone información parcial (tamaños desconocidos)"
 empty = "   (nada que listar)"
 row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
@@ -139,6 +144,9 @@ video_unplayable = "El vídeo de portada está dañado"
 internal = "Error interno"
 
 [cli]
+pick_prompt = "elige qué entradas extraer (espacio para marcar · a para todas · Enter para confirmar) — {input}"
+pick_no_tty = "❌ --pick necesita un terminal interactivo; en scripts usa --select \"1,3,5\""
+pick_cancelled = "(cancelado, no se hizo nada)"
 report_done = "✅ Paquete de diagnóstico creado: {path}\n   (No incluye el contenido de tus archivos ni contraseñas. Para publicarlo usa --no-paths.)"
 report_failed = "❌ No se pudo crear el paquete de diagnóstico: {err}"
 no_target = "❌ No indicaste ningún archivo.\n\n   Uso: yshjy <archivo>\n   Más: yshjy --help"

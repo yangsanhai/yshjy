@@ -45,6 +45,7 @@ text = """
                                     --select "遊戲資料/**" 只要某個目錄
                                     --select "1,3,5"      只要第 1、3、5 個
                                     --select required     跳過 .DS_Store 之類的垃圾
+  --pick <檔案>                   全螢幕勾選要解哪些（↑↓ 選 · 空格勾 · a 全選 · Enter 確認）
   --json                          逐行輸出事件流/結果（給腳本用）
   --no-smart-dir                  關掉「智慧解壓縮」：預設會看壓縮檔裡有沒有單一頂層目錄來決定
                                   要不要多套一層同名資料夾，加這個就永遠建同名資料夾
@@ -92,6 +93,10 @@ tier_full = "  全能版：冷門格式（ISO/UDF、CAB、ARJ…）陸續補進�
 
 [preview]
 title = "📦 {input}（{format}）"
+th_index = "序號"
+th_size = "大小"
+th_lock = "加密"
+th_path = "路徑"
 incomplete = "   ⚠ 這個格式只能列出部分資訊（大小未知）"
 empty = "   （列不出內容）"
 row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
@@ -139,6 +144,9 @@ video_unplayable = "封面影片本身有問題"
 internal = "內部錯誤"
 
 [cli]
+pick_prompt = "選要解的項目（空格勾選 · a 全選 · Enter 確認）—— {input}"
+pick_no_tty = "❌ --pick 要在互動終端裡用；腳本裡請改用 --select \"1,3,5\""
+pick_cancelled = "（已取消，什麼都沒做）"
 report_done = "✅ 診斷包已產生：{path}\n   （不含你的檔案內容與任何密碼；要貼到公開的地方，請加 --no-paths 重新產生一份）"
 report_failed = "❌ 產生診斷包失敗：{err}"
 no_target = "❌ 沒告訴我要處理哪個檔案。\n\n   用法：yshjy <檔案>\n   更多：yshjy --help"

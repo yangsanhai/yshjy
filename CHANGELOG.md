@@ -95,9 +95,47 @@ bash: yshjy --lang<TAB>   → zh-CN zh-TW en-US ja-JP ko-KR ru-RU es-ES
 **7 种语言全部同步**（zh-CN / zh-TW / en-US / ja-JP / ko-KR / ru-RU / es-ES），不是只改中文 ——
 否则外国用户看到的还是错的。复核脚本确认 7 份 help 都不再缺任何对外选项。
 
-### 八、下一步
+### 八、`--list` 改表格（comfy-table，MIT）
 
-终端侧还剩：`--list` 改表格（comfy-table）、`--pick` 全屏勾选（dialoguer）、`-j 2` 多行进度（indicatif）。
+- 引 `comfy-table 8`（只多带一个 `unicode-segmentation`；`cargo deny check licenses` 通过）
+- 四列「序号 / 大小 / 加密 / 路径」，中文按**显示宽度**对齐（不是字节数）
+- **只在真终端且 ≥50 列时画表格**：
+  - 管道 / 重定向 → 保持原来一行一条（脚本靠这个格式解析，`--json` 一个字段都没动）
+  - 窄于 50 列 → 也退回老格式（实测 40 列时表格会把 `大文件.bin` 折成 `大文件.b` + `in`，不如老格式好读）
+- 表头 4 个 i18n 键 × 7 语言
+- 实测：80 / 100 列中文对齐正确；40 列自动退回一行一条；管道输出与改前逐行相同
+
+### 九、`--pick` 全屏勾选（dialoguer，MIT）
+
+用户点名要的「档 3」。**不手搓 raw mode** —— 键位照 `refs/upstream/dialoguer/src/prompts/multi_select.rs:245-305`：
+
+```
+↓ / Tab / j   下移      ↑ / BackTab / k  上移
+← / h         上页      → / l            下页
+空格          勾选      a                全选 / 全不选
+Esc / q       取消      Enter            确认
+```
+
+- 新增 `src/pick.rs`：预览用 `NullSink`（勾选界面不混进度噪音）
+- `--pick` 优先于 `--select`；非交互终端（管道 / cron）报 `cli.pick_no_tty` 并以 **USAGE(2)** 退出
+- Esc / q 取消算成功（退出码 0，一个文件都不解）
+- 3 个 i18n 键 × 7 语言；help 里补一行 `--pick`
+- 新探针 `tests/pick.sh`（用 python 开 pty 真发按键）**6 项全过**：
+  - **验收①** 勾第 1、3 项的结果与 `--select "1,3"` **逐字节一致**
+  - **验收②** 管道里退出码 2 且提示改用 `--select`
+  - **验收③** 中文文件名（`遊戲數據/存档.sav`）在界面里完整不错行
+  - **验收④** Esc 取消零产物
+
+### 十、踩到的新坑（记下来）
+
+**TOML 值里带引号必须转义**：`pick_no_tty` 的值里有 `--select "1,3,5"`，第一次写进 toml 时没转义，
+7 个语言包全部解析失败 → 程序**启动即 panic**（崩溃日志里能看到 `unexpected key or value`）。
+改完还要 `cargo build` 才生效 —— 语言包是 **编译时嵌入**的，改 toml 不重编等于没改。
+（我第一轮就是这么被骗的：tomllib 校验通过了，跑起来还是崩 —— 因为二进制还是旧的。）
+
+### 十一、下一步
+
+终端侧还剩：`-j 2` 多行进度（indicatif）、`--pick` 的中文键位速查表。
 
 ---
 

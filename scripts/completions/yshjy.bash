@@ -13,7 +13,7 @@ _yshjy_complete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --encoding --select -j --jobs -f --force --no-smart-dir --keep --split --level --layout --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
+    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --encoding --select --pick -j --jobs -f --force --no-smart-dir --keep --split --level --layout --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
 
     case "$prev" in
         -o|--dest)

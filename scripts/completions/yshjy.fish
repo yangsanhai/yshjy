@@ -19,6 +19,7 @@ for bin in yshjy yshys
     complete -c $bin -l no-auto-password -d '不自动从「说明.txt」和密码本找解压码'
     complete -c $bin -l encoding -x -a 'utf-8 gbk big5 sjis' -d '手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）'
     complete -c $bin -l select -x -d '只解一部分：'
+    complete -c $bin -l pick -d '全屏勾选要解哪些（↑↓ 选 · 空格勾 · a 全选 · Enter 确认）'
     complete -c $bin -s j -l jobs -x -a '1 2 4 8' -d '同时跑几个'
     complete -c $bin -s f -l force -d '跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）'
     complete -c $bin -l no-smart-dir -d '关掉「智能解压」：默认会看包里有没有单一顶层目录来决定'

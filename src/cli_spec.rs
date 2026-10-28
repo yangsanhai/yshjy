@@ -68,6 +68,7 @@ pub const OPTS: &[Opt] = &[
     opt("--no-auto-password", None, None, false),
     opt("--encoding", None, Some("编码"), false),          // big5 / sjis / gbk / utf-8
     opt("--select", None, Some("条件"), false),            // 只解一部分
+    opt("--pick", None, None, false),                     // 全屏勾选（dialoguer）
     opt("--jobs", Some("-j"), Some("N"), false),
     opt("--force", Some("-f"), None, false),              // 跳过磁盘空间预检
     opt("--no-smart-dir", None, None, false),
@@ -210,13 +211,13 @@ mod tests {
 
     /// 长选项总数钉桩 —— 加选项时**必须**同步改这里（故意的：逼你确认补全/man 也跟着更新）
     ///
-    /// 39 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的内部命令
-    /// `--dump-cli-spec`。
+    /// 40 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的 `--dump-cli-spec`
+    /// + `--pick`（全屏勾选）。
     #[test]
-    fn 长选项总数是_39() {
+    fn 长选项总数是_40() {
         assert_eq!(
             OPTS.len(),
-            39,
+            40,
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }
