@@ -132,6 +132,8 @@ if [ -n "$BIN" ]; then
   run "CLI 选项对账（cli_spec_match.sh）" bash tests/cli_spec_match.sh
   # --pick 全屏勾选：非 TTY 拒绝 + pty 里勾选结果与 --select 逐字节一致
   run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
+  # 进度条：单任务等价 / -j 2 两行独立 / TERM=dumb 不沉默 / 管道零污染
+  run "多任务进度（progress_multi.sh）" bash tests/progress_multi.sh "$BIN"
 else
   skip "协议探针" "没有可执行文件"
 fi

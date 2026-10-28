@@ -60,6 +60,8 @@ unicode-width = "0.2.2"
 comfy-table = "8"
 # --pick 的全屏勾选：raw mode / 分页 / 退出复原这些边界它全覆盖（MIT，真身 refs/upstream/dialoguer）
 dialoguer = "0.12"
+# -j 2 以上的多行进度：MultiProgress 给每个任务一条独立行（MIT，真身 refs/upstream/indicatif）
+indicatif = "0.18"
 
 [dev-dependencies]
 rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }

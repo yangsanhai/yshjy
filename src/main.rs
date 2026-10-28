@@ -1229,17 +1229,91 @@ fn 读一行不回显() -> Option<String> {
     Some(line.trim_end_matches(['\r', '\n']).to_string())
 }
 
+/// 多任务进度状态（只有 `-j 2` 以上真的并行时才会启用）
+///
+/// 为什么要有它：手绘版只能画**一行**（`\r` 回去覆盖），两个任务交替 emit 时
+/// 后一个会把前一个盖掉 —— 这正是 TODO 里「-j 2 时两行互相覆盖」那条。
+/// 做法是等**真的出现第二个任务**才切到 indicatif 的 `MultiProgress`：
+/// 单任务仍然走原来那条已经测过 7 条单测的路径，不冒险。
+struct 多任务状态 {
+    /// 见过的任务号 —— 凑到 2 个才说明是批量/并行
+    见过: std::collections::HashSet<u64>,
+    /// 每个任务一条进度行
+    条: std::collections::HashMap<u64, indicatif::ProgressBar>,
+    /// indicatif 的多行管理（延迟创建）
+    多行: Option<indicatif::MultiProgress>,
+}
+
+impl 多任务状态 {
+    fn new() -> Self {
+        Self {
+            见过: Default::default(),
+            条: Default::default(),
+            多行: None,
+        }
+    }
+
+    /// 拿这个任务的进度行；返回 `None` = 还只有一个任务，调用方继续用手绘单行
+    fn 取条(&mut self, job: u64) -> Option<indicatif::ProgressBar> {
+        self.见过.insert(job);
+        if self.见过.len() < 2 {
+            return None;
+        }
+        // TERM=dumb 时 indicatif 会**静默退化成 hidden**（`draw_target.rs` 里
+        // `is_dumb()` 一票否决，连报错都没有）。这种终端下退回单行手绘 ——
+        // 至少还有进度可看，而不是一片沉默。
+        //
+        // 实测记录：Hermes 的终端执行环境就是 `TERM=dumb`，所以本地测试时
+        // `-j 2` 一度「一帧进度都没有」，排查了很久才发现是这个。
+        if matches!(std::env::var("TERM").as_deref(), Ok("dumb")) {
+            return None;
+        }
+        if self.多行.is_none() {
+            let m = indicatif::MultiProgress::new();
+            // 实测踩到：默认的 `new()` 内部先做一次 TTY 检测，检测不到就**静默退化**
+            // 成 hidden。这里强制指定 stderr 绘制目标。
+            m.set_draw_target(indicatif::ProgressDrawTarget::stderr_with_hz(10));
+            self.多行 = Some(m);
+        }
+        if let Some(pb) = self.条.get(&job) {
+            return Some(pb.clone());
+        }
+        let 多行 = self.多行.as_ref()?;
+        let pb = 多行.add(indicatif::ProgressBar::new(1000));
+        let (满, 空) = 进度条字符();
+        // indicatif 要三个字符：已完成 / 当前位置 / 未完成
+        let chars: String = [满, 满, 空].iter().collect();
+        if let Ok(sty) = indicatif::ProgressStyle::with_template("   [{bar:20}] {percent:>3}%  {msg}")
+        {
+            pb.set_style(sty.progress_chars(&chars));
+        }
+        self.条.insert(job, pb.clone());
+        Some(pb)
+    }
+
+    /// 任务结束：收掉它那一行（`finish_and_clear` 避免留下半截条）
+    fn 收尾(&mut self, job: u64) {
+        if let Some(pb) = self.条.remove(&job) {
+            pb.finish_and_clear();
+        }
+    }
+}
+
 /// 把引擎事件渲染成终端上的人话（引擎只发码和数字，文案归这里）
 struct 终端出口 {
     quiet: bool,
     json: bool,
     /// stderr 是不是终端：不是（管道/重定向）就不画进度条，免得刷出一堆 \r
     tty: bool,
-    last_draw: std::sync::Mutex<std::time::Instant>,
+    /// `None` = 还没画过第一帧。**首次必须画**，否则 200ms 节流会把
+    /// 短任务（内存盘上 150MB 只要 0.2 秒）的第一帧也吃掉，用户什么都看不到。
+    last_draw: std::sync::Mutex<Option<std::time::Instant>>,
     /// 速度 / 剩余时间估算（复用引擎里那个 EtaEstimator：α=0.3 指数滑动平均）
     eta: std::sync::Mutex<yshjy::progress::EtaEstimator>,
     /// 终端列数（构造时取一次就够；取不到按 80）
     cols: usize,
+    /// 多任务进度（`-j ≥ 2` 才启用，见 `多任务状态`）
+    多任务: std::sync::Mutex<多任务状态>,
 }
 
 impl 终端出口 {
@@ -1249,7 +1323,7 @@ impl 终端出口 {
             quiet,
             json,
             tty: std::io::stderr().is_terminal(),
-            last_draw: std::sync::Mutex::new(std::time::Instant::now()),
+            last_draw: std::sync::Mutex::new(None),
             eta: std::sync::Mutex::new(yshjy::progress::EtaEstimator::new()),
             // 注意：非交互环境（script / CI / 管道）下 ioctl 常常返回 0 列 ——
             // 直接 clamp 到 40 会让后面「速度 / 剩余 / 第几项」全被丢掉。
@@ -1258,6 +1332,7 @@ impl 终端出口 {
                 Ok((c, _)) if c >= 20 => (c as usize).clamp(20, 300),
                 _ => 80,
             },
+            多任务: std::sync::Mutex::new(多任务状态::new()),
         }
     }
 
@@ -1299,21 +1374,17 @@ impl yshjy::event::EventSink for 终端出口 {
 
         match ev {
             Event::ExtractProgress {
-                progress, current, ..
+                job,
+                progress,
+                current,
             }
             | Event::PackProgress {
-                progress, current, ..
+                job,
+                progress,
+                current,
             } => {
                 if !self.tty {
                     return; // 管道模式：别画进度条
-                }
-                // 重画节流：引擎侧已按 100ms 合并，这里再降到 200ms，避免刷屏
-                let now = std::time::Instant::now();
-                if let Ok(mut last) = self.last_draw.lock() {
-                    if now.duration_since(*last) < std::time::Duration::from_millis(200) {
-                        return;
-                    }
-                    *last = now;
                 }
                 let eta = match self.eta.lock() {
                     Ok(mut e) => e.observe(progress.done_bytes, progress.total_bytes),
@@ -1322,6 +1393,43 @@ impl yshjy::event::EventSink for 终端出口 {
                         .into_inner()
                         .observe(progress.done_bytes, progress.total_bytes),
                 };
+
+                // ── 多任务（-j 2 以上）：每个任务一条独立行，交给 indicatif 统一重绘 ──
+                // 这条路径不用我们的 200ms 节流 —— indicatif 自带绘制节流。
+                let 多行条 = match self.多任务.lock() {
+                    Ok(mut st) => st.取条(*job),
+                    Err(p) => p.into_inner().取条(*job),
+                };
+                if let Some(pb) = 多行条 {
+                    // 前缀「   [bar:20] 100%  」约占 30 列
+                    let 可用 = self.cols.saturating_sub(30);
+                    pb.set_message(进度消息(progress, &eta, current.as_deref(), 可用));
+                    let 千分 = progress
+                        .fraction()
+                        .map(|f| (f * 1000.0).round() as u64)
+                        .unwrap_or(0);
+                    pb.set_position(千分.min(1000));
+                    if std::env::var_os("YSHJY_DEBUG_PROGRESS").is_some() {
+                        eprintln!("[DBG] 多行 job={job} 千分={千分}");
+                    }
+                    return;
+                }
+                if std::env::var_os("YSHJY_DEBUG_PROGRESS").is_some() {
+                    eprintln!("[DBG] 单行 job={job}");
+                }
+
+                // ── 单任务：原来那条路，一个字没改 ──
+                // 重画节流：引擎侧已按 100ms 合并，这里再降到 200ms，避免刷屏
+                let now = std::time::Instant::now();
+                if let Ok(mut last) = self.last_draw.lock() {
+                    // 第一帧无条件画（`None`）—— 短任务也能看到进度，不是一片空白
+                    if let Some(上一帧) = *last
+                        && now.duration_since(上一帧) < std::time::Duration::from_millis(200)
+                    {
+                        return;
+                    }
+                    *last = Some(now);
+                }
                 let line = 画进度行(progress, &eta, current.as_deref(), self.cols);
                 eprint!("\r{line}\x1b[K");
             }
@@ -1359,7 +1467,11 @@ impl yshjy::event::EventSink for 终端出口 {
                     文案().t("cli.password_tried", &[("count", &attempts.to_string())])
                 );
             }
-            Event::JobFinished { .. } => {
+            Event::JobFinished { job, .. } => {
+                // 多任务：收掉这个任务那一行（否则会留在屏幕上不消失）
+                if let Ok(mut st) = self.多任务.lock() {
+                    st.收尾(*job);
+                }
                 self.清行();
             }
             _ => {}
@@ -1781,21 +1893,46 @@ fn 画进度行(
         .unwrap_or_else(|| "  …  ".into());
     let mut line = format!("   [{bar}] {百分比}");
 
+    // 文字段（字节 · 项号 · 速度 · 剩余 · 文件名）走共用函数 —— 多任务路径也用它
+    line.push_str(&进度消息(
+        progress,
+        eta,
+        current,
+        cols.saturating_sub(line.width()),
+    ));
+    line
+}
+
+/// 进度行的**文字部分**（字节 · 项号 · 速度 · 剩余 · 文件名），不含条与百分比。
+///
+/// 抽出来给两条渲染路径共用：
+/// - 单任务：`画进度行` 拼上条和百分比，用 `\r` 重画（已测好，不动）
+/// - 多任务（`-j 2` 以上）：塞进 indicatif 的 `{msg}`，条和重画交给它管
+///
+/// **算法只写一份** —— 否则两个路径的「剩余时间」会算出不同结果。
+/// `可用宽` 是这一行还剩多少列可写；不够就按「项号 → 速度 → 剩余 → 文件名」的顺序放弃。
+fn 进度消息(
+    progress: &yshjy::progress::ProgressView,
+    eta: &yshjy::progress::Eta,
+    current: Option<&str>,
+    可用宽: usize,
+) -> String {
+    use unicode_width::UnicodeWidthStr;
+
+    let mut line = String::new();
     // 字节：总量未知时就只报已解，别硬凑一个「/0 B」
     let 字节段 = if progress.total_bytes > 0 {
         format!(
-            "  {}/{}",
+            "{}/{}",
             人类可读(progress.done_bytes),
             人类可读(progress.total_bytes)
         )
     } else {
-        format!("  {}", 人类可读(progress.done_bytes))
+        人类可读(progress.done_bytes)
     };
     line.push_str(&字节段);
 
     let 项段 = if progress.total_files > 0 {
-        // 显示「正在处理第几个」而不是「已完成几个」—— 后者解到一半时永远是 0/1 项，
-        // 看着像一点没动。并行（-j>1）时这个数字是近似值，够用。
         let 当前项 = (progress.done_files + 1).min(progress.total_files);
         format!("  {当前项}/{} 项", progress.total_files)
     } else {
@@ -1813,13 +1950,13 @@ fn 画进度行(
         .unwrap_or_default();
 
     // 先加「第几项」，再加速度/剩余 —— 宽度不够就从后往前放弃
-    if line.width() + 项段.width() <= cols {
+    if line.width() + 项段.width() <= 可用宽 {
         line.push_str(&项段);
     }
-    if line.width() + 速度段.width() <= cols {
+    if line.width() + 速度段.width() <= 可用宽 {
         line.push_str(&速度段);
     }
-    if line.width() + 剩余段.width() <= cols {
+    if line.width() + 剩余段.width() <= 可用宽 {
         line.push_str(&剩余段);
     }
 
@@ -1827,7 +1964,7 @@ fn 画进度行(
     if let Some(name) = current
         && !name.is_empty()
     {
-        let 剩余宽 = cols.saturating_sub(line.width() + 2); // 两个空格分隔
+        let 剩余宽 = 可用宽.saturating_sub(line.width() + 2); // 两个空格分隔
         if 剩余宽 >= 8 {
             line.push_str("  ");
             line.push_str(&截断显示宽度(name, 剩余宽));
