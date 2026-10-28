@@ -556,7 +556,9 @@ fn main() -> ExitCode {
     }
     // 只剥封面、不解压（DESIGN §3 / §17.5）
     if has("--extract-cover") {
-        return do_extract_cover(&targets, quiet);
+        // `-o` 别名在 `val_of` 里已归一到 `--dest`；封面也是产物，跟着 `-o` 走
+        let dest_o = val_of("--dest");
+        return do_extract_cover(&targets, dest_o.as_deref().map(std::path::Path::new), quiet);
     }
     if cmd == "ys" {
         // 先把 Option 绑定成变量再取引用：`&val_of(...)` 直接塞进结构体会拿到
@@ -2375,7 +2377,11 @@ fn 找位置参数(argv: &[String], 带值: &[&str]) -> Option<PathBuf> {
 ///
 /// 封面区 = `[0, 压缩层起点)`。起点由定位阶段算出（ZIP 的 `Target::Zip.base`），
 /// 所以这里**不需要重新扫一遍文件**。
-fn do_extract_cover(targets: &[String], quiet: bool) -> ExitCode {
+fn do_extract_cover(
+    targets: &[String],
+    dest: Option<&std::path::Path>,
+    quiet: bool,
+) -> ExitCode {
     use std::sync::Arc;
 
     let mut 失败 = false;
@@ -2386,7 +2392,8 @@ fn do_extract_cover(targets: &[String], quiet: bool) -> ExitCode {
 
         match yshjy::job::identify(p, &ctx) {
             Ok(yshjy::job::Target::Zip { base, .. }) => {
-                match yshjy::cover_extract::extract_zip_cover(p, base) {
+                // 落点：给了 `-o` 就跟着走，没给就包旁边（历史行为）
+                match yshjy::cover_extract::extract_zip_cover_to(p, base, dest) {
                     Ok(Some(c)) => {
                         if quiet {
                             println!("{}", c.path.display());

@@ -289,9 +289,20 @@ pub fn 解压(
     if 要封面 {
         let sink0: Arc<dyn EventSink> = Arc::new(crate::event::NullSink);
         let ctx0 = UnpackCtx::new(1, sink0);
+        // 封面也是产物：请求里给了 `dest` 就放那儿 —— 界面「只提取封面」正是这条路径，
+        // 不给 dest 才退回「包旁边」（历史行为）。不认 dest 会让副本撒在源包旁边：
+        // 只读目录直接失败，可写目录则越跑越多 `封面 (N).mp4`。
+        let 封面目录: Option<PathBuf> = 参数
+            .get("dest")
+            .and_then(|v| v.as_str())
+            .map(PathBuf::from);
         if let Ok(crate::job::Target::Zip { base, .. }) =
             crate::job::identify(Path::new(路径), &ctx0)
-            && let Ok(Some(c)) = crate::cover_extract::extract_zip_cover(Path::new(路径), base)
+            && let Ok(Some(c)) = crate::cover_extract::extract_zip_cover_to(
+                Path::new(路径),
+                base,
+                封面目录.as_deref(),
+            )
         {
             结果["cover"] = json!({
                 "path": c.path.display().to_string(),

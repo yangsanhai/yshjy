@@ -35,11 +35,22 @@ pub fn cover_kind(ext: &str) -> &'static str {
     }
 }
 
-/// 由原包路径推出封面路径：`a.mp4` → `a.封面.mp4`
+/// 由原包路径推出封面路径：`a.mp4` → `a.封面.mp4`（落在包旁边）
 ///
 /// 重名时加 ` (1)`（与解压的 rename 策略一致），**永不返回原包路径**。
 pub fn cover_path(input: &Path) -> PathBuf {
-    let parent = input.parent().unwrap_or_else(|| Path::new("."));
+    cover_path_in(input, None)
+}
+
+/// 同上，但落点目录可以指定（`-o <目录>` / 协议 `dest`）。
+///
+/// 为什么需要它：`-o` 是「产物放这儿」的通用承诺，封面也是产物。不认 `-o` 的后果实测过 ——
+/// 副本全撒在源包旁边：目录可写时越跑越多（`封面 (35).mp4`），只读目录 / 网盘挂载点直接失败。
+/// `dir = None` 保持历史行为（包旁边），别改回去。
+pub fn cover_path_in(input: &Path, dir: Option<&Path>) -> PathBuf {
+    let parent = dir
+        .or_else(|| input.parent())
+        .unwrap_or_else(|| Path::new("."));
     let stem = input
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
@@ -106,12 +117,22 @@ pub fn probe_zip_cover(input: &Path, base: u64) -> Option<CoverInfo> {
     })
 }
 
-/// 切出封面区 `[0, base)`
+/// 切出封面区 `[0, base)`（落在包旁边）
 ///
 /// - `base == 0` → 没有封面区（包就在文件开头），返回 `Ok(None)`
 /// - 输出已存在 → 自动改名，不覆盖
 /// - 只复制 `base` 字节，绝不多读
 pub fn extract_zip_cover(input: &Path, base: u64) -> Result<Option<Cover>> {
+    extract_zip_cover_to(input, base, None)
+}
+
+/// 切出封面区 `[0, base)`，落到 `dest`（`None` = 包旁边）
+///
+/// 比上一版多两件事，都是为了不在用户磁盘上留垃圾：
+/// - **落点目录不存在就建**（`-o 新目录/` 是常见用法），切失败时把这个新建的空目录收回去；
+/// - **先写 `.yshjy-part` 再改名**（与解压六条落盘路径同一套）：中途失败不会留下
+///   顶着正式名的半截视频 —— 半截 mp4 用户会当成「切出来的原片」，其实打不开。
+pub fn extract_zip_cover_to(input: &Path, base: u64, dest: Option<&Path>) -> Result<Option<Cover>> {
     if base == 0 {
         return Ok(None);
     }
@@ -129,16 +150,51 @@ pub fn extract_zip_cover(input: &Path, base: u64) -> Result<Option<Cover>> {
             .context("cover base out of range"));
     }
 
-    let out_path = cover_path(input);
-    let out = File::create(&out_path)
-        .map_err(|e| Error::new(ErrorCode::PermissionDenied).context(format!("create cover: {e}")))?;
+    let out_path = cover_path_in(input, dest);
+
+    // 落点目录不存在就建；记下「是我们建的」，失败时把这个空目录收回去
+    let mut 新建目录 = false;
+    if let Some(d) = dest
+        && !d.exists()
+    {
+        std::fs::create_dir_all(d).map_err(|e| {
+            Error::new(ErrorCode::PermissionDenied).context(format!("create cover dir: {e}"))
+        })?;
+        新建目录 = true;
+    }
+    // 收尾用：删掉刚落下的半成品 + 我们自己建的空目录
+    let 清理 = |临时: &Path| {
+        let _ = std::fs::remove_file(临时);
+        if 新建目录 && let Some(d) = dest {
+            let _ = std::fs::remove_dir(d); // 非空就失败，忽略即可
+        }
+    };
+
+    let 临时: PathBuf = {
+        let mut s = out_path.clone().into_os_string();
+        s.push(".yshjy-part");
+        PathBuf::from(s)
+    };
+    let out = File::create(&临时).map_err(|e| {
+        清理(&临时);
+        Error::new(ErrorCode::PermissionDenied).context(format!("create cover: {e}"))
+    })?;
     let mut w = BufWriter::with_capacity(1 << 20, out);
 
     // `take(base)` 把读取上限钉死：即使源文件后面还有 8 GB 压缩数据也不会多读
-    let copied = std::io::copy(&mut src.take(base), &mut w)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("copy cover: {e}")))?;
-    w.flush()
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("flush cover: {e}")))?;
+    let copied = std::io::copy(&mut src.take(base), &mut w).map_err(|e| {
+        清理(&临时);
+        Error::new(ErrorCode::Internal).context(format!("copy cover: {e}"))
+    })?;
+    if let Err(e) = w.flush() {
+        清理(&临时);
+        return Err(Error::new(ErrorCode::Internal).context(format!("flush cover: {e}")));
+    }
+    drop(w); // 关句柄再改名（Windows 上不关改不了）
+    std::fs::rename(&临时, &out_path).map_err(|e| {
+        清理(&临时);
+        Error::new(ErrorCode::Internal).context(format!("rename cover: {e}"))
+    })?;
 
     let ext = input
         .extension()
@@ -244,5 +300,51 @@ mod tests {
         assert_eq!(cover_kind("PNG"), "image");
         assert_eq!(cover_kind("mp4"), "video");
         assert_eq!(cover_kind("bin"), "other");
+    }
+
+    #[test]
+    fn 指定目录时封面跟着_o走而且目录自动建() {
+        let d = scratch("dest");
+        let f = d.join("游戏.mp4");
+        let head = b"FAKE-VIDEO-HEADER";
+        let mut data = head.to_vec();
+        data.extend_from_slice(b"PK\x03\x04payload");
+        std::fs::write(&f, &data).unwrap();
+
+        let out = d.join("输出目录").join("更深一层");
+        assert!(!out.exists(), "前提：目标目录还不存在");
+        let c = extract_zip_cover_to(&f, head.len() as u64, Some(&out))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            c.path.parent(),
+            Some(out.as_path()),
+            "封面必须落在 -o 目录里，实际：{}",
+            c.path.display()
+        );
+        assert_eq!(std::fs::read(&c.path).unwrap(), head);
+        // 源包旁边不能出现副本 —— 老 bug 就是副本全撒在这儿（只读目录直接失败）
+        let 旁边有封面 = std::fs::read_dir(&d)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().contains("封面"));
+        assert!(!旁边有封面, "包旁边不该有封面副本");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn 落点目录建不出来时报权限错误且两边都不动() {
+        let d = scratch("baddest");
+        let f = d.join("x.mp4");
+        std::fs::write(&f, b"AAAAbbbb").unwrap();
+        // dest 指到「已经是文件」的路径上 → create_dir_all 必失败
+        let 挡住 = d.join("占位");
+        std::fs::write(&挡住, b"x").unwrap();
+
+        let e = extract_zip_cover_to(&f, 4, Some(&挡住)).unwrap_err();
+        assert_eq!(e.code, ErrorCode::PermissionDenied, "{e}");
+        assert_eq!(std::fs::read(&f).unwrap(), b"AAAAbbbb", "原包不能被碰");
+        assert_eq!(std::fs::read(&挡住).unwrap(), b"x", "占位文件不能被碰");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
