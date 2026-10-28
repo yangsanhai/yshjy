@@ -60,7 +60,19 @@ man 页从此停在旧版本；只有探针会发现（生成器自己说「本�
 **修法**：新增 `norm_man()`，**只抹 `.TH` 行里的日期**，版本号与其他字段参与比对。
 修完生成器正常输出 `✅ 已生成：yshjy.1`，man 页变 `yshjy 0.9.28`，`cli_spec_match.sh` 7 项全绿。
 
-### 四、本轮其它
+### 四、出包与装机（2026-10-28 夜）
+
+- 版本抬到 **0.9.28**（Cargo / pubspec / AGENTS / man 四处同步；0.9.27 已装机，按规矩必须抬号）
+- 三档产物齐全：`yshjy_0.9.28_amd64.deb`（9.8M）+ `yshjy-0.9.28-linux-x86_64.tar.gz` +
+  `yshjy-full-0.9.28-linux-x86_64.tar.gz`（各 3.7M + sha256）—— 顺带补上 0.9.27 只出了 deb、
+  漏掉的那两档 tar.gz
+- `scripts/test-packages.sh` **33 项全绿**；`sudo apt install` 覆盖装机后实测：
+  `dpkg -l yshjy` = 0.9.28、干净 PATH 里 `yshjy --version` = 0.9.28（`~/.local/bin/yshjy`
+  只是软链到 `/usr/bin/yshjy`，没有旧副本抢路）、菜单项 **14 种格式**、
+  `Exec=/usr/lib/yshjy/gui/yshjy_gui`、装机版「只取封面落 `-o`」生效且包旁边零副本、
+  `--help` 里 `--pick` / `--rescue` 都在
+
+### 五、本轮其它
 
 - 补提交四个平台脚手架（`gui/android|ios|macos|windows`，106 个文件）：多平台适配的底子，之前一直未入库
 - `.unshallow.log`（参考库拉取脚本的临时日志）加入 `.gitignore` 并删除

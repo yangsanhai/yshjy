@@ -10,6 +10,10 @@
 > 它认为没改、跳过写盘；改成只抹日期）。
 > 回归：`bash tests/all.sh` **29 通过 / 0 失败 / 4 跳过（慢测试）/ 179 秒**；`flutter test` 13 条；
 > `flutter analyze` 只剩一条既有 info；clippy `-D warnings` 干净。
+> **已出包并装机**：`dist/yshjy_0.9.28_amd64.deb`（9.8M）+ 两档 `tar.gz`（各 3.7M，0.9.27 缺的那档补上）；
+> `scripts/test-packages.sh` **33 项全绿**；`sudo apt install` 已覆盖 0.9.27 → **`dpkg -l yshjy` = 0.9.28**；
+> 装机版实测：菜单认领 **14 种格式**、`Exec=/usr/lib/yshjy/gui/yshjy_gui`、无旧手工副本、
+> 「只取封面落 `-o`」生效、`--help` 里 `--pick` / `--rescue` 都在。
 > **下一轮**：`docs/TODO.md` §优化建议 已全部清空 —— 剩下的就是「多平台适配」整块（用户口径：最后做）
 > 与表尾两条待查（`cargo test --release` 偶发失败、`--pick` 被 Ctrl-C 后光标不恢复）。
 >

@@ -19,8 +19,11 @@
 所以现在盘面上只剩三件，**都等用户发话，不自己找活**：
 1. 表尾两条待查（`cargo test --release` 偶发失败 / `--pick` 被 Ctrl-C 后光标不恢复）
 2. 「多平台适配」整块（用户口径：**最后做**，探测结论已在下面那张表里，别重复调研）
-3. 装机：0.9.28 的 deb/tar.gz 已出且 `scripts/test-packages.sh` 33 项全绿，
-   但**还没 dpkg -i**（要 sudo，等用户点头）
+3. ~~装机~~ ✅ **0.9.28 已装（2026-10-28 22:36）**：`dpkg -l yshjy` = 0.9.28；
+   `~/.local/bin/yshjy` 是软链指向 `/usr/bin/yshjy`（0.9.28，干净 PATH 里跑的就是它）；
+   无 `~/.local/opt/yshjy` 旧副本；desktop 的 `Exec=/usr/lib/yshjy/gui/yshjy_gui`；
+   菜单认领 **14 种格式**；装机版实测「只取封面落 `-o`」生效、包旁边零副本、`--help` 里
+   `--pick` / `--rescue` 都在
 
 ### ⏸ 最后做：多平台适配（整块延后；已探测清楚，到时候别重复调研）
 
