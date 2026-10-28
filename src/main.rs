@@ -122,31 +122,29 @@ fn 版本信息() -> String {
     s
 }
 
+/// CLI 选项表 —— **唯一真源**（`src/cli_spec.rs`）
+///
+/// 补全脚本与 man 页也从这张表生成，别再手抄副本（`docs/CLI-GUI-PLAN.md` §1）。
+mod cli_spec;
+
 /// 需要跟一个值的选项 —— 收集命令行里的"文件名"时必须跳过它们的值
 ///
-/// 抽成常量而不是散在 `matches!` 里：**漏登记一个就会出真事故**
-/// —— `--lang en 包.mp4` 会把 `en` 当成要解压的文件（多语言上线时正好踩到）。
-const 带值的选项: &[&str] = &[
-    "--dest", "-o", "--password", "-p", "--jobs", "-j", "--select", "--lang", "--split", "--encoding",
-    // 第 21 批组 E（CLI 扫尾）新增
-    "--config", "--layout", "--cover", "--password-file", "--log",
-    // 第 23 批（P23-4）：打包压缩级别
-    "--level",
-];
+/// **不再手抄**：从 `cli_spec::OPTS` 推导。手抄版实测已经漂过 ——
+/// `--import-passwords` 会取值却没登记，与当年 `--lang en 包.mp4` 把 `en`
+/// 当成要解压的文件是同一个坑（2026-10-28 三方对账揪出）。
+fn 带值的选项() -> &'static [&'static str] {
+    static CACHE: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(cli_spec::value_flags)
+}
 
 /// 不带值的选项 —— 用来拦住拼错的参数
 ///
 /// 以前 `-extract-cover`（少打一个横线）会被静默忽略 → 默认解压照跑，
 /// 用户以为在提封面，实际解了整个 5 GB 包（2026-10-17 实测踩到）。
-const 无值选项: &[&str] = &[
-    "--list", "-l", "--rescue", "--extract-cover", "--json", "--quiet", "-q",
-    "--help", "-h", "--version", "-V", "--show-config", "--report", "--no-paths",
-    "--caps",
-    "--force", "-f", "--no-smart-dir", "--no-checksum", "--no-readme", "--tail",
-    "--sfx", "--sfx-linux", "--serve", "--debug-crash", "--no-auto-password", "--no-color",
-    "--keep",
-    "-v", "-vv", "--verbose",
-];
+fn 无值选项() -> &'static [&'static str] {
+    static CACHE: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(cli_spec::switch_flags)
+}
 
 /// 进程级文案仓库
 ///
@@ -459,19 +457,19 @@ fn main() -> ExitCode {
             i += 1;
             continue;
         }
-        if 带值的选项.contains(&a.as_str()) {
+        if 带值的选项().contains(&a.as_str()) {
             i += 2; // 跳过它的值
             continue;
         }
         if a.starts_with('-') && a.len() > 1 {
-            if 无值选项.contains(&a.as_str()) {
+            if 无值选项().contains(&a.as_str()) {
                 i += 1;
                 continue;
             }
             // 不认识的选项：**必须报错**，绝不静默忽略。
             // 静默忽略的后果是「拼错参数 → 默认解压照跑」，用户完全察觉不到。
             let 猜 = format!("--{}", a.trim_start_matches('-'));
-            let 提示 = if 无值选项.contains(&猜.as_str()) || 带值的选项.contains(&猜.as_str())
+            let 提示 = if 无值选项().contains(&猜.as_str()) || 带值的选项().contains(&猜.as_str())
             {
                 format!("（你是不是想写 {猜}？）")
             } else {
@@ -2092,7 +2090,7 @@ fn do_report(argv: &[String], hide_paths: bool) -> ExitCode {
     // ⚠️ 实测踩到过：`yshjy --report -p 密码 包.mp4` 里，`-p` 的**值**（密码）
     //    也是个"非选项参数"，于是被当成了要分析的文件 —— findings.json 里的
     //    target 变成了那串密码。
-    let 目标 = 找位置参数(argv, 带值的选项);
+    let 目标 = 找位置参数(argv, 带值的选项());
     let opts = yshjy::report::ReportOptions {
         target: 目标,
         hide_paths,
