@@ -166,9 +166,19 @@
 
 ### 界面（GUI）侧
 
-- [ ] **「只取封面」入口**：引擎早就有 `--extract-cover`，协议 `extract` 也支持 `cover` / `extract` 两个开关，
-  界面上却没有对应按钮。成本最低的一条（协议现成，只是没接线）。
-  验收：拖入伪装包 → 点「只取封面」→ 落地一个能正常播放的原版视频，且**不解压**内层内容。
+- [x] **「只取封面」入口** ✅ **已完成（2026-10-28）** —— 界面上其实**早就接线了**
+  （预览页「伪装封面 / 压缩包内容」两个勾选框，只勾封面时主按钮就写「只提取封面」，
+  Dart 侧传 `cover: _wantCover, wantExtract: _wantExtract`）；文档落后于实现，已实测坐实。
+  **但实测挖出一个真 bug，顺手修了**：`--extract-cover` / 协议 `cover` **不认 `-o` / `dest`**，
+  封面一律落在源包旁边 → 只读目录直接失败、可写目录越跑越多（`tests/data` 里实测堆了 36 个
+  `A1_steg_modeA_plain.封面 (N).mp4`，就是契约测试每次跑它留下的）。
+  修法：`cover_path_in(input, dir)` + `extract_zip_cover_to(input, base, dest)`（旧的
+  `cover_path` / `extract_zip_cover` 保留成薄包装，老调用点零改动）；落点目录不存在就建、
+  失败把自建空目录收回；顺手改成 `.yshjy-part` → rename 的原子写（半截 mp4 用户会当成原片）。
+  **验收**：新探针 `tests/protocol_cover_only.py` **25 项全绿**，已挂进 `tests/all.sh` ——
+  ① 只取封面时 `entries_done=0`、dest 里只有封面一个文件、封面是合法 MP4（ftyp 头）；
+  ② 源包目录里零副本；③ 不给 dest 时仍落包旁边（老行为不回退）；④ 同名自动改名不覆盖；
+  ⑤ 解压 + 取封面同时要时两者共存同一 dest。
 - [ ] **「救援模式」入口**：CLI 有 `--rescue`（索引坏了按文件头抢救），界面里搜 `rescue` 零命中。
   协议里还没有这个命令，要加 `rescue` 命令 + Dart 侧入口 + 契约测试。
   验收：拿一个索引被改坏的样本，界面点「救援」也能救出文件；`tests/contract/` 补一份 golden。
