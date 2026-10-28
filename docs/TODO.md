@@ -73,6 +73,15 @@
   所以暂不定性，怀疑是机械盘冷启动 I/O 慢触发的超时类测试或 OOM 杀进程。
   下次复现时先 `bash tests/all.sh > ~/.hermes/cache/scratch/all.log 2>&1` 留完整输出，**别再只 tail**（这次就是因为 tail 掉了现场，无从判断是哪一条）。
 
+- [ ] **`--pick` 被 Ctrl-C 中断后光标不恢复**（2026-10-28 实测，pty 探针）：发 `\x03` 后进程以
+  SIGINT 结束（rc=-2），屏幕上只有 `\x1b[?25l`（隐藏光标）没有对应的 `\x1b[?25h`，
+  真实终端里光标会一直不显示，得 `reset` 才回来。
+  根因：中断走信号路径，`dialoguer` 的复原代码没有执行机会。
+  候选修法（按代价排）：① 不修，已在 `docs/CLI-SPEC.md` §4.5 写明「正常退出请用 Esc / q」；
+  ② 引 `signal-hook` / `ctrlc`（MIT/Apache，在 `deny.toml` 白名单内）装一个 SIGINT handler，
+  只做 `Show` 光标 + `disable_raw_mode` 后 `exit(130)`；③ 自己在 `src/pick.rs` 用 `rustix` 装 handler
+  （不破 `forbid(unsafe_code)`）。**优先 ②**，但要先跑 `cargo deny check` 四项。
+
 ## 优化建议（终端 ↔ 界面对账出来的缺口，2026-10-28）
 
 > 由来：用户问「终端命令你更新了吗、匹配功能了吗」。逐项对账后发现**两边各缺一半**：
@@ -112,8 +121,10 @@
   **只在真终端且 ≥50 列时画表格** —— 管道/重定向保持原来一行一条（脚本解析不受影响），
   窄于 50 列也退回老格式（实测 40 列时表格会把路径折成「大文件.b / in」）。
   表头 4 个 i18n 键 × 7 语言。实测 80/100 列中文对齐正确、40 列自动退回、管道输出与改前一致。
-- [ ] **中文键位表**：照 `refs/upstream/inquire/KEY_BINDINGS.md` 的表格形式，把 `--pick` 的键位
-  写进 `docs/CLI-SPEC.md`（代码里已有注释，缺一份给用户看的速查）。
+- [x] **中文键位表** ✅ **已完成（2026-10-28）**：`docs/CLI-SPEC.md` 新增 §4.5，
+  照 `refs/upstream/inquire/KEY_BINDINGS.md` 的 `<kbd>` 表格形式，列全 8 组按键 + 边界行为
+  （非 TTY 拒绝 / 一个都不勾 / Ctrl-C 的真实后果）。键位不是猜的 —— 逐条对着
+  `refs/upstream/dialoguer/src/prompts/multi_select.rs` 的按键分支抄，并用 pty 探针实测了 Ctrl-C 行为。
 - [x] **帮助补三条**（✅ 9c749ee 已完成，2026-10-28 补勾）：`--level`（压缩级别 0-9，界面打包页已有滑块）、`--sfx` / `--sfx-linux`（自解压包，
   界面已有开关）、`--caps`（各格式能力表，界面设置页已有按钮）。三处引擎都实现了，就是 `--help` 没写。
   验收：`yshjy --help` 能搜到这三个词，且文案与界面上的说法一致。
