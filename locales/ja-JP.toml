@@ -45,6 +45,7 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
                                     --select "data/**"     そのフォルダ以下だけ
                                     --select "1,3,5"       1・3・5 番目だけ
                                     --select required      .DS_Store などを除外
+  --pick <ファイル>               展開する項目を全画面で選ぶ（スペース · a · Enter）
   --json                           イベント／結果を JSON 行で出力（スクリプト向け）
   --no-smart-dir                   「スマート展開」を無効化：既定では最上位フォルダが 1 つだけなら
                                    同名フォルダを重ねず展開先へ直接展開します
@@ -92,6 +93,10 @@ tier_full = "  全能版：珍しい形式（ISO/UDF、CAB、ARJ など）を順
 
 [preview]
 title = "📦 {input}（{format}）"
+th_index = "番号"
+th_size = "サイズ"
+th_lock = "暗号化"
+th_path = "パス"
 incomplete = "   ⚠ この形式では一部の情報しか取得できません（サイズ不明）"
 empty = "   （一覧を取得できません）"
 row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
@@ -139,6 +144,9 @@ video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"
 
 [cli]
+pick_prompt = "展開する項目を選ぶ（スペースで切替 · a で全選択 · Enter で確定）— {input}"
+pick_no_tty = "❌ --pick は対話端末で使ってください。スクリプトでは --select \"1,3,5\" を使ってください"
+pick_cancelled = "（キャンセルしました。何もしていません）"
 report_done = "✅ 診断パッケージを作成しました：{path}\n   （ファイルの中身とパスワードは含まれません。公開するときは --no-paths を付けてください）"
 report_failed = "❌ 診断パッケージの作成に失敗しました：{err}"
 no_target = "❌ 処理するファイルが指定されていません。\n\n   使い方：yshjy <ファイル>\n   詳細：yshjy --help"

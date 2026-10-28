@@ -55,6 +55,11 @@ toml = "1.1.8"
 zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2", "aes-crypto"] }
 crossterm = "0.29.0"
 unicode-width = "0.2.2"
+# --list 的表格：中文按显示宽度对齐、窄终端自动折行（MIT，参考真身 refs/upstream/comfy-table）
+# 只多带一个 unicode-segmentation；台账见 docs/REFERENCE-INDEX.md §8
+comfy-table = "8"
+# --pick 的全屏勾选：raw mode / 分页 / 退出复原这些边界它全覆盖（MIT，真身 refs/upstream/dialoguer）
+dialoguer = "0.12"
 
 [dev-dependencies]
 rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }

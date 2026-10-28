@@ -45,6 +45,7 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
                                     --select "data/**"    해당 폴더 아래만
                                     --select "1,3,5"      1·3·5번째만
                                     --select required      .DS_Store 같은 쓰레기 제외
+  --pick <파일>                   풀 항목을 전체 화면에서 선택 (스페이스 · a · Enter)
   --json                          이벤트/결과를 JSON 줄로 출력 (스크립트용)
   --no-smart-dir                  '스마트 압축 풀기' 해제: 기본값은 최상위 폴더가 하나뿐이면
                                   같은 이름의 폴더를 겹치지 않고 대상 폴더에 바로 풉니다
@@ -92,6 +93,10 @@ tier_full = "  full 에디션: 드문 형식(ISO/UDF, CAB, ARJ 등)을 순차 �
 
 [preview]
 title = "📦 {input} ({format})"
+th_index = "번호"
+th_size = "크기"
+th_lock = "암호화"
+th_path = "경로"
 incomplete = "   ⚠ 이 형식은 일부 정보만 알 수 있습니다 (크기 미상)"
 empty = "   (목록을 가져올 수 없음)"
 row = "   {lock}{icon} {index:>4}.  {size:>10}  {path}{risk}"
@@ -139,6 +144,9 @@ video_unplayable = "표지 동영상 자체가 손상되었습니다"
 internal = "내부 오류"
 
 [cli]
+pick_prompt = "압축을 풀 항목 선택 (스페이스로 선택 · a 전체 선택 · Enter 확인) — {input}"
+pick_no_tty = "❌ --pick 은 대화형 터미널에서 사용하세요. 스크립트에서는 --select \"1,3,5\" 를 쓰세요"
+pick_cancelled = "(취소했습니다. 아무것도 하지 않았습니다)"
 report_done = "✅ 진단 패키지를 만들었습니다: {path}\n   (파일 내용과 비밀번호는 포함되지 않습니다. 공개할 때는 --no-paths를 붙이세요)"
 report_failed = "❌ 진단 패키지 생성 실패: {err}"
 no_target = "❌ 처리할 파일을 지정하지 않았습니다.\n\n   사용법: yshjy <파일>\n   자세히: yshjy --help"

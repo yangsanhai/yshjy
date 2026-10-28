@@ -130,6 +130,8 @@ if [ -n "$BIN" ]; then
   # CLI 选项表 ↔ 三份补全 ↔ --help 三方对账
   # （2026-10-28 新增：手抄副本实测已漂 —— --import-passwords 漏登记、补全缺 17 个）
   run "CLI 选项对账（cli_spec_match.sh）" bash tests/cli_spec_match.sh
+  # --pick 全屏勾选：非 TTY 拒绝 + pty 里勾选结果与 --select 逐字节一致
+  run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
 else
   skip "协议探针" "没有可执行文件"
 fi

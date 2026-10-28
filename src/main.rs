@@ -127,6 +127,9 @@ fn 版本信息() -> String {
 /// 补全脚本与 man 页也从这张表生成，别再手抄副本（`docs/CLI-GUI-PLAN.md` §1）。
 mod cli_spec;
 
+/// `--pick`：全屏勾选要解哪些条目（用 dialoguer，不手搓；见模块头注释）
+mod pick;
+
 /// 需要跟一个值的选项 —— 收集命令行里的"文件名"时必须跳过它们的值
 ///
 /// **不再手抄**：从 `cli_spec::OPTS` 推导。手抄版实测已经漂过 ——
@@ -611,19 +614,49 @@ fn main() -> ExitCode {
         },
         None => cfg.general.jobs, // 配置文件里可以定默认并行数
     };
-    let selection = match val_of("--select") {
-        Some(expr) => match yshjy::select::Selection::parse(&expr) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!(
-                    "{}",
-                    文案().t("cli.bad_select", &[("expr", &expr), ("reason", &e.to_string())])
-                );
-                eprintln!("{}", 文案().t("cli.select_examples", &[]));
+    let selection = if has("--pick") {
+        // ── --pick：全屏勾选（2026-10-28）──
+        // 非交互终端（管道 / 脚本 / cron）直接拒绝，并告诉用户改用 --select ——
+        // 全屏勾选在那种环境里只会把管道搞乱（验收标准②）。
+        use std::io::IsTerminal;
+        if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+            eprintln!("{}", 文案().t("cli.pick_no_tty", &[]));
+            return ExitCode::from(code::USAGE);
+        }
+        let 目标 = match targets.first() {
+            Some(t) => t.clone(),
+            None => {
+                eprintln!("{}", 文案().t("cli.no_target", &[]));
                 return ExitCode::from(code::USAGE);
             }
-        },
-        None => yshjy::select::Selection::all(),
+        };
+        match pick::交互勾选(&目标, 编码.as_deref()) {
+            Ok(Some(sel)) => sel,
+            Ok(None) => {
+                // 用户按 Esc / q —— 取消不是错误
+                eprintln!("{}", 文案().t("cli.pick_cancelled", &[]));
+                return ExitCode::from(code::OK);
+            }
+            Err(e) => {
+                eprintln!("❌ {e}");
+                return ExitCode::from(code::ERR);
+            }
+        }
+    } else {
+        match val_of("--select") {
+            Some(expr) => match yshjy::select::Selection::parse(&expr) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!(
+                        "{}",
+                        文案().t("cli.bad_select", &[("expr", &expr), ("reason", &e.to_string())])
+                    );
+                    eprintln!("{}", 文案().t("cli.select_examples", &[]));
+                    return ExitCode::from(code::USAGE);
+                }
+            },
+            None => yshjy::select::Selection::all(),
+        }
     };
 
     do_extract(解压参数 {
@@ -758,33 +791,47 @@ fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
     }
 
     println!();
-    for e in pv.entries.iter().take(40) {
-        let lock = if e.encrypted { "🔒" } else { "  " };
-        let icon = if e.is_dir { "📁" } else { "  " };
-        let size = if e.size > 0 {
-            人类可读(e.size)
-        } else {
-            语.t("preview.unknown_size", &[])
-        };
-        let risk = if e.is_risky {
-            语.t("preview.risky", &[])
-        } else {
-            String::new()
-        };
-        println!(
-            "{}",
-            语.t(
-                "preview.row",
-                &[
-                    ("lock", lock),
-                    ("icon", icon),
-                    ("index", &e.index.to_string()),
-                    ("size", &size),
-                    ("path", &e.path),
-                    ("risk", &risk),
-                ]
-            )
-        );
+
+    // 真终端里画成表格；管道 / 重定向保持原来一行一条
+    // （脚本靠这个格式解析，`--json` 更是一个字段都没动）
+    //
+    // 窄于 50 列也不画表格：实测 40 列时路径会被折成「大文件.b / in」这种，
+    // 还不如老格式好读。
+    use std::io::IsTerminal;
+    let 够宽 = crossterm::terminal::size()
+        .map(|(w, _)| w >= 50)
+        .unwrap_or(false);
+    if std::io::stdout().is_terminal() && 够宽 {
+        打印预览表格(pv);
+    } else {
+        for e in pv.entries.iter().take(40) {
+            let lock = if e.encrypted { "🔒" } else { "  " };
+            let icon = if e.is_dir { "📁" } else { "  " };
+            let size = if e.size > 0 {
+                人类可读(e.size)
+            } else {
+                语.t("preview.unknown_size", &[])
+            };
+            let risk = if e.is_risky {
+                语.t("preview.risky", &[])
+            } else {
+                String::new()
+            };
+            println!(
+                "{}",
+                语.t(
+                    "preview.row",
+                    &[
+                        ("lock", lock),
+                        ("icon", icon),
+                        ("index", &e.index.to_string()),
+                        ("size", &size),
+                        ("path", &e.path),
+                        ("risk", &risk),
+                    ]
+                )
+            );
+        }
     }
     if pv.entries.len() > 40 {
         println!(
@@ -811,6 +858,49 @@ fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
         println!("{}", 语.t("preview.password_hint", &[("input", t)]));
     }
     println!("{}", 语.t("preview.select_hint", &[("input", t)]));
+}
+
+/// `--list` 在真终端里画成表格（中文按显示宽度对齐、窄终端自动折行）
+///
+/// 只在 `stdout` 是终端时调用 —— 管道 / 重定向仍走原来的一行一条，
+/// 免得把脚本解析搞崩（`--json` 更是一个字段都没动）。
+/// 列宽自适应来自 comfy-table（MIT）：它用 unicode-width 算中文宽度，
+/// README §205/§255-283 的优先级是「显式宽度 → 终端宽度」。
+fn 打印预览表格(pv: &yshjy::preview::Preview) {
+    use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
+
+    let 语 = 文案();
+    let mut tb = Table::new();
+    tb.load_style(UTF8_FULL)
+        .set_content_arrangement(ContentArrangement::Dynamic);
+    tb.set_header(vec![
+        语.t("preview.th_index", &[]),
+        语.t("preview.th_size", &[]),
+        语.t("preview.th_lock", &[]),
+        语.t("preview.th_path", &[]),
+    ]);
+
+    for e in pv.entries.iter().take(40) {
+        let size = if e.size > 0 {
+            人类可读(e.size)
+        } else {
+            语.t("preview.unknown_size", &[])
+        };
+        let mut 路径 = e.path.clone();
+        if e.is_dir {
+            路径 = format!("📁 {路径}");
+        }
+        if e.is_risky {
+            路径.push_str(&语.t("preview.risky", &[]));
+        }
+        tb.add_row(vec![
+            Cell::new(e.index.to_string()),
+            Cell::new(size),
+            Cell::new(if e.encrypted { "🔒" } else { "" }),
+            Cell::new(路径),
+        ]);
+    }
+    println!("{tb}");
 }
 
 /// 预览结果 → JSON（给脚本/前端消费）
