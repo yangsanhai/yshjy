@@ -102,6 +102,7 @@ pub const OPTS: &[Opt] = &[
     // ── 内部选项（不进 help / 补全）──────────────────────────────
     opt("--serve", None, None, true),                     // 协议服务（界面走这条）
     opt("--debug-crash", None, None, true),               // 手动触发崩溃，测兜底
+    opt("--dump-cli-spec", None, None, true),             // 把本表输出成 JSON（生成补全/man 用）
 ];
 
 /// `-v` / `-vv` 是**重复计数型**短选项，不属于「长名 + 可选短名」的形状，
@@ -152,21 +153,83 @@ pub fn switch_flags() -> Vec<&'static str> {
     v
 }
 
+/// 把表输出成 JSON —— `--dump-cli-spec` 用它，`scripts/gen-cli-assets.py` 读它生成
+/// 补全与 man 页。
+///
+/// **生成器不许去解析 Rust 源码**（正则解析源码是最脆的做法），一律读这个 JSON。
+pub fn dump_json() -> String {
+    let mut s = String::from("{\n");
+    s.push_str("  \"options\": [\n");
+    for (i, o) in OPTS.iter().enumerate() {
+        s.push_str(&format!(
+            "    {{\"long\": {long}, \"short\": {short}, \"value\": {value}, \"internal\": {internal}}}{comma}\n",
+            long = json_str(o.long),
+            short = match o.short {
+                Some(x) => json_str(x),
+                None => "null".to_string(),
+            },
+            value = match o.value {
+                Some(v) => json_str(v),
+                None => "null".to_string(),
+            },
+            internal = o.internal,
+            comma = if i + 1 == OPTS.len() { "" } else { "," },
+        ));
+    }
+    s.push_str("  ],\n");
+    s.push_str(&format!(
+        "  \"repeat_shorts\": [{}]\n",
+        REPEAT_SHORTS
+            .iter()
+            .map(|x| json_str(x))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+    s.push_str("}\n");
+    s
+}
+
+/// 最小的 JSON 字符串转义（我们只有选项名与值名，不会出现控制字符，但引号/反斜杠仍要挡）
+fn json_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// 长选项总数钉桩 —— 加选项时**必须**同步改这里（故意的：逼你确认补全/man 也跟着更新）
     ///
-    /// 38 = 原有 37（16 带值 + 30 开关，含重复的短名行去重后）+ 2026-10-28 补登记的
-    /// `--import-passwords`。
+    /// 39 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的内部命令
+    /// `--dump-cli-spec`。
     #[test]
-    fn 长选项总数是_38() {
+    fn 长选项总数是_39() {
         assert_eq!(
             OPTS.len(),
-            38,
+            39,
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
+    }
+
+    /// `--dump-cli-spec` 输出的 JSON 必须能被解析，且含关键字段（生成器靠它吃饭）
+    #[test]
+    fn dump_json_形状正确() {
+        let j = dump_json();
+        assert!(j.contains("\"options\""));
+        assert!(j.contains("\"repeat_shorts\""));
+        assert!(j.contains("\"--dest\""));
+        assert!(j.contains("\"目录\""), "值名要带上（补全/man 要用）");
+        assert!(!j.contains("\\u"), "不该出现转义乱码");
     }
 
     /// 表内不许出现重复长名（复制粘贴最容易出的错）

@@ -414,6 +414,15 @@ fn main() -> ExitCode {
         return do_report(&argv, has("--no-paths"));
     }
 
+    // 内部：把 CLI 选项表输出成 JSON（`scripts/gen-cli-assets.py` 读它生成补全与 man 页）
+    //
+    // 为什么走这条路：生成器如果去解析 `src/main.rs` 的源码，正则一漂就错；
+    // 让二进制自己吐 JSON，真源永远是那张表。
+    if has("--dump-cli-spec") {
+        print!("{}", cli_spec::dump_json());
+        return ExitCode::from(code::OK);
+    }
+
     // 导入外部密码本（兼容隐写者的 PW.txt：Tab 取第一列，且不过滤中文）
     if let Some(src) = val_of("--import-passwords") {
         let dst = cfg.passwords_path();

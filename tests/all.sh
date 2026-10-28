@@ -127,6 +127,9 @@ if [ -n "$BIN" ]; then
     skip "RAR 原子落盘" "没装 rar（sudo apt install -y rar 后才会跑）"
   fi
   run "协议契约（contract/run.py）" env YSHJY_BIN="$BIN" python3 tests/contract/run.py
+  # CLI 选项表 ↔ 三份补全 ↔ --help 三方对账
+  # （2026-10-28 新增：手抄副本实测已漂 —— --import-passwords 漏登记、补全缺 17 个）
+  run "CLI 选项对账（cli_spec_match.sh）" bash tests/cli_spec_match.sh
 else
   skip "协议探针" "没有可执行文件"
 fi
