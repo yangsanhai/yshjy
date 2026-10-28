@@ -87,6 +87,7 @@
 | `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` |
 | `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `ask?`, `select?`, `encoding?` | 顺序批量解压，返回逐项结果；`ask` / `select` / `encoding` 与 `extract` 同规则（同一次批量里所有包都按这个挑选） |
 | `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
+| `rescue` | `path`, `dest?`, `list_only?`, `encoding?` | **救援**（＝CLI `--rescue`）：中央目录坏了也按 local header 重建清单并抢救数据。`list_only:true` 只重建清单、**一个字节都不落盘**（界面可以先说「能救回 N 个」再动手）；不给 `dest` 时落到 `<包名>.rescue`；只认 ZIP 家族，认不出回 `NOT_ARCHIVE`（**不许**折成 `DATA_LOST`，否则用户会去重下好包）。结果带 `entries_total` / `entries_done` / `dest` / `files[]` / `skipped[]` / `rebuilt[]` |
 | `bulk` 以外的新命令 | — | **只加不删**，前端忽略不认识的 |
 
 （最后一行示例：以后新增命令照这个原则 —— **只加不删**，老前端忽略即可。）

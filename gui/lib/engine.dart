@@ -474,6 +474,27 @@ class EngineClient {
     return _unwrap(r);
   }
 
+  /// 救援：索引（中央目录）坏了时按文件头抢救（协议 `rescue`，与 CLI `--rescue` 同一条路）
+  ///
+  /// - `listOnly: true` 只重建清单不落盘 —— 想先说「能救回 N 个」再动手就用它
+  /// - 不给 `dest` 时引擎落到 `<包名>.rescue`（与 CLI 一致）
+  ///
+  /// 超时给到 30 分钟：救援要扫全文件，网盘挂载点上慢得多。
+  Future<Map<String, dynamic>> rescue(
+    String path, {
+    String? dest,
+    bool listOnly = false,
+    String? encoding,
+  }) async =>
+      _unwrap(await _call({
+        'cmd': 'rescue',
+        'path': path,
+        if (dest != null) 'dest': dest,
+        'list_only': listOnly,
+        if (encoding != null && encoding.isNotEmpty && encoding != 'auto')
+          'encoding': encoding,
+      }, timeout: const Duration(minutes: 30)));
+
   Future<void> cancel() async {
     try {
       await _call({'cmd': 'cancel'}, timeout: const Duration(seconds: 10));
