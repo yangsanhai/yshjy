@@ -37,3 +37,6 @@ fuzz/artifacts/
 fuzz/coverage/
 *.tar.gz
 tests/data/
+
+# 过程日志（参考库拉取脚本的临时输出，别入库也别留）
+.unshallow.log
