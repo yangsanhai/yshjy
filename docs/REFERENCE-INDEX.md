@@ -212,32 +212,39 @@
 | indicatif / dialoguer / comfy-table | §8 台账（带源码行号） |
 | hatchzip / delete_when_unzip / ReclaimArc | `docs/INPLACE-EXTRACT.md`（三档路线拆解） |
 
-### 10.2 漏的（下载了，但没有拆解文档）
+### 10.2 ✅ 原「漏的」9 项 —— **2026-10-28 全部补拆完毕**
 
-| # | 项目 | 现状 | 要紧程度 |
+> 补拆共产出 **5 份文档 / 9 条可落地结论 / 1 个真 bug**。判定标准不变：
+> 「拆过」= 有专门文档或带行号的台账。
+
+| # | 项目 | 拆解文档 | 最值钱的产出 |
 |---|---|---|---|
-| 1 | **`clap_complete` / `clap_mangen` 源码**（`upstream/clap/`） | 刚拉，**一行没读**；只有台账里写了「可以引它」 | 🔴 最高 —— 第 1 行（补全/man 自动生成）就要用 |
-| 2 | **`hiddify-core` 的 C ABI 设计**（`upstream/hiddify-app/`） | 只抄了 `pubspec.yaml` 里 ffigen 那 6 行配置，**头文件怎么设计没拆** | 🔴 高 —— 第 4 步安卓就要用，我们 `ffi/include/yshjy.h` 正好可以对照 |
-| 3 | **`libarchive`**（`外部-归档软件/`） | 只在格式总矩阵里当**格式来源**引用，架构（格式注册表/过滤器链）没拆 | 🟡 中 —— 是「加格式不改主流程」的教科书 |
-| 4 | **`Ark`**（KDE）、**`FileRoller`**（GNOME） | Ark 只有 `GUI-PLAN.md:603` 一句「桌面集成学 File Roller / Ark」；**FileRoller 全仓零提及**（唯一连名字都没进文档的） | 🟡 中 —— 桌面右键/托盘/通知/默认打开那条线才用 |
-| 5 | **`Keka`**、**`NanaZip`** | 各只有一句（NanaZip 的「Core-Codec 分离」提了但没拆） | 🟢 低 —— 格式扩展时才用 |
-| 6 | `flutter_rust_bridge`（`frb_example/`） | 拉了，**零提及**（只在 pubspec 对比里出现过项目名） | 🟢 低 —— 已定走 ffigen，不用它 |
-| 7 | `fastforge` / `cargo-dist` | 只看了配置文件头部几十行 | 🟢 低 —— 等真要做安装器/一键装再看 |
-| 8 | `inquire` | 只抄了 `KEY_BINDINGS.md` 的文档格式，键位实现没拆 | 🟢 低 —— 用 dialoguer 已经够 |
-| 9 | `ratatui` | §8 记了「不做鼠标」，算**有意排除**，不算漏 | — |
+| 1 | **clap_complete + clap_mangen** | `tech/clap-complete-mangen.md` | 🔴 **我们 bash 补全的真 bug**：没有 bash-completion 包时，带空格的文件名被劈成两个候选（实测 2 个 vs 期望 1 个）；修法 `IFS=$'\n'` 包 `compgen -f` |
+| 2 | **hiddify-core 的 C ABI** | `tech/hiddify-core-c-abi.md` | 头文件是**构建产物**（不进仓）→ 我们手写 `ffi/include/yshjy.h` 有漂移风险，给了探针方案；另记 upstream 一处 use-after-free 别学 |
+| 3 | **libarchive** | `tech/libarchive.md` | `entry_bytes_declared`（按头部声明大小给输出封顶）→ 直接对应我们待办「条目 packSize 校验」 |
+| 4 | **Ark + FileRoller** | `tech/ark-fileroller.md` | 右键菜单**按目标目录可写性裁剪**（只读时不给「解压到此处」）；另确认 GNOME 官方也在从 CLI 后端迁到内建 libarchive |
+| 5 | **Keka** | 同上文档 §1 | ❌ **无法拆：上游闭源**。仓库只有 `Bin/`（unar/lbzip2/lzip/plzip 四个外部 CLI）+ 34 种翻译，零源码 |
+| 6 | **NanaZip** | `tech/keka-nanazip-inquire-etc.md` §2 | Core/Codec/Base 三层；`Sfx.Console`/`Sfx.Setup`/`Sfx.Shared` 三档自解压 |
+| 7 | **inquire** | 同上 §3 | 🔴 **`--pick` 被 Ctrl-C 后光标不恢复的根因确认**：dialoguer 用 `console` 后端 → Ctrl+C 走 SIGINT；crossterm 后端会当普通按键读进来。多出「解法 B」 |
+| 8 | **fastforge / cargo-dist** | 同上 §4/§5 | 打包流水线四段分层（分析/构建/打包/发布）；`x86_64-unknown-linux-musl` 是 glibc 基线问题的根治方向 |
+| 9 | **flutter_rust_bridge** | 同上 §6 | 确认不选的 3 条理由（要改导出层 / 两套运行时 / 藏起 ABI 版本号） |
+
+> `ratatui` 仍是有意排除（不做鼠标），不算漏。
 
 ### 10.3 顺手发现的两笔冗余（**没删，等用户点头**）
 
 - `外部-归档软件/` 里的 **`LocalSend`** 与 **`RustDesk`** 是 2026-10-16 的浅克隆，与 `upstream/` 新拉的同名项目重复。
 - `外部-归档软件/PeaZip` 与 `refs/PeaZip` 重复（后者才是被拆解的那份）。
 - 合计约占 283 MB 里的一百多 MB；按项目铁律**先问不删**。
+- 另：`外部-归档软件/clone.log` 里记的克隆路径是 `/home/user/hermes/studio/refs/`（后来整体移过来了），
+  路径已过时，别拿它当准。
 
-### 10.4 补拆顺序（按「马上要用」排，不按项目大小）
+### 10.4 补拆过程中新发现的 4 个待办（**进 `docs/TODO.md`，不插队，加表尾**）
 
-1. `clap_complete` / `clap_mangen` —— 第 1 行开工前先读（半小时）
-2. `hiddify-core` 的 C ABI 头文件设计 —— 第 4 步安卓开工前读（一小时）
-3. `libarchive` 格式注册表 —— 想加格式时读
-4. `Ark` / `FileRoller` —— 做桌面集成时读
+1. 🔴 `scripts/completions/yshjy.bash` 的 fallback 没有 IFS 保护（真 bug，实测见 `tech/clap-complete-mangen.md` §6.1）
+2. 🟡 新增探针 `tests/ffi-header-sync.sh`（头文件与 `ffi/src/lib.rs` 双向对账）
+3. 🟢 `complete` 那行补 `-o nosort -o bashdefault -o default`（带 bash 4.4 判断）
+4. 🟢 `--test`（测试包完整性）作为独立能力 —— Ark 的 `SupportsTesting` 提醒的缺口
 
 ---
 

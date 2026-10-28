@@ -16,8 +16,13 @@
 **梯队四已全清，阶段 0 的 T5 也已完成（2026-10-28）** —— 0.9.26 的 deb 与 tar.gz 都在 `dist/`，验收 33 项全绿。
 **当前该做的（2026-10-28 夜·0.9.28）**：**§优化建议那节已经全部清空**
 （终端 5 条 + 界面 2 条，最后两条「只取封面」与「救援模式」在 0.9.28 做完，见 CHANGELOG）。
-所以现在盘面上只剩三件，**都等用户发话，不自己找活**：
-1. 表尾两条待查（`cargo test --release` 偶发失败 / `--pick` 被 Ctrl-C 后光标不恢复）
+**参考项目补拆已完成（2026-10-28 夜）**：原 §10.2「漏的」9 项全部拆完，产出 5 份文档
+（`refs/tech/{clap-complete-mangen,hiddify-core-c-abi,libarchive,ark-fileroller,keka-nanazip-inquire-etc}.md`），
+其中 **1 个真 bug**（bash 补全带空格文件名）与 **1 条根因确认**（`--pick` 的 Ctrl-C）已记到本文件表尾。
+Keka 无法拆（上游闭源，仓里只有 Bin/ + 翻译）。
+所以现在盘面上只剩四件，**都等用户发话，不自己找活**：
+1. 表尾四条待查（`cargo test --release` 偶发失败 / `--pick` 被 Ctrl-C 后光标不恢复 /
+   bash 补全空格文件名 bug / 缺 `tests/ffi-header-sync.sh` 探针）
 2. 「多平台适配」整块（用户口径：**最后做**，探测结论已在下面那张表里，别重复调研）
 3. ~~装机~~ ✅ **0.9.28 已装（2026-10-28 22:36）**：`dpkg -l yshjy` = 0.9.28；
    `~/.local/bin/yshjy` 是软链指向 `/usr/bin/yshjy`（0.9.28，干净 PATH 里跑的就是它）；
@@ -96,6 +101,38 @@
   ④ 验收要能测出来：`tests/pick.sh` 加一项 —— pty 里发 `\x03` 后，输出流里必须出现
      `\x1b[?25h` 且退出码 130；顺手断言「不影响正常路径」（Esc / 勾选确认仍退出码 0）。
   备用方案（不行再加）：`rustix` 自己装 handler，不破 `forbid(unsafe_code)`。
+  **2026-10-28 补拆 `inquire` 后确认了根因、并发现第二条解法**（详见
+  `refs/tech/keka-nanazip-inquire-etc.md` §3）：
+  - 根因有了上游背书 —— `inquire/src/error.rs:27-33` 注释原话（SIGINT 那句在 `:32`）：
+    「This error will be returned only when using `crossterm` or `termion` as the terminal back-end.
+    **If using `console`, pressing Ctrl+C will trigger SIGINT.**」而 **dialoguer 用的正是 `console`**。
+    所以不是我们写错了，是后端选型决定的。
+  - **解法 B（新）**：`--pick` 自己用 crossterm 读键（`Cargo.toml` 里已有 `crossterm = "0.29"`），
+    Ctrl+C 就是 `KeyCode::Char('c') + CONTROL`，**不进信号路径**，收尾代码在同一函数里顺序执行；
+    代价是要自己重写分页/过滤/非 TTY 降级（即 `REFERENCE-INDEX.md:136-140` 那条「别自己写 raw mode」的反面）。
+  - **执行建议**：先试 A（改动最小）；若 handler 里 `disable_raw_mode` 出现不可重入问题，
+    再退 B。**别两条一起上。**
+
+### 待查 / 改进（2026-10-28 补拆参考项目时新发现，按铁律记表尾，不插队）
+
+- [ ] 🔴 **bash 补全的真 bug：没装 bash-completion 包时，带空格的文件名被劈成两个候选**。
+  `scripts/completions/yshjy.bash` 的 fallback 是 `COMPREPLY=($(compgen -f -- "$cur"))`，
+  命令替换按默认 IFS 再分词 → `有 空格.zip` 变成 `有` + `空格.zip`。实测：无 bash-completion 时
+  COMPREPLY 2 个元素（错），装了是 1 个（对），clap 的 `IFS=$'\n'` 写法也是 1 个（对）。
+  修法见 `refs/tech/clap-complete-mangen.md` §6.1（生成器 `gen-cli-assets.py:295`、`:312` 两处）。
+  验收：新增 `tests/completions.sh`，断言带空格文件名只出一条候选。
+
+- [ ] 🟡 **新增探针 `tests/ffi-header-sync.sh`**：`ffi/include/yshjy.h` 是手写的第二份真源
+  （头文件 43 行 vs `ffi/src/lib.rs` 9 个 `extern "C"`），改了实现忘改头文件就会漂移 ——
+  和 man 页版本号、补全 18/35 项是**同一种病**（已经栽过两次）。做法照 `tests/cli_spec_match.sh`：
+  两边抓函数名清单 `diff`，不一致就红。参考 `refs/tech/hiddify-core-c-abi.md` §7.1-B。
+
+- [ ] 🟢 `complete` 那行补 `-o nosort -o bashdefault -o default`（bash ≥4.4 才有 `nosort`），
+  用户可感知的差别：选项候选不再被 bash 按字母序重排。位置 `gen-cli-assets.py:316`。
+
+- [ ] 🟢 `--test`（测试包完整性）作为独立能力位 —— `Ark` 的插件元数据里 `SupportsTesting: true`
+  是一个独立能力（`refs/tech/ark-fileroller.md` §2）。我们现在只有打包侧的 `--no-checksum`，
+  解压侧没有「只测不写」的动作。另记：Ark 的能力是**按 MIME 声明**的，我们的 `caps` 是全局一份。
 
 ## 优化建议（终端 ↔ 界面对账出来的缺口，2026-10-28）
 
