@@ -85,10 +85,17 @@
   SIGINT 结束（rc=-2），屏幕上只有 `\x1b[?25l`（隐藏光标）没有对应的 `\x1b[?25h`，
   真实终端里光标会一直不显示，得 `reset` 才回来。
   根因：中断走信号路径，`dialoguer` 的复原代码没有执行机会。
-  候选修法（按代价排）：① 不修，已在 `docs/CLI-SPEC.md` §4.5 写明「正常退出请用 Esc / q」；
-  ② 引 `signal-hook` / `ctrlc`（MIT/Apache，在 `deny.toml` 白名单内）装一个 SIGINT handler，
-  只做 `Show` 光标 + `disable_raw_mode` 后 `exit(130)`；③ 自己在 `src/pick.rs` 用 `rustix` 装 handler
-  （不破 `forbid(unsafe_code)`）。**优先 ②**，但要先跑 `cargo deny check` 四项。
+  **用户口径（2026-10-28）：这轮不做，就记在这里等以后。** 已在 `docs/CLI-SPEC.md` §4.5
+  写明「正常退出请用 Esc / q」，所以不算哑坑。
+  **动手时的执行顺序（照这个走，别即兴）**：
+  ① 先引 `signal-hook`（或 `ctrlc`），MIT/Apache，在 `deny.toml` 白名单内 —— **加依赖前先跑
+     `cargo deny check` 四项全绿**，红了就换实现方式；
+  ② handler 只做三件事：`\x1b[?25h` 显光标 → `crossterm::terminal::disable_raw_mode()` →
+     `exit(130)`。**别在 handler 里做别的**（信号上下文不能干重活）；
+  ③ 只在 `--pick` 进屏期间装、退出时摘掉，别让整个程序的 Ctrl-C 行为变味；
+  ④ 验收要能测出来：`tests/pick.sh` 加一项 —— pty 里发 `\x03` 后，输出流里必须出现
+     `\x1b[?25h` 且退出码 130；顺手断言「不影响正常路径」（Esc / 勾选确认仍退出码 0）。
+  备用方案（不行再加）：`rustix` 自己装 handler，不破 `forbid(unsafe_code)`。
 
 ## 优化建议（终端 ↔ 界面对账出来的缺口，2026-10-28）
 
