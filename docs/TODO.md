@@ -102,14 +102,19 @@
 - [x] **帮助补三条**（✅ 9c749ee 已完成，2026-10-28 补勾）：`--level`（压缩级别 0-9，界面打包页已有滑块）、`--sfx` / `--sfx-linux`（自解压包，
   界面已有开关）、`--caps`（各格式能力表，界面设置页已有按钮）。三处引擎都实现了，就是 `--help` 没写。
   验收：`yshjy --help` 能搜到这三个词，且文案与界面上的说法一致。
-- [ ] **补全与 man 页改成构建期自动生成**（**不许再手写副本**，做法见 `docs/REFERENCE-INDEX.md` §9.1）：
-  现状实测（2026-10-28 用 `target/release/yshjy --help` 数）：**`--help` 共 35 个长选项，手写补全只登记 18 个，
+- [ ] **补全改成自动生成 ✅ 已完成（2026-10-28，`92ae618`+后续提交）；man 页仍手写 ⬜ 待做**
+  （**不许再手写副本**，做法见 `docs/REFERENCE-INDEX.md` §9.1）：
+  原状实测（2026-10-28 用 `target/release/yshjy --help` 数）：**`--help` 共 35 个长选项，手写补全只登记 18 个，
   缺 17 个** —— `--caps --config --cover --encoding --extract-cover --keep --layout --level --log
   --no-auto-password --no-checksum --no-color --no-readme --password-file --sfx --sfx-linux --split`。
-  根因不是「漏抄」，是**手抄副本必然漂移**；照 `upstream/ouch/build.rs:20-39` 用 `clap_complete` + `clap_mangen`
-  从同一份 clap 定义生成，打包时塞进 deb。`scripts/completions/` 手写三件套退休。
-  验收：① `cargo build` 能生成补全与 man；② 生成的补全选项集合 == `yshjy --help` 的选项集合（对账进 `tests/all.sh`）；
-  ③ 包里 man 页版本号与二进制一致（不许再出现 man 停在旧版本）。
+  根因不是「漏抄」，是**手抄副本必然漂移**。
+  **已落地（补全这一半）**：新增 `src/cli_spec.rs`（唯一真源，39 项）+ `--dump-cli-spec` 吐 JSON +
+  `scripts/gen-cli-assets.py` 生成 bash/zsh/fish 三份（说明文字从 `help.text` 自动提取，不产生第二份文案）+
+  `tests/cli_spec_match.sh` 五条对账探针并挂进 `tests/all.sh`。手写三件套已退休（文件头写明「别手改」）。
+  实测：bash 里 `yshjy --imp<TAB>` → `--import-passwords`、`-j<TAB>` → `1 2 4 8`、`--lang<TAB>` → 7 种语言；
+  三份补全都从 18 项变 36 项对外选项全在；`bash -n` / `zsh -n` 语法过。
+  **剩下（man 页）**：`docs/yshjy.1` 仍是手写，缺的选项要补齐；版本号那行要从 `CARGO_PKG_VERSION` 取
+  （历史上落后过三个版本）。验收：① 包里 man 页版本号与二进制一致；② man 页里的选项集合 == 表（对账加进探针）。
 
 ### 功能（新增，用户点名）
 
