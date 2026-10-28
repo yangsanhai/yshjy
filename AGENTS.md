@@ -4,7 +4,7 @@
 
 ## 这是什么
 
-还原伪装成视频/图片的压缩包，Rust 引擎 + Flutter Linux 界面。当前版本 `0.9.26`。
+还原伪装成视频/图片的压缩包，Rust 引擎 + Flutter Linux 界面。当前版本 `0.9.27`。
 
 - 引擎：`src/*.rs`（CLI + 管道协议，零第三方解压库，自己写的 zip/7z/rar/tar 解析）
 - 界面：`gui/`（Flutter，Linux 桌面）
