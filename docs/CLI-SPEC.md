@@ -202,6 +202,35 @@ $ yshjy --list --json 包.mp4
 - **永不清屏**（竞品清屏冲掉日志的坑，见 UI-SPEC 9.3）。
 - 大文件必须显示：百分比 + 字节数 + 预计剩余 + 当前文件名。
 
+### 4.5 `--pick` 交互键位（全屏勾选）
+
+`--pick` 只负责「选出哪些序号」，选完仍走 `--select` 那套；勾中第 2、5、9 项与
+`--select "2,5,9"` 的结果**逐字节一致**（`tests/pick.sh` 验的就是这条）。
+序号用条目自己的 1-based 号，与 `--list` 印出来的号是同一套。
+
+| **按键** | **作用** |
+| --- | --- |
+| <kbd>↓</kbd> / <kbd>Tab</kbd> / <kbd>j</kbd> | 下移一行（到底回卷到第一行） |
+| <kbd>↑</kbd> / <kbd>Shift+Tab</kbd> / <kbd>k</kbd> | 上移一行（到顶回卷到最后一行） |
+| <kbd>→</kbd> / <kbd>l</kbd> | 下一页（条目多于屏幕高度时才生效） |
+| <kbd>←</kbd> / <kbd>h</kbd> | 上一页（同上） |
+| <kbd>空格</kbd> | 勾选 / 取消当前行 |
+| <kbd>a</kbd> | 全选；已经全选时改为全不选 |
+| <kbd>Enter</kbd> | 确认，按勾选结果开始解压 |
+| <kbd>Esc</kbd> / <kbd>q</kbd> | 取消，**一个文件都不解**，退出码 0 |
+
+**边界行为**：
+
+- 非交互终端（管道 / 重定向 / cron）里跑 `--pick` 会直接拒绝：给 `cli.pick_no_tty` 文案并提示改用
+  `--select`，退出码 `USAGE(2)`。不会假装在等人按键。
+- 一个都没勾就按 Enter 等价于「什么都不解」，也是退出码 0，不报错。
+- **<kbd>Ctrl</kbd>+<kbd>C</kbd> 是直接中断进程**（SIGINT），不是「取消勾选后返回」——
+  此时程序来不及恢复光标，`--pick` 界面隐藏的光标会留在隐藏状态；敲一次 `reset` 或重开终端即可复原。
+  想正常退出请用 <kbd>Esc</kbd> / <kbd>q</kbd>。（实测记录，见 TODO 表尾那条待修项。）
+
+> 键位不是我们发明的，是 `dialoguer` 的 `MultiSelect` 原样（源码 `refs/upstream/dialoguer/src/prompts/multi_select.rs`
+> 的按键分支），业界通用；自己手写循环只会把 raw mode 复原、分页、非 TTY 降级这些坑推迟到用户机器上。
+
 ---
 
 ## 五、CLI 与 GUI 功能对等表
