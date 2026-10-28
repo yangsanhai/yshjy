@@ -232,6 +232,7 @@ A：**绝不**。所有修复都在内存里做，磁盘上的源文件一个字
 - `DESIGN.md` — 产品设计（需求、功能、决策记录）
 - `docs/ARCHITECTURE.md` — 架构设计（2026-10-16 的设计稿，模块划分那节已过时）
 - `docs/INTERNALS.md` — **内部全景**：代码现在长什么样（49 模块职责/依赖/机制/落点/探针，由 `scripts/scan-src.py` 扫源码生成）
+- `docs/ROADMAP.md` — **对照审计与全平台路线**：哪里有问题、怎么补、Windows/Android/苹果怎么走
 - `docs/BACKEND-SPEC.md` — 后端补充设计
 - `docs/CLI-SPEC.md` — 命令行规范
 - `docs/UI-SPEC.md` — 界面规范与文案表
