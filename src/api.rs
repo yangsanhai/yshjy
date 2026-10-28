@@ -25,7 +25,8 @@ pub const 协议版本: u64 = 1;
 
 /// 引擎认识的全部命令（`hello.features` 与 PROTOCOL 命令表都从这里取）
 pub const 命令列表: &[&str] = &[
-    "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "answer", "skip",
+    "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "rescue", "answer",
+    "skip",
 ];
 
 /// 引擎会发出的事件种类（`hello.event_kinds` 从这里取）
@@ -62,6 +63,7 @@ pub fn 执行(
         "extract" => 解压(参数, 事件, 取消, ask),
         "pack" => 打包(参数, 事件),
         "batch" => 批量(参数, 事件, 取消, ask),
+        "rescue" => 救援(参数, 事件, 取消),
         "report" => 诊断(参数, 事件),
         // 这两条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令
         "answer" | "skip" => Err(错误值(
@@ -790,6 +792,148 @@ pub fn 错误对象(e: crate::Error) -> Value {
         "note": format!("{e:?}"),
         "detail": detail,
     })
+}
+
+/// 救援：索引（中央目录）坏了 / 被改掉时，按每个条目的 local header 重建清单并抢救数据。
+///
+/// 与 CLI `--rescue` 走同一批引擎函数（`scan_whole_file` → `rescue_by_locals` →
+/// `extract_by_locals_ctx`），区别只是把「打印」换成「发事件 + 返回 JSON」。
+///
+/// 参数：
+/// - `path`（必填）
+/// - `dest`：解到哪；不给就 `<包名>.rescue`（与 CLI 一致，落在包旁边）
+/// - `list_only: true`：只重建清单、不落盘（界面可以先说「能救回 N 个」再动手）
+/// - `encoding`：文件名编码（同 `extract`）
+///
+/// 为什么单独一条命令、不让 `extract` 自动兜底：救援是**慢且可能缺东西**的路径，
+/// 用户得知道自己在用它。界面把它放在失败页，意思是「已经解不开了，再试一把」。
+pub fn 救援(参数: &Value, 事件: &Arc<dyn EventSink>, 取消: &CancelToken) -> Result<Value, Value> {
+    let 路径 = 参数
+        .get("path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| 错误值("BAD_PARAM", "缺少 path"))?;
+    let p = Path::new(路径);
+    let 只列 = 参数.get("list_only").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    let dest: PathBuf = match 参数.get("dest").and_then(|v| v.as_str()) {
+        Some(d) => PathBuf::from(d),
+        None => {
+            let name = p
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "救援结果".into());
+            p.with_file_name(format!("{name}.rescue"))
+        }
+    };
+
+    let mut f =
+        std::fs::File::open(p).map_err(|e| 错误值("PATH_NOT_FOUND", &format!("打不开：{e}")))?;
+    let size = f
+        .metadata()
+        .map_err(|e| 错误值("INTERNAL", &format!("读不到文件大小：{e}")))?
+        .len();
+
+    let sink: Arc<dyn EventSink> = 事件.clone();
+    let ctx = UnpackCtx::new(1, sink)
+        .with_cancel(取消.clone())
+        .with_encoding(
+            参数
+                .get("encoding")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+        );
+
+    // ① 先找压缩层真正的起点（伪装包前面可能压着几十 MB 视频）
+    let hits = crate::scan::scan_whole_file(&mut f, size, &crate::scan::ScanOptions::strict())
+        .map_err(|e| 错误值("INTERNAL", &format!("扫描失败：{e}")))?;
+    let start = hits
+        .iter()
+        .find(|h| h.format == crate::layout::ArchiveFormat::Zip)
+        .map(|h| h.offset)
+        .ok_or_else(|| {
+            错误值(
+                "NOT_ARCHIVE",
+                "文件里找不到 ZIP 的痕迹 —— 救援只认得 ZIP 家族（7z/RAR 索引坏了暂时救不了）",
+            )
+        })?;
+
+    // ② 按 local header 重建清单
+    let items = crate::rescue::rescue_by_locals(
+        &mut f,
+        start,
+        size,
+        &crate::rescue::RescueOptions::default(),
+    )
+    .map_err(错误对象)?;
+
+    if items.is_empty() {
+        return Err(错误值(
+            "DATA_LOST",
+            "按文件头重建不出任何条目（数据区可能已经没了）",
+        ));
+    }
+
+    let 清单: Vec<Value> = items
+        .iter()
+        .map(|e| {
+            json!({
+                "path": e.path,
+                "size": e.size,
+                "pack_size": e.pack_size,
+                "method": e.method,
+                // 通用标志位 bit0 = 加密；有的条目大小来自数据描述符（流式写入）
+                "encrypted": e.flags & 1 != 0,
+                "size_from_descriptor": e.size_from_descriptor,
+            })
+        })
+        .collect();
+
+    if 只列 {
+        let 总数: u64 = items.iter().map(|e| e.size).sum();
+        return Ok(json!({
+            "list_only": true,
+            "outcome": "Success",
+            "entries_total": items.len(),
+            "bytes_total": 总数,
+            "dest": Value::Null,
+            "files": [],
+            "rebuilt": 清单,
+            "skipped": [],
+            "warnings": [],
+            "cancelled": false,
+        }));
+    }
+
+    // ③ 真把数据救出来（走与解压同一套安全限额 / 原子落盘）
+    let eopts = crate::extract::ExtractOptions::new(&dest);
+    let rep = crate::rescue::extract_by_locals_ctx(&mut f, start, size, &eopts, &ctx)
+        .map_err(错误对象)?;
+
+    if rep.files.is_empty() {
+        return Err(错误值(
+            "DATA_LOST",
+            &format!("重建了 {} 个条目，但一个都没救出来", items.len()),
+        ));
+    }
+
+    Ok(json!({
+        "outcome": if rep.cancelled { "Cancelled" } else { "Success" },
+        "entries_total": items.len(),
+        "entries_done": rep.files.len(),
+        "bytes_written": rep.bytes_written,
+        "dest": dest.display().to_string(),
+        "files": rep.files.iter().map(|f| json!({
+            "path": f.out_path.display().to_string(),
+            "name": f.name,
+            "size": f.size,
+        })).collect::<Vec<_>>(),
+        "skipped": rep.skipped.iter()
+            .map(|(n, why)| json!({"name": n, "reason": why}))
+            .collect::<Vec<_>>(),
+        "warnings": rep.warnings,
+        "rebuilt": 清单,
+        "cancelled": rep.cancelled,
+    }))
 }
 
 /// 解压结果 → JSON（字段名是协议契约的一部分，别随手改）

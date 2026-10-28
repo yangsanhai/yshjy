@@ -246,7 +246,9 @@ fn 处理命令(
             let 结果 = api::扫描(&值);
             写行(出, &结果响应(id, 结果));
         }
-        "list" | "extract" | "pack" | "batch" => {
+        // rescue 走同一套「一次一个任务」调度：它是慢路径（要扫全文件），
+        // 和 extract 抢磁盘只会互相拖死；也能被 cancel 打断
+        "list" | "extract" | "pack" | "batch" | "rescue" => {
             let 参数 = 值.clone();
             let 事件: Arc<dyn EventSink> = 事件.clone();
             let 发 = 结果发.clone();
@@ -319,8 +321,8 @@ mod tests {
         assert_eq!(h["engine"], yshjy::VERSION);
         // PROTOCOL 表 / 前端能力判断都吃这个数组：漏一项就等于"功能不存在"
         for c in [
-            "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "answer",
-            "skip",
+            "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "rescue",
+            "answer", "skip",
         ] {
             assert!(
                 h["features"].as_array().unwrap().contains(&json!(c)),

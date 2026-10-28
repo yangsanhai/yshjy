@@ -137,6 +137,19 @@ def gen_man(opts: list[dict], descs: dict[str, str], version: str, date: str) ->
     return out, no_desc
 
 
+def norm_man(s: str | None) -> str:
+    """比对 man 页前，只把 `.TH` 行里的**生成日期**抹掉。
+
+    为什么只抹日期：早先是整行抹成 `.TH NORMALIZED`，于是**版本号也一起被抹掉** ——
+    版本从 0.9.26 升到 0.9.27 后，生成器算出来「和旧的一样」直接跳过写盘，
+    man 页永远停在旧版本号，而 `tests/cli_spec_match.sh` 会红（生成器却说没事）。
+    日期每天变才需要归一化；版本是内容，必须参与比对。
+    """
+    if not s:
+        return ""
+    return re.sub(r'^(\.TH\s+\S+\s+\S+\s+)"[^"]*"', r'\1"NORMALIZED"', s, flags=re.M)
+
+
 def die(msg: str) -> NoReturn:
     sys.exit(f"❌ {msg}")
 
@@ -429,8 +442,8 @@ def main() -> None:
         old = p.read_text(encoding="utf-8") if p.exists() else None
         # man 页的 .TH 行含生成日期 —— 比对时归一化掉，否则每天第一次跑都会「假红」
         if p.suffix == ".1":
-            norm = lambda s: re.sub(r"^\.TH .*$", ".TH NORMALIZED", s, flags=re.M) if s else s
-            same = norm(old) == norm(content)
+            # 只归一化日期（版本号要参与比对，见 norm_man 的说明）
+            same = norm_man(old) == norm_man(content)
         else:
             same = old == content
         if not same:

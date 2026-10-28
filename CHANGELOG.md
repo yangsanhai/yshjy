@@ -2,6 +2,73 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.28] · 2026-10-28（终端/界面收尾：只取封面的落点修复 + 救援模式接进协议与界面 + man 版本号漂移根治）
+
+> 这一轮**不加新功能**，治的是「文档写着有、实际没有 / 有了但行为不对」的三处
+> —— 都是实测撞出来的，不是猜的。回归：`bash tests/all.sh` **29 通过 / 0 失败**（179 秒）。
+
+### 一、`--extract-cover` / 协议 `cover` 不认 `-o` / `dest`（真 bug）
+
+**现场**：`tests/data` 里堆了 **36 个** `A1_steg_modeA_plain.封面 (N).mp4`。
+不是谁手抖，是 `tests/contract/run.py` 的封面用例每次跑都往样本目录落一个 ——
+`-o` 明明传了，封面却落在**源包旁边**。
+
+**用户会怎么撞上**：源包在只读目录 / 网盘挂载点 → 切封面直接失败（说「没权限」，
+用户以为是包坏了）；源包在下载目录 → 副本越攒越多，占空间还分不清哪个是新的。
+
+**修法**（老调用点零改动，都是薄包装）：
+- `cover_path_in(input, dir)` / `extract_zip_cover_to(input, base, dest)`；
+  旧的 `cover_path` / `extract_zip_cover` 转调新函数（`dir = None` = 包旁边，历史行为不变）
+- 落点目录不存在就建（`-o 新目录/` 是常见用法）；切失败把**自建的空目录收回来**，不留空文件夹
+- 顺手改成 `.yshjy-part` → `rename` 的原子写（与解压六条落盘路径同一套）：
+  半截 mp4 顶正式名落地时，用户会把它当成「切出来的原片」，其实打不开
+- CLI `do_extract_cover` 接 `-o`；协议 `extract` 接 `dest`
+
+**验收**：`tests/protocol_cover_only.py` **25 项**（已挂 `all.sh`）—— 只取封面时
+`entries_done=0`、dest 里只有封面一个文件、封面是合法 MP4（`ftyp` 头）、源包目录零副本、
+不给 dest 时仍落包旁边、同名自动改名不覆盖、解压 + 取封面同时要时两者共存。另加 2 条单测。
+
+### 二、救援模式接进协议与界面（`rescue` 命令）
+
+界面里搜 `rescue` 一直是零命中 —— CLI 有 `--rescue`，图形界面里根本没有这条路。
+现在补上，且**不让 `extract` 自动兜底**（救援是慢路径，用户得知道自己在用它）：
+
+- **协议**：新增 `rescue` 命令（`api::救援`），移植 CLI 那条链
+  （`scan_whole_file` → `rescue_by_locals` → `extract_by_locals_ctx`），
+  参数 `path` / `dest?` / `list_only?` / `encoding?`；
+  `list_only:true` 只重建清单、**一个字节都不落盘**（界面可以先说「能救回 N 个」再动手）；
+  不给 `dest` 落到 `<包名>.rescue`（与 CLI 一致）；`hello.features` 加上它
+- **`serve.rs`**：`rescue` 走与 extract 同一套「一次一个任务」调度（慢路径，抢磁盘只会互相拖死，也能 cancel）
+- **界面**：失败页在**救得回来**的错误上才给「试着救出来（索引坏了也能抢救）」按钮 ——
+  `DATA_LOST` / `PARTIAL_DATA` / `CHECKSUM_FAILED`，以及 `NOT_ARCHIVE` 但 `looks_like=zip`
+  （拖进来的真就是个视频时不给按钮，免得白等一场）；密码错、缺分卷不给。
+  用 `OutlinedButton` 不用 `FilledButton`（首屏「唯一最强入口」有 widget 测试钉着）
+- **错误码语义**：认不出压缩包一律回 `NOT_ARCHIVE`，**绝不折成 `DATA_LOST`** ——
+  后者会让用户去重下那个其实完好的包
+
+**验收**：`tests/protocol_rescue.py` **22 项**（已挂 `all.sh`，样本是现造的「中央目录签名被打乱的 zip」）：
+`hello.features` 含 rescue / `list_only` 不落盘 / 真救 2 个文件内容逐字节一致 / 原包一字节未动 /
+非压缩包回 `NOT_ARCHIVE` / 不给 dest 落 `<包名>.rescue`。
+
+### 三、man 页版本号永远停在旧版（根因在生成器的比对逻辑）
+
+`cli_spec_match.sh` 报「man 页版本号与 Cargo.toml 不一致（应为 0.9.27）」，而 man 页里写着 0.9.26。
+根因：`scripts/gen-cli-assets.py` 比对 man 页时把整行 `.TH` 归一化成 `.TH NORMALIZED`，
+**版本号也在这一行里，于是被一起抹掉了** → 版本升号后生成器认为「一模一样」直接跳过写盘，
+man 页从此停在旧版本；只有探针会发现（生成器自己说「本来就是最新的」）。
+
+**修法**：新增 `norm_man()`，**只抹 `.TH` 行里的日期**，版本号与其他字段参与比对。
+修完生成器正常输出 `✅ 已生成：yshjy.1`，man 页变 `yshjy 0.9.28`，`cli_spec_match.sh` 7 项全绿。
+
+### 四、本轮其它
+
+- 补提交四个平台脚手架（`gui/android|ios|macos|windows`，106 个文件）：多平台适配的底子，之前一直未入库
+- `.unshallow.log`（参考库拉取脚本的临时日志）加入 `.gitignore` 并删除
+- `docs/CLI-SPEC.md` 新增 **§4.5 `--pick` 交互键位**（8 组按键 + 边界行为），
+  键位逐条对着 `dialoguer` 源码抄；顺带 pty 实测了 Ctrl-C：**SIGINT 直接中断、光标留在隐藏状态**，
+  已在文档写明「正常退出请用 Esc / q」，修法（装 SIGINT handler）进了 TODO 表尾
+- 清理 `tests/data` 里那 36 个编号副本（测试临时产物，样本本体未动）
+
 ## [0.9.27] · 2026-10-28（终端收口：选项表成真源 + 补全/man 自动生成 + --pick + --list 表格 + 多行进度）
 
 > 由来：用户定「核心功能已完整，发布前把终端和图形界面优化好」。第一步不是加功能，

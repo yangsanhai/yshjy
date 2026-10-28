@@ -564,6 +564,59 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 这些失败还能抢救：索引（中央目录）坏了、数据只坏了一部分。
+  ///
+  /// 密码错、缺分卷、目标无权限这类救不了 —— 给按钮只会让用户白等一场。
+  /// `NOT_ARCHIVE` 要收窄：认不出压缩包时，只有「内容其实是 ZIP、只是索引坏了」
+  /// 才值得试（否则用户拖进来的就是个视频，救援也只会再说一遍认不出）。
+  bool get _canRescue {
+    final code = _errorCode;
+    if (code == null || _needsPassword || code == 'MISSING_VOLUME') return false;
+    if (code == 'NOT_ARCHIVE') {
+      return (_errorDetail?['looks_like'] as String?)?.toLowerCase() == 'zip';
+    }
+    return const {'DATA_LOST', 'PARTIAL_DATA', 'CHECKSUM_FAILED'}.contains(code);
+  }
+
+  /// 救援模式：索引坏了也能按文件头把数据捞出来（协议 `rescue`）
+  ///
+  /// 慢路径（要扫全文件），所以界面切到进度态再走，别让按钮点下去像没反应。
+  Future<void> _rescue() async {
+    final path = _file;
+    if (path == null) return;
+    setState(() {
+      _phase = Phase.extracting;
+      _progress = null;
+      _current = null;
+      _nestedArchives = [];
+    });
+    try {
+      widget.onStatus?.call('救援模式：按文件头重建清单…');
+      final r = await _client.rescue(
+        path,
+        dest: _outDir,
+        encoding: _encoding,
+      );
+      if (!mounted) return;
+      setState(() {
+        _result = ExtractResult.fromJson(r);
+        _phase = Phase.done;
+      });
+      final savedCount = (r['files'] as List?)?.length ?? 0;
+      widget.onStatus?.call('救援完成：救回 $savedCount 个文件');
+      Notifier.send('救援完成', '救回 $savedCount 个文件');
+      await HistoryStore.add(HistoryEntry(
+        time: DateTime.now().toIso8601String(),
+        input: path,
+        dest: r['dest'] as String?,
+        ok: true,
+        bytes: (r['bytes_written'] as num?)?.toInt() ?? 0,
+      ));
+    } on EngineError catch (e) {
+      _showError(e.code, e.note, e);
+    }
+  }
+
   /// 紧凑小按钮：默认 TextButton 高 48，一行塞四个会把上面的列表挤没（窄窗口致命）
   Widget _miniBtn(String text, VoidCallback onTap, {IconData? icon}) {
     const st = ButtonStyle(
@@ -1850,6 +1903,24 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
+              ),
+            ],
+            // 索引坏了也有救：CLI 的 --rescue 在界面上就是这个按钮。
+            // 用 OutlinedButton 不用 FilledButton —— 首屏「唯一最强入口」的约束
+            // 有 widget 测试钉着，这里再放一个实心按钮会诱导误点。
+            if (_canRescue) ...[
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                key: const ValueKey('rescue'),
+                onPressed: _rescue,
+                icon: const Icon(Icons.healing_outlined, size: 18),
+                label: const Text('试着救出来（索引坏了也能抢救）'),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '按文件头把能救的条目捞出来，可能慢一些，也可能缺东西',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
             ],
             // 技术详情（`Error { code: … }`）对新手是噪音，默认收起来：
