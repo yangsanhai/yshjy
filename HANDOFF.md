@@ -22,13 +22,13 @@
 > 回归：`bash tests/all.sh` **30 通过 / 0 失败 / 4 跳过 / 179 秒**（`scratch/all11.log`），
 > 整轮跑下来文件管理器激活次数 **+0**；`flutter analyze` 仅一条既有 info、`flutter test` 20 条绿。
 > 证据见 `CHANGELOG.md`「未发布 · 2026-10-29」（四节）。
-> **还没动的下一步**：`docs/TODO.md` 第一期**只剩一条**（进度条补「已用时」）。
-> 第一期同日已完成两条：① 重写 `REFERENCE-INDEX.md` 状态列（14 条失真逐条 `grep` 复核，
-> 另抓到 2 条同类失真，10 条证据行号回验 **10/10** 对上）；② **Windows 编译阻塞解除** ——
-> 全仓 48 处 unix-only 里只有 `extract.rs:499` 真没隔离，修完 `cargo build --target
-> x86_64-pc-windows-gnu` 出 **13 MB `yshjy.exe`**（PE32+ console），wine 里能跑、能解真 zip
-> （中文逐字节一致）。**顺手抓到 Windows 侧时区占位 bug**：`crash.rs` 非 unix 分支还 `return 0`
-> → 文件名时间差 8 小时、跨日显示成明天，已记进 TODO「平台」节的 Windows CLI 一项。
+> **还没动的下一步**：`docs/TODO.md` **第二期第一条**（界面：窗口尺寸/位置记忆，要引 `window_manager`，
+> 加依赖前先看许可证）。
+> **第一期（对齐与止血）三条同日全部完成**：① 重写 `REFERENCE-INDEX.md` 状态列（14 条失真逐条 `grep`
+> 复核、另抓到 2 条、10 条证据行号回验 **10/10**）；② **Windows 编译阻塞解除** —— 48 处 unix-only 里
+> 只有 `extract.rs:499` 真没隔离，修完出 **13 MB `yshjy.exe`**，wine 能跑、能解真 zip（中文逐字节一致）；
+> ③ 进度条补「已用时」（单任务手绘与 `-j 2` 的 `{msg}` 共用一份算法，真实终端抓帧 **102 帧**带已用、
+> **0 帧超宽**）。顺手记下 Windows 侧时区占位 bug（时间差 8 小时、跨日错天）→ TODO 平台节。
 >
 > **本轮（2026-10-28 夜 · 纯文档轮，代码与产物一行没动）**：
 > ① 新增 `docs/INTERNALS.md`（代码全景）+ `scripts/scan-src.py`（数字由源码扫出，可重跑）；
