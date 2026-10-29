@@ -144,11 +144,14 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   和 man 页版本号、补全 18/35 项是**同一种病**（已经栽过两次）。做法照 `tests/cli_spec_match.sh`：
   两边抓函数名清单 `diff`，不一致就红。参考 `refs/tech/hiddify-core-c-abi.md` §7.1-B。
 
-- [ ] 🧹 **scratch 里约 13 G 测试样本待清（2026-10-29 遗留，用户说交给下一轮）**：
-  `~/.hermes/cache/scratch/progtest_192424/`（约 12 G：2.1 GB 抓帧用大包 + 几个 600 MB 包与解压产物）、
-  `~/.hermes/cache/scratch/yshjy_raratomic.*`（三个目录共约 955 M，上午探针失败现场）。
-  都是测试临时产物，删掉不影响源码与用户下载（`~/下载/` 一根手指都别碰）。
-  **动手前按铁律先念清单让用户确认，`rm -rf` 单独一条命令**——别塞进造数据那条里（塞了整条会被审批拦下、一行都不执行）。
+- [x] ✅ **scratch 已清（2026-10-29 收尾）**：删掉 `progtest_192424`（12 G 抓帧样本）+
+  **805 个 `yshjy_*` 探针现场（7.2 G）**，scratch 从 **19 G → 968 K**，磁盘可用 71 G → 89 G。
+  只留 `*.log`（116 K，CHANGELOG 引用的证据）。`/tmp` 里本轮 8 个临时文件也删了。
+  ⚠️ **顺带发现的系统性问题（值得下一轮做）**：探针失败时会在 `$TMPDIR` 留「现场」（一个 RAR 现场
+  400~500 MB），而且**从不自动清理** —— 攒了 **805 个目录 / 7.2 G** 才被发现。建议给探针加
+  「跑完删现场，除非设了 `YSHJY_KEEP_SCENE=1`」或「启动时清掉 24 小时前的同类现场」，
+  并把这条写进 `tests/all.sh` 的收尾。**别只记「记得手动清」** —— 那就是这次攒到 7 G 的原因。
+  铁律不变：动手前先念清单给用户确认，`rm -rf` 单独一条命令。
 
 - [ ] 🟢 `complete` 那行补 `-o nosort -o bashdefault -o default`（bash ≥4.4 才有 `nosort`），
   用户可感知的差别：选项候选不再被 bash 按字母序重排。位置 `gen-cli-assets.py:316`。
@@ -225,8 +228,9 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   语义照 libarchive 的 `entry_bytes_declared`（`refs/tech/libarchive.md` §4）；这条在台账里挂了很久，是数据正确性问题。
 - [ ] **nautilus 右键脚本按「目标目录可写」给提示**（抄 FileRoller `nautilus-fileroller.c:255-290`：
   能写→「解压到此处」，不能写→只给「解压到…」）。落点 `gui/linux/nautilus-script-yshjy`（现在零判断）。
-- [ ] **补全再修两处（抄 clap）**：`complete` 注册行加 `-o nosort -o bashdefault -o default`（bash≥4.4 才有 nosort）；
-  zsh 目录补全改 `_files -/`、fish 改 `(__fish_complete_directories)`。落点 `gen-cli-assets.py`。
+- [ ] **补全再修两处（抄 clap）**：zsh 目录补全改 `_files -/`、fish 改 `(__fish_complete_directories)`。
+  （`nosort` / `bashdefault` / `default` 那三个 bash 参数已单独记在「待查 / 改进」节，**别重复排期**）
+  落点 `gen-cli-assets.py`。
 
 ### 第三期：结构优化（2–3 天，要设计）—— 方案 §3.3
 
@@ -238,17 +242,11 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 - [ ] `build-deb.sh` 补 `prerm`（现在有 postinst + postrm，缺 prerm）
 - [ ] GitHub 发布流水线（现在只有单平台 `ci.yml`，没有多平台矩阵与 release 汇总）
 
-### 平台（详见 `ROADMAP.md` §4）
+### 平台
 
-- [ ] **Windows CLI**：~~cfg 隔离~~ ✅ 已做（2026-10-29，`yshjy.exe` 13 MB 出得来、wine 能跑能解 zip）→
-  剩下的：① **补时区**（`crash.rs` 非 unix 的 `本地时区偏移秒()` 还是 `return 0` 占位 → 改用
-  `GetTimeZoneInformation`；不补的话 zip 里的本地时间被当 UTC，**文件名时间差 8 小时、跨日显示成明天**，
-  wine 实测已踩到）② wine 实测 4 样本 + 1 坏包 ③ zip 出包 ④ 写 `docs/BUILD-Windows.md`
-- [ ] Windows GUI：**只能在 Win 上编**，写 `docs/BUILD-Windows.md` 交给用户自己编，不承诺交叉出图形包
-- [ ] **Android**：JDK 17（独立目录）→ SDK/NDK（15–20 G，要用户授权）→ `cargo-ndk` → ffigen 绑定 →
-  `FfiTransport` → 分区存储政策（私有目录直写 / 外部 SAF / 不许静默失败）→ `flutter build apk` 自签
-- [ ] **苹果**：GitHub Actions `macos` runner 出未签名包；不上架不公证不买账号（口径已定，别再问）；
-  上 GitHub 前必修：`.git` 300 MB 历史里的编译产物要清 + 个人路径脱敏
+> **唯一真源在下面「全平台（零成本路线）」那一节（①~⑥）** —— 这里原有一份 4 条的简版，跟那节重复
+> 登记（Windows / Android / 苹果各写了两遍）。2026-10-29 把这份副本收掉：进度只往那节写，
+> **别再起第二份**。已完成的部分已在 ②/⑤ 里标出（引擎交叉编译已通、`yshjy.exe` 已出、wine 验过）。
 
 ## 优化建议（终端 ↔ 界面对账出来的缺口，2026-10-28）
 
@@ -376,8 +374,12 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 
 - [ ] **① 仓库上 GitHub（公开）+ CI 骨架** —— 这是后面所有平台的前置。
   push 触发 `tests/all.sh`；打 tag 触发构建矩阵。验收：push 后 CI 自动跑绿；`git tag v0.9.26` 能触发构建。
-- [ ] **② Windows**：`flutter create --platforms=windows` 补平台目录；
-  引擎 `cargo build --release --target x86_64-pc-windows-gnu`。产物 zip（exe + 界面目录）。
+- [ ] **② Windows**：`flutter create --platforms=windows` 补平台目录；产物 zip（exe + 界面目录）。
+  **引擎部分已完成（2026-10-29）**：`cargo build --release --target x86_64-pc-windows-gnu` 通，
+  出 **13 MB `yshjy.exe`**（PE32+ console），wine 里能跑 `--version`、能解含中文的真 zip。
+  还剩：① **补时区**（`crash.rs` 非 unix 的 `本地时区偏移秒()` 仍是 `return 0` 占位 → 改
+  `GetTimeZoneInformation`；不补则 zip 里的本地时间被当 UTC，**文件名时间差 8 小时、跨日显示成明天**，
+  wine 实测已踩到）② wine 跑 4 样本 + 1 坏包 ③ 出 zip 包 ④ 写 `docs/BUILD-Windows.md`。
   **未签名** → 用户首次点「仍要运行」，README 写明怎么点。验收：Windows 10/11 上双击能开界面、能解压、能打包。
 - [ ] **③ Android**：`cargo-ndk` 编 arm64-v8a / armeabi-v7a 的 `.so`，`flutter build apk --release`；
   keystore 用 `keytool` 自己生成（免费，**别丢**，丢了以后没法覆盖升级）。
@@ -386,8 +388,13 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 - [ ] **④ macOS（未签名，靠 CI 的免费 Mac 机器）**：`flutter build macos` 出 dmg，**不签名、不公证**。
   README 写明：首次要**右键 →「打开」**（或系统设置 → 隐私与安全性里允许）。
   验收：CI 产出 dmg；在真 Mac 上右键打开能跑（需要借一台或找朋友试）。
-- [ ] **⑤ FFI 层**（`src/ffi.rs` 现在不存在，只有 `docs/FFI.md` 设计）—— iOS 的唯一道路，顺带给 Android 提速。
-  用 `flutter_rust_bridge` 生成绑定，**别手写 `extern "C"`**。
+- [ ] **⑤ FFI 层** —— iOS 的唯一道路，顺带给 Android 提速。
+  **现状修正（2026-10-29，上一版文档是错的）**：`ffi/` **早就存在**（`ffi/src/lib.rs` 9 个
+  `extern "C"` + `ffi/include/yshjy.h` 手写头文件），不是「`src/ffi.rs` 不存在」；缺的是
+  **Dart 侧的 `FfiTransport`** 和绑定生成。
+  **绑定用 `ffigen`，不用 `flutter_rust_bridge`**（结论在 `REFERENCE-INDEX.md` §9.2：我们的 C ABI
+  已经是 JSON 进 / 事件出，ffigen 只在 Dart 侧生成绑定、引擎一行不用改；frb 要从 Rust 侧改导出层）。
+  另：手写头文件与 `ffi/src/lib.rs` 会漂移 → 要做 `tests/ffi-header-sync.sh`（已记在表尾）。
   验收：Dart 侧 `FfiTransport` 在桌面上跑通一次 list + extract，结果与 `ProcessTransport` 逐字节一致。
 - [ ] **⑥ iOS 工程 + `BUILD-iOS.md`**（给愿意自己编的人）：`flutter create --platforms=ios` + Xcode 工程 +
   一页说明（装 Xcode、免费 Apple ID、**7 天有效期**、怎么续）。
