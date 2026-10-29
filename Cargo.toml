@@ -1,6 +1,6 @@
 [package]
 name = "yshjy"
-version = "0.9.29"
+version = "0.9.30"
 edition = "2024"
 license = "MIT"
 authors = ["yangsanhai"]

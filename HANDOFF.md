@@ -20,7 +20,13 @@
 >    **没做也不冒充**：本机无 Android，「SAF 的 content:// 算哪一档」未验证 —— 落地清单在 `docs/TODO.md`。
 >    **坑**：探针一开始把 FIFO 塞进 `scan`，引擎 `job::identify` 会 open FIFO → 永久阻塞（120 秒超时）；
 >    FIFO 改由单测覆盖（只探测不打开）。**以后别把管道/FIFO 放进 scan 的 paths**。
-> **下一轮**：出包（0.9.30）+ 装机，之后只剩「多平台适配」整块与 `--pick` 光标那条（等用户点头）。
+> **收尾（22:14）**：五处版本号同步（`Cargo.toml` / `gui/pubspec.yaml` / `ffi/Cargo.toml` /
+> PROTOCOL 两处示例 / man 页由生成器带出）→ `CHANGELOG` 三段「未发布」改成 `[0.9.30]` →
+> `build-deb.sh` 自查通过 → `release.sh` 出两档 tar.gz → `test-packages.sh` **37 项全绿**。
+> `dist/` 只留 0.9.30 全套（旧包 55 项已按用户要求删除）。
+> **装机**：`sudo apt install -y ./dist/yshjy_0.9.30_amd64.deb` 要用户输密码（AI 的 shell 拿不到），
+> 装完补验 `dpkg -l` / `--version` / 菜单格式数 / 真跑一个 1000+ 条目的包。
+> 下一轮只剩「多平台适配」整块与 `--pick` 光标那条（等用户点头）。
 
 > **2026-10-29 · 第三期 A：预览树 + 部分解压（**纯界面轮，引擎一行没改**）**
 > ① 新增 `gui/lib/entry_tree.dart`：平铺清单 → 目录树（纯 Dart、不 import Flutter，可直接 `flutter test`）。
