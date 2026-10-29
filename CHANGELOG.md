@@ -2,6 +2,78 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-29（界面：窗口尺寸记忆真的生效了 —— 挖出两个 bug）
+
+> 用户口径是「每次开都要手动拉窗口」。查下来不是「没做」，是**做了但从来没生效**，
+> 而且生效路径上还埋着一个会「越开越大」的基准错位。引擎一行没改，只动界面原生层。
+
+### 一、保存挂在 `destroy` 上，而界面根本不走 destroy
+
+`gui-window.txt` 的读写代码 0.9.26 那批就写进了 `gui/linux/runner/my_application.cc`，
+但用户用了一个月，`~/.local/state/yshjy/gui-window.txt` **一次都没生成**（目录里只有
+`crash/` 和 `gui-history.json`）。原因不是代码写错，是**这条路的入口没了**：
+
+- 正在解压时点关闭 → `didRequestAppExit` 返回 `cancel`，走 `Tray.hideWindow()`（藏到托盘，不销毁）
+- 托盘「退出」→ Dart 收拾完 → `quit_now` → `g_application_quit`（不保证发 `destroy`）
+
+两条主路都绕开了 `destroy` 信号，保存函数形同虚设。
+
+**修法**：把「写盘」从 `on_destroy_save_size` 里抽成 `save_window_size()`，改成
+`on_configure` / `on_state_track` 之后 **800ms 防抖写盘**（拖动时 configure 一秒几十次，
+不能每帧写文件），`destroy` 时保留一次兜底 flush。定时器句柄存进 `WindowSizeState`，
+`destroy` 里先 `g_source_remove` 再 free —— 否则定时器会在 state 释放后拿到野指针。
+
+### 二、存的是「含 CSD 装饰的 surface 尺寸」，载入却当内容区 → 越开越宽
+
+第一版改完跑实测，立刻看到雪球：
+
+```
+预置 880 700 → 启动后存回 992 849   （宽 +112、高 +144）
+预置 992 849 → 启动后存回 1104 849  （宽又 +112）
+```
+
+根因：Wayland 下 `configure-event` 给的 `event->width/height` 是**含 CSD 装饰/阴影的
+surface 尺寸**，而 `gtk_window_set_default_size` 吃的是**内容区尺寸** —— 存进去再读出来
+喂回去，一轮加一圈。修法：改用 `gtk_window_get_size()`（GTK 文档明确「不含装饰」，与
+`set_default_size` 同基准），并把 surface 与 content 的差值一起打进 trace，方便以后换主题
+/换桌面时一眼看出基准又漂了。
+
+**试过的错路（别重复）**：先怀疑是 Flutter 的 `FlView` 撑大窗口，打 `child-request` 出来是
+`0x0`，排除；又想给恢复的宽度留 140px 装饰余量（`decor_margin`），实测把 1254 clamp 到
+1140 后窗口**照样**被合成器最大化 —— 触发条件是「窗口几个边都贴着工作区」的启发式，
+不是单纯的宽度比较，索性回退这两处，保持代码最小。
+
+### 三、探针：只能靠界面里的 trace 打点（几条外部观测路全部堵死）
+
+- Wayland 协议不许客户端查询别人的窗口几何；
+- GNOME 48 的 `org.gnome.Shell.Screenshot` 对非 shell 进程回 `AccessDenied`（实测）；
+- 本机没装 `xdotool`/`wmctrl`，装了在 Wayland 会话里也拿不到窗口；
+- `GDK_BACKEND=x11` 在本机没有 X11 会话（`cannot open display`）。
+
+所以界面里加了 `YSHJY_WINDOW_TRACE=1` → stderr 三行打点
+（`load raw WxH -> apply WxH` / `configure surface … content …` / `save WxH`），
+新探针 `tests/gui_window_state.sh` 断言这条线，**8 项**：读回原尺寸、随手落盘、
+**再开一次尺寸不变（不滚雪球）**、超大值 clamp、clamp 后写回、坏文件走默认比例、
+坏文件被覆盖、无 Gtk-CRITICAL。
+
+探针默认**不跑**（`all.sh` 里是 skip）：它会真开界面窗口，桌面闪几下 —— 用户明确讨厌
+回归时往桌面弹窗（被文件管理器弹窗抓到过两次）。要跑：`YSHJY_GUI_VISIBLE_TEST=1`。
+等待方式也从固定 sleep 改成「轮询到 `window: save` 出现」：debug 构建首帧要 6 秒上下，
+固定 4 秒会拿到空日志误判（第一版就是这么假红的）。
+
+### 四、位置记忆：Wayland 下做不了，如实记下来
+
+`loginctl` 显示本机会话 `Type=wayland`。Wayland 协议**不允许客户端给自己定位窗口**
+（`gtk_window_move` 无效），所以「记住窗口位置」在这是不可能完成的需求，不是没做。
+X11 下可做，但本机没有 X11 会话可验收，不做。
+
+`window_manager`（MIT / 1126 赞 / 30 天下载 89 万 / 0.5.2 活跃）评估过、**不引**：
+它同样是在 GTK 侧调 `gtk_window_move`/`set_default_size`，Wayland 下一样做不了位置，
+接进来只是给已有的实现再加一份真源。
+
+**验收**：`tests/gui_window_state.sh` 8/8；`flutter test` 20 条；`flutter analyze` 只剩 2 条
+既有 info；`bash tests/all.sh` 见 `scratch/all12.log`。
+
 ## [未发布] · 2026-10-29（测试基建：探针该用哪档二进制 + 自解压探针会弹文件管理器）
 
 > 引擎代码**一行没改**，只改 `tests/`。两件事都是被同一类症状骗过之后挖出来的：

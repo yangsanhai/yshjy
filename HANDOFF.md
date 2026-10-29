@@ -5,6 +5,25 @@
 > **待办只看 `docs/TODO.md`**；**参考项目台账看 `docs/REFERENCE-INDEX.md`**；
 > **往哪走 / 全平台怎么切看 `docs/ROADMAP.md`**（2026-10-28 对照审计 + 三批路线）。
 >
+> **2026-10-29 · 界面轮：窗口尺寸记忆（引擎一行没改，只动界面原生层）** —— 用户口径是
+> 「每次开都要手动拉窗口」。查下来不是没做，是**做了但从来没生效**，而且生效路径上还埋着
+> 一个「越开越大」的基准错位：
+> ① 保存只挂在窗口 `destroy` 上，而现在「忙时关窗口 = 藏到托盘」「托盘退出 =
+>    `g_application_quit`」两条主路都不一定走到 destroy —— 用户用一个月，
+>    `~/.local/state/yshjy/gui-window.txt` **一次都没生成**。改成 configure 后 800ms
+>    防抖写盘 + destroy 兜底 flush（定时器在 destroy 里先摘，防野指针）。
+> ② 存的是「含 CSD 装饰的 surface 尺寸」（实测宽 +112 / 高 +144），载入却当内容区喂给
+>    `set_default_size` → 实测 880x700 → 992x849 → 1104x849 越开越宽。改用
+>    `gtk_window_get_size`（不含装饰，同基准）。
+> **位置记忆：Wayland 协议不许客户端给自己定位**，本机会话 `Type=wayland` → 不做；
+> X11 才做得到，但没有 X11 会话可验收。**`window_manager` 评估过不引**（MIT 没问题，但它在
+> Wayland 下同样做不到位置，只是给已有实现再加一份真源）。
+> 新探针 `tests/gui_window_state.sh` **8 项全绿**，关键回归是「再开一次尺寸不变（不滚雪球）」；
+> 探针默认 skip（会真开窗口），`YSHJY_GUI_VISIBLE_TEST=1` 才跑。`flutter test` 20 条、
+> `flutter analyze` 只剩 2 条既有 info。证据见 `CHANGELOG.md`「未发布 · 界面」四节。
+> **下一步**：`docs/TODO.md` 第二期第二条（界面：密码卡「这次不保存」勾选）。
+> ⚠️ **装机版仍是 0.9.28（不含本轮修复）** —— 要打 0.9.29 并装机得用户点头，打包是单独流程。
+>
 > **2026-10-29 · 测试基建轮（引擎一行没改，只动 `tests/` + 文档）**：
 > ① TODO 表尾那条「`cargo test --release` 偶发失败」**定性为确定性**：`rar_atomic` /
 >    `pack_progress` / `resume` 默认用 `target/debug/yshjy`，而 `all.sh` 第 1 关**只建 release**
