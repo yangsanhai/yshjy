@@ -65,3 +65,9 @@ indicatif = "0.18"
 
 [dev-dependencies]
 rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }
+
+# Windows 才用的系统 API：时区偏移（crash.rs，W1）、可用内存（外壳探针，W5）。
+# 只在 Windows 构建时拉进来 —— Linux/macOS 那半的依赖树与产物一个字节都不变。
+# 台账：docs/REFERENCE-INDEX.md §9（API 归属按 windows-sys 0.61 源码核对过）
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_SystemInformation"] }

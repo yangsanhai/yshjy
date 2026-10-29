@@ -2,6 +2,29 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-30（Windows 修复战役：按审计清单 W1~W10 逐项修，**未发版**）
+
+> 仓库搬到 Windows 机器（`E:\yshjy-20261030`，与 Linux 机走移动硬盘同一份 `.git`）后的第一轮代码改动。
+> 待办来源与验收标准：`docs/TODO.md` 的「2026-10-30 Windows 实测审计」。**装机版仍是 0.9.31。**
+
+### W1 ✅ 修时区偏移（解出的文件时间不再 +8 小时）
+
+- **根因**：`crash.rs` 的 `本地时区偏移秒()` 只有 `#[cfg(unix)]` 分支，Windows 上写死 0 ——
+  zip 里存的「本地时间」被当成 UTC，解出的文件时间整体 +8 小时（实测 00:44:56 → 08:44:58）。
+- **改法**（照审计定稿方案，比最初设想的 `GetTimeZoneInformation` 简单）：
+  `GetLocalTime()` − `GetSystemTime()` 直接得当前偏移，夏令时由 Windows 自己算，零手算
+  （思路出自参考项目 `refs/upstream/time` 的 `local_offset_at/windows.rs`）。
+- **改动文件**：`src/crash.rs`（Windows 分支 + `民用日` 换算 + 3 条单测）、
+  `Cargo.toml`（新增 **仅在 Windows 构建时** 生效的依赖 `windows-sys 0.61`，
+  features `Win32_Foundation` + `Win32_System_SystemInformation`；Linux/macOS 依赖树与产物一个字节不变）。
+- **与审计的一处出入**：`SYSTEMTIME` 结构体实际在 `Win32::Foundation` 而非
+  `SystemInformation`（后者只有函数），所以多启了一个 feature，已核对 windows-sys 0.61.2 源码。
+- **验收证据**（2026-10-30 本机实跑）：
+  - 真实解包：mtime `00:44:56` 的源文件打 zip 伪装 `.mp4`，`yshjy 伪装视频.mp4` 解出
+    mtime **`00:44:56 +0800` 与源完全一致**（修复前是 08:44:58）；
+  - 新增单测 3 条全绿（偏移落在真实时区范围 `-43200..=50400` / 同秒两次取样一致 / `民用日` 纪元与闰年锚点）；
+  - `cargo test`：lib 341 过 / 14 挂（与基线一致，全是 W2/W6/W8 已知账）、bin 32 过 / 0 挂。
+
 ## [未发布] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
 
 > 本节只有实测与证据，没有代码改动，**装机版仍是 0.9.31**。

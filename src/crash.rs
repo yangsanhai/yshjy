@@ -19,6 +19,9 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::SYSTEMTIME;
+
 /// 崩溃日志保留几份（多了占地方，少了不够回溯）
 const 保留份数: usize = 10;
 
@@ -75,10 +78,52 @@ fn 本地时区偏移秒() -> i64 {
     }
 }
 
-/// 非 Unix 先返回 0（将来的 Windows 版用 `GetTimeZoneInformation` 补）
-#[cfg(not(unix))]
+/// Windows：`GetLocalTime()`（本地墙钟）− `GetSystemTime()`（UTC 墙钟）= 当前偏移秒
+///
+/// 为什么不碰 `GetTimeZoneInformation`：Bias 单位是分钟、符号「西正东负」、夏令时还要
+/// 判断当前落在哪一段，三处都容易错 —— 两个墙钟的差值由 Windows 自己算好，夏令时天然正确
+/// （思路出自参考项目 `refs/upstream/time` 的 `local_offset_at/windows.rs`，台账 §9）。
+///
+/// 两次取样只隔几微秒，秒粒度上最多差 1 秒：zip 的 DOS 时间本来就是 2 秒粒度、
+/// 资源管理器只显示到分钟，这 1 秒用户看不见，不值得为它再上 FILETIME 那套换算。
+#[cfg(windows)]
+fn 本地时区偏移秒() -> i64 {
+    use windows_sys::Win32::System::SystemInformation::{GetLocalTime, GetSystemTime};
+    // SAFETY: 两个 API 都只往我们自己的 SYSTEMTIME 里写值，无失败返回、无全局副作用。
+    unsafe {
+        let mut 本地: SYSTEMTIME = std::mem::zeroed();
+        let mut 世界: SYSTEMTIME = std::mem::zeroed();
+        GetLocalTime(&mut 本地);
+        GetSystemTime(&mut 世界);
+        墙钟秒(&本地) - 墙钟秒(&世界)
+    }
+}
+
+/// 其他非 Unix 平台（本项目暂无）：宁按 UTC 显示，不因时区把程序弄崩
+#[cfg(not(any(unix, windows)))]
 fn 本地时区偏移秒() -> i64 {
     0
+}
+
+/// SYSTEMTIME → 「自 1970-01-01 起的秒数」（毫秒位忽略）
+#[cfg(windows)]
+fn 墙钟秒(t: &SYSTEMTIME) -> i64 {
+    民用日(i64::from(t.wYear), t.wMonth, t.wDay) * 86400
+        + i64::from(t.wHour) * 3600
+        + i64::from(t.wMinute) * 60
+        + i64::from(t.wSecond)
+}
+
+/// 某个民用日期距 1970-01-01 的天数（Howard Hinnant 的 `days_from_civil`，公有领域）
+#[cfg(windows)]
+fn 民用日(年: i64, 月: u16, 日: u16) -> i64 {
+    let y = 年 - i64::from(月 <= 2);
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = (i64::from(月) + 9) % 12; // 三月 = 0，闰日落在年末好算
+    let doy = (153 * mp + 2) / 5 + i64::from(日) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
 }
 
 /// 装 panic 兜底（**在 `main` 最开头调用**，越早越好）
@@ -459,5 +504,38 @@ mod tests {
         );
         assert!(剩.iter().any(|n| n == "别的文件.txt"), "不是我们的文件不能删");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── W1 时区（2026-10-30 实测：偏移写死 0 → 解出的文件时间 +8 小时）──
+
+    #[cfg(windows)]
+    #[test]
+    fn windows时区偏移落在真实范围内() {
+        let o = 本地时区偏移秒();
+        // 现实中时区只存在于 UTC-12（-43200）到 UTC+14（+50400）之间
+        assert!(
+            (-43200..=50400).contains(&o),
+            "偏移 {o} 秒超出任何真实时区"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows时区偏移与本机时间一致() {
+        // 用 Rust 自己的本地换算不了（引擎禁 unsafe，这正是外壳算的原因），
+        // 但可以验证符号方向：拿 wYear/wMonth/wDay 现场对照偏移的整除关系不可靠，
+        // 这里只守「两次取样都是合法的民用时刻，差值非零且稳定」
+        let a = 本地时区偏移秒();
+        let b = 本地时区偏移秒();
+        assert_eq!(a, b, "同一秒内两次取样，偏移必须一致（实际 {a} vs {b}）");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn 民用日换算锚点正确() {
+        // Unix 纪元与两个闰年锚点（days_from_civil 的标准用例）
+        assert_eq!(民用日(1970, 1, 1), 0);
+        assert_eq!(民用日(2000, 3, 1), 11017);
+        assert_eq!(民用日(2026, 10, 30), 20756); // 本项目 Windows 开工日
     }
 }

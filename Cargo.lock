@@ -1411,6 +1411,7 @@ dependencies = [
  "thiserror",
  "toml",
  "unicode-width",
+ "windows-sys",
  "zip",
 ]
 
