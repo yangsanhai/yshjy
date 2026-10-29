@@ -107,6 +107,42 @@
 `resume_level` 这套三档命名借自 itchio/savior（`none` / `entry` / `block`）——
 用业界已有的词，比我们自己造一套好沟通。
 
+### 按格式的能力表（`hello.formats`，2026-10-29 新增）
+
+`hello.caps` 是**引擎级**的能力（能不能预览 / 能不能续传），而「这个压缩格式能不能选条目、
+能不能给密码、能不能反向打包」是**按格式**不同的 —— zip 能选条目、gzip 这类裸流不能；
+7z 有头加密（连清单都加密）、zip 没有。所以 `hello.formats` 给一张表：
+
+```jsonc
+{"id":1,"cmd":"hello"} →
+{"id":1,"ok":true,"result":{
+  "caps": {"preview":true,"selective":true,"resume":true,"resume_level":"entry","background":true},
+  "formats": [
+    {"format":"zip","shape":"plain","encrypted":true,"encrypted_names":false,
+     "split_volumes":true,"selective":true,"restores_mtime":true,"can_create":true},
+    {"format":"gzip","shape":"single","encrypted":false,"encrypted_names":false,
+     "split_volumes":false,"selective":false,"restores_mtime":false,"can_create":false}
+    /* …共 12 条 */
+  ]
+}}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `format` | 机器标识：`zip` / `7z` / `rar4` / `rar5` / `tar` / `gzip` / `xz` / `zstd` / `bzip2` / `brotli` / `lz4` |
+| `shape` | 数据形状：`plain`（单条流）/ `volumes`（多卷已拼好）/ `tar`（目录树）/ `single`（裸流解出一个文件） |
+| `encrypted` | 支持解密 |
+| `encrypted_names` | 可能连**文件名**都加密（7z `-mhe=on`）—— 无密码时连清单都列不出 |
+| `split_volumes` | 支持分卷 |
+| `selective` | 支持只解一部分（`extract.select`） |
+| `restores_mtime` | 解压能还原原文件的修改时间 |
+| `can_create` | 能反向打包成这种格式 |
+
+**展示名不归引擎**：`format` / `shape` 都是机器标识（小写、无空格），中文/日文标签由前端查自己的语言包拼。
+**为什么不用 `--caps` 子进程**：iOS 禁止 fork/exec，手机端那条路物理上跑不了 —— 能力表必须能从协议拿到。
+**兼容性**：只加字段，不删不改；老前端不认识 `formats` 就忽略，行为完全不变，所以协议版本不升。
+数据源与 CLI `--caps --json` **同一份**（`unpack::能力行()`），`tests/caps_protocol.py` 盯着两边逐字段一致。
+
 ## 响应（引擎 → 前端）
 
 ```jsonc

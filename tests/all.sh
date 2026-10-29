@@ -146,6 +146,8 @@ if [ -n "$BIN" ]; then
   run "FFI 头文件对账（ffi-header-sync.sh）" bash tests/ffi-header-sync.sh
   # --test 只测不写：完整解码 + 校验，但一个字节都不落盘（7-Zip 的 t / Ark 的 SupportsTesting）
   run "只测不写（verify_only.sh）" bash tests/verify_only.sh "$BIN"
+  # caps 按格式声明：协议 hello.formats 与 CLI --caps 必须同源（手抄第二份真源的老病）
+  run "能力表同源（caps_protocol.py）" env YSHJY_BIN="$BIN" python3 tests/caps_protocol.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
     run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"

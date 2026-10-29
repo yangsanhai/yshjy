@@ -44,30 +44,21 @@ fn 打印各格式能力(json: bool) -> ExitCode {
     use yshjy::layout::ArchiveFormat;
     use yshjy::unpack::{self, Shape};
 
-    let 组合: &[(&str, ArchiveFormat, Shape)] = &[
-        ("zip", ArchiveFormat::Zip, Shape::Plain),
-        ("zip（分卷）", ArchiveFormat::Zip, Shape::Volumes),
-        ("7z", ArchiveFormat::SevenZ, Shape::Volumes),
-        ("rar4", ArchiveFormat::Rar4, Shape::Plain),
-        ("rar5", ArchiveFormat::Rar5, Shape::Plain),
-        ("tar", ArchiveFormat::Tar, Shape::Tar),
-        ("gzip", ArchiveFormat::Gzip, Shape::Single),
-        ("xz", ArchiveFormat::Xz, Shape::Single),
-        ("zstd", ArchiveFormat::Zstd, Shape::Single),
-        ("bzip2", ArchiveFormat::Bzip2, Shape::Single),
-        ("brotli", ArchiveFormat::Brotli, Shape::Single),
-        ("lz4", ArchiveFormat::Lz4, Shape::Single),
-    ];
+    // 组合清单与能力位都在引擎里（`unpack::能力组合` / `能力行`）—— 协议 `hello.formats`
+    // 读的是同一份，这里只负责**显示名**（展示文案归外壳，引擎不产句子）。
+    let 名 = |f: ArchiveFormat, s: Shape| -> String {
+        match (f, s) {
+            (ArchiveFormat::Zip, Shape::Volumes) => format!("{}（分卷）", f.as_str()),
+            _ => f.as_str().to_string(),
+        }
+    };
 
     if json {
         let mut 行: Vec<String> = Vec::new();
-        for (名, fmt, shape) in 组合 {
-            let Some(h) = unpack::find(*fmt, *shape) else {
-                continue;
-            };
-            let c = h.caps();
+        for (fmt, shape, c) in unpack::能力行() {
             行.push(format!(
-                "{{\"format\":\"{名}\",\"encrypted\":{},\"encrypted_names\":{},\"split_volumes\":{},\"selective\":{},\"restores_mtime\":{},\"can_create\":{}}}",
+                "{{\"format\":\"{}\",\"shape\":\"{}\",\"encrypted\":{},\"encrypted_names\":{},\"split_volumes\":{},\"selective\":{},\"restores_mtime\":{},\"can_create\":{}}}",
+                fmt.as_str(), shape.as_str(),
                 c.encrypted, c.encrypted_names, c.split_volumes, c.selective, c.restores_mtime, c.can_create
             ));
         }
@@ -78,11 +69,8 @@ fn 打印各格式能力(json: bool) -> ExitCode {
     // 给人看的表：✓ 支持 / - 不支持
     println!("各格式能力（✓ 支持，- 不支持）");
     println!("格式          密码  密名  分卷  选择  时间  打包");
-    for (名, fmt, shape) in 组合 {
-        let Some(h) = unpack::find(*fmt, *shape) else {
-            continue;
-        };
-        let c = h.caps();
+    for (fmt, shape, c) in unpack::能力行() {
+        let 名 = 名(fmt, shape);
         let m = |b: bool| if b { "✓" } else { "-" };
         println!(
             "{:<12} {:>4} {:>5} {:>5} {:>5} {:>5} {:>5}",

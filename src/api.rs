@@ -95,8 +95,34 @@ pub fn hello() -> Value {
             // 关掉窗口后引擎还在后台跑（藏到托盘继续解），这是真做出来了，
             // 所以能力位如实写 true —— 前端可以据此显示「后台继续」。
             "background": true
-        }
+        },
+        // 按格式声明的能力表（Ark 的 `SupportsTesting: true` 是同一个思路：能力挂在**格式**上，
+        // 不是全局一份）。前端据此决定「这个格式能不能选条目 / 能不能给密码 / 能不能打包」。
+        //
+        // **只加不删**：老前端不认识 `formats` 就忽略，行为不变，所以协议版本不用升。
+        // `format` / `shape` 都是机器标识（zip / rar5 / volumes / single…），展示名归前端。
+        "formats": formats_caps()
     })
+}
+
+/// `hello.formats` 的数据源：与 CLI `--caps --json` 同源（`unpack::能力行()`）
+fn formats_caps() -> Value {
+    let 行: Vec<Value> = crate::unpack::能力行()
+        .into_iter()
+        .map(|(f, s, c)| {
+            json!({
+                "format": f.as_str(),
+                "shape": s.as_str(),
+                "encrypted": c.encrypted,
+                "encrypted_names": c.encrypted_names,
+                "split_volumes": c.split_volumes,
+                "selective": c.selective,
+                "restores_mtime": c.restores_mtime,
+                "can_create": c.can_create,
+            })
+        })
+        .collect();
+    Value::Array(行)
 }
 
 /// 扫一批路径（S13 队列 / S10 多候选的数据源）：

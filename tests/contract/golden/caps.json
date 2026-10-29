@@ -7,6 +7,7 @@
         "encrypted_names": true,
         "restores_mtime": false,
         "selective": true,
+        "shape": "volumes",
         "split_volumes": true
       },
       "brotli": {
@@ -15,6 +16,7 @@
         "encrypted_names": false,
         "restores_mtime": false,
         "selective": false,
+        "shape": "single",
         "split_volumes": false
       },
       "bzip2": {
@@ -23,6 +25,7 @@
         "encrypted_names": false,
         "restores_mtime": false,
         "selective": false,
+        "shape": "single",
         "split_volumes": false
       },
       "gzip": {
@@ -31,6 +34,7 @@
         "encrypted_names": false,
         "restores_mtime": false,
         "selective": false,
+        "shape": "single",
         "split_volumes": false
       },
       "lz4": {
@@ -39,6 +43,7 @@
         "encrypted_names": false,
         "restores_mtime": false,
         "selective": false,
+        "shape": "single",
         "split_volumes": false
       },
       "rar4": {
@@ -47,6 +52,7 @@
         "encrypted_names": false,
         "restores_mtime": true,
         "selective": true,
+        "shape": "plain",
         "split_volumes": true
       },
       "rar5": {
@@ -55,6 +61,7 @@
         "encrypted_names": false,
         "restores_mtime": true,
         "selective": true,
+        "shape": "plain",
         "split_volumes": true
       },
       "tar": {
@@ -63,6 +70,7 @@
         "encrypted_names": false,
         "restores_mtime": true,
         "selective": true,
+        "shape": "tar",
         "split_volumes": false
       },
       "xz": {
@@ -71,6 +79,7 @@
         "encrypted_names": false,
         "restores_mtime": false,
         "selective": false,
+        "shape": "single",
         "split_volumes": false
       },
       "zip": {
@@ -79,14 +88,7 @@
         "encrypted_names": false,
         "restores_mtime": true,
         "selective": true,
-        "split_volumes": true
-      },
-      "zip（分卷）": {
-        "can_create": true,
-        "encrypted": true,
-        "encrypted_names": false,
-        "restores_mtime": true,
-        "selective": true,
+        "shape": "volumes",
         "split_volumes": true
       },
       "zstd": {
@@ -95,6 +97,7 @@
         "encrypted_names": false,
         "restores_mtime": false,
         "selective": false,
+        "shape": "single",
         "split_volumes": false
       }
     }
