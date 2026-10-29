@@ -17,7 +17,9 @@ import tempfile
 import time
 import zipfile
 
-BIN = sys.argv[1] if len(sys.argv) > 1 else "target/release/yshjy"
+BIN = (sys.argv[1] if len(sys.argv) > 1
+       else os.environ.get("YSHJY_BIN")
+       or ("target/release/yshjy.exe" if os.name == "nt" else "target/release/yshjy"))
 STUB = pathlib.Path("assets/sfx/yshjy-sfx.exe").read_bytes()
 W = pathlib.Path(tempfile.mkdtemp(prefix="yshjy_sfx_proto_"))
 
@@ -74,7 +76,10 @@ r = 收(发(cmd="pack", inputs=[str(SRC)], out=str(out), mode="disguise",
 # 2. 产物能自己解开
 # 正式存根是 Windows PE（MZ）→ 用 wine 跑；开发机的 Linux 版存根直接跑
 if STUB[:2] == b"MZ":
-    runner = ["wine"]
+    if os.name == "nt":
+        runner = []  # Windows 本机就是 PE，直接跑（wine 只是 Linux 开发机的桥，W7）
+    else:
+        runner = ["wine"]
     env = dict(os.environ, WINEDEBUG="-all",
                YSHJY_SFX_SILENT="1", YSHJY_SFX_NO_OPEN="1")
 else:

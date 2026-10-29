@@ -18,6 +18,10 @@ import random
 import stat
 import subprocess
 import sys
+
+if os.name == "nt":
+    print("– Linux .sh 自解压（跳过：Windows 上没有这个产物形态，PE 存根走 protocol_sfx.py）")
+    sys.exit(0)
 import tempfile
 
 BIN = sys.argv[1] if len(sys.argv) > 1 else "target/release/yshjy"

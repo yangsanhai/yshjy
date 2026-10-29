@@ -26,7 +26,11 @@ cd "$(dirname "$0")/.." || exit 1
 
 MB=${1:-60}
 # 用 debug（与 pack_progress.sh 一致）：`tests/all.sh` 两档都会建 —— 详见那个文件同处注释
-BIN=${BIN:-target/debug/yshjy}
+BIN=${BIN:-}
+# Windows 产物带 .exe（W7）
+if [ -z "$BIN" ]; then
+  for c in target/debug/yshjy target/debug/yshjy.exe; do [ -x "$c" ] && BIN="$c" && break; done
+fi
 if [ ! -x "$BIN" ]; then
   echo "先编译：cargo build（找不到 $BIN）" >&2
   exit 2
@@ -141,6 +145,15 @@ PY
 }
 
 # ── 场景一：用户按取消（SIGINT）──
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    # MSYS 的 kill -INT 送不进原生 Windows 子进程（没有共享控制台，
+    # GenerateConsoleCtrlEvent 无从谈起，2026-10-30 实测引擎把包解完才退）——
+    # 优雅取消（ctrlc 接管 → Drop 刷缓冲）这条路要用**真终端**手工验；
+    # 「中断后续传」本身由场景二（硬杀）覆盖，Windows 上在这里明说跳过，不许假红
+    echo "  （跳过场景一：本机没有真控制台，SIGINT 送不进原生子进程；硬杀路径见场景二）"
+    ;;
+  *)
 echo
 echo "场景一：解到一半按取消（Ctrl-C）→ 重开接着解"
 rm -rf "$DA"
@@ -179,6 +192,9 @@ if [ "$LEFT" -eq 0 ]; then
 else
   bad "解压完成后还留着 $LEFT 份续传记录"
 fi
+
+    ;;
+esac
 
 # ── 场景二：硬杀（kill -9，模拟关窗口 / 断电）──
 echo

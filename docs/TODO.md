@@ -666,7 +666,7 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 | W4 | ✅ 密码明文（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~关回显只有 Unix 分支~~ 换 dialoguer::Password，顺手删手写 termios |
 | W5 | ✅ 内存预检（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~读 /proc，Windows 永远「内存未知」~~ 外壳注册 GlobalMemoryStatusEx 探针，预检实时取数 |
 | W6 | ✅ 配置 `~`（**2026-10-30 已修**，证据见 CHANGELOG） | 🟡 | ~~展开只认 HOME~~ 走 paths::home（USERPROFILE 优先） |
-| W7 | 回归套件跑不全 | 🟡 | 缺 `zip` / `rar` / `unrar` |
+| W7 | ✅ 回归套件（**2026-10-30 全绿：35 过/0 挂/9 明说跳过**，四个深坑见 CHANGELOG） | 🟡 | ~~缺 zip/rar/unrar~~ 7z 造夹具 + MSYS .exe 兜底/星平面 grep/GBK 输出/kill -INT 四坑修平 |
 | W8 | ✅ 单测 14 挂（**2026-10-30 清零：355 过 0 挂**） | 🟡 | 10 条随 W2、1 条随 W6；paths 加 cfg(unix)；tar/make_with 系挖出 **WSL bash 假绿**（直起工具修复） |
 | W9 | 图形界面 | ⛔ 用户点名要 | 脚手架在，Flutter 没装；Dart 侧 3 处写死 Unix 路径 |
 | W10 | 本机构建环境 | 🔧 不是代码 | 代理 / 沙箱两个坑，不解决编不动 |
@@ -734,12 +734,14 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
   PATH）→ make_with 系的 gzip/xz/bzip2/zstd 四条一直是「静默跳过」的假绿。
   全部改直起工具 + `current_dir`，五条现在**真跑真过**。**结果：355 过 / 0 挂**
 
-### W7 回归套件在 Windows 上跑不全
+### W7 ✅ 回归套件在 Windows 上跑全（2026-10-30 已修，四个深坑全文见 CHANGELOG.md）
 
-- `tests/all.sh` 需要 `zip`（造夹具）、`rar` / `unrar`（RAR 那几条）
-- 本机 Git Bash 实测：有 `7z` / `unzip` / `file` / `python3` / `sha256sum` / `mkfifo`，**缺 `zip` / `rar` / `unrar`**
-- **修法**：造 zip 夹具改用 `7z a -tzip`（本机有）；RAR 用例在没有 `rar` 的机器上**跳过并明说**，不许假绿
-- **验收**：Windows 上 `bash tests/all.sh` 能跑完并给出「通过 / 失败 / 跳过」三项数字
+- zip 夹具 → `7z a -tzip`；rar/unrar 没有就明说跳过
+- **实测挖出的四个深坑**（比"缺命令"深得多）：①MSYS `[ -x/-e/-f ]` 对无后缀名兜底 `.exe`，
+  BIN 探测必须先查 .exe；②MSYS grep 在 UTF-8 locale 匹配不了星平面 emoji（🔒）；
+  ③Windows 7-Zip 按 GBK 转码输出文件名，grep 要用 ASCII 标记；④MSYS `kill -INT` 送不进
+  无控制台的原生子进程，优雅取消场景在 Windows 跳过、硬杀路径全真跑
+- **验收达成**：`bash tests/all.sh --no-gui` = **35 过 / 0 挂 / 9 跳（每条跳过带原因）**
 
 ### W9 图形界面（用户 2026-10-30 明确：**一定要上**）
 

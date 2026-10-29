@@ -61,7 +61,9 @@ if "$BIN" --list plain.mp4 2>/dev/null | grep -q "中文名.txt"; then
 else
   bad "列表里中文名乱码"
 fi
-if "$BIN" --list pw.mp4 2>/dev/null | grep -q "🔒"; then
+# LC_ALL=C 按字节匹配：MSYS2 的 grep 3.0 在 UTF-8 locale 下匹配不了星平面字符（🔒=U+1F512），
+# 中文（BMP 内）不受影响（2026-10-30 W7 实测）
+if "$BIN" --list pw.mp4 2>/dev/null | LC_ALL=C grep -q "🔒"; then
   ok "加密包显示锁标记"
 else
   bad "加密包没显示锁标记"

@@ -110,8 +110,31 @@
 - **验收证据**（2026-10-30 本机实跑）：`trash::` 单测过 —— Windows 上真删进**系统回收站**
   （测试文件留在回收站属预期副作用，可在资源管理器还原验证）；lib 354 过 / 0 挂、bin 34/0、
   clippy 干净。**资源管理器里「能还原」这一眼留给老板**（回收站里应有「测试包.mp4」）。
+### W7 ✅ 回归套件在 Windows 跑全（`tests/all.sh --no-gui`：**35 过 / 0 挂 / 9 明说跳过**）
+
+- **夹具**：造 zip 改 `7z a -tzip`（本机无 `zip`）；`rar`/`unrar` 相关沿用「没有就明说跳过」。
+- **修了四个「本机才会撞上」的深坑**（每条都实测复现过）：
+  1. **MSYS 的 `[ -x/-e/-f ]` 对无后缀名自动兜底同名 `.exe`** —— `yshjy` 不存在、`yshjy.exe`
+     存在时 `[ -x yshjy ]` 也是真，BIN 探测必须**先查 .exe**（三份 python 探针的
+     `os.path.exists` 不兜底，之前全靠 Linux ELF 残留「存在」糊弄过去）；
+  2. **MSYS2 的 grep 3.0 在 UTF-8 locale 下匹配不了星平面字符**（🔒=U+1F512）——
+     `LC_ALL=C` 按字节可解；中文（BMP 内）不受影响；
+  3. **Windows 的 7-Zip 按系统代码页（GBK）转码输出里的文件名**（od 验过：`313 265`=说）——
+     UTF-8 的 grep 永远匹配不上中文名，改匹配 ASCII 的 `.bin`；
+  4. **MSYS 的 `kill -INT` 送不进无控制台的原生子进程**（GenerateConsoleCtrlEvent 无从谈起，
+     引擎把包解完才退）—— resume.sh 场景一（优雅取消）在 Windows 明说跳过，
+     **硬杀路径（KILL=TerminateProcess）场景二/反证/随机断点全真跑全过**（硬杀后续传 24 项、逐字节一致）。
+- **明说跳过的（各带原因，不许假绿）**：pick.sh / progress_multi.sh（python 无 pty）、
+  nautilus 右键脚本与只读目录档（Linux 专属 + NTFS 不认 chmod）、自解压 `.sh` 两档（Linux 专属形态）、
+  seek_probe 的 `/dev/null` 档、protocol_sfx_linux（.sh 形态）、`script` 交互两态（没装 util-linux）。
+- **改动文件**：`tests/{all,smoke,tree_select,errmsgs,decoy,trash_source,resume,pack_progress,cli_spec_match}.sh`、
+  `scripts/gen-cli-assets.py`（候选加 .exe）、`tests/seek_probe.py`、`tests/protocol_sfx{,_linux}.py`。
+  顺带清掉 `target/{release,debug}/yshjy` 两个 Linux ELF 残留（W10 说过随时可重建——
+  它们的旧 mtime 曾骗过 gen-cli-assets 的「二进制比源码旧」检查）。
+- **验收**：`bash tests/all.sh --no-gui` **35 过 / 0 挂 / 9 跳**；引擎侧 `cargo test` 354+34 全绿不变。
 
 ## [未发布] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
+
 
 
 

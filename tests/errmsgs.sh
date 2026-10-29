@@ -46,9 +46,15 @@ expect() {
 
 # ① 输出目录没写权限 → 应该明确说「不让写」，不能说「数据丢了」
 mkdir -p "$TMP/readonly"
+if uname -s | grep -q '^MINGW'; then
+  # NTFS 不认 chmod 的只读位（实测：写照样成功）—— 这条只在 Unix 上验，明说跳过
+  printf '  [33m–[0m %s
+' "只读目录报「不让写」（跳过：NTFS 不认 chmod，Unix 专属条件）"
+else
 chmod 555 "$TMP/readonly"
 expect "只读目录报「不让写」" "不让写" 1 -o "$TMP/readonly" "$DATA/C1_plain.zip"
 chmod 755 "$TMP/readonly"
+fi
 
 # ② 目标位置是个普通文件 → 应该明确说「这是个文件」
 : > "$TMP/plainfile"
