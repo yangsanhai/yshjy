@@ -651,9 +651,21 @@ else
   exit 1
 fi
 echo "解压完成：$TARGET"
-# 自动化/测试场景别真弹文件管理器（YSHJY_SFX_NO_OPEN=1）
+# 解完自动打开输出目录 —— 只对「真人自己跑」开，自动化场景安静收场：
+#   ① YSHJY_SFX_NO_OPEN=1 显式关（CI / 脚本一律用它，最高优先）
+#   ② stdout 是终端（真人在终端里敲 ./包.sh）→ 开
+#   ③ stdout 被重定向/管道，但父进程不是 shell（= 在文件管理器里双击）→ 开
+#   ④ 其余（`sh 包.sh > log`、批量脚本调用）→ 不开
 if [ -z "${YSHJY_SFX_NO_OPEN:-}" ] && command -v xdg-open >/dev/null 2>&1; then
-  xdg-open "$TARGET" >/dev/null 2>&1 || true
+  sfx_open=1
+  if [ ! -t 1 ]; then
+    case "$(ps -o comm= -p "$PPID" 2>/dev/null)" in
+      bash|dash|sh|zsh|ksh|fish) sfx_open=0 ;;
+    esac
+  fi
+  if [ "$sfx_open" = 1 ]; then
+    xdg-open "$TARGET" >/dev/null 2>&1 || true
+  fi
 fi
 exit 0
 "#;

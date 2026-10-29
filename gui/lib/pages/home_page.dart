@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_settings.dart';
 import '../engine.dart';
 import '../history_store.dart';
 import '../humanize.dart';
@@ -450,6 +451,12 @@ class _HomePageState extends State<HomePage> {
       final ok = (r['ok'] as num?)?.toInt() ?? 0;
       final failed = (r['failed'] as num?)?.toInt() ?? 0;
       widget.onStatus?.call('批量完成：$ok 成功 / $failed 失败');
+      // 设置里开了「解完自动打开」才开，且只开第一个有产物的目录（不逐个弹窗口）
+      final firstDest = jobs
+          .cast<Map>()
+          .map((j) => j['dest'] as String?)
+          .firstWhere((d) => d != null && d.isNotEmpty, orElse: () => null);
+      await _maybeOpenAfterDone(firstDest);
       // 历史：每个任务一条
       for (final raw in jobs) {
         final j = (raw as Map).cast<String, dynamic>();
@@ -465,6 +472,18 @@ class _HomePageState extends State<HomePage> {
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
+  }
+
+  /// 解压完成后是否自动打开输出目录（设置页那个开关，存 `[general] open_after`，默认关）
+  ///
+  /// 为什么默认关：批量解 20 个包不该弹 20 个窗口 —— 业界也是这么分的
+  /// （NanaZip 做成选项、7-Zip 干脆不做）。界面本来就有「打开输出目录」按钮，
+  /// 主动点一下就够；想让「解完自动跳到文件夹」的人在设置里打开。
+  Future<void> _maybeOpenAfterDone(String? dest) async {
+    if (dest == null || dest.isEmpty) return;
+    if (!await openAfterExtractEnabled()) return;
+    if (!mounted) return;
+    await openDirectory(dest);
   }
 
   void _resetQueue() {
@@ -549,6 +568,7 @@ class _HomePageState extends State<HomePage> {
         r.ok ? '解压完成' : '解压部分完成',
         '${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
       );
+      await _maybeOpenAfterDone(r.dest);
       // 产物里若还套着压缩包，问一句要不要再解一层（不自动，免得大包解到天荒地老）
       _probeNested();
       // 记一条历史（历史页读它）
@@ -605,6 +625,7 @@ class _HomePageState extends State<HomePage> {
       final savedCount = (r['files'] as List?)?.length ?? 0;
       widget.onStatus?.call('救援完成：救回 $savedCount 个文件');
       Notifier.send('救援完成', '救回 $savedCount 个文件');
+      await _maybeOpenAfterDone(r['dest'] as String?);
       await HistoryStore.add(HistoryEntry(
         time: DateTime.now().toIso8601String(),
         input: path,
@@ -795,6 +816,7 @@ class _HomePageState extends State<HomePage> {
         _result = r;
         _phase = Phase.done;
       });
+      await _maybeOpenAfterDone(r.dest);
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
