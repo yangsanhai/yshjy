@@ -542,11 +542,19 @@ ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            #
 - [ ] **① 仓库上 GitHub（公开）+ CI 骨架** —— 这是后面所有平台的前置。
   push 触发 `tests/all.sh`；打 tag 触发构建矩阵。验收：push 后 CI 自动跑绿；`git tag v0.9.26` 能触发构建。
 - [ ] **② Windows**：`flutter create --platforms=windows` 补平台目录；产物 zip（exe + 界面目录）。
-  **引擎部分已完成（2026-10-29）**：`cargo build --release --target x86_64-pc-windows-gnu` 通，
-  出 **13 MB `yshjy.exe`**（PE32+ console），wine 里能跑 `--version`、能解含中文的真 zip。
-  还剩：① **补时区**（`crash.rs` 非 unix 的 `本地时区偏移秒()` 仍是 `return 0` 占位 → 改
-  `GetTimeZoneInformation`；不补则 zip 里的本地时间被当 UTC，**文件名时间差 8 小时、跨日显示成明天**，
-  wine 实测已踩到）② wine 跑 4 样本 + 1 坏包 ③ 出 zip 包 ④ 写 `docs/BUILD-Windows.md`。
+  **引擎部分已在真正的 Windows 机器上打通（2026-10-30，不是 wine 了）**：MSVC 目标
+  `cargo build --release` 57 秒出 **7.8 MB `yshjy.exe`**，`--version` / `--caps` 正常，
+  真解了一个伪装成 `.mp4` 的中文名 zip，内容正确。
+  **但 Windows 上另有一批只有 Windows 才会犯的错**（时区 / 断点续传 / 回收站 / 密码回显…），
+  **清单与证据见本文件末尾「2026-10-30 Windows 实测审计」一节（W1~W10），按那里的编号做，别在这里再抄一份。**
+  本项剩余：① W1 补时区 ② W2 修断点续传 ③ W3~W7 按性价比排
+  ④ **出两个版本（用户 2026-10-30 拍板，两个都要）**：
+     **免安装绿色版**（解压即用、双击 `yshjy.exe`）+ **安装包**（自动挂右键菜单 / 文件关联）
+  ⑤ 写 `docs/BUILD-Windows.md`
+  ⑥ **图形界面（用户 2026-10-30 明确：一定要上）** → 装 Flutter SDK + 修 Dart 侧 3 处写死的
+  `XDG`/`HOME` + 引擎名补 `.exe`（W9）。
+     **设置页新增一项「关窗口时：缩到托盘 / 直接退出」，默认「直接退出」**（用户 2026-10-30 拍板；
+     与 Linux 版默认「缩托盘」相反，别照抄）。
   **未签名** → 用户首次点「仍要运行」，README 写明怎么点。验收：Windows 10/11 上双击能开界面、能解压、能打包。
 - [ ] **③ Android**：`cargo-ndk` 编 arm64-v8a / armeabi-v7a 的 `.so`，`flutter build apk --release`；
   keystore 用 `keytool` 自己生成（免费，**别丢**，丢了以后没法覆盖升级）。
@@ -642,6 +650,139 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
     里的 `0 B` 改成人话（需要 X / 只有 Y / 还差 Z）。
   - **验收**：解 300MB 到 U盘 → 报 ✅ 那一刻拔盘 → 重插后文件应完整；再补一条能自动化的探针
     （小 exFAT loop 盘 + `dmsetup` error 目标模拟写失败，不必每次真拔硬件）。
+
+## 2026-10-30 Windows 实测审计（在真 Windows 机器上编、跑、解压出来的）
+
+> 由来：项目副本搬到 Windows 机器上开工，第一次**真的**在 Windows 上编（以前只有 Linux 交叉编 + wine）。
+> 方法：`cargo build --release` 真编 + `cargo test` 真跑 + 造伪装包真解 + 逐条读平台分支代码。
+> **数字都是实跑的**：编译 57 秒 / 产物 7.8 MB / 单测 **341 过 14 挂**。
+> 排序按「真人会撞上的概率」，不看实现难度。**做的时候只做最上面一条。**
+
+| # | 项 | 性质 | 一句话 |
+|---|---|---|---|
+| W1 | 时区占位返回 0 | 🔴 用户一眼看得见 | 解出来的文件时间 **+8 小时**（实测 00:44:56 → 08:44:58） |
+| W2 | 断点续传静默失效 | 🔴 功能假死 | `append` 模式下 `set_len(0)` 被 Windows 拒绝 → 每次从头解，不报错 |
+| W3 | 回收站写错地方 | 🟠 | 只认 XDG，Windows 上会建到当前盘根目录，资源管理器还不认 |
+| W4 | 输密码明文显示 | 🟠 | 关回显只有 Unix 分支 |
+| W5 | 内存预检失效 | 🟠 | 读 `/proc`，Windows 上永远「内存未知」→ 防炸弹的内存闸形同虚设 |
+| W6 | 配置 `~` 不展开 | 🟡 | 展开只认 `HOME` |
+| W7 | 回归套件跑不全 | 🟡 | 缺 `zip` / `rar` / `unrar` |
+| W8 | 单测 14 挂 | 🟡 | 10 条是 W2 的根因，3 条是环境，1 条已归到 W6 |
+| W9 | 图形界面 | ⛔ 用户点名要 | 脚手架在，Flutter 没装；Dart 侧 3 处写死 Unix 路径 |
+| W10 | 本机构建环境 | 🔧 不是代码 | 代理 / 沙箱两个坑，不解决编不动 |
+
+### W1 补时区（最便宜、用户最看得见）
+
+- **现状**：`src/crash.rs:78-82`，`#[cfg(not(unix))] fn 本地时区偏移秒() -> i64 { 0 }`
+- **实测证据**（2026-10-30）：`2026-10-30 00:44:56` 的源文件，解出来 `08:44:58` —— 整 8 小时，正好东八区
+- **根因**：zip 里存的是「本地时间」，转 Unix 时间戳要减本地偏移；偏移写死 0 就等于当成 UTC
+- **修法（2026-10-30 查完参考项目后改的 —— 比原方案简单，用这个）**：
+  **不要自己算 `GetTimeZoneInformation` 的 Bias / StandardBias / DaylightBias**（单位是分钟、
+  符号「西正东负」、夏令时还要判断处于哪一段，三处都容易错）。
+  我们只需要「**现在**」的偏移，所以直接 `GetLocalTime()` 减 `GetSystemTime()`
+  = 本地偏移秒，**夏令时由 Windows 自己算，零手算**。
+  出处：`refs/upstream/time/time/src/sys/local_offset_at/windows.rs`（它走
+  `SystemTimeToTzSpecificLocalTime` 的同一思路；我们只取「现在」，还能再省掉 SYSTEMTIME→FILETIME 那步）。
+  API 位置已核对（`windows-sys 0.61.2` 源码）：`GetLocalTime` / `GetSystemTime` /
+  `GlobalMemoryStatusEx` 都在 `Win32::System::SystemInformation`（feature
+  `Win32_System_SystemInformation`）→ **W1 与 W5 共用同一个 feature，只加一条依赖**。
+  `crash.rs` 是 bin 的模块（不在 `lib.rs` 的 `#![forbid(unsafe_code)]` 管辖内），unsafe 合法。
+- **验收**：解出的 mtime 与资源管理器显示一致；补一条 `#[cfg(windows)]` 单测（偏移落在 `-43200..=50400`）
+
+### W2 修断点续传（本机才会暴露的真 bug）
+
+- **现状**：`src/resume.rs:268-283`，`.create(true).append(true).open()` 之后 `file.set_len(0)`
+- **实测证据**：10 行的最小复现（`/tmp/rsmini/m.rs`）→ `set_len: Err(Os { code: 5, kind: PermissionDenied })`
+- **根因**：`append(true)` 在 Windows 上只给 `FILE_APPEND_DATA`，没有 `GENERIC_WRITE`；
+  `SetEndOfFile` 需要写权限 → 拒绝。于是 `open_in` 走 `.ok()?` 提前返回 `None`，
+  `src/job.rs:803` 把 `None` 当「没有记录」→ **每次从头解，不崩不报错**（续传是「增强」，
+  打不开就静默降级，设计上没错，Windows 上等于把增强整个丢了）
+- **修法**：要截断的那一支单独开一份 `.create(true).truncate(true).write(true)`；
+  或统一 `.create(true).read(true).write(true)` 后自己维护追加位置（append 语义自己管）
+- **验收**：`cargo test resume::` 10 条全绿；真机解到一半 Ctrl-C 再重跑，应收到 `Resumed` 事件
+
+### W3 回收站（`--trash-source` 在 Windows 上是错的）
+
+- **现状**：`src/trash.rs:15-22` `trash_dir()` 只认 `XDG_DATA_HOME` / `HOME`
+- **后果**：Windows 上没有 `HOME` → 退到相对路径 `.local/share/Trash`，会落在**当前工作目录所在盘的根**；
+  而且写的是 XDG 的 `.trashinfo`，Windows 资源管理器不认
+- **修法（2026-10-30 查完 `refs/upstream/trash-rs` 后定的）**：**只能引 crate，自己写不进去**。
+  理由：COM 调 `IFileOperation` 必须有 `unsafe`，而 `src/lib.rs:14` 是 `#![forbid(unsafe_code)]`，
+  `pub mod trash` **在 lib 里** —— 与 `crash.rs`（bin 的模块，unsafe 合法）不同，这里物理上写不了。
+  → `[target.'cfg(windows)'.dependencies] trash = "5.2"`（`Byron/trash-rs`，MIT，255★，2026-10 仍更新）；
+  它只在 Windows 构建时拉进来，**Linux 那半的依赖与产物一个字节都不变**。
+  **抄它实现时必须知道的一个坑**（`refs/upstream/trash-rs/src/windows.rs:92-118`）：
+  `PerformOperations()` **返回成功不代表真删了**，还要查 `GetAnyOperationsAborted()`；
+  另外它用 `FOF_ALLOWUNDO | FOF_NO_UI | FOF_WANTNUKEWARNING`（最后一个保证回收站不可用时会问，不静默永久删）。
+  **退一步也可以但必须明说**：Windows 上 `--trash-source` 直接报「此平台暂不支持」，
+  **不许静默建个错的目录**
+- **验收**：Windows 上要么真进回收站（资源管理器能还原），要么给人话错误
+
+### W4 输密码回显（`src/main.rs:1425-1449`）
+
+- 关回显只有 `#[cfg(unix)]` 的 termios 分支，Windows 上退回普通读 → **解压码明文显示在屏幕上**
+- `crossterm` 已在依赖里且支持 Windows，用它关回显即可
+- **验收**：Windows 上输密码不显示字符、回车后正常继续
+
+### W5 内存预检 / 机械盘探测（`src/hardware.rs:196-240`）
+
+- 只读 `/proc/meminfo`、`/proc/mounts`、`/sys/block/*/queue/rotational`，Windows 上全 `None`
+- 当前是**降级不崩**（`ok()?`），但解压前的内存预检在 Windows 上**等于没有**
+  —— 防解压炸弹的「总量闸」还在，**「内存闸」丢了**
+- **修法**：Windows 用 `GlobalMemoryStatusEx` + `MEMORYSTATUSEX.ullAvailPhys`（已核对在
+  `windows-sys` 的 `Win32::System::SystemInformation`，与 **W1 共用同一个 feature**，不额外加依赖）；
+  盘型可以暂时不做（只影响提示与并行度）。
+  另一条路（不推荐）：`sysinfo` crate —— `rustdesk/src/common.rs:929` 就这么干，但为了一行内存
+  把整包依赖拖进来不划算，而我们本来就只需要这一个数
+- **验收**：Windows 上能报出真实可用内存；造一个超内存的包应被拦下来
+
+### W6 配置里的 `~` 不展开（`src/config.rs:64-73`）
+
+- `展开波浪号()` 只认 `HOME`；Windows 用户在 `config.toml` 里写 `dir = "~/出"` 不会展开
+- **修法**：改用 `crate::paths::home()`（它已按平台优先 `USERPROFILE`）
+- **验收**：`config::tests::波浪号会展开` 在 Windows 上也绿
+
+### W7 回归套件在 Windows 上跑不全
+
+- `tests/all.sh` 需要 `zip`（造夹具）、`rar` / `unrar`（RAR 那几条）
+- 本机 Git Bash 实测：有 `7z` / `unzip` / `file` / `python3` / `sha256sum` / `mkfifo`，**缺 `zip` / `rar` / `unrar`**
+- **修法**：造 zip 夹具改用 `7z a -tzip`（本机有）；RAR 用例在没有 `rar` 的机器上**跳过并明说**，不许假绿
+- **验收**：Windows 上 `bash tests/all.sh` 能跑完并给出「通过 / 失败 / 跳过」三项数字
+
+### W8 单测在 Windows 上 14 挂（分三类）
+
+- 10 条 `resume::tests::*` → **W2 的根因**，修完应该一起绿
+- `config::tests::波浪号会展开` → **W6**
+- `paths::tests::xdg_绝对路径优先` → 纯函数测试用了 `/tmp/state`，Windows 上 `/tmp/...` **不算绝对路径**（没有盘符）→ 这条测试该加 `#[cfg(unix)]`
+- `extract_stream::tests::tar_能展开成目录树` → 需要系统 `tar` 命令；Windows 上改成「没有 tar 就跳过并明说」
+- **验收**：`cargo test` 在 Windows 上除明确跳过的以外全绿（Linux 上必须仍是 388 全过）
+
+### W9 图形界面（用户 2026-10-30 明确：**一定要上**）
+
+- **脚手架不用重跑**：`gui/windows/`（CMakeLists / runner / Runner.rc / win32_window）已经在了
+- **要装的**：Flutter SDK（Windows 桌面）；VS 的「使用 C++ 的桌面开发」—— 本机已有
+  MSVC 14.50 + Windows SDK 10.0.26100，装完应该能直接 `flutter build windows`
+- **Dart 侧三处写死 Unix 路径**（真正要改的代码）：
+  1. `gui/lib/main.dart:12`：`env['XDG_CONFIG_HOME'] ?? '${env['HOME']}/.config'` 找配置目录
+  2. `gui/lib/pages/home_page.dart:2314`：同样写法找密码本 `passwords.txt`
+     → 这两处 Windows 上会算成 `/.config`；而 `gui/lib/platform_paths.dart` **已经写好了**
+     正确的 Windows 分支（`APPDATA` / `LOCALAPPDATA`），**只是这两处没走它**
+  3. `gui/lib/engine.dart:256-263`：引擎路径写死 `'yshjy'`，Windows 上要 `yshjy.exe`
+- 另：`gui/lib/notify.dart:40` 托盘通知只有 Linux 分支，Windows 上要另外接
+- **设置页新增一项（用户 2026-10-30 拍板）**：「关窗口时：**缩到托盘** / **直接退出**」，
+  **默认「直接退出」**。注意这与 Linux 版的行为**相反**（Linux 默认缩托盘，见
+  `gui/lib/app_shell.dart`）—— 别把 Linux 的默认值照抄过来。配置项要存进 `config.toml`
+  （引擎侧 `config.rs` 加字段，界面读它），别只存在界面内存里。
+- **验收**：Windows 上 `flutter build windows` 出 exe，双击能开界面、能解压、能打包
+
+### W10 本机构建环境（不是代码问题，但会挡路 —— **下次开工先看这条**）
+
+1. **代理**：注册表里有 `ProxyServer=127.0.0.1:7890`（FlClash 留下的，`ProxyEnable=0` 但 cargo 照读它）。
+   FlClash 没开时 7890 没人监听 → `cargo` 报「download of config.json failed」。
+   **不用开代理**（直连实测 200），编译时带 `CARGO_HTTP_PROXY= cargo build --release` 就行。
+2. **沙箱**：cargo 要执行自己生成的 build script（新生成的 exe），受限环境里会 `os error 5`，要在普通终端跑。
+3. **`target/` 里 14 G 是 Linux 编译产物**（`.so` / `.rlib` / 无扩展名 ELF），Windows 上毫无用处，
+   删了随时能重建。`gui/build`、`ffi/target` 同理。
 
 ## 用法（给自己看的三句话）
 
