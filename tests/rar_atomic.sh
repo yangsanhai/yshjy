@@ -19,6 +19,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 MB=${1:-150}
+# ★ 必须用 debug，不是 release：中断点按「完整解耗时 ÷ 3」算，而 release 解 80MB 只要 151 ms
+#   → 0.15 秒的硬杀根本打不中，进程早就正常退出了，断言当场假红（2026-10-29 实测）。
+#   `tests/all.sh` 第 1 关两档都会建；单独手跑前先 `cargo build`。
 BIN=${BIN:-target/debug/yshjy}
 [ -x "$BIN" ] || { echo "先编译：cargo build（找不到 $BIN）" >&2; exit 2; }
 command -v rar >/dev/null || {
@@ -27,10 +30,11 @@ command -v rar >/dev/null || {
 }
 command -v python3 >/dev/null || { echo "需要 python3" >&2; exit 2; }
 
-# 二进制必须比源码新 —— 改完代码只跑 `cargo test` 是**不会**重建 target/debug/yshjy 的，
-# 探针会拿旧二进制跑出旧症状（实测踩过：差点把"修复无效"当成结论，其实是没编译）
+# 二进制必须比源码新 —— 这是「拿旧二进制跑出旧症状」的保险丝（实测踩过：差点把"修复无效"
+# 当成结论，其实是没编译）。`tests/all.sh` 第 1 关会先 `cargo build --release`，所以整轮跑时
+# 它天然成立；只有单独手跑本探针才可能撞上。
 if [ -n "$(find src Cargo.toml -newer "$BIN" -print -quit 2>/dev/null)" ]; then
-  echo "⚠️  源码比 $BIN 新 —— 先 cargo build，否则测的是旧行为" >&2
+  echo "⚠️  源码比 $BIN 新 —— 先 cargo build --release，否则测的是旧行为" >&2
   exit 2
 fi
 

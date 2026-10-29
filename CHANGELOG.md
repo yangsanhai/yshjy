@@ -2,6 +2,60 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-29（测试基建：探针该用哪档二进制 + 自解压探针会弹文件管理器）
+
+> 引擎代码**一行没改**，只改 `tests/`。两件事都是被同一类症状骗过之后挖出来的：
+> 一个是「看着像偶发、其实是确定性」，一个是「跑测试会弹出用户的文件管理器」。
+
+### 一、探针用 debug 而 `all.sh` 只建 release → 假红，且被误记成「偶发失败」
+
+**现场**：`docs/TODO.md` 表尾一直挂着「`cargo test --release` 在 all.sh 里偶发失败」。
+2026-10-29 复跑整轮当场失败 1 项，日志只有一行：
+
+```
+⚠️  源码比 target/debug/yshjy 新 —— 先 cargo build，否则测的是旧行为
+```
+
+**根因（确定性，不是 I/O 也不是 OOM）**：`tests/rar_atomic.sh` / `pack_progress.sh` /
+`resume.sh` 的默认 `BIN` 是 `target/debug/yshjy`，而 `tests/all.sh` 第 1 关**只跑
+`cargo build --release`，从不建 debug**。于是「改过 `Cargo.toml` 或 `src/` 但没手动
+`cargo build`」时必然红、没改过时绿 —— 昨天 all7 红 / all8 绿，看着就像偶发
+（实测时间戳：`Cargo.toml` 22:31 比 debug 二进制 22:26 新 5 分钟，正是改 0.9.28 号那一下）。
+探针自带的那道自检是对的，它拦住了「拿旧二进制测出旧结论」。
+
+**试过的错路（记下来别再走）**：先把三个探针改成 release，想着「测发布产物更真实、还能少编一档」。
+实测**不可行**，因为这三个探针的判定都建立在「debug 慢」上：
+
+- `rar_atomic`：中断点 = 完整解耗时 ÷ 3；release 解 81 MB 只要 **151 ms** → 0.15 秒硬杀
+  打不中，进程早就正常退出了，2 项断言当场假红
+- `pack_progress`：release 下 80 MB 只发得出 **1 条**进度事件 → 3 项断言全红
+
+**最终修法**：`all.sh` 第 1 关补一条 `cargo build --quiet`（debug，增量约 8 秒、无改动时近 0 秒），
+三个探针保持 debug，并在文件头写明「为什么必须是 debug」+「all.sh 两档都会建」。
+
+**验收**：`bash tests/all.sh` → **30 通过 / 0 失败 / 4 跳过 / 188 秒**；
+三个探针在 debug 下单独跑也全绿（`rar_atomic` 7 项、`pack_progress` 7 项、`resume` 15 项）。
+
+### 二、`pack_progress.sh` 跑一次就弹一次文件管理器（用户当场抓到两次）
+
+**现场**：跑整轮回归时桌面弹出文件管理器窗口，用户问「你刚刚跑的这个为啥打开了我的文件管理器」，
+紧接着又弹一个。journal 抓到铁证：
+
+```
+dbus-daemon: Activating service name='org.gnome.Nautilus' requested by ':1.30376'
+             (uid=1000 pid=1983534 comm="gio open ????????")
+```
+
+**根因**：`src/pack/mod.rs` 生成的 Linux 自解压存根，解完默认会 `xdg-open "$TARGET"` 打开目标目录
+（给真人用的贴心行为，开关是 `YSHJY_SFX_NO_OPEN=1`）。`pack_progress.sh` 为了验证「产物没写坏」
+会真执行那个 `.sh`，但**没设这个开关** —— 其它四个 sfx 探针（`protocol_sfx.py` /
+`protocol_sfx_linux.py` / `sfx_stub_test.py`）早就设了，只有这一处漏了。
+
+**修法**：执行处加 `YSHJY_SFX_NO_OPEN=1`（不放松存根行为，只让探针别弹窗）。
+
+**验收**：跑前后各数一次 journal 里 `org.gnome.Nautilus` 的激活次数 —— 修前每跑一次 +1，
+修后**增加 0 次**，探针仍 7 项全绿。
+
 ## [0.9.28] · 2026-10-28（终端/界面收尾：只取封面的落点修复 + 救援模式接进协议与界面 + man 版本号漂移根治）
 
 > 这一轮**不加新功能**，治的是「文档写着有、实际没有 / 有了但行为不对」的三处

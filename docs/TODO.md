@@ -83,10 +83,25 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 
 ### 待查（偶发问题，别当新功能做）
 
-- [ ] `cargo test --release` 在 `tests/all.sh` 里**失败过一次**（2026-10-27 23:59，重启后首跑）。
-  紧接着单跑 `cargo test --release`、`--quiet`、以及整轮 `all.sh` 复跑**全绿（334+12+2 / 24 通过 0 失败）**。
-  所以暂不定性，怀疑是机械盘冷启动 I/O 慢触发的超时类测试或 OOM 杀进程。
-  下次复现时先 `bash tests/all.sh > ~/.hermes/cache/scratch/all.log 2>&1` 留完整输出，**别再只 tail**（这次就是因为 tail 掉了现场，无从判断是哪一条）。
+- [x] ✅ **已定性并修好（2026-10-29）**：整轮里真正会红的是 `rar_atomic.sh` ——
+  它默认用 `target/debug/yshjy`，而 `all.sh` 第 1 关**只建 release**。所以「改过 `Cargo.toml` / `src`
+  却没手动 `cargo build`」时**必然红**、没改过时绿，看着就像偶发 —— 实为**确定性**，不是 I/O / OOM
+  （实测时间戳：`Cargo.toml` 比 debug 二进制新 5 分钟，正是改 0.9.28 号那一下）。
+  修法：`all.sh` 第 1 关补一条 `cargo build --quiet`（debug，增量 8 秒、无改动近 0 秒），
+  三个 debug 探针（rar_atomic / pack_progress / resume）保持 debug 并写明原因。
+  **试过「三个探针全改 release」：不可行，别再重复** —— release 解 81 MB 只要 151 ms，
+  `rar_atomic` 的中断点（耗时÷3）打不中、`pack_progress` 的进度事件只剩 1 条，两边当场假红。
+  验收：`bash tests/all.sh` **30 通过 / 0 失败 / 4 跳过 / 188 秒**（`all10.log`）。
+  证据见 `CHANGELOG.md`「未发布 · 2026-10-29」一节。
+  原记录里「`cargo test --release` 那一关失败」今日两次全绿、现场已不可考，故并入本条；
+  若再复现仍按老规矩先落完整日志（`bash tests/all.sh > ~/.hermes/cache/scratch/all.log 2>&1`），别再只 tail。
+
+- [x] ✅ **已修（2026-10-29）：探针跑一次弹一次文件管理器** —— `pack_progress.sh` 执行自解压 `.sh`
+  验证产物时漏了 `YSHJY_SFX_NO_OPEN=1`，而存根解完默认 `xdg-open` 打开目标目录
+  （`src/pack/mod.rs:655`）→ 每轮回归在用户桌面弹一个窗口（用户当场抓到两次）。
+  其它四个 sfx 探针早就设了，只有这一处漏。验收：跑前后数 journal 里
+  `org.gnome.Nautilus` 激活次数，修后**增加 0 次**。**以后新写「会真执行 sfx 产物」的探针，
+  一律带 `YSHJY_SFX_NO_OPEN=1`（`YSHJY_SFX_SILENT=1` 同理，别问确认）。**
 
 - [ ] **`--pick` 被 Ctrl-C 中断后光标不恢复**（2026-10-28 实测，pty 探针）：发 `\x03` 后进程以
   SIGINT 结束（rc=-2），屏幕上只有 `\x1b[?25l`（隐藏光标）没有对应的 `\x1b[?25h`，
