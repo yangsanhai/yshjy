@@ -1,16 +1,18 @@
-//! XDG 回收站（DESIGN §17.2：解压完原包可以「移入回收站」，**永不 rm**）
+//! 回收站（DESIGN §17.2：解压完原包可以「移入回收站」，**永不 rm**）
 //!
-//! 规范：`$XDG_DATA_HOME/Trash/files/<名字>` 放文件本体，
-//! `$XDG_DATA_HOME/Trash/info/<名字>.trashinfo` 记录原路径和删除时间。
-//! 文件管理器（Nautilus 等）看得懂，用户能一键还原。
-//!
-//! 取舍：不引 `trash` crate —— 格式只有三行，自己写更符合「单文件零依赖」。
+//! 平台分两路（审计 W3）：
+//! - **Unix**：XDG 规范自己写 —— `$XDG_DATA_HOME/Trash/files/<名字>` 放本体，
+//!   `info/<名字>.trashinfo` 记原路径和删除时间，文件管理器（Nautilus 等）能一键还原。
+//! - **Windows**：`trash` crate 走**系统回收站**（COM `IFileOperation`）—— XDG 那套在
+//!   Windows 会把东西挪到「当前盘根的 `.local/share/Trash`」，资源管理器不认，等于没删对地方；
+//!   而 COM 必须 unsafe，`lib.rs` 的 `#![forbid(unsafe_code)]` 物理上写不了，只能引 crate。
 
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, ErrorCode, Result};
 
 /// 回收站根目录（`$XDG_DATA_HOME/Trash`，回退 `~/.local/share/Trash`）
+#[cfg(unix)]
 pub fn trash_dir() -> PathBuf {
     if let Some(x) = std::env::var_os("XDG_DATA_HOME")
         && !x.is_empty()
@@ -21,10 +23,26 @@ pub fn trash_dir() -> PathBuf {
     PathBuf::from(home).join(".local/share/Trash")
 }
 
+/// Windows：走**系统回收站**（`trash` crate = COM `IFileOperation`）
+///
+/// 为什么必须引 crate：COM 要 unsafe，`lib.rs` 的 `#![forbid(unsafe_code)]` 物理上
+/// 写不了（审计 W3 定案，出处 `refs/upstream/trash-rs/src/windows.rs:92`）。
+/// crate 内部已处理「`PerformOperations` 返回成功但实际被中止」的坑
+/// （`GetAnyOperationsAborted`），并带 `FOF_ALLOWUNDO | FOF_NO_UI`——不弹窗、能还原。
+#[cfg(windows)]
+pub fn move_to_trash(path: &Path) -> Result<PathBuf> {
+    trash::delete(path)
+        .map_err(|e| Error::new(ErrorCode::PermissionDenied).context(format!("移入回收站失败: {e}")))?;
+    Ok(path.to_path_buf())
+}
+
 /// 把文件/目录移入回收站，返回它在新位置上的路径
 ///
-/// - **绝不 rm**：只做 `rename`（跨盘时退回「复制 + 删源」，但仍然先进回收站）
-/// - 重名自动加 `-<时间戳>` 后缀，不会覆盖回收站里别的东西
+/// - **绝不 rm**：先进回收站，用户随时能还原
+/// - 重名自动加后缀，不会覆盖回收站里别的东西
+///
+/// Windows 上没有「新位置」可言（还原由系统 shell 索引负责），返回原路径。
+#[cfg(unix)]
 pub fn move_to_trash(path: &Path) -> Result<PathBuf> {
     let root = trash_dir();
     let files = root.join("files");
@@ -79,6 +97,7 @@ pub fn move_to_trash(path: &Path) -> Result<PathBuf> {
     }
 }
 
+#[cfg(unix)]
 fn copy_recursive(from: &Path, to: &Path) -> Result<()> {
     if from.is_dir() {
         std::fs::create_dir_all(to)
@@ -98,6 +117,7 @@ fn copy_recursive(from: &Path, to: &Path) -> Result<()> {
 }
 
 /// `2026-10-17T21:40:00` 这种本地时间（回收站规范要 ISO 8601，不带时区也认）
+#[cfg(unix)]
 fn 本地时间字符串() -> String {
     // 不引 chrono：简单按本地偏移算（引擎外壳已注入时区，这里只求够用）
     let secs = std::time::SystemTime::now()
@@ -117,6 +137,7 @@ fn 本地时间字符串() -> String {
     )
 }
 
+#[cfg(unix)]
 fn 本地偏移秒() -> i64 {
     // 从 `date +%z` 拿不到（不能起进程）；用 TZ 环境变量粗略判断：
     // 中国 +08:00。拿不到就按 0（UTC），回收站信息只影响显示时间。
@@ -131,6 +152,7 @@ fn 本地偏移秒() -> i64 {
 }
 
 /// 公历日期（Howard Hinnant 的 civil_from_days）
+#[cfg(unix)]
 fn 民用日期(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
@@ -148,12 +170,14 @@ fn 民用日期(z: i64) -> (i64, u32, u32) {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn 回收站目录在_xdg_data_home_下() {
         let d = trash_dir();
         assert!(d.ends_with("Trash"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn 移入回收站后原位置不存在且本体在files里() {
         let dir = std::env::temp_dir().join(format!("yshjy_trash_{}", std::process::id()));
@@ -182,6 +206,23 @@ mod tests {
 
         let _ = std::fs::remove_file(&moved);
         let _ = std::fs::remove_file(&info);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Windows：trash crate 走系统回收站，无法从进程内验证「资源管理器看得见」，
+    // 但「原位置消失 + 调用成功」是可自动化的合同；进真回收站留一条测试文件属预期副作用
+    #[cfg(windows)]
+    #[test]
+    fn windows移入系统回收站后原位置不存在() {
+        let dir = std::env::temp_dir().join(format!("yshjy_trash_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("测试包.mp4");
+        std::fs::write(&f, b"payload").unwrap();
+
+        let r = move_to_trash(&f).unwrap();
+        assert!(!f.exists(), "原位置必须已移走");
+        assert_eq!(r, f, "系统回收站没有「新位置」，应返回原路径");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

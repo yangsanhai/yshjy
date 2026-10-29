@@ -94,8 +94,25 @@
   Linux 路径行为不变（同样直起工具，无 bash 参与，原本语义一致）。
 - **改动文件**：`src/paths.rs`、`src/extract_stream.rs`（仅测试代码）。
 - **验收**：`cargo test --lib` **355 过 / 0 挂**（基线 341/14）；bin 34/0。
+### W3 ✅ Windows 回收站走系统 shell（引 trash crate）
+
+- **根因**：`trash_dir()` 只认 XDG，Windows 上没 `HOME` → 退到**当前盘根**的
+  `.local/share/Trash`，资源管理器不认 —— 等于没删进回收站。
+- **改法**（照审计定案）：Windows 引 `trash 5.2`（COM `IFileOperation`，MIT，
+  台账 §9 已有真身），`lib.rs` 的 `#![forbid(unsafe_code)]` 自己写不了 COM。
+  crate 内部已带 `FOF_ALLOWUNDO | FOF_NO_UI`（不弹窗、能还原）并处理了
+  「`PerformOperations` 成功但实际被中止」的坑（`GetAnyOperationsAborted`）。
+  Unix 的 XDG 自研实现原样保留（`#[cfg(unix)]`）。**仅在 Windows 构建时拉依赖**，
+  Linux 依赖树与产物不变。
+- **改动文件**：`Cargo.toml`、`src/trash.rs`（平台分支 + Windows 单测）；
+  顺带清了 clippy（extract7z 一处存量 `nonminimal_bool`、`windows可用内存mib` 改小写、
+  dialoguer 分支改 `.ok()`—— 现在全库 clippy 干净）。
+- **验收证据**（2026-10-30 本机实跑）：`trash::` 单测过 —— Windows 上真删进**系统回收站**
+  （测试文件留在回收站属预期副作用，可在资源管理器还原验证）；lib 354 过 / 0 挂、bin 34/0、
+  clippy 干净。**资源管理器里「能还原」这一眼留给老板**（回收站里应有「测试包.mp4」）。
 
 ## [未发布] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
+
 
 
 
