@@ -97,7 +97,10 @@ fi
 
 # ── 5/6. 第三方工具还能列内容 ──
 if command -v 7z >/dev/null 2>&1; then
-    if 7z l d1.mp4 2>/dev/null | grep -q '随机.bin'; then
+    # 匹配 ASCII 的 .bin 而不是中文名：Windows 的 7-Zip 按系统代码页（GBK）转码
+# 输出里的文件名（W7 实测 od 验过），UTF-8 的 grep 永远匹配不上；
+# 夹具里唯一的 .bin 就是随机.bin，看到它 = 7z 真的读进了压缩数据
+if 7z l d1.mp4 2>/dev/null | grep -q '\.bin'; then
         ok "7-Zip 能列出内容"
     else
         bad "7-Zip 列不出内容（假签名后的填充是不是被改回随机了？）"
@@ -106,7 +109,7 @@ else
     echo "  - 7z 没装，跳过"
 fi
 if command -v unzip >/dev/null 2>&1; then
-    if unzip -l d1.mp4 2>/dev/null | grep -q '随机.bin'; then
+    if unzip -l d1.mp4 2>/dev/null | grep -q '\.bin'; then
         ok "unzip 能列出内容"
     else
         bad "unzip 列不出内容"

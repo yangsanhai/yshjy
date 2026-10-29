@@ -165,7 +165,9 @@ def newest_source_mtime() -> float:
 def load_spec() -> dict:
     """跑二进制拿 JSON。优先 release；两个都试，谁支持 --dump-cli-spec 用谁"""
     src_mtime = newest_source_mtime()
-    for rel in ("target/release/yshjy", "target/debug/yshjy"):
+    # Windows 产物带 .exe（W7）
+    for rel in ("target/release/yshjy.exe", "target/release/yshjy",
+                "target/debug/yshjy.exe", "target/debug/yshjy"):
         p = ROOT / rel
         if not p.exists():
             continue

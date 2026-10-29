@@ -41,7 +41,8 @@ printf 'A-3\n'   > "$S/src/合集A/第一季/三.txt"
 printf 'B-1\n'   > "$S/src/合集A/第二季/四.txt"
 printf 'C-1\n'   > "$S/src/另一个/五.txt"
 printf 'TOP\n'   > "$S/src/六.txt"
-(cd "$S/src" && zip -q -r "$S/包.zip" .) || { echo "失败：造样本失败（缺 zip）"; exit 1; }
+# Windows 的 Git Bash 没有 zip，用 7z 造同样的 zip 夹具（W7）
+(cd "$S/src" && 7z a -tzip "$S/包.zip" . >/dev/null) || { echo "失败：造样本失败（缺 7z）"; exit 1; }
 
 # ── 拿序号：界面里树勾「合集A/第一季」等于把这几个 index 一起传出去 ──
 mapfile -t META < <(python3 - "$S" "$BIN" <<'PY'
@@ -141,7 +142,7 @@ fi
 # ── ④ 空目录条目不该被当成文件解出（树里显示但不可勾）──
 mkdir -p "$S/src2/空目录"
 printf 'x\n' > "$S/src2/有文件.txt"
-(cd "$S/src2" && zip -q -r "$S/空包.zip" .)
+(cd "$S/src2" && 7z a -tzip "$S/空包.zip" . >/dev/null)
 "$BIN" --no-smart-dir -o "$S/empty" "all" "$S/空包.zip" >/dev/null 2>&1
 if [ -d "$S/empty/空目录" ] || [ -z "$(ls -A "$S/empty/空目录" 2>/dev/null)" ]; then
   ok "空目录条目：树里能显示、解出来是空目录（不是文件）"

@@ -31,10 +31,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BIN = sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "target" / "release" / "yshjy")
-if not Path(BIN).exists():
-    BIN = str(ROOT / "target" / "debug" / "yshjy")
-if not Path(BIN).exists():
+BIN = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("YSHJY_BIN")
+       or next((str(ROOT / "target" / rel) for rel in
+                ("release/yshjy.exe", "release/yshjy", "debug/yshjy.exe", "debug/yshjy")
+                if (ROOT / "target" / rel).exists()), ""))
+if not BIN:
     print("❌ 找不到 yshjy 二进制（先 cargo build --release）")
     sys.exit(1)
 
@@ -98,7 +99,8 @@ tmp = Path(tempfile.mkdtemp(prefix="yshjy_seekprobe_"))
 try:
     normal = tmp / "普通.zip"
     normal.write_bytes(b"PK\x03\x04" + b"\x00" * 64)
-    targets = [str(normal), "/dev/null"]
+    # Windows 没有 /dev/null（NUL 是另一套设备语义）—— 没这个条件就明说跳过，不许假红
+    targets = [str(normal)] + ([] if os.name == "nt" else ["/dev/null"])
 
     res = serve({"id": 2, "cmd": "scan", "paths": targets})
     items = {i["path"]: i for i in res.get("items", [])}
@@ -120,11 +122,14 @@ try:
     else:
         bad(f"普通文件应判 full，实际 {got}")
 
-    got = items.get("/dev/null", {}).get("seek")
-    if got == "copy_first":
-        ok("字符设备 → copy_first（流不能回退）")
+    if os.name == "nt":
+        print("  – 字符设备 → copy_first（跳过：Windows 没有 /dev/null，这档在 Unix/Android 验）")
     else:
-        bad(f"/dev/null 应判 copy_first，实际 {got}")
+        got = items.get("/dev/null", {}).get("seek")
+        if got == "copy_first":
+            ok("字符设备 → copy_first（流不能回退）")
+        else:
+            bad(f"/dev/null 应判 copy_first，实际 {got}")
 
 
     # ── 6. label 只是给人的，不许当状态机 ──

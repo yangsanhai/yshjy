@@ -61,7 +61,13 @@ run() { # run <说明> <命令...>
 
 # ───────────────────────── 0. 环境 ─────────────────────────
 head_ "0. 环境"
-if [ -x target/release/yshjy ]; then
+# Windows 产物带 .exe。⚠️ MSYS 的 [ -x/-e/-f ] 对无后缀名会自动兜底同名 .exe
+# （W7 实测：yshjy 不存在、yshjy.exe 存在时 [ -x yshjy ] 也是真）——
+# 所以必须 **先查 .exe**：Linux 上它不存在，自然落到无后缀分支
+if [ -x target/release/yshjy.exe ]; then
+  ok "找到 target/release/yshjy.exe（Windows）"
+  BIN="$(pwd)/target/release/yshjy.exe"
+elif [ -x target/release/yshjy ]; then
   ok "找到 target/release/yshjy"
   BIN="$(pwd)/target/release/yshjy"
 else
@@ -118,7 +124,12 @@ if [ -n "$BIN" ]; then
   # 条目声明大小封顶：多写不落盘、少写报截断（libarchive entry_bytes_declared 语义）
   run "packSize 校验（pack_size_cap.sh）" bash tests/pack_size_cap.sh "$BIN"
   # 文件管理器右键脚本：可写→原地解；只读→改投「下载」且通知说明（不许静默失败）
-  run "右键脚本（nautilus_script.sh）" bash tests/nautilus_script.sh "$BIN"
+  # 右键脚本是 Linux 专属（Nautilus），且「只读目录回退」在 NTFS 上复现不了（不认 chmod）
+  if uname -s | grep -q '^MINGW'; then
+    skip "右键脚本（nautilus_script.sh）" "Linux 专属（Nautilus；NTFS 不认 chmod 只读）"
+  else
+    run "右键脚本（nautilus_script.sh）" bash tests/nautilus_script.sh "$BIN"
+  fi
   run "RAR 缺卷判定（rar_volume.sh）" bash tests/rar_volume.sh "$BIN"
   run "zip 符号链接（zip_symlink.sh）" bash tests/zip_symlink.sh "$BIN"
   run "默认打开方式（mime_default.sh）" bash tests/mime_default.sh gui/linux/yshjy.desktop
@@ -156,12 +167,21 @@ if [ -n "$BIN" ]; then
     skip "7z 头加密" "没装 7z（sudo apt install -y p7zip-full 后才会跑）"
   fi
   # --pick 全屏勾选：非 TTY 拒绝 + pty 里勾选结果与 --select 逐字节一致
-  run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
+  # pty 是 Unix 概念（Windows 的 python 没有 termios/pty），没有就明说跳过，不许假红
+  if python3 -c "import pty" 2>/dev/null; then
+    run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
+  else
+    skip "全屏勾选（pick.sh）" "本机 python 没有 pty（Windows），pty 交互只在 Unix 验"
+  fi
   # 预览树（第三期 A）：界面勾目录 = 传一串序号，这条验「送出去的序号」与
   # 等价通配表达式产物逐字节一致（树的构建/三态由 gui/test/entry_tree_test.dart 覆盖）
   run "预览树选择一致性（tree_select.sh）" bash tests/tree_select.sh "$BIN"
-  # 进度条：单任务等价 / -j 2 两行独立 / TERM=dumb 不沉默 / 管道零污染
-  run "多任务进度（progress_multi.sh）" bash tests/progress_multi.sh "$BIN"
+  # 进度条：单任务等价 / -j 2 两行独立 / TERM=dumb 不沉默 / 管道零污染（同样吃 pty）
+  if python3 -c "import pty" 2>/dev/null; then
+    run "多任务进度（progress_multi.sh）" bash tests/progress_multi.sh "$BIN"
+  else
+    skip "多任务进度（progress_multi.sh）" "本机 python 没有 pty（Windows），pty 交互只在 Unix 验"
+  fi
 else
   skip "协议探针" "没有可执行文件"
 fi

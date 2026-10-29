@@ -23,7 +23,7 @@ bad() { echo "  ✗ $1"; n_fail=$((n_fail+1)); }
 
 # ── 找一个支持 --dump-cli-spec 的二进制（release 优先） ──
 BIN=""
-for cand in target/release/yshjy target/debug/yshjy; do
+for cand in target/release/yshjy target/release/yshjy.exe target/debug/yshjy target/debug/yshjy.exe; do
     [ -x "$cand" ] || continue
     if "$cand" --dump-cli-spec >/dev/null 2>&1; then BIN="$cand"; break; fi
 done

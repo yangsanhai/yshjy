@@ -21,7 +21,11 @@ MB=${1:-150}
 # ★ 必须用 debug，不是 release：本探针按「进度事件条数 / 分母会不会换」判定，而 release 解 80MB
 #   只要 0.15 秒、只发得出 1 条事件 —— 换 release 后 3 项断言当场全红（2026-10-29 实测）。
 #   `tests/all.sh` 第 1 关会同时建 release 与 debug，两档都保证最新；单独手跑前先 `cargo build`。
-BIN=${BIN:-target/debug/yshjy}
+BIN=${BIN:-}
+# Windows 产物带 .exe（W7）
+if [ -z "$BIN" ]; then
+  for c in target/debug/yshjy target/debug/yshjy.exe; do [ -x "$c" ] && BIN="$c" && break; done
+fi
 if [ ! -x "$BIN" ]; then
   echo "先编译：cargo build（找不到 $BIN）" >&2
   exit 2
@@ -108,14 +112,21 @@ if 查进度 "$T/伪装.json" "伪装包（.mp4）报进度"; then ok "伪装包
   || "$BIN" ys "$T/输入" -o "$T/普通.zip" --level 0 --json >"$T/普通.json" 2>"$T/普通.err"
 if 查进度 "$T/普通.json" "普通 ZIP 报进度"; then ok "普通压缩进度在动"; else bad "普通压缩进度"; fi
 
-# ── ③ 自解压 .sh ──
+# ── ③ 自解压 .sh（Linux 专属产物形态，Windows 明说跳过）──
+if uname -s | grep -q '^MINGW'; then
+  printf '  [33m–[0m %s
+' "自解压 .sh（跳过：Linux 专属产物，PE 存根那档在 protocol_sfx 验）"
+else
 "$BIN" ys "$T/输入" -o "$T/自解压.sh" --sfx-linux --level 0 --json >"$T/自解压.json" 2>"$T/自解压.err"
 if 查进度 "$T/自解压.json" "自解压 .sh 报进度"; then ok "自解压进度在动"; else bad "自解压进度"; fi
+fi
 
 # ── ④ 三种产物都要真能用（进度是附加的，不能把包打坏）──
 if [ -s "$T/伪装.mp4" ]; then ok "伪装包有产物（$(du -h "$T/伪装.mp4" | cut -f1)）"; else bad "伪装包是空的"; fi
 if [ -s "$T/普通.zip" ]; then ok "普通 ZIP 有产物"; else bad "普通 ZIP 是空的"; fi
-if [ -x "$T/自解压.sh" ]; then ok "自解压 .sh 可执行"; else bad "自解压 .sh 没执行权限"; fi
+if [ ! -f "$T/自解压.sh" ]; then printf '  [33m–[0m %s
+' "自解压 .sh 可执行（跳过：Linux 专属）"
+elif [ -x "$T/自解压.sh" ]; then ok "自解压 .sh 可执行"; else bad "自解压 .sh 没执行权限"; fi
 
 # 自解压产物真解一遍（进度改到落盘路径上了，必须验证没写坏）
 # 注意：存根会自己在当前目录下建一个以脚本名命名的子目录，所以用 find 找产物
@@ -123,7 +134,10 @@ if [ -x "$T/自解压.sh" ]; then ok "自解压 .sh 可执行"; else bad "自解
 #   当着用户的面弹出文件管理器窗口（2026-10-29 实际被用户抓到两次）。其它四个 sfx 探针
 #   （protocol_sfx / protocol_sfx_linux / sfx_stub_test）早就设了，只有这里漏了。
 mkdir -p "$T/解开"
-if ( cd "$T/解开" && YSHJY_SFX_NO_OPEN=1 sh "$T/自解压.sh" >/dev/null 2>&1 ) \
+if [ "$(uname -s | grep -c '^MINGW')" = 1 ]; then
+  printf '  [33m–[0m %s
+' "自解压 .sh 真的能解开（跳过：Linux 专属）"
+elif ( cd "$T/解开" && YSHJY_SFX_NO_OPEN=1 sh "$T/自解压.sh" >/dev/null 2>&1 ) \
    && [ -n "$(find "$T/解开" -name '大文件.bin' -print -quit)" ]; then
   ok "自解压 .sh 真的能解开"
 else
