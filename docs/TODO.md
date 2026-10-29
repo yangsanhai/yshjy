@@ -176,10 +176,21 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   已确认为真缺口不是失真：条目 packSize 校验 / 预览树+部分解压 / 干扰数据+假签名 / 移动端 seek 三档 /
   解压后删除源开关 / 移动端桥接（ffigen）/ Android 分区存储 / 发布工作流拆法 / 工作流单文件骨架。
   （另有 1 行标 ❌ 的是 Keka「无法拆：上游闭源」，不是缺口。）
-- [ ] **`src/extract.rs:499` cfg 隔离**（Windows 路线第一个实锤阻塞，实测 `E0433: cannot find unix in os`）。
-  `#[cfg(unix)]` 用 `std::os::unix::fs::symlink`；`#[cfg(windows)]` 用 `std::os::windows::fs::symlink_file`，
-  失败退回「复制一份」并标 `SLOW_PATH`（不静默）。**顺手全仓扫一遍** `grep -rn "std::os::unix\|std::os::linux\|libc::" src/`
-  —— 别修一个编一次，一次扫完再编。
+- [x] ✅ **Windows 编译阻塞已解除（2026-10-29）** —— 全仓 48 处 unix-only 逐个看过，**真正没隔离的只有
+  `src/extract.rs:499` 一处**（`std::os::unix::fs::symlink`，`E0433: cannot find unix in os`）。
+  其余 47 处**早就 cfg 隔离好了**（`main.rs` 的 SIGPIPE/termios、`crash.rs` 的 `localtime_r`、
+  `extract_stream.rs` 的 symlink、`tools.rs`/`resume.rs`/`api.rs`/`restore.rs` 的 `PermissionsExt`/`MetadataExt`
+  全都有 `#[cfg(unix)]`；`hardware.rs` 的 `/proc`、`/sys` 走 `.ok()?` 降级；`pack/mod.rs` 的 `xdg-open`
+  是 shell 存根里的字符串，不参与编译）。**别信「扫到 48 处就要改 48 处」**，先看有没有 cfg。
+  修法：`#[cfg(unix)]` 直接建符号链接；`#[cfg(not(unix))]` 退回「目标是什么就复制什么」
+  （目录建同名目录、文件 `fs::copy`），并记一条 `DiagnosticCode::SlowPath` 让界面看得到（不静默）。
+  **实测三步全过**：`cargo check --all-targets --target x86_64-pc-windows-gnu` rc=0（7 秒）→
+  `cargo build --release --target x86_64-pc-windows-gnu` 出 `yshjy.exe`（13 MB，PE32+ console，19.9 秒）→
+  **wine 真跑**：`--version` 正常、解开一个真 zip（中文内容逐字节一致、时间戳有还原）。
+  Linux 侧回归 `bash tests/all.sh` **30 通过 / 0 失败 / 181 秒**（`zip_symlink.sh` 探针照旧绿）。
+  ⚠️ **wine 实测顺手抓到 Windows 侧一个真 bug**：`crash.rs` 的非 unix `本地时区偏移秒()` 还是
+  `return 0` 占位 → zip 里的本地时间被当 UTC 解析，**文件名时间差 8 小时、跨日会显示成明天**
+  （实测 10-29 的文件解出来显示 10-30）。这条已记进「平台」节的 Windows CLI 一项，跟时区一起修。
 - [ ] **进度条补「已用时」**（clap 参考里 `{elapsed}` 是标准字段；我们现在只有速度/剩余/项号）。
   位置 `main.rs` 的 `进度消息()` / `画进度行()`，注意 CLI 与界面必须同一个 ETA 源。
 
@@ -212,7 +223,10 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 
 ### 平台（详见 `ROADMAP.md` §4）
 
-- [ ] **Windows CLI**：cfg 隔离 → `cargo build --target x86_64-pc-windows-gnu` → wine 实测 4 样本 + 1 坏包 → zip 出包
+- [ ] **Windows CLI**：~~cfg 隔离~~ ✅ 已做（2026-10-29，`yshjy.exe` 13 MB 出得来、wine 能跑能解 zip）→
+  剩下的：① **补时区**（`crash.rs` 非 unix 的 `本地时区偏移秒()` 还是 `return 0` 占位 → 改用
+  `GetTimeZoneInformation`；不补的话 zip 里的本地时间被当 UTC，**文件名时间差 8 小时、跨日显示成明天**，
+  wine 实测已踩到）② wine 实测 4 样本 + 1 坏包 ③ zip 出包 ④ 写 `docs/BUILD-Windows.md`
 - [ ] Windows GUI：**只能在 Win 上编**，写 `docs/BUILD-Windows.md` 交给用户自己编，不承诺交叉出图形包
 - [ ] **Android**：JDK 17（独立目录）→ SDK/NDK（15–20 G，要用户授权）→ `cargo-ndk` → ffigen 绑定 →
   `FfiTransport` → 分区存储政策（私有目录直写 / 外部 SAF / 不许静默失败）→ `flutter build apk` 自签

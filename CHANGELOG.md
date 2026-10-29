@@ -93,6 +93,41 @@ Windows 资源管理器「全部解压」有「完成后显示解压的文件」
 **回归**：`bash tests/all.sh` **30 通过 / 0 失败 / 4 跳过 / 179 秒**，且整轮跑下来
 文件管理器激活次数 **+0**（`flutter test` 现在带隔离的 `XDG_CONFIG_HOME`，不许碰用户真实配置）。
 
+### 五、Windows 交叉编译阻塞解除（`extract.rs` 符号链接的 cfg 隔离）
+
+**背景**：`docs/ROADMAP.md` 一期第二条 —— Windows 路线唯一的实锤阻塞，实测
+`error[E0433]: cannot find unix in os`。这条不修，「全平台」第一步就走不出去。
+
+**先扫后改，扫出来的东西和预想不一样**：全仓扫 `std::os::unix|std::os::linux|libc::|PermissionsExt|
+MetadataExt|CommandExt|symlink|/proc/|/sys/` 共 **48 处、13 个文件**，看着像要改一大片。
+逐处看上下文才发现：**47 处早就 cfg 隔离好了**（`main.rs` 的 SIGPIPE / termios、`crash.rs` 的
+`localtime_r`、`extract_stream.rs` 的 symlink、`tools.rs`/`resume.rs`/`api.rs`/`restore.rs` 的
+`PermissionsExt`/`MetadataExt` 全带 `#[cfg(unix)]`；`hardware.rs` 的 `/proc`、`/sys` 是 `.ok()?` 降级；
+`pack/mod.rs` 的 `xdg-open` 只是 shell 存根里的字符串，不参与编译）。
+**「扫到 N 处」不等于「要改 N 处」**，先看每处有没有 cfg 再动手。
+
+**真正没隔离的只有 `src/extract.rs:499`**（解压时建符号链接）。修法：
+
+- `#[cfg(unix)]`：直接 `std::os::unix::fs::symlink`
+- `#[cfg(not(unix))]`：Windows 上普通用户建符号链接要管理员权限，所以退回**「目标是什么就复制什么」**
+  （目录 → `create_dir_all` 同名目录；文件 → `fs::copy` 一份），并记一条
+  `DiagnosticCode::SlowPath` 让界面/日志看得见 —— **不静默丢条目**
+- 诚实交代代价：脚本类链接在 Windows 上不保持「跟随」，但内容一定在（写进注释，别假装是完整还原）
+
+**验证三步（都是真跑的，不是推断）**：
+
+1. `cargo check --all-targets --target x86_64-pc-windows-gnu` → **rc=0**（7 秒）
+2. `cargo build --release --target x86_64-pc-windows-gnu` → 出 `yshjy.exe`
+   **13 MB · PE32+ console · 19.9 秒**
+3. **wine 真跑**：`yshjy.exe --version` 正常；拿一个真 zip 解压
+   —— 中文内容逐字节一致（`diff` 过），时间戳也还原了
+4. Linux 侧回归：`bash tests/all.sh` **30 通过 / 0 失败 / 181 秒**，`zip_symlink.sh` 探针照旧绿
+
+**顺手抓到一个 Windows 侧的真 bug（记进 TODO 平台节，不在这批修）**：`crash.rs` 里非 unix 的
+`本地时区偏移秒()` 还是 `return 0` 占位 → zip 里的**本地时间被当 UTC** 解析，文件名时间差 8 小时、
+**跨日会显示成明天**（wine 实测：今天 10-29 的文件解出来显示 10-30）。这正是本项目那条
+「全项目时间差 8 小时」老坑的 Windows 版，跟时区一起修。
+
 ## [0.9.28] · 2026-10-28（终端/界面收尾：只取封面的落点修复 + 救援模式接进协议与界面 + man 版本号漂移根治）
 
 > 这一轮**不加新功能**，治的是「文档写着有、实际没有 / 有了但行为不对」的三处
