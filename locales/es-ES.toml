@@ -127,6 +127,7 @@ failed = "❌ {input} — falló: {reason}"
 cancelled = "⏹ {input} — cancelado (se conservan los archivos ya extraídos)"
 
 [error]
+head_encrypted = "Este paquete también tiene cifrada la lista de archivos (cifrado de cabecera) — sin la contraseña no se ve ni qué contiene"
 not_archive = "No es un archivo comprimido (no se encontraron datos comprimidos reconocibles)"
 password_wrong = "Contraseña incorrecta"
 password_missing = "Este archivo está bloqueado y necesita contraseña"

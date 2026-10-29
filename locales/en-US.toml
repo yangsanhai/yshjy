@@ -130,6 +130,7 @@ failed = "❌ {input} — failed: {reason}"
 cancelled = "⏹ {input} — cancelled (files already extracted are kept)"
 
 [error]
+head_encrypted = "This archive has its file list encrypted too (header encryption) — without the password you cannot even see what is inside"
 not_archive = "Not an archive (no recognizable compressed data found)"
 password_wrong = "Wrong password"
 password_missing = "This archive is locked and needs a password"

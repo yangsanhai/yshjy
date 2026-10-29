@@ -327,12 +327,19 @@ pub(crate) fn preview_7z<R: std::io::Read + std::io::Seek>(
     };
     let reader = sevenz_rust2::ArchiveReader::new(src, pw).map_err(|e| {
         let msg = format!("{e}");
-        let code = if msg.contains("密码") || msg.to_lowercase().contains("password") {
-            ErrorCode::NeedPassword
-        } else {
+        let 像密码问题 = msg.contains("密码") || msg.to_lowercase().contains("password");
+        let code = if !像密码问题 {
             ErrorCode::NotArchive
+        } else if password.is_none() {
+            // 连头都读不出来 ⇒ **头加密**（7z -mhe=on）：不给密码看不到清单
+            ErrorCode::HeadEncrypted
+        } else {
+            // 给了密码还是读不出头 ⇒ 密码不对（别再说「需要解压码」，用户明明给了）
+            ErrorCode::WrongPassword
         };
-        Error::new(code).context(format!("7z 读头失败: {msg}"))
+        Error::new(code)
+            .with("head_encrypted", if password.is_none() { "true" } else { "false" })
+            .context(format!("7z 读头失败: {msg}"))
     })?;
 
     // 7z 的加密是**块级**的：AES-256 作为 coder 挂在压缩链上（方法 ID 0x06F10701）。
