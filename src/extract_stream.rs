@@ -213,7 +213,7 @@ pub fn decompress_stream_ctx<R: Read>(
     packed_hint: u64,
     ctx: &UnpackCtx,
 ) -> Result<u64> {
-    if let Some(parent) = out_path.parent() {
+    if !ctx.verify_only && let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
     }
@@ -238,7 +238,7 @@ pub fn decompress_stream_ctx<R: Read>(
     if fmt == ArchiveFormat::Xz {
         let src = src;
         let mut out = BudgetWriter {
-            inner: crate::io::PartWriter::create(out_path).map_err(|e| {
+            inner: crate::io::PartWriter::create_with(out_path, ctx.verify_only).map_err(|e| {
                 { let m = format!("创建输出失败: {e}"); Error::from(e).context(m) }
             })?,
             budget: &mut budget,
@@ -284,7 +284,7 @@ pub fn decompress_stream_ctx<R: Read>(
     };
 
     // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
-    let mut part = crate::io::PartFile::create(out_path)
+    let mut part = crate::io::PartFile::create_with(out_path, ctx.verify_only)
         .map_err(|e| { let m = format!("创建输出失败: {e}"); Error::from(e).context(m) })?;
     let mut buf = vec![0u8; 64 * 1024];
     let mut total = 0u64;
@@ -430,8 +430,11 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
     opts: &ExtractStreamOptions,
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
-    fs::create_dir_all(&opts.dest)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
+    // 只测不写：不建输出目录
+    if !ctx.verify_only {
+        fs::create_dir_all(&opts.dest)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
+    }
 
     // ── 剥外层压缩流（与「列清单」共用同一份逻辑，见 open_tar_stream）──
     let reader = open_tar_stream(src, outer)?;
@@ -486,7 +489,9 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                     ctx.entry_done(idx, &name, ItemResult::Ok, 0);
                     continue;
                 }
-                let _ = fs::create_dir_all(&d);
+                if !ctx.verify_only {
+                    let _ = fs::create_dir_all(&d);
+                }
                 ctx.resume_record(&name, &d, crate::resume::条目种类::目录);
             }
             ctx.entry_done(idx, &name, ItemResult::Ok, 0);
@@ -525,7 +530,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 ));
                 continue;
             }
-            if let Some(parent) = 链接路径.parent() {
+            if !ctx.verify_only && let Some(parent) = 链接路径.parent() {
                 let _ = fs::create_dir_all(parent);
             }
             // 断点续传：上次链接已经建好 → 跳
@@ -611,7 +616,8 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 crate::extract::Overwrite::Rename => out_path = unique_path_stream(&out_path),
             }
         }
-        if let Some(parent) = out_path.parent()
+        if !ctx.verify_only
+            && let Some(parent) = out_path.parent()
             && let Err(e) = fs::create_dir_all(parent)
         {
             report
@@ -636,7 +642,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
         };
 
         // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
-        let mut part = match crate::io::PartFile::create(&out_path) {
+        let mut part = match crate::io::PartFile::create_with(&out_path, ctx.verify_only) {
             Ok(f) => f,
             Err(e) => {
                 report.note_io_error(&e);
@@ -703,7 +709,8 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 }
                 report.bytes_written += written;
                 // 还原归档里记的时间戳 / 权限（尽力而为：设不上不影响"解压成功"这个结论）
-                if !attrs.is_empty()
+                if !ctx.verify_only
+                    && !attrs.is_empty()
                     && let Err(e) = crate::restore::apply(&out_path, &attrs)
                     && report.warnings.len() < 3
                 {

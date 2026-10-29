@@ -49,6 +49,13 @@ pub struct UnpackCtx {
     /// 挂在 ctx 上而不是塞进 `UnpackOptions`：解码器拿到的参数结构体是**纯配置**，
     /// 而这个是「会边跑边变的运行期状态」（要写盘、要计数），本质是上下文不是参数。
     pub resume: Option<Arc<crate::resume::ResumeLog>>,
+    /// 只测不写（CLI `--test` / 协议 `verify_only`）
+    ///
+    /// 真时：**不建输出目录、不产生任何文件**，解码出来的字节写进空设备。
+    /// CRC、声明大小封顶、限额、取消全都照常判定，所以「校验通过」与真解压是同一套证据。
+    /// 挂在 ctx 上而不是 `UnpackOptions`：它决定这次运行**要不要落盘**，属于运行期状态，
+    /// 而且每条落盘路径手上都有 ctx（不用再往下传一层参数）。
+    pub verify_only: bool,
     /// 上次发进度事件的时间（节流用）
     last_emit: Arc<Mutex<Instant>>,
 }
@@ -63,6 +70,7 @@ impl UnpackCtx {
             cancel: CancelToken::new(),
             encoding: None,
             resume: None,
+            verify_only: false,
             // 初始时间戳往前推一个间隔，保证**第一条进度就能发出去**
             // （否则小任务会一条进度事件都没有，界面看起来像卡住了）
             last_emit: Arc::new(Mutex::new(
@@ -76,6 +84,12 @@ impl UnpackCtx {
     /// 手动指定文件名编码（见 [`UnpackCtx::encoding`]）
     pub fn with_encoding(mut self, encoding: Option<String>) -> Self {
         self.encoding = encoding;
+        self
+    }
+
+    /// 只测不写（见 [`UnpackCtx::verify_only`]）
+    pub fn with_verify_only(mut self, verify_only: bool) -> Self {
+        self.verify_only = verify_only;
         self
     }
 

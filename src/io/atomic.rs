@@ -44,12 +44,38 @@ pub struct PartFile {
     target: PathBuf,
     file: Option<File>,
     finished: bool,
+    /// 「只测不写」模式（`--test` / 协议 `verify_only`）：写入落到空设备，
+    /// `finish` / `rename_to` 都不改名，`Drop` 也不删任何东西。
+    ///
+    /// 为什么复用同一个类型而不是另造一个 `NullSink`：七条落盘路径（ZIP / 7z / 单流 /
+    /// xz / tar / 救援 / RAR）都只认 `PartFile`，另起类型就得把每条路径都分叉一遍。
+    /// 把「写去哪」收在 IO 层，解码逻辑一行不动 —— 这才是能一次改对的地方。
+    sink: bool,
 }
 
 impl PartFile {
     /// 在 `target` 旁边创建 part 文件（父目录必须已存在）。
     pub fn create(target: impl AsRef<Path>) -> io::Result<Self> {
+        Self::create_with(target, false)
+    }
+
+    /// 同 [`PartFile::create`]，但可以要求「只测不写」：
+    /// 真时**不产生任何文件**，字节写进空设备（`/dev/null` / Windows `NUL`）。
+    ///
+    /// 校验仍然完全生效：CRC、声明大小封顶、限额、取消都在解码循环里，与写盘无关。
+    pub fn create_with(target: impl AsRef<Path>, verify_only: bool) -> io::Result<Self> {
         let target = target.as_ref().to_path_buf();
+        if verify_only {
+            // 空设备：写进去的字节直接消失（不占磁盘、不受磁盘满影响）
+            let file = File::create(null_device())?;
+            return Ok(Self {
+                part: PathBuf::from(null_device()),
+                target,
+                file: Some(file),
+                finished: false,
+                sink: true,
+            });
+        }
         let part = part_path_for(&target);
         let file = File::create(&part)?;
         Ok(Self {
@@ -57,6 +83,7 @@ impl PartFile {
             target,
             file: Some(file),
             finished: false,
+            sink: false,
         })
     }
 
@@ -81,6 +108,11 @@ impl PartFile {
     pub fn finish(mut self) -> io::Result<()> {
         // 先把句柄关掉再改名：Windows 上改名要求没有打开的句柄，Linux 也习惯这么做
         self.file.take();
+        if self.sink {
+            // 只测不写：没有产物要改名，但语义上「这一条校验通过」了
+            self.finished = true;
+            return Ok(());
+        }
         fs::rename(&self.part, &self.target)?;
         self.finished = true;
         Ok(())
@@ -98,6 +130,10 @@ impl PartFile {
     /// 用 `&mut self` 是为了让调用方在分支里改名后仍能继续持有这个守卫（失败时由 Drop 清理）。
     pub fn rename_to(&mut self, target: impl AsRef<Path>) -> io::Result<()> {
         self.file.take();
+        if self.sink {
+            self.finished = true;
+            return Ok(());
+        }
         fs::rename(&self.part, target)?;
         self.finished = true;
         Ok(())
@@ -110,8 +146,17 @@ impl Drop for PartFile {
             return;
         }
         self.file.take();
+        if self.sink {
+            // 只测不写：什么文件都没造，也绝不能去 remove 空设备
+            return;
+        }
         let _ = fs::remove_file(&self.part);
     }
+}
+
+/// 系统的空设备路径。写进去的字节被内核丢弃。
+fn null_device() -> &'static str {
+    if cfg!(windows) { "NUL" } else { "/dev/null" }
 }
 
 /// 由目标路径推出 part 路径；文件名过长时按字符边界截断再拼后缀。
@@ -150,6 +195,13 @@ impl PartWriter {
     pub fn create(target: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self {
             part: Some(PartFile::create(target)?),
+        })
+    }
+
+    /// 见 [`PartFile::create_with`]（`verify_only` = 只测不写）
+    pub fn create_with(target: impl AsRef<Path>, verify_only: bool) -> io::Result<Self> {
+        Ok(Self {
+            part: Some(PartFile::create_with(target, verify_only)?),
         })
     }
 

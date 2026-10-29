@@ -140,6 +140,12 @@ if [ -n "$BIN" ]; then
   # CLI 选项表 ↔ 三份补全 ↔ --help 三方对账
   # （2026-10-28 新增：手抄副本实测已漂 —— --import-passwords 漏登记、补全缺 17 个）
   run "CLI 选项对账（cli_spec_match.sh）" bash tests/cli_spec_match.sh
+  # 补全脚本**运行时**行为：带空格文件名不许被 IFS 劈成两个候选（2026-10-29 真 bug）
+  run "补全运行时（completions.sh）" bash tests/completions.sh
+  # C ABI 头文件 ↔ 实现 对账（手写第二份真源，同 man 页 / 补全同一种病）
+  run "FFI 头文件对账（ffi-header-sync.sh）" bash tests/ffi-header-sync.sh
+  # --test 只测不写：完整解码 + 校验，但一个字节都不落盘（7-Zip 的 t / Ark 的 SupportsTesting）
+  run "只测不写（verify_only.sh）" bash tests/verify_only.sh "$BIN"
   # --pick 全屏勾选：非 TTY 拒绝 + pty 里勾选结果与 --select 逐字节一致
   run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
   # 进度条：单任务等价 / -j 2 两行独立 / TERM=dumb 不沉默 / 管道零污染

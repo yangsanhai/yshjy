@@ -282,8 +282,11 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
     use std::cell::Cell;
     use std::io::Write;
 
-    std::fs::create_dir_all(&opts.dest)
-        .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
+    // 只测不写：不建输出目录
+    if !ctx.verify_only {
+        std::fs::create_dir_all(&opts.dest)
+            .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
+    }
 
     let password = match &opts.password {
         Some(p) => sevenz_rust2::Password::new(p),
@@ -325,7 +328,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                     ctx.entry_done(idx, &name, ItemResult::Ok, 0);
                     return Ok(true);
                 }
-                if let Err(e) = std::fs::create_dir_all(dest_path) {
+                if !ctx.verify_only && let Err(e) = std::fs::create_dir_all(dest_path) {
                     report
                         .skipped
                         .push((name.clone(), format!("建目录失败: {e}")));
@@ -387,7 +390,8 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                     }
                 }
             }
-            if let Some(parent) = out_path.parent()
+            if !ctx.verify_only
+                && let Some(parent) = out_path.parent()
                 && let Err(e) = std::fs::create_dir_all(parent)
             {
                 report
@@ -409,7 +413,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
             // 等这个库暴露访问器（或换库）再补，不要用"格式化再解析"那种脏办法。
 
             // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名
-            let mut part = match crate::io::PartFile::create(&out_path) {
+            let mut part = match crate::io::PartFile::create_with(&out_path, ctx.verify_only) {
                 Ok(f) => f,
                 Err(e) => {
                     report.note_io_error(&e);

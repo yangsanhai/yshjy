@@ -341,11 +341,14 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         return Err(Error::new(ErrorCode::DestIsFile)
             .with("path", opts.dest.display().to_string()));
     }
-    fs::create_dir_all(&opts.dest).map_err(|e| {
-        // T8-P5：目标位置是个文件 / 路径太长 / 没权限，别一律说「内部错误」
-        let m = format!("mkdir dest: {e}");
-        Error::from(e).context(m)
-    })?;
+    // 只测不写：连输出目录都不建（用户不该因为「测一下」而多出一个空文件夹）
+    if !ctx.verify_only {
+        fs::create_dir_all(&opts.dest).map_err(|e| {
+            // T8-P5：目标位置是个文件 / 路径太长 / 没权限，别一律说「内部错误」
+            let m = format!("mkdir dest: {e}");
+            Error::from(e).context(m)
+        })?;
+    }
 
     let mut report = ExtractReport::default();
 
@@ -409,7 +412,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
                 continue;
             }
-            if let Err(e) = fs::create_dir_all(&out_path) {
+            if !ctx.verify_only && let Err(e) = fs::create_dir_all(&out_path) {
                 report.note_io_error(&e);
                 report
                     .skipped
@@ -462,7 +465,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         // 安全规则跟 tar 共用一套：只接受「相对路径 + 规范化后仍在解压目录内」，
         // 绝对路径 / 用 `..` 爬出目录的一律拒绝并说明 —— 不静默、也不假装解出来了。
         if is_symlink {
-            if let Some(parent) = out_path.parent() {
+            if !ctx.verify_only && let Some(parent) = out_path.parent() {
                 let _ = fs::create_dir_all(parent);
             }
             let 读出 = archive.by_index_raw(i).ok().and_then(|mut f| {
@@ -537,7 +540,8 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             continue;
         }
 
-        if let Some(parent) = out_path.parent()
+        if !ctx.verify_only
+            && let Some(parent) = out_path.parent()
             && let Err(e) = fs::create_dir_all(parent)
         {
             report.note_io_error(&e);
@@ -604,7 +608,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         // 流式写盘 + 边写边记限额（防炸弹）
         // T9-P1/T8-P6：先写 .yshjy-part，全部写完再原子改名 ——
         // 中途被杀 / 磁盘满 / 取消时，磁盘上不会出现「顶着正式名字的半截文件」
-        let mut part = match crate::io::PartFile::create(&out_path) {
+        let mut part = match crate::io::PartFile::create_with(&out_path, ctx.verify_only) {
             Ok(f) => f,
             Err(e) => {
                 report.note_io_error(&e);
@@ -719,7 +723,9 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 report.bytes_written += written;
                 // 把归档里记录的时间戳 / 权限还原到刚解出来的文件上
                 // （尽力而为：设不上不该把一次成功解压变成失败）
-                还原条目属性(&out_path, &file, &mut report);
+                if !ctx.verify_only {
+                    还原条目属性(&out_path, &file, &mut report);
+                }
                 // 断点续传：到这一步文件才算**真的完整落地**（原子改名 + 属性还原都过了）
                 ctx.resume_record(&name, &out_path, crate::resume::条目种类::文件);
                 ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, written);

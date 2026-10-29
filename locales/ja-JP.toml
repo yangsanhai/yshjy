@@ -51,6 +51,7 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
                                    同名フォルダを重ねず展開先へ直接展開します
   -q, --quiet                      結果だけ出力（スクリプト向け）
   --force 展開前のディスク容量チェックを飛ばす（足りないと開始を拒否します）
+  --test  検証のみ：完全にデコードして検査し、何も書き込みません（壊れていないかの確認用）
   --lang <言語>                    表示言語を切り替え（例：zh-CN、en、ko、ru、es）
   --show-config 現在の設定を表示（設定ファイルの場所と各項目の値）
   --tail                           末尾追加レイアウトで固める（既定：free アトム内。表紙が画像/テキストなら自動）
@@ -146,6 +147,8 @@ video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"
 
 [cli]
+test_mode = "🔍 検証のみ：完全にデコードして検査しますが、ディスクには 1 バイトも書き込みません"
+test_source_conflict = "❌ --test は --trash-source / --delete-source と同時に使えません — 検証のみでは出力がないため、元ファイルを消すと唯一の控えを失います"
 delete_source_needs_tty = "❌ --delete-source は元のアーカイブを完全削除します。対話端末でのみ使えます。スクリプトでは --trash-source（ゴミ箱へ移動・復元可能）を使ってください"
 delete_source_warn = "⚠️  {count} 個の元アーカイブを完全削除します（ゴミ箱に入らず、元に戻せません）。\n   解凍結果が完全かどうか確認してから続けてください。"
 delete_source_aborted = "（中止しました。元のアーカイブは何も触っていません）"
@@ -199,6 +202,7 @@ rescue_extract_failed = "   ❌ 取り出しに失敗：{err}"
 rescue_failed = "❌ レスキューに失敗：{err}"
 
 [result.phrase]
+verified = "検証 OK（書き込みなし）"
 ok = "展開完了"
 partial = "{done}/{total} 件を展開"
 cancelled = "キャンセル（{done}/{total} 完了）"

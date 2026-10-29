@@ -51,6 +51,7 @@ OPCIONES HABITUALES:
                                   carpeta de primer nivel, se extrae directamente en el destino
   -q, --quiet                     mostrar solo el resultado (para scripts)
   --force saltar la comprobación de espacio en disco (si no alcanza, se rechaza el inicio)
+  --test  Solo verificación: decodifica y comprueba sin escribir nada (para saber si el paquete está bien)
   --lang <idioma>                 cambiar el idioma (p. ej. zh-CN, en, ja, ko, ru)
   --show-config ver la configuración actual (dónde está el archivo y qué valores)
   --tail                          empaquetar «añadiendo al final» (por defecto: free atom; se usa solo si la portada es imagen/texto)
@@ -146,6 +147,8 @@ video_unplayable = "El vídeo de portada está dañado"
 internal = "Error interno"
 
 [cli]
+test_mode = "🔍 Solo verificación: decodifica y comprueba todo, pero no escribe ni un byte en el disco"
+test_source_conflict = "❌ --test no se puede combinar con --trash-source / --delete-source — en modo verificación no hay resultado que comparar: borrar el original te dejaría sin la única copia"
 delete_source_needs_tty = "❌ --delete-source borra el archivo original definitivamente y solo funciona en una terminal interactiva. En scripts usa --trash-source (papelera, recuperable)"
 delete_source_warn = "⚠️  Se van a borrar definitivamente {count} archivo(s) original(es) (no van a la papelera, no se puede deshacer).\n   Comprueba que lo extraído esté completo antes de continuar."
 delete_source_aborted = "(Cancelado: no se tocó ningún archivo original)"
@@ -199,6 +202,7 @@ rescue_extract_failed = "   ❌ Error al extraer: {err}"
 rescue_failed = "❌ Error de rescate: {err}"
 
 [result.phrase]
+verified = "verificado (sin escribir nada)"
 ok = "extraído"
 partial = "extraídos {done}/{total}"
 cancelled = "cancelado ({done}/{total} hechos)"

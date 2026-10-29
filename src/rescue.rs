@@ -488,7 +488,8 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
                 crate::extract::Overwrite::Rename => out_path = unique_path_rescue(&out_path),
             }
         }
-        if let Some(parent) = out_path.parent()
+        if !ctx.verify_only
+            && let Some(parent) = out_path.parent()
             && let Err(e) = std::fs::create_dir_all(parent)
         {
             report
@@ -531,7 +532,7 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
         let limited = (&mut *r).take(take);
 
         // T9-P1/T8-P6：先写 .yshjy-part，写完再原子改名（救援模式的残片另行改名成 .partial）
-        let mut part = match crate::io::PartFile::create(&out_path) {
+        let mut part = match crate::io::PartFile::create_with(&out_path, ctx.verify_only) {
             Ok(f) => f,
             Err(e) => {
                 report.note_io_error(&e);

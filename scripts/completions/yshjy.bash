@@ -13,14 +13,18 @@ _yshjy_complete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --encoding --select --pick -j --jobs -f --force --no-smart-dir --keep --trash-source --delete-source --split --level --layout --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
+    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --encoding --select --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --level --layout --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
 
     case "$prev" in
         -o|--dest)
-            if declare -F _filedir >/dev/null; then _filedir -d; else COMPREPLY=($(compgen -d -- "$cur")); fi
+            if declare -F _filedir >/dev/null; then _filedir -d; else mapfile -t COMPREPLY < <(compgen -d -- "$cur"); fi
             return 0
             ;;
         -p|--password|--select|--split|--level)
+            # 这几项故意不给候选（密码不该进 history、序号/大小无候选）。
+            # 但加了 `-o default` 之后，空 COMPREPLY 会被 readline 回落成文件名补全 ——
+            # 于是 `--password <TAB>` 冒出一串文件名。这里显式关掉回落（bash ≥ 4.4 才有 compopt）。
+            compopt +o default 2>/dev/null || true
             COMPREPLY=()
             return 0
             ;;
@@ -41,7 +45,7 @@ _yshjy_complete() {
             return 0
             ;;
         --password-file|--cover|--log|--config|--import-passwords)
-            if declare -F _filedir >/dev/null; then _filedir; else COMPREPLY=($(compgen -f -- "$cur")); fi
+            if declare -F _filedir >/dev/null; then _filedir; else mapfile -t COMPREPLY < <(compgen -f -- "$cur"); fi
             return 0
             ;;
     esac
@@ -55,8 +59,18 @@ _yshjy_complete() {
     if declare -F _filedir >/dev/null; then
         _filedir
     else
-        COMPREPLY=($(compgen -f -- "$cur"))
+        mapfile -t COMPREPLY < <(compgen -f -- "$cur")
     fi
 }
 
-complete -o filenames -F _yshjy_complete yshjy yshys
+# 用 mapfile 而不是 COMPREPLY=($(compgen …))：命令替换会按 IFS 再分词，
+# 带空格的文件名（「有 空格.zip」）被劈成两个候选。实测 `IFS=$'\n' COMPREPLY=(…)`
+# 这种前缀写法虽然不劈词，但会在补全函数返回后**留下全局 IFS**，把后续命令的分词全搞坏。
+# -o nosort 要 bash ≥ 4.4（老版本会当成非法选项直接报错，所以要判版本）；
+# bashdefault/default 让「本来就没候选」以外的位置回落到默认补全，
+# 故意不给候选的选项（--password / --select）在函数里已 compopt +o default 关掉回落。
+if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4))); then
+    complete -o filenames -o nosort -o bashdefault -o default -F _yshjy_complete yshjy yshys
+else
+    complete -o filenames -o bashdefault -o default -F _yshjy_complete yshjy yshys
+fi

@@ -675,6 +675,7 @@ fn main() -> ExitCode {
         encoding: 编码.clone(),
         // 原包处置：命令行是「这一次」的口子。两个都写以 --delete-source 为准
         // （更狠的那个），二次确认里会说清楚到底哪个生效。
+        verify_only: has("--test"),
         source_action: if has("--delete-source") {
             源包处置::永久删除
         } else if has("--trash-source") {
@@ -1053,6 +1054,8 @@ struct 解压参数 {
     encoding: Option<String>,
     /// 解完怎么处置原包（--trash-source / --delete-source）
     source_action: 源包处置,
+    /// 只测不写（--test）：完整解码 + 校验，一个字节都不落盘
+    verify_only: bool,
 }
 
 fn do_extract(a: 解压参数) -> ExitCode {
@@ -1069,6 +1072,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
         force,
         encoding,
         source_action,
+        verify_only,
     } = a;
     use std::sync::Arc;
     use yshjy::batch;
@@ -1151,6 +1155,19 @@ fn do_extract(a: 解压参数) -> ExitCode {
         }
         js
     };
+    // `--test` 与「处置原包」互斥：只测不写时根本没有产物可以对照，
+    // 这时候删原包等于让用户丢掉唯一的材料 —— 直接拒绝，不做事后解释。
+    if verify_only && source_action != 源包处置::不动 {
+        eprintln!(
+            "{}",
+            文案().t("cli.test_source_conflict", &[])
+        );
+        return ExitCode::from(code::USAGE);
+    }
+    if verify_only && !quiet && !json {
+        eprintln!("{}", 文案().t("cli.test_mode", &[]));
+    }
+
     let opts = batch::BatchOptions {
         jobs: jobs_n.max(1),
         continue_on_error: true,
@@ -1160,6 +1177,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
         smart_dir,
         force,
         encoding,
+        verify_only,
         limits: yshjy::safety::Limits {
             max_ratio: cfg.safety.zip_bomb_ratio,
             warn_executables: cfg.safety.warn_executables,
@@ -1225,7 +1243,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
     if json {
         println!("{}", 汇总_json(&report));
     } else {
-        打印汇总(&report, quiet);
+        打印汇总(&report, quiet, verify_only);
     }
     ExitCode::from(report.exit_code().clamp(0, 255) as u8)
 }
@@ -1649,9 +1667,11 @@ fn 诊断文案(code: yshjy::event::DiagnosticCode) -> String {
 }
 
 /// 任务结论 → 中文一句话 + 图标
-fn 结论文案(o: &yshjy::error::Outcome) -> (String, &'static str) {
+fn 结论文案(o: &yshjy::error::Outcome, verify_only: bool) -> (String, &'static str) {
     use yshjy::error::Outcome;
     match o {
+        // 只测不写：成功 = 校验通过，不能说「解开」（用户会去找产物）
+        Outcome::Success if verify_only => (文案().t("result.phrase.verified", &[]), "✅"),
         Outcome::Success => (文案().t("result.phrase.ok", &[]), "✅"),
         Outcome::Partial { done, total } => (
             文案().t(
@@ -1791,14 +1811,14 @@ fn 文件类型提示(path: &std::path::Path) -> Option<String> {
 /// **失败项不在这个循环里逐条打**：目录里 50 个文件只有 2 个是包时，
 /// 逐条打会刷出几十行"这不是压缩包"，用户根本看不见成功的那两个。
 /// 失败统一到下面「按原因合并」，同一种原因只占一行。
-fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
+fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool, verify_only: bool) {
     use yshjy::error::Outcome;
 
     for j in &report.jobs {
         if matches!(j.outcome, Outcome::Failed(_)) {
             continue; // 留给后面的合并汇报
         }
-        let (txt, icon) = 结论文案(&j.outcome);
+        let (txt, icon) = 结论文案(&j.outcome, verify_only);
         if quiet {
             println!("{}", j.stats.dest.as_deref().unwrap_or(&j.input).display());
             continue;
@@ -1820,6 +1840,10 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
             "{}",
             上色(&行, if matches!(j.outcome, Outcome::Success) { 绿 } else { 黄 })
         );
+        if verify_only {
+            // 只测不写：没有产物目录可给
+            continue;
+        }
         if let Some(d) = &j.stats.dest {
             // 显示**绝对路径**：`.` 对用户等于没说
             // （实测踩到：产物落在 ~ 里，用户看完输出还是找不到）
@@ -1851,7 +1875,7 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
         // 同原因合并：20 个 png → 一行「20 个文件：这不是压缩包」
         let mut 按原因: Vec<(String, Vec<&yshjy::batch::JobOutcome>)> = Vec::new();
         for j in &失败 {
-            let 原因 = 结论文案(&j.outcome).0;
+            let 原因 = 结论文案(&j.outcome, verify_only).0;
             match 按原因.iter_mut().find(|(r, _)| *r == 原因) {
                 Some((_, v)) => v.push(j),
                 None => 按原因.push((原因, vec![*j])),
@@ -1880,7 +1904,7 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool) {
         }
     } else if let Some(j) = 失败.first() {
         // 单任务：先把「❌ 文件 —— 原因」那行打出来（循环里为了合并汇报跳过了失败项）
-        let (txt, icon) = 结论文案(&j.outcome);
+        let (txt, icon) = 结论文案(&j.outcome, verify_only);
         let 行 = 文案().t(
             "result.line",
             &[

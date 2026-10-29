@@ -51,6 +51,7 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
                                   같은 이름의 폴더를 겹치지 않고 대상 폴더에 바로 풉니다
   -q, --quiet                     결과만 출력 (스크립트용)
   --force 압축 풀기 전 디스크 공간 점검 건너뛰기 (부족하면 시작을 거부)
+  --test  검증만: 완전히 디코드·검사만 하고 아무것도 쓰지 않습니다 (패키지 무결성 확인용)
   --lang <언어>                   인터페이스 언어 변경 (예: zh-CN, en, ja, ru, es)
   --show-config 현재 설정 보기 (설정 파일 위치와 각 항목 값)
   --tail                          '끝에 덧붙이기' 레이아웃으로 묶기 (기본: free atom 안, 표지가 그림/텍스트면 자동)
@@ -146,6 +147,8 @@ video_unplayable = "표지 동영상 자체가 손상되었습니다"
 internal = "내부 오류"
 
 [cli]
+test_mode = "🔍 검증만: 완전히 디코드하고 검사하지만 디스크에는 1바이트도 쓰지 않습니다"
+test_source_conflict = "❌ --test 는 --trash-source / --delete-source 와 함께 쓸 수 없습니다 — 검증만 할 때는 산출물이 없어 원본을 지우면 유일한 사본을 잃습니다"
 delete_source_needs_tty = "❌ --delete-source 는 원본 압축 파일을 영구 삭제하며 대화형 터미널에서만 쓸 수 있습니다. 스크립트에서는 --trash-source(휴지통 이동, 복원 가능)를 쓰세요"
 delete_source_warn = "⚠️  원본 압축 파일 {count} 개를 영구 삭제합니다(휴지통에 들어가지 않고 복구 불가).\n   압축이 제대로 풀렸는지 확인한 뒤 진행하세요."
 delete_source_aborted = "(취소했습니다. 원본 압축 파일은 그대로입니다)"
@@ -199,6 +202,7 @@ rescue_extract_failed = "   ❌ 추출 실패: {err}"
 rescue_failed = "❌ 복구 실패: {err}"
 
 [result.phrase]
+verified = "검증 통과(기록 없음)"
 ok = "압축 풀기 완료"
 partial = "{done}/{total}개 압축 풀림"
 cancelled = "취소됨 ({done}/{total} 완료)"

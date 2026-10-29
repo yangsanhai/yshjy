@@ -2,6 +2,76 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-29（表尾待查三条收掉 + 新能力 `--test` 只测不写）
+
+> 用户口径「先 1 后 2」：先把 `docs/TODO.md` 表尾「待查/改进」那批小条目清掉，再做第三期结构优化。
+> 本轮清掉表尾 4 条（1 个真 bug + 1 个新能力 + 2 个对账探针），`--pick` 光标那条按用户 2026-10-28
+> 的口径**仍然不做**（记在原处待以后）。
+
+### 一、bash 补全：带空格的文件名被劈成两个候选（真 bug，已修）
+
+`scripts/completions/yshjy.bash` 的 fallback 原本是 `COMPREPLY=($(compgen -f -- "$cur"))`。
+命令替换的结果会**再按默认 IFS 分词**，于是 `有 空格.zip` 变成 `有` + `空格.zip` 两个候选。
+没装 `bash-completion` 包时必现（装了才走 `_filedir` 躲过去），所以只在部分机器上暴露。
+文件、目录、末尾兜底三处同一族问题一起改（`gen-cli-assets.py` 的三处锚点），
+生成物里统一成 `mapfile -t COMPREPLY < <(compgen …)`。
+
+**实测排除掉的另一种写法**：`IFS=$'\n' COMPREPLY=($(compgen …))` 这种前缀赋值虽然不劈词，
+但会把**全局 IFS 改掉并泄漏到函数返回之后** —— 紧接着 `set -- $(echo "a b")` 只得到 1 个词，
+等于把用户交互 shell 里后续命令的分词全搞坏。`local IFS=$'\n'` 才安全，但那要在函数里多一层。
+`mapfile` 最省事且无副作用，选它。
+
+新探针 `tests/completions.sh` **11 项**：真在 bash 子进程里摆好 `COMP_WORDS`/`COMP_CWORD`、
+调用补全函数、断言 `COMPREPLY`；覆盖「装了/没装 bash-completion」「带空格文件名」「带空格目录」
+「`--password` 等位置仍然零候选」「IFS 没被污染」「值候选前缀过滤」「complete 注册项」
+「不改调用者的 COMP_WORDS」。**反向验证**：拿 `git HEAD` 的旧补全脚本跑，正好红在劈词/目录/注册三条。
+
+### 二、`--test`：只测不写（完整解码 + 校验，一个字节都不落盘）
+
+对标 7-Zip 的 `t` 与 Ark 插件元数据的 `SupportsTesting`（`refs/tech/ark-fileroller.md` §2）。
+**不解字节到磁盘**，所以磁盘满时照样能查包、查完不留任何目录。
+
+- **开关收在 IO 层**：`io/atomic.rs` 的 `PartFile` 加 sink 模式（`create_with(path, verify_only)`），
+  写进空设备（`/dev/null` / Windows `NUL`），`finish` / `rename_to` 不改名、`Drop` 绝不 remove 空设备。
+  七条落盘路径（ZIP / 7z / 单流 / xz / tar / 救援 / RAR）**解码逻辑一行没动**，只把「写去哪」换了。
+- **配套三类动作在只测模式下跳过**：不建输出目录（12 处）、不还原时间戳/权限（2 处）、
+  **不做磁盘空间预检**（不解字节，磁盘够不够与这次无关）。
+- **断点续传必须停用**：开着续传时「上次解过的条目直接跳过」会让 `--test` 什么都没测到，
+  而且会往用户配置目录里写记录。
+- **与「处置原包」互斥**：`--test` + `--trash-source`/`--delete-source` 直接用法错误（退出码 2）——
+  只测不写时没有产物可以对照，删原包等于让用户丢掉唯一的材料。
+- 成功文案改成「校验通过」而不是「解开」，并且不打印产物目录（用户会去找不存在的东西）。
+- CLI `--test` 进了 `src/cli_spec.rs`（长选项 42 → **43**，钉桩测试同步更新），
+  `--help` / man 页 / 三份补全由生成器自动跟上；协议 `extract` 与 `batch` 都接受 `verify_only`。
+- 7 个语言包补 3 条：`cli.test_mode` / `cli.test_source_conflict` / `result.phrase.verified`，
+  `--help` 各语言各加一行说明。
+
+**验收**：`tests/verify_only.sh` **8 项全绿** —— 好包零产物且不建目录、数据损坏的包退出码非 0
+（证明校验真在跑）、互斥拒绝、源包不动、`--json` 也零产物、tar.gz（tar + 单流两条路径）同样零产物，
+另加两条**正面对照**（同一个包不加 `--test` 能正常解出文件，证明样本与路径都是好的）。
+
+### 三、两个「第二份真源」对账探针（同 man 页 / 补全漂移那类病）
+
+- `tests/ffi-header-sync.sh` **4 项**：`ffi/include/yshjy.h`（手写）与 `ffi/src/lib.rs` 的
+  `extern "C"` 函数集合**双向** diff（实现有头文件没有 = 宿主调不到；头文件有实现没有 = 链接会炸）、
+  ABI 版本宏与常量一致、头文件函数都带 `yshjy_` 前缀、`ffi/Cargo.toml` 版本与主线一致。
+  反向验证：临时删掉头文件里一行声明，探针当场变红。
+- **顺带抓到的真漂移**：`ffi/Cargo.toml` 的 version 停在 **0.9.20**，主线已 0.9.29 ——
+  规则 16 的「五处版本号」清单漏了这第六处；已改 0.9.29（`ffi/Cargo.lock` 同步，`cargo check` 通过）
+  并把这条做成探针断言，以后发版漏改会红。
+
+### 四、`complete` 补齐 `-o nosort -o bashdefault -o default`
+
+`-o nosort` 要 bash ≥ 4.4（老版本会把 nosort 当非法选项直接报错），所以生成器里加了版本判断。
+`-o default` 会让「空 COMPREPLY」回落到 readline 的文件名补全 —— 那会毁掉
+「`--password`/`--select`/`--split`/`--level` 故意不给候选」的设计，所以在那些分支里
+`compopt +o default` 显式关掉回落（探针 4 项盯着这个行为）。
+
+### 五、回归
+
+`bash tests/all.sh` —— **35 通过 / 0 失败 / 5 跳过 / 约 185 秒**
+（第一次跑红在 `cargo test --release` 的「长选项总数」钉桩：42 → 43，正是它该拦的）；`cargo test` 336+29+2、`cargo clippy -D warnings` 干净。
+
 ## [0.9.29] · 2026-10-29（引擎：条目 packSize 校验 —— 多写不落盘、少写报截断）
 
 > 这条在台账里挂了一个月，语义出自 libarchive 的 `entry_bytes_declared`

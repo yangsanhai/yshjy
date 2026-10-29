@@ -144,6 +144,8 @@ pub struct BatchOptions {
     pub limits: crate::safety::Limits,
     /// 手动指定文件名编码（`gbk`/`big5`/`sjis`/`utf-8`；`None` = 自动链）
     pub encoding: Option<String>,
+    /// 只测不写（`--test` / 协议 `verify_only`）：完整解码 + 校验，但**一个字节都不落盘**
+    pub verify_only: bool,
 }
 
 impl Default for BatchOptions {
@@ -158,6 +160,7 @@ impl Default for BatchOptions {
             force: false,
             limits: crate::safety::Limits::default(),
             encoding: None,
+            verify_only: false,
         }
     }
 }
