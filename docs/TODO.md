@@ -144,6 +144,12 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   和 man 页版本号、补全 18/35 项是**同一种病**（已经栽过两次）。做法照 `tests/cli_spec_match.sh`：
   两边抓函数名清单 `diff`，不一致就红。参考 `refs/tech/hiddify-core-c-abi.md` §7.1-B。
 
+- [ ] 🧹 **scratch 里约 13 G 测试样本待清（2026-10-29 遗留，用户说交给下一轮）**：
+  `~/.hermes/cache/scratch/progtest_192424/`（约 12 G：2.1 GB 抓帧用大包 + 几个 600 MB 包与解压产物）、
+  `~/.hermes/cache/scratch/yshjy_raratomic.*`（三个目录共约 955 M，上午探针失败现场）。
+  都是测试临时产物，删掉不影响源码与用户下载（`~/下载/` 一根手指都别碰）。
+  **动手前按铁律先念清单让用户确认，`rm -rf` 单独一条命令**——别塞进造数据那条里（塞了整条会被审批拦下、一行都不执行）。
+
 - [ ] 🟢 `complete` 那行补 `-o nosort -o bashdefault -o default`（bash ≥4.4 才有 `nosort`），
   用户可感知的差别：选项候选不再被 bash 按字母序重排。位置 `gen-cli-assets.py:316`。
 
