@@ -176,6 +176,10 @@ impl Hardware {
     }
 }
 
+// 「这个位置能不能跳着读」的探测放在 `seek` 模块（那里还有复制兜底），
+// 这里转出来是因为方案 §C 与 `docs/ARCHITECTURE.md` F1 都写作 `hardware::seek_ability`。
+pub use crate::seek::{seek_ability, SeekAbility};
+
 /// 可用内存（MiB）—— 解压前预检用
 pub fn available_mem_mib() -> Option<u64> {
     read_available_mem_mib()

@@ -30,6 +30,9 @@ for bin in yshjy yshys
     complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M，也认纯字节数）'
     complete -c $bin -l level -x
     complete -c $bin -l layout -x -a 'L1 L2'
+    complete -c $bin -l decoy -x -d '打包时撒 N 段干扰数据（最多 64 段，默认 0 = 不打）'
+    complete -c $bin -l decoy-size -x -d '每段多大（4K–1M，默认 16K）'
+    complete -c $bin -l decoy-signatures -d '每段里夹一枚假特征码（骗扫描器；默认关）'
     complete -c $bin -l cover -r -F -d '用自己的图片/视频当封面'
     complete -c $bin -l tail -d '打包用"尾部追加"布局'
     complete -c $bin -l no-checksum -d '不生成 .sha256 校验和'

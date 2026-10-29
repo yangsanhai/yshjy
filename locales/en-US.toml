@@ -72,6 +72,9 @@ COMMON OPTIONS:
   --delete-source                 Permanently delete the source archive after extracting (cannot be undone; asks once, refuses when non-interactive)
   --level 0-9                     pack compression level: 0 = store (fastest), 9 = smallest (default 6)
   --sfx / --sfx-linux             pack a self-extracting archive (.exe / .sh) that unpacks on double-click; cannot be used with --split, --cover not needed, no .说明.txt written
+  --decoy <N>                     Scatter N decoy segments into the pack (max 64, default 0 = off)
+  --decoy-size <size>             Size of each segment (4K–1M, default 16K)
+  --decoy-signatures              Put a fake archive signature in each segment (default off)
   --caps                          show the capability table per format (extract / pack / encryption / volumes / resume)
 
 EXAMPLES:
@@ -187,6 +190,9 @@ pack_layout_free = "free atom"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ Self-check passed (the file plays, and we can unpack it back)"
 pack_selfcheck_bad = "   ❌ Self-check failed: {err}"
+pack_decoy = "   🎭 Decoy data: {count} segment(s), {total} in total ({size} each, fake signatures: {sig})"
+pack_decoy_sig_on = "on"
+pack_decoy_sig_off = "off"
 pack_failed = "❌ Packing failed: {err}"
 pack_create_failed = "❌ Cannot create the output file: {err}"
 pack_missing = "❌ Not found: {path}"

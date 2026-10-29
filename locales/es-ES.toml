@@ -69,6 +69,9 @@ OPCIONES HABITUALES:
   --delete-source                 tras extraer, borrar el archivo original definitivamente (no se puede deshacer; pregunta una vez y se niega si no es interactivo)
   --level 0-9                     nivel de compresión al empaquetar: 0 = sin comprimir (rápido), 9 = tamaño mínimo (por defecto 6)
   --sfx / --sfx-linux             empaquetar como archivo autoextraíble (.exe / .sh); no se puede con --split, --cover no hace falta, no se crea .说明.txt
+  --decoy <N>                     Añadir N segmentos de datos señuelo (máx. 64, por defecto 0 = no)
+  --decoy-size <tamaño>           Tamaño de cada segmento (4K–1M, por defecto 16K)
+  --decoy-signatures              Poner una firma de archivo falsa en cada segmento (por defecto no)
   --caps                          mostrar la tabla de capacidades por formato (extraer / empaquetar / cifrado / volúmenes / reanudar)
 
 EJEMPLOS:
@@ -184,6 +187,9 @@ pack_layout_free = "átomo free"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ Autocomprobación correcta (el archivo se reproduce y se puede descomprimir)"
 pack_selfcheck_bad = "   ❌ Autocomprobación fallida: {err}"
+pack_decoy = "   🎭 Datos señuelo: {count} segmento(s), {total} en total ({size} cada uno, firmas falsas: {sig})"
+pack_decoy_sig_on = "activadas"
+pack_decoy_sig_off = "desactivadas"
 pack_failed = "❌ Error al empaquetar: {err}"
 pack_create_failed = "❌ No se puede crear el archivo de salida: {err}"
 pack_missing = "❌ No encontrado: {path}"

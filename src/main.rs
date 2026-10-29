@@ -571,6 +571,43 @@ fn main() -> ExitCode {
                 }
             },
         };
+        // 干扰数据（第三期 B）：段数 / 每段大小 / 是否撒假签名
+        let decoy = {
+            let count = match val_of("--decoy") {
+                None => 0usize,
+                Some(v) => match v.trim().parse::<usize>() {
+                    Ok(n) => n,
+                    Err(_) => {
+                        eprintln!("❌ --decoy 只能是整数段数（收到 {v}）");
+                        return ExitCode::from(code::USAGE);
+                    }
+                },
+            };
+            let size = match val_of("--decoy-size") {
+                None => 16 * 1024,
+                Some(v) => match yshjy::pack_post::parse_size(&v) {
+                    Some(n) if n <= usize::MAX as u64 => n as usize,
+                    _ => {
+                        eprintln!("❌ --decoy-size 看不懂：{v}（写法如 16K / 1M / 65536）");
+                        return ExitCode::from(code::USAGE);
+                    }
+                },
+            };
+            yshjy::pack::decoy::DecoyOptions {
+                count,
+                size,
+                signatures: has("--decoy-signatures"),
+            }
+        };
+        // 越界在这里先拦一次：别等到引擎里再报（这样 --help 旁边的错误更好懂）
+        if let Err(e) = decoy.validate() {
+            eprintln!("❌ {e}");
+            return ExitCode::from(code::USAGE);
+        }
+        if decoy.signatures && !decoy.is_on() {
+            eprintln!("❌ --decoy-signatures 要配合 --decoy <段数> 用（单独给没有意义）");
+            return ExitCode::from(code::USAGE);
+        }
         return do_pack(打包参数 {
             targets: &targets,
             dest_opt: &dest_o,
@@ -591,6 +628,7 @@ fn main() -> ExitCode {
                 None
             },
             level,
+            decoy,
             json: has("--json"),
         });
     }
@@ -2204,6 +2242,8 @@ struct 打包参数<'a> {
     sfx: Option<&'static str>,
     /// `--level 0-9`：压缩级别（P23-4）
     level: Option<u32>,
+    /// `--decoy` / `--decoy-size` / `--decoy-signatures`：干扰数据（第三期 B）
+    decoy: yshjy::pack::decoy::DecoyOptions,
     /// `--json`：事件按行输出（打包进度也要走这条路，否则脚本拿不到）
     json: bool,
 }
@@ -2222,6 +2262,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         cover,
         sfx,
         level,
+        decoy,
         json,
     } = a;
     // 文案全走语言包（引擎只给结构化数据）。v0.9 第 10 批从 `PackReport::summary()`
@@ -2375,10 +2416,18 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         yshjy::pack::PackTick::Wrote(n, 名字) => ctx.advance_pack(n, 名字.as_deref()),
         yshjy::pack::PackTick::TotalHint(额外) => ctx.set_total(总字节 + 额外, 总文件),
     };
+    // 自解压与干扰数据互斥：存根靠**固定偏移**找 ZIP，前面插噪声就再也定位不到
+    if decoy.is_on() && sfx.is_some() {
+        eprintln!(
+            "❌ --decoy 不能和 --sfx / --sfx-linux 同用：自解压包靠写死的偏移找数据，\
+             前面插噪声会把它弄坏"
+        );
+        return ExitCode::from(code::USAGE);
+    }
     let 打包结果 = match sfx {
         Some("linux") => yshjy::pack::build_sfx_sh_ctx(&opts, &mut bw, &mut 报),
         Some(_) => yshjy::pack::build_sfx_ctx(&opts, &mut bw, &mut 报),
-        None => yshjy::pack::build_ctx(&opts, &mut bw, &mut 报),
+        None => yshjy::pack::build_ctx_decoy(&opts, &decoy, &mut bw, &mut 报),
     };
     // 收尾补一条终态，保证终端/脚本看到的进度是最终值
     ctx.force_pack_progress(None);
@@ -2425,6 +2474,30 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                     ),
                     None => {}
                 }
+                // 干扰数据：用户得知道自己撒了多少（不然「设置了没生效」看不出来）
+                if rep.noise_size > 0 {
+                    // 「假签名开没开」也要说清楚 —— 开关类参数不给反馈等于没生效
+                    let 签名 = 语.t(
+                        if decoy.signatures {
+                            "cli.pack_decoy_sig_on"
+                        } else {
+                            "cli.pack_decoy_sig_off"
+                        },
+                        &[],
+                    );
+                    println!(
+                        "{}",
+                        语.t(
+                            "cli.pack_decoy",
+                            &[
+                                ("count", &decoy.count.to_string()),
+                                ("size", &人类可读(decoy.size as u64)),
+                                ("total", &人类可读(rep.noise_size)),
+                                ("sig", &签名),
+                            ]
+                        )
+                    );
+                }
                 for w in &rep.warnings {
                     println!("{}", 语.t("cli.pack_warn", &[("warn", w)]));
                 }
@@ -2436,7 +2509,12 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 println!("中间文件（--keep 保留）：{}", tmp.display());
             }
             // 自检 —— 不能"以为成功就完事"
-            match yshjy::pack::self_check(&out, rep.entries) {
+            match yshjy::pack::self_check_at(
+                &out,
+                rep.entries,
+                Some(rep.zip_offset),
+                rep.noise_size,
+            ) {
                 Ok(warns) if warns.is_empty() => {
                     if !quiet {
                         if sfx.is_some() {
