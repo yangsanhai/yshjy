@@ -2310,9 +2310,8 @@ class _HomePageState extends State<HomePage> {
   /// 路径与引擎一致：`$XDG_CONFIG_HOME/yshjy/passwords.txt`（回退 `~/.config`）。
   Future<void> _loadRecentPasswords() async {
     try {
-      final env = Platform.environment;
-      final base = env['XDG_CONFIG_HOME'] ?? '${env['HOME']}/.config';
-      final f = File('$base/yshjy/passwords.txt');
+      // 路径走 platform_paths 的唯一真源（与引擎 config_dir 一致，W9）
+      final f = File('$configDir${Platform.pathSeparator}passwords.txt');
       if (!await f.exists()) return;
       final lines = await f.readAsLines();
       final pws = <String>[];

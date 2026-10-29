@@ -256,11 +256,13 @@ class EngineClient {
   static String get executable {
     final env = Platform.environment['YSHJY_BIN'];
     if (env != null && env.isNotEmpty) return env;
+    // Windows 的引擎是 yshjy.exe（发布包里引擎跟界面放同一目录，W9）
+    final name = Platform.isWindows ? 'yshjy.exe' : 'yshjy';
     try {
-      final beside = File(Platform.resolvedExecutable).parent.path + Platform.pathSeparator + 'yshjy';
+      final beside = File(Platform.resolvedExecutable).parent.path + Platform.pathSeparator + name;
       if (File(beside).existsSync()) return beside;
     } catch (_) {}
-    return 'yshjy';
+    return name;
   }
 
   Stream<EngineEvent> get events => _events.stream;
