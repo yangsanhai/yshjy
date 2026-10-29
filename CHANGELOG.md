@@ -107,7 +107,30 @@ TO-DO 原文是「`caps` 按格式声明（Ark 的做法，协议面升版，影
 zip 能选条目而 gzip 不能（证明能力真按格式）、7z 声明头加密而 zip 不声明、标识全是 ASCII 机器名、
 全局 `caps` 五项仍在（老前端兼容）。`flutter analyze` 只剩两条既有 info。
 
-### 七、回归
+### 七、打包：补上 `prerm`（卸载前钩子）
+
+`build-deb.sh` 一直只有 `postinst` + `postrm`，缺 `prerm`。症状不是装不上，而是**卸载不干净**：
+
+- 界面「关窗口 = 藏到托盘」，所以卸载后托盘里可能还挂着一个**已经被删掉的进程**；
+- `postinst` 给用户设过 14 种格式的「双击用我打开」，卸载后用户配置里留着这些条目
+  （GNOME 会兜底，但重装或换路径时会莫名其妙）。
+
+`prerm` 的两条纪律：
+
+- **只在 `remove|purge` 时动手**；`dpkg` 在升级时传的是 `prerm upgrade <新版本>`，直接早退 ——
+  用户可能正让它在解一个 8 GB 的包，升级把他的活杀掉是不可接受的（这条做成了 `build-deb.sh`
+  与 `test-packages.sh` 的断言：prerm 里没有 `upgrade` 字样就拒绝出包）。
+- 停进程用 **TERM 不用 KILL**：强杀会让正在解压的包留下 `.yshjy-part`；卸载软件的副作用
+  不该包括「砸坏他正在做的事」。清 mime 配置前先备份成 `mimeapps.list.yshjy-uninstall.bak`，
+  写不动就算了（卸载本身不该因为这个失败）。
+
+验收：`bash scripts/build-deb.sh` 自查通过（含新增的「prerm 在 / 755 / 语法 / 区分 upgrade」四条），
+`bash scripts/test-packages.sh` **37 项全绿**（原 33 项 + prerm 4 项）；从包里取出 prerm 真跑了
+`upgrade` / `remove` / 空参数三种调用，都是 0 退出、无副作用。
+顺带按铁律重编了界面（`flutter build linux --release`）再出包 —— 因为本轮改过
+`settings_page.dart`，不重编的话包里会是旧界面。
+
+### 八、回归
 
 `bash tests/all.sh` —— **35 通过 / 0 失败 / 5 跳过 / 约 185 秒**
 （第一次跑红在 `cargo test --release` 的「长选项总数」钉桩：42 → 43，正是它该拦的）；`cargo test` 336+29+2、`cargo clippy -D warnings` 干净。

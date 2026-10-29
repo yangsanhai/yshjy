@@ -303,7 +303,10 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   `caps` 按格式声明（Ark 的做法，协议面升版，影响 GUI + FFI 两侧）
 - [x] ✅ **已完成（2026-10-29）**：新错误码 `HEAD_ENCRYPTED`（连清单都加密 → 必须先去要密码），错误密码单独报 `WRONG_PASSWORD`（不许把「给错了」说成「没给」）。**顺带修掉一个真 bug**：`do_list` 里密码写死 `None`，导致 `--list -p 密码 头加密.7z` 永远失败。`tests/head_encrypted.sh` 5 项全绿。原记录：
   7z 头加密专门提示（现在有 `encrypted` / `encrypted_count`，但「头加密时无密码连清单都列不出」没做提示）
-- [ ] `build-deb.sh` 补 `prerm`（现在有 postinst + postrm，缺 prerm）
+- [x] ✅ **已完成（2026-10-29）**：prerm 只在 `remove|purge` 时动手 —— ① TERM 停掉还在跑的界面
+  （关窗口只是藏托盘，不清会留个「已被删掉的进程」）② 清掉 postinst 设过的「双击默认打开」条目
+  （改前先备份成 `mimeapps.list.yshjy-uninstall.bak`）。**升级分支立刻早退**：用户可能正在解 8 GB 的包，升级不许杀他的活。`build-deb.sh` 自查 + `test-packages.sh` 各加断言（存在 / 755 / `sh -n` / 必须区分 upgrade），出包验收 37 项全绿。原记录：
+  `build-deb.sh` 补 `prerm`（现在有 postinst + postrm，缺 prerm）
 - [ ] GitHub 发布流水线（现在只有单平台 `ci.yml`，没有多平台矩阵与 release 汇总）
 
 ### 平台
