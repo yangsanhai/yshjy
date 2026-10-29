@@ -227,9 +227,12 @@ $ yshjy --list --json 包.mp4
 - 非交互终端（管道 / 重定向 / cron）里跑 `--pick` 会直接拒绝：给 `cli.pick_no_tty` 文案并提示改用
   `--select`，退出码 `USAGE(2)`。不会假装在等人按键。
 - 一个都没勾就按 Enter 等价于「什么都不解」，也是退出码 0，不报错。
-- **<kbd>Ctrl</kbd>+<kbd>C</kbd> 是直接中断进程**（SIGINT），不是「取消勾选后返回」——
-  此时程序来不及恢复光标，`--pick` 界面隐藏的光标会留在隐藏状态；敲一次 `reset` 或重开终端即可复原。
-  想正常退出请用 <kbd>Esc</kbd> / <kbd>q</kbd>。（实测记录，见 TODO 表尾那条待修项。）
+- **<kbd>Ctrl</kbd>+<kbd>C</kbd>** 也能干净退出：光标复原、退出码 **130**（SIGINT 惯例），
+  不用再 `reset` 或重开终端。实现见 `src/pick.rs` 的 `中断复原` + `src/main.rs` 的 `装中断接管`
+  （Ctrl-C 全进程只在 `main` 装一次，按阶段分派）；探针见 `tests/pick.sh` 第 ⑤ 组。
+  > 2026-10-29 修：之前这里确实是「光标留在隐藏状态，得 reset」，根因是 `console` 后端
+  > 把 Ctrl-C 变成 SIGINT，`dialoguer` 的复原代码没有执行机会。
+- 想按「正常退出」拿到退出码 0（而不是 130）仍请用 <kbd>Esc</kbd> / <kbd>q</kbd>。
 
 > 键位不是我们发明的，是 `dialoguer` 的 `MultiSelect` 原样（源码 `refs/upstream/dialoguer/src/prompts/multi_select.rs`
 > 的按键分支），业界通用；自己手写循环只会把 raw mode 复原、分页、非 TTY 降级这些坑推迟到用户机器上。
