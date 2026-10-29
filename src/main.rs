@@ -1404,14 +1404,11 @@ fn 问是否继续() -> bool {
 
 /// 问用户要解压码（关闭回显；直接回车 = 放弃）
 fn 问解压码(包: &std::path::Path) -> Option<String> {
-    use std::io::Write;
     let 名 = 包
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| 包.display().to_string());
     eprintln!("🔑 {名} 带锁，需要解压码");
-    eprint!("   请输入解压码（输入时不显示；直接回车 = 放弃）：");
-    let _ = std::io::stderr().flush();
     match 读一行不回显() {
         Some(p) if !p.trim().is_empty() => Some(p.trim().to_string()),
         _ => {
@@ -1422,30 +1419,32 @@ fn 问解压码(包: &std::path::Path) -> Option<String> {
 }
 
 /// 从终端读一行，**不回显**（解压码不该出现在屏幕上，也不该留在 shell 历史里）
+///
+/// 以前只有 `#[cfg(unix)]` 的手写 termios 分支关得掉回显，Windows 上落进普通读，
+/// 解压码明文显示在屏幕上（审计 W4）。现在统一交给 `dialoguer::Password` ——
+/// 它把「关回显 + 退格编辑 + 回车提交」跨平台都处理好了（`--pick` 同族，依赖本来就在）。
 fn 读一行不回显() -> Option<String> {
-    use std::io::BufRead;
-    #[cfg(unix)]
-    {
-        // SAFETY: tcgetattr / tcsetattr 只读写 termios 结构体；
-        // 失败就退回普通读（最坏情况只是回显关不掉，不影响正确性）。
-        unsafe {
-            let fd = libc::STDIN_FILENO;
-            let mut 原: libc::termios = std::mem::zeroed();
-            if libc::tcgetattr(fd, &mut 原) == 0 {
-                let mut 关回显 = 原;
-                关回显.c_lflag &= !libc::ECHO;
-                libc::tcsetattr(fd, libc::TCSANOW, &关回显);
-                let mut line = String::new();
-                let n = std::io::stdin().lock().read_line(&mut line).ok();
-                libc::tcsetattr(fd, libc::TCSANOW, &原);
-                eprintln!(); // 回显关着，换行得自己补
-                return n.map(|_| line.trim_end_matches(['\r', '\n']).to_string());
-            }
-        }
+    use crossterm::tty::IsTty;
+    // 两种情况走普通读（最坏只是回显关不掉 —— 旧手写 termios 分支的注释同样接受这个降级）：
+    // ① 管道喂密码（`echo 码 | yshjy 包`）：不是终端就谈不上回显，必须保住脚本可用；
+    // ② stderr 被重定向：dialoguer 只认终端（它往 stderr 画提示），硬上会直接报错
+    if !std::io::stdin().is_tty() || !std::io::stderr().is_tty() {
+        use std::io::BufRead;
+        let mut line = String::new();
+        std::io::stdin().lock().read_line(&mut line).ok()?;
+        return Some(line.trim_end_matches(['\r', '\n']).to_string());
     }
-    let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line).ok()?;
-    Some(line.trim_end_matches(['\r', '\n']).to_string())
+    use dialoguer::Password;
+    match Password::new()
+        .with_prompt("   请输入解压码（输入时不显示；直接回车 = 放弃）")
+        .allow_empty_password(true)
+        .interact()
+    {
+        Ok(p) => Some(p),
+        // Ctrl-C 在 raw mode 里是普通按键，dialoguer 报 Interrupted ——
+        // 按「放弃」算，与「直接回车」同路，让流程继续走「没有解压码」
+        Err(_) => None,
+    }
 }
 
 /// 多任务进度状态（只有 `-j 2` 以上真的并行时才会启用）
