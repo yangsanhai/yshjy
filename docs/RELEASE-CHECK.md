@@ -1,6 +1,35 @@
 # 发布检查（T5）—— 逐项核对
 
-## 0.9.29 发布记录（2026-10-29，最新一次）
+## 0.9.31 发布记录（2026-10-29，最新一次）
+
+> 只改了一处：`--pick` 被 Ctrl-C 打断后的光标复原（引擎 + 探针，界面逻辑一行没动）。
+> 但版本号会进界面状态栏，所以界面也重编了一遍。
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| 五处版本号同步 | 手工改 `Cargo.toml` / `ffi/Cargo.toml` / `gui/pubspec.yaml` / `docs/PROTOCOL.md` 两份示例 / `CHANGELOG.md` 段落标题；`docs/yshjy.1` 由 `gen-cli-assets.py` 在打包时带出 | 5/5 |
+| 引擎 release 构建 | `cargo build --release` | 成功（18 秒） |
+| 界面 release 构建 | `cd gui && ~/flutter/bin/flutter build linux --release` | 成功 |
+| 出两档 tar.gz | `bash scripts/release.sh` | `yshjy-` / `yshjy-full-` 各 3.7M |
+| 出 deb | `bash scripts/build-deb.sh` | `dist/yshjy_0.9.31_amd64.deb` 9.9M，自查 14 种格式通过 |
+| 验包 | `bash scripts/test-packages.sh` | **37 项全绿** |
+| 装机 | `sudo apt install ./dist/yshjy_0.9.31_amd64.deb` | 0.9.30 → 0.9.31（先 `apt-get -s` 模拟：只升级 1 个包，0 新装 0 卸载） |
+
+**装机后实测（用 `/usr/bin/yshjy` 本身跑，不是仓库里的 `target/` 二进制）**：
+
+- `dpkg -l yshjy` = **0.9.31**、`/usr/bin/yshjy --version` = 0.9.31
+- 桌面菜单认领 **14 种格式**；`/usr/share/man/man1/yshjy.1.gz` 与 bash 补全时间戳随之更新
+- `bash tests/pick.sh /usr/bin/yshjy` **11 项全绿**（含本轮新增的 Ctrl-C 第 ⑤ 组 5 项）——
+  这条是关键：它证明修复真的进了装机版，而不是只在仓库里绿
+- 真跑一遍：`ys 源目录 -o 伪装视频.mp4` → `file` 认成 `ISO Media, MP4`、`--list` 列出条目、
+  解压回 4 个文件、**逐文件 sha256 与源目录完全一致**
+
+**坑（仍然有效）**：打包要用 `ys` 子命令（`yshjy ys <目录> -o <产物>`），
+直接 `yshjy <目录> -o x.mp4` 会被当成「这不是压缩包」（退出码 3）—— 验收脚本第一版就踩了。
+顺序仍是先 `release.sh` 再 `build-deb.sh`（或两条都跑完再验包），否则 `test-packages.sh`
+会红在「tar.gz 与 deb 不是同一次构建」。
+
+## 0.9.29 发布记录（2026-10-29）
 
 > 这一版把「窗口尺寸记忆 / 原包处置（CLI + 界面）/ 右键脚本只读目录 / packSize 封顶」四块
 > 送进装机版。流程与 0.9.26 那轮完全一致（下表就是那轮的快照，数字换成 33 项）：
