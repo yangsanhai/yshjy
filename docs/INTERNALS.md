@@ -46,31 +46,35 @@
 
 ```
 ┌─ L3 外壳 ────────────────────────────────────────────────┐
-│  main.rs (2670) CLI       gui/lib (5074·15 文件) Flutter  │
-│  serve.rs (379) 协议     ffi/ C ABI（iOS/Android/其它）   │
+│  main.rs  CLI              gui/lib  Flutter 界面         │
+│  serve.rs 协议             ffi/     C ABI（iOS/Android） │
 └───────────────┬──────────────────────────────────────────┘
                 │ JSON 请求 / JSON 事件
-┌─ L2 编排 ─────┴──────────────────────────────────────────┐
-│  api.rs (957)  一次请求→一次结果（界面走这条）            │
-│  job.rs (1548) 单任务全流程（CLI 也走这条）               │
-│  batch.rs (819) 批量队列    drill.rs (204) 嵌套下钻       │
+┌─ L2 编排 ────┴───────────────────────────────────────────┐
+│  api.rs   一次请求→一次结果（界面走这条）                │
+│  job.rs   单任务全流程（CLI 也走这条）                   │
+│  batch.rs 批量队列     drill.rs 嵌套下钻                 │
 └───────────────┬──────────────────────────────────────────┘
                 │
-┌─ L1 能力 ─────┴──────────────────────────────────────────┐
-│ 识别：scan(749) probe(499) rescue(1079) repair(339)       │
-│ 解码：unpack(1044) extract(1300) extract_stream(1116)     │
-│       extract7z(736) extract_rar(1008) layout/zip(840)     │
-│ 打包：pack(1132) pack_post(261) pack/cover(170)           │
-│ 辅助：preview(761) select(350) resume(786) restore(261)   │
-│       password_hint(539) cover_extract(350) trash(187)    │
+┌─ L1 能力 ────┴───────────────────────────────────────────┐
+│  识别：scan probe rescue repair                          │
+│  解码：unpack extract extract_stream                     │
+│        extract7z extract_rar layout/zip                  │
+│  打包：pack pack/cover pack/decoy pack_post              │
+│  辅助：preview select resume restore seek                │
+│        password_hint cover_extract trash                 │
 └───────────────┬──────────────────────────────────────────┘
                 │
-┌─ L0 地基 ─────┴──────────────────────────────────────────┐
-│  error(749) 22个模块依赖 · ctx(402) 10 · event(685) 7    │
-│  progress(658) 6 · safety(516) 6 · io/(843) 窗口/分段/原子 │
-│  config(703) i18n(587) paths(103) hardware(365) tools(138)│
+┌─ L0 地基 ────┴───────────────────────────────────────────┐
+│  error（24 个模块依赖）· ctx（10）· event（7）           │
+│  progress（6）· safety（6）                              │
+│  io/：window segment atomic interrupt patch blockcache   │
+│  config i18n paths hardware tools cli_spec               │
 └──────────────────────────────────────────────────────────┘
 ```
+
+> 图上只画**层级与模块归属**；行数、文件数、被依赖次数一律看 §3（`python3 scripts/scan-src.py` 产出）。
+> 图上写死数字必然漂 —— 这条已经栽过两次（man 页版本号、补全 18/35 项）。
 
 **硬约束**（`src/lib.rs` 顶部原文）：
 1. 不依赖任何 UI 框架 —— CLI / 桌面 / 手机同一套引擎
@@ -80,7 +84,7 @@
 
 ---
 
-## 3. 模块全表（49 个文件 / 27,722 行）
+## 3. 模块全表（52 个文件 / 29,584 行）
 
 > 「被依赖」= 有多少个模块 `use crate::它`（数字是实测的，越大越底层）。
 
@@ -88,57 +92,60 @@
 
 | 模块 | 行 | 被依赖 | 职责 | 关键点 |
 |---|---|---|---|---|
-| `error.rs` | 749 | **22** | 错误码体系（三层结果模型） | 16 个 `ErrorCode`；引擎只说码不说人话 |
-| `ctx.rs` | 402 | **10** | 解压上下文：事件/进度/取消三件套 | 所有解压入口都要它，取消从这一路下去 |
+| `error.rs` | 754 | **24** | 错误码体系（三层结果模型） | 17 个 `ErrorCode`；引擎只说码不说人话 |
+| `ctx.rs` | 416 | **10** | 解压上下文：事件/进度/取消三件套 | 所有解压入口都要它，取消从这一路下去 |
 | `event.rs` | 685 | 7 | 引擎事件流（引擎→外壳） | **30 种事件**（见 §5） |
 | `progress.rs` | 658 | 6 | 进度、取消、剩余时间估算 | `EtaEstimator` α=0.3、样本<3 不给估算；CLI 与 GUI **必须共用** |
 | `safety.rs` | 516 | 6 | 安全护栏（路径穿越/空间/内存） | 内置不可绕过；限额超了走 `ask.rs` 问用户 |
-| `io/atomic.rs` | 295 | — | 落盘原子写入守卫（`.part` → rename） | 所有写盘都过它 |
+| `io/atomic.rs` | 347 | — | 落盘原子写入守卫（`.part` → rename） | 所有写盘都过它 |
 | `io/window.rs` | 138 | — | 偏移窗口：把 `[start,start+len)` 映射成 `0..len` | 「包在文件中间」的基石 |
 | `io/segment.rs` | 254 | — | 分段虚接：多个分散段拼成连续流 | E2/E3 场景靠它 |
 | `io/interrupt.rs` | 121 | — | 可中断读取 | 让「取消」立刻生效，不用等读完 |
 | `io/patch.rs` | 218 | — | 补丁窗口：读时就地改字节，**绝不改磁盘** | 修坏头部不改原文件 |
+| `io/blockcache.rs` | 363 | — | 块缓存：给「不能随便 seek」的源套上 `Read + Seek` | 32 KiB 块 / 8 MiB LRU；回退到已淘汰块**明确报错，不装成 EOF**（第三期 C） |
 | `config.rs` | 703 | — | 配置与密码本 | 本机状态目录，跨平台路径见 `paths.rs` |
 | `i18n.rs` | 587 | — | 7 语言文案 | 引擎只给码，文案在这一层 |
 | `paths.rs` | 103 | — | 跨平台状态目录 | |
-| `hardware.rs` | 365 | — | 硬件与资源档位 | 并发度/内存估算 |
-| `cli_spec.rs` | 295 | — | **CLI 选项唯一真源**（37 项） | `--help`/补全/man 全从它推导 |
+| `hardware.rs` | 369 | — | 硬件与资源档位 | 并发度/内存估算 |
+| `cli_spec.rs` | 303 | — | **CLI 选项唯一真源**（43 个长选项） | `--help`/补全/man 全从它推导 |
 | `tools.rs` | 138 | — | 外部工具检测（**可选增强，不是依赖**） | 有 rar 更好，没也能跑 |
 
 ### L1 能力
 
 | 模块 | 行 | 被依赖 | 职责 |
 |---|---|---|---|
-| `unpack.rs` | 1044 | 2 | **统一解压器接口** —— 「加一个格式只改一处」的地基（§4.2） |
-| `extract.rs` | 1300 | 2 | ZIP 解码；定位与解码彻底解耦 |
-| `extract_stream.rs` | 1116 | 2 | 单流压缩（gzip/xz/zstd/bzip2/lz4/brotli）+ TAR |
-| `extract_rar.rs` | 1008 | 1 | RAR（含加密、含分卷） |
-| `extract7z.rs` | 736 | 1 | 7z（含分卷虚接） |
+| `unpack.rs` | 1084 | 2 | **统一解压器接口** —— 「加一个格式只改一处」的地基（§4.2） |
+| `extract.rs` | 1357 | 2 | ZIP 解码；定位与解码彻底解耦 |
+| `extract_stream.rs` | 1123 | 2 | 单流压缩（gzip/xz/zstd/bzip2/lz4/brotli）+ TAR |
+| `extract_rar.rs` | 1009 | 1 | RAR（含加密、含分卷） |
+| `extract7z.rs` | 778 | 1 | 7z（含分卷虚接） |
 | `layout/zip.rs` | 840 | — | ZIP/ZIP64 结构解析与**偏移反推**；EOCD 分块倒扫 |
 | `layout/mod.rs` | 92 | 6(被) | 结构解析入口 |
 | `scan.rs` | 749 | — | 全文件签名扫描（`FindPK_4` 式强判定） |
 | `probe.rs` | 499 | — | 文件类型探测（「你给我的是啥文件」） |
-| `rescue.rs` | 1079 | — | 救援模式：目录表坏了也能重建文件列表 |
+| `rescue.rs` | 1080 | — | 救援模式：目录表坏了也能重建文件列表 |
 | `repair.rs` | 339 | — | 偏移修复（坏包多数只是头部几字节写错） |
-| `preview.rs` | 761 | — | 预览：**不解压**列出包里有什么（用了 `job`，见 §9 偏差1） |
+| `preview.rs` | 768 | — | 预览：**不解压**列出包里有什么（用了 `job`，见 §9 偏差1） |
 | `select.rs` | 350 | 6(被) | 只解用户勾的那部分 |
 | `resume.rs` | 786 | — | 断点续传（条目级 + JSONL 记录 + 三重校验） |
 | `restore.rs` | 261 | — | 还原 mtime / 权限 |
 | `password_hint.rs` | 539 | — | 从旁边「说明.txt」自动抓解压码 |
 | `cover_extract.rs` | 350 | — | 封面分离：把原视频也交出来 |
 | `trash.rs` | 187 | — | XDG 回收站（**永不 rm**） |
-| `pack/mod.rs` | 1132 | — | 伪装打包：把包藏进视频/图片 |
+| `seek.rs` | 266 | — | 「这个位置能不能跳着读」—— 移动端 seek 三档探测（第三期 C） |
+| `pack/mod.rs` | 1249 | — | 伪装打包：把包藏进视频/图片 |
 | `pack/cover.rs` | 170 | — | 内置封面素材 |
+| `pack/decoy.rs` | 316 | — | 干扰数据 / 假签名（第三期 B）—— 噪声只写在压缩数据之外；「签名 + 30 字节零」别改回纯随机（会骗坏 7-Zip） |
 | `pack_post.rs` | 261 | — | 打包后处理：分卷/校验和/自动说明书 |
 
 ### L2 编排
 
 | 模块 | 行 | 被依赖 | 职责 |
 |---|---|---|---|
-| `api.rs` | 957 | — | 引擎 API 层：一次请求→一次结果（**界面走这条**） |
-| `job.rs` | 1548 | — | 单任务全流程（**CLI 也走这条**，与 api 是两条路，见 §4.6） |
-| `batch.rs` | 819 | 3(被) | 批量队列，一个坏了不影响其余 |
-| `drill.rs` | 204 | — | 嵌套包自动下钻（只下一层） |
+| `api.rs` | 1045 | — | 引擎 API 层：一次请求→一次结果（**界面走这条**） |
+| `job.rs` | 1556 | — | 单任务全流程（**CLI 也走这条**，与 api 是两条路，见 §4.6） |
+| `batch.rs` | 822 | 3(被) | 批量队列，一个坏了不影响其余 |
+| `drill.rs` | 206 | — | 嵌套包自动下钻（只下一层） |
 | `ask.rs` | 140 | 1(被) | 双向询问：引擎问一句、用户答一句 |
 | `report.rs` | 503 | — | 诊断包（`--report`） |
 | `crash.rs` | 463 | — | 崩溃兜底，留下能报障的现场 |
@@ -147,11 +154,11 @@
 
 | 模块 | 行 | 职责 |
 |---|---|---|
-| `main.rs` | 2670 | CLI：选项解析 / 进度渲染 / `--pick` / `--list` / 一切终端 UX |
+| `main.rs` | 3045 | CLI：选项解析 / 进度渲染 / `--pick` / `--list` / 一切终端 UX |
 | `serve.rs` | 379 | `--serve`：一行一个 JSON 的双向管道（GUI 靠它） |
-| `pick.rs` | 85 | `--pick` 全屏勾选（dialoguer，Ctrl-C 的坑见 TODO 表尾） |
-| `lib.rs` | 57 | 模块出口 + 4 条硬约束 |
-| `gui/lib` | 5074 | Flutter：`home_page`(2117) `pack_page`(676) `engine`(527) `settings`(509) `app_shell`(372) + 托盘/通知/历史/主题 |
+| `pick.rs` | 167 | `--pick` 全屏勾选（dialoguer）；Ctrl-C 光标复原已修，中断接管全进程只装一次 |
+| `lib.rs` | 58 | 模块出口 + 4 条硬约束 |
+| `gui/lib` | 5732 | Flutter：`home_page`(2371) `pack_page`(676) `engine`(534) `settings`(529) `app_shell`(372) `entry_tree`(335) + 托盘/通知/历史/主题 |
 | `ffi/` | 297+43 | C ABI：JSON 进 / 事件出 / Job 句柄；`yshjy.h` 手写（漂移风险见 TODO 表尾） |
 
 ---
@@ -266,7 +273,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 
 ## 5. 对外面（协议 / CLI / 错误）
 
-**协议 10 个命令**（`api.rs:28`）：`hello` `cancel` `report` `scan` `list` `extract` `pack` `batch` `rescue` `answer`
+**协议 11 个命令**（`api.rs` 分派 10 个 + `skip` 在 `serve.rs` 层）：`hello` `cancel` `report` `scan` `list` `extract` `pack` `batch` `rescue` `answer` `skip`
 
 **30 种事件**：`ASK_USER` `DIAGNOSTIC` `ENTRY_FINISHED` `EXTRACT` `EXTRACT_PROGRESS` `HIDDEN_AT_OFFSET`
 `JOB_FINISHED` `JOB_STARTED` `LAYOUT_GUESSED` `LIST` `LOCATE` `OFFSET_CORRECTED` `PACK` `PACK_PROGRESS`
@@ -274,18 +281,18 @@ pub struct Caps {                                 // 能力位（对应用户能
 `RESUMED` `RISKY_ENTRY` `SCAN_PROGRESS` `SLOW_PATH` `SPACE_SHORTAGE` `STAGE_FINISHED` `STAGE_STARTED`
 `VERIFY` `VIDEO_UNPLAYABLE` `VOLUMES_MERGED`
 
-**16 个错误码**（`error.rs`）：`PathNotFound` `InvalidArgument` `NotEnoughSpace` `PermissionDenied`
-`PathTooLong` `DestIsFile` `NeedPassword` `WrongPassword` `NotArchive` `Truncated` `MissingVolume`
+**17 个错误码**（`error.rs`）：`PathNotFound` `InvalidArgument` `NotEnoughSpace` `PermissionDenied`
+`PathTooLong` `DestIsFile` `NeedPassword` `WrongPassword` `HeadEncrypted` `NotArchive` `Truncated` `MissingVolume`
 `DataLost` `EncryptedUnbreakable` `VideoUnplayable` `Cancelled` `Internal`
 
-**CLI 37 个选项**，唯一真源 `src/cli_spec.rs`；`--help` / 三份补全 / man 页 **全部从它推导**，
+**CLI 43 个长选项**，唯一真源 `src/cli_spec.rs`；`--help` / 三份补全 / man 页 **全部从它推导**，
 并由 `tests/cli_spec_match.sh` 三方对账（不一致就红）。
 
 ---
 
 ## 6. 测试矩阵：每条能力谁在守
 
-> `bash tests/all.sh` 跑全套（29 通过 / 0 失败 / 4 跳过，约 179 秒）。
+> `bash tests/all.sh` 跑全套（41 通过 / 0 失败 / 5 跳过，约 191–203 秒；2026-10-29 实测）。
 
 | 能力 | 守它的探针 |
 |---|---|
@@ -341,7 +348,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 
 **另外两件要留意的**：
 
-4. **`main.rs` 2670 行是最大的单文件** —— CLI 的选项解析、进度渲染、`--pick`、`--list` 全在里面。
+4. **`main.rs` 3045 行是最大的单文件** —— CLI 的选项解析、进度渲染、`--pick`、`--list` 全在里面。
    想加终端功能时会越来越挤（`cli_spec.rs` 已经把**数据**抽走了，剩下的是**行为**）。
 5. **`ffi/include/yshjy.h` 是手写的第二份真源**（43 行 vs 9 个导出）—— 见 TODO 表尾的探针方案。
 
@@ -354,7 +361,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 
 | ARCHITECTURE.md 写的 | 现在实际 |
 |---|---|
-| §3「模块划分（crate 结构）」 | 早不是那套划分了 —— 以**本文档 §3** 为准（49 文件 27,722 行） |
+| §3「模块划分（crate 结构）」 | 早不是那套划分了 —— 以**本文档 §3** 为准（52 文件 29,584 行） |
 | §12「v0.1 实现顺序（建议）」 | 已完成到 0.9.28，那节只是历史 |
 | §13「待办（写代码前要补的）」 | 已清空；真源是 `docs/TODO.md` |
 | §357「GUI 选型：为什么是 Flutter + 协议而不是 FFI」 | 仍成立（桌面走协议），但**移动端已定走 ffigen + C ABI**，两条路并存 |
@@ -370,7 +377,7 @@ python3 scripts/scan-src.py          # 完整模块地图 + 依赖矩阵 + 反�
 python3 scripts/scan-src.py --check  # 只打印核对项（与本节期望值逐个对）
 
 # 2. 文件数 / 总行数
-wc -l src/*.rs src/**/*.rs | tail -1        # 期望 27,722 行 / 49 文件（2026-10-28）
+wc -l src/*.rs src/**/*.rs | tail -1        # 期望 29,584 行 / 52 文件（2026-10-29）
 
 # 3. 协议面
 grep -n '"hello", "cancel"' src/api.rs      # 命令清单

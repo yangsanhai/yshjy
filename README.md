@@ -4,8 +4,8 @@
 > 网盘里那些改了后缀也解不开的"视频"—— 拖进来就行。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/平台-Linux%20%7C%20Windows%20%7C%20Android-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.7.0%20测试版-2ECC71)
+![Platform](https://img.shields.io/badge/平台-Linux%20%E5%8F%91%E5%B8%83%E7%BA%A7%20%7C%20Windows%20%E5%91%BD%E4%BB%A4%E8%A1%8C-2EC5CE)
+![状态](https://img.shields.io/badge/状态-v0.9.31%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
 
 > **两个版本**
 > - **常用版**（文件名 `yshjy-*`）—— 日常下载会遇到的格式全都在，体积小、依赖少，**推荐装这个**
@@ -34,7 +34,7 @@
 
 ---
 
-## ✅ 现在就能用（v0.8.0 测试版）
+## ✅ 现在就能用（v0.9.31）
 
 ```bash
 # 解压（最简单，就这一行）
@@ -82,8 +82,8 @@ yshjy --report --no-paths 包.mp4    # 路径脱敏（要贴到公开的地方�
 | 29.4 MB 仿真包（AES-256 + 中文密码 + 中文名 + 嵌套目录） | 定位 510 µs / 解压 146 ms |
 | 打包 → 解压闭环（20 MB，6 条目） | `diff -r` 完全一致，自检通过 |
 | 索引被故意改坏的包 | 自动修复：`偏移 999999 → 2582`，正常解出 |
-| 冒烟测试 | **25/25 通过** |
-| 单元测试 + 模糊测试 | **259** 个单测全过；fuzz **2787 万次**畸形输入、**零 crash** |
+| 回归测试 | `bash tests/all.sh` **41 通过 / 0 失败 / 5 跳过** |
+| 单元测试 + 模糊测试 | **388** 个单测全过；只读入口 fuzz **2.38 亿次**、写盘路径 **7.2 万次**，均**零 crash** |
 | `--list` 8.7 GB 伪装包 | **0.09 秒**（修掉"让 zip 库自己检测偏移"那个坑之前是 109 秒） |
 | 解压 5.9 GB 伪装包 | **55 秒**（同一处修复前是 129 秒，产物 SHA-256 不变） |
 
@@ -100,8 +100,8 @@ yshjy --report --no-paths 包.mp4    # 路径脱敏（要贴到公开的地方�
 | 一个文件里藏了两个包 | ✗（只看到一个） | ✅ 全部找出 |
 | **救援模式**（扫不出目录表也救） | ✗ | ✅ 按每个文件的头重建清单 |
 | 打包时自动检查产物能不能用 | ✗ | ✅ 回读自检，不合格就报警 |
-| 有图形界面 | ✗（同类工具几乎都是命令行） | 🚧 规划中 |
-| 跨平台 | ✗ | 🚧 Linux 已可用，Windows / Android 规划中 |
+| 有图形界面 | ✗（同类工具几乎都是命令行） | ✅ 已装（5 页 + 托盘，Linux） |
+| 跨平台 | ✗ | 🟡 Linux 发布级；Windows 命令行已能编（时区待补）；Android / macOS / iOS 未开始 |
 
 **一句话**：别人只会说"文件损坏"，我们会告诉你**发生了什么、为什么、还能救多少**。
 
@@ -111,11 +111,11 @@ yshjy --report --no-paths 包.mp4    # 路径脱敏（要贴到公开的地方�
 
 | 类别 | 已支持 | 规划中 |
 |---|---|---|
-| **解压** | ZIP（ZIP64）、7z、RAR（1.3→7）、**TAR、GZIP、XZ、ZSTD、BZIP2** | — |
+| **解压** | ZIP（ZIP64）、7z、RAR（1.3→7）、**TAR、GZIP、XZ、ZSTD、BZIP2、BROTLI、LZ4** | — |
 | **加密** | ZipCrypto、AES-256、**7z AES-256**（均含中文密码） | — |
-| **伪装外壳** | MP4（free 原子 / 尾部追加） | MKV、PNG、JPG、PDF |
+| **伪装外壳** | **任意类型**：MP4 走 free 原子，其它自动改尾部追加（实测用来伪装图片/PDF 也行） | — |
 | **识别（能认但还不能解）** | ZIP / 7z / RAR4 / RAR5 / TAR / GZIP / XZ / ZSTD / BZIP2 | — |
-| **分卷** | **7z 分卷（自动发现）**、**RAR 分卷** | ZIP 分卷（`.z01`） |
+| **分卷** | **7z 分卷**、**RAR 分卷**、**ZIP 分卷（`.z01`/`.z02`… + `.zip` 收尾）** | — |
 | **救援** | ZIP 的 offset 修复 + local header 重建 + ZIP64 extra | 其它格式 |
 
 > 只使用**开源**技术实现：RAR 仅支持解压（不生成），符合 RAR 官方许可限制。
@@ -130,7 +130,7 @@ yshjy --report --no-paths 包.mp4    # 路径脱敏（要贴到公开的地方�
 git clone <仓库地址>
 cd yshjy
 cargo build --release
-# 产物：target/release/yshjy（单文件，约 1.3 MB）
+# 产物：target/release/yshjy（单文件，约 9.0 MB，零外部依赖）
 
 # 装到用户目录
 install -Dm755 target/release/yshjy ~/.local/bin/yshjy
@@ -139,9 +139,9 @@ install -Dm755 target/release/yshjy ~/.local/bin/yshjy
 跑测试：
 
 ```bash
-cargo test                 # 单元测试（98 个）
+cargo test                 # 单元测试（388 个）
 cargo clippy --all-targets -- -D warnings   # 静态检查（零警告）
-bash tests/smoke.sh        # 冒烟测试（25 个场景）
+bash tests/all.sh          # 全部回归（41 项探针，约 3 分钟）
 ```
 
 ---
@@ -157,11 +157,15 @@ bash tests/smoke.sh        # 冒烟测试（25 个场景）
 - [x] **修补层：偏移修复 + 救援模式（v0.1.0）**
 - [x] **命令行（v0.1.0 测试版）**
 - [x] **v0.2 — 7z 解压 + RAR 解压 + 分卷自动拼接**
-- [x] **v0.4 — 格式补全（TAR / GZIP / XZ / ZSTD / BZIP2）**
-- [ ] v0.5 — 批量处理、预览挑选、图形界面
-- [ ] v0.3 — 桌面图形界面
-- [ ] v0.4 — Windows
-- [ ] v0.5 — 手机（Android）
+- [x] **v0.4 — 格式补全（TAR / GZIP / XZ / ZSTD / BZIP2 / BROTLI / LZ4）**
+- [x] **v0.9 — 批量处理、预览树挑选（`--pick` / `--select`）、桌面图形界面**
+- [x] **v0.9 — 自解压 sfx、断点续传、救援、干扰数据 / 假签名、移动端 seek 探测**
+- [ ] Windows 命令行版 —— 引擎已交叉编出 `yshjy.exe` 并 wine 验过，差补时区 + 出包 + 文档
+- [ ] Windows 图形界面版 —— 需在 Windows 上编
+- [ ] 手机（Android）—— SDK/NDK 未装，未开始
+- [ ] macOS / iOS —— 靠 GitHub 免费 CI，未开始
+
+> 完成度的**唯一真源**在 `docs/TODO.md` 顶部的「📊 完成度总览」，这里只留路线图。
 
 ---
 
@@ -194,7 +198,7 @@ A：我们内置防护：防路径穿越（`../../etc/passwd` 这类）、防解
 解出可执行文件会提醒你。但**提醒**：这类"改后缀解压"的资源是恶意软件重灾区，运行前建议扫毒。
 
 **Q：能解出打开就播放的完整视频吗？**
-A：能。伪装包里的封面视频通常是完整的，我们可以单独剥出来（规划中）。
+A：能。用 `yshjy --extract-cover 包.mp4`，或界面预览页只勾「封面」—— 封面视频本来就是完整的 MP4，原样剥出。
 
 **Q：它会改我的源文件吗？**
 A：**绝不**。所有修复都在内存里做，磁盘上的源文件一个字节都不动。
