@@ -2,6 +2,55 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-29（`--pick` 被 Ctrl-C 打断后光标不恢复）
+
+修 `docs/TODO.md` 表尾那条待查项（用户 2026-10-29 点头才动）。
+
+**用户感觉到的变化**：`--pick` 全屏勾选时按 <kbd>Ctrl</kbd>+<kbd>C</kbd> ——
+光标不再留在隐藏状态（以前得敲 `reset` 或重开终端），退出码 `130`，屏幕干净；
+也不会再冒出一句「❌ 交互勾选出错：IO error: read interrupted」。
+
+### 一、根因是两层（原记录只写了第一层）
+
+1. `dialoguer` 的终端后端是 `console`（不是 crossterm），**它把 Ctrl-C 变成 SIGINT** ——
+   上游 `inquire/src/error.rs:27-33` 有原话背书：「If using `console`, pressing Ctrl+C will
+   trigger SIGINT.」于是 `dialoguer` 的复原代码（写 `\x1b[?25h` 显光标）根本没有执行机会。
+2. **动手才发现**：一旦我们接管了 SIGINT（信号不再杀进程），`dialoguer` 的阻塞读会被
+   `EINTR` 打断，`interact_opt()` 返回 `IO error: read interrupted`。不拦的话屏幕上会打一条
+   「交互勾选出错」—— 修一条坏一处。所以**主线程那条 `Err` 路也得收**。
+
+### 二、落地（没加新依赖，没走「自己写按键循环」那条备选）
+
+- `src/main.rs` 新增 `装中断接管()`：Ctrl-C **全进程只装一次**、按阶段分派 ——
+  `--pick` 在屏 → 复原屏幕 + 退 130；解压中 → 转成引擎「取消」（老行为不变）；
+  其余阶段 → 退 130（等价于被 SIGINT 杀掉，shell 看到的都是 130）。
+  **顺带收掉一个隐患**：`ctrlc` 的 `set_handler` 全进程只允许成功一次（第二次
+  `MultipleHandlers`），原来那句写了 `let _ =` —— 如果 `--pick` 先装过，解压那边的
+  取消接管会**静默失效**，退出时留半成品。
+- `src/pick.rs`：`在屏中` 标志 + `屏幕守卫`（RAII，提前 return / 出错都会复位）、
+  `中断复原()`（只在界面里时写 `\x1b[?25h`，重复写幂等）、`是中断()`（**标志 或 错误文本**
+  双保险 —— ctrlc 的等待线程与主线程谁先醒没有保证）。
+- 退出码 `130` 统一成 `main::中断退出码` 常量，不再散落字面量。
+- **termios 一行没碰**：实测 `console` 的 raw mode 是 RAII 的，被信号打断时自己复原
+  （pty 里前后对比 `lflag` / ICANON / ECHO / ISIG 完全一致）。原方案留的「unsafe 存 termios
+  快照」因此不需要 —— 少一层 unsafe。
+
+### 三、实测与验收
+
+- `tests/pick.sh` 新增第 ⑤ 组（5 项）：发 `\x03` → 退 130 / 输出流里有 `\x1b[?25h` /
+  不出现「交互勾选出错」/ termios 与进屏前一致 / 一个文件都没解。
+  该脚本 **11 通过 0 失败**。
+- **反向验证**：把 `装中断接管()` 注释掉重编 → 当场红 2 条（`-2`、无 `\x1b[?25h`），
+  证明这两条断言真的能抓到原来的 bug。
+- **解压中的 Ctrl-C 没变味**（额外实测，2 万碎文件 40 MB 包，解到一半发 SIGINT）：
+  退 130、打印「⏹ 收到 Ctrl-C —— 正在收尾（已解出的文件会保留…）」、
+  保留已解 **6890** 个文件、残留 `.yshjy-part` **0** 个。
+- 回归：`cargo test` **357 + 29 + 2 全绿**；`cargo clippy --all-targets -- -D warnings` 干净；
+  `bash tests/all.sh` **41 通过 / 0 失败 / 5 跳过 / 203 秒**
+  （日志 `~/.hermes/cache/scratch/all_pick_fix.log`）。
+- 文档同步：`docs/CLI-SPEC.md` §4.5 从「Ctrl-C 只是硬中断，光标留在隐藏状态，敲 reset」
+  改成「干净退 130」。
+
 ## [0.9.30] · 2026-10-29（第三期 B+C：干扰数据/假签名 · 移动端 seek 三档）
 
 > 依据 `docs/THIRD-PHASE-PLAN.md` §B / §C。这一轮把第三期剩下的两条清完，**方案里有两处

@@ -148,6 +148,52 @@ fn 文案() -> &'static yshjy::i18n::I18n {
     I18N.get().expect("文案仓库应当在 main 开头初始化")
 }
 
+// ─────────────────────── Ctrl-C 接管（全进程只装一次）───────────────────────
+
+/// Ctrl-C 的退出码 —— SIGINT 惯例（128 + 2；shell 里被 Ctrl-C 杀掉看到的也是这个数）
+const 中断退出码: i32 = 130;
+
+/// 解压阶段的取消令牌（`run_batch` 之前挂上来，见 `装中断接管`）
+static 取消令牌: std::sync::OnceLock<yshjy::progress::CancelToken> = std::sync::OnceLock::new();
+
+/// 装 Ctrl-C 接管 —— **全进程只调一次**，且必须早于 `--pick`。
+///
+/// 为什么非要"只装一次"：`ctrlc` 的 `set_handler` 全进程只允许成功一次，第二次返回
+/// `MultipleHandlers`。以前这段装在解压流程里（`let _ =` 把错误吞了），而 `--pick`
+/// 也要接管 Ctrl-C —— 两边抢同一个名额：谁先装谁生效，后装的那次**静默失效**。
+/// 2026-10-29 改成一处安装、按阶段分派，把那个隐患一起收掉。
+///
+/// 三个阶段（`ctrlc` 的 handler 跑在自己的专用线程上，不是信号上下文，可以放心用 Rust）：
+/// 1. `--pick` 全屏里：`console` 后端把 Ctrl-C 变成 SIGINT，`dialoguer` 的复原代码
+///    （写 `\x1b[?25h` 显示光标）**根本没有执行机会** → 终端光标一直不回来，得 `reset`。
+///    见 `docs/TODO.md` 那条；这里补上复原再按惯例退 130。
+/// 2. 解压阶段：转成引擎的「取消」—— 已解出的文件保留、写了一半的删掉，比硬杀干净。
+/// 3. 其余阶段（`--list` / 预览 / 参数还没走完）：直接退 130，与系统默认行为等价
+///    （被 SIGINT 杀掉时 shell 看到的就是 130）。
+fn 装中断接管() {
+    let 结果 = ctrlc::set_handler(|| {
+        if pick::中断复原() {
+            std::process::exit(中断退出码);
+        }
+        match 取消令牌.get() {
+            Some(c) if c.is_cancelled() => {
+                // 第二次 Ctrl-C：用户等不及了，直接退
+                eprintln!("\n{}", 文案().t("cli.interrupted_again", &[]));
+                std::process::exit(中断退出码);
+            }
+            Some(c) => {
+                c.cancel_with("user pressed ctrl-c");
+                eprintln!("\n{}", 文案().t("cli.interrupted", &[]));
+            }
+            None => std::process::exit(中断退出码),
+        }
+    });
+    if let Err(e) = 结果 {
+        // 装不上只会退化成系统默认行为（Ctrl-C 直接杀进程），不该阻塞任何功能
+        详细(format!("Ctrl-C 接管没装上（{e}），中断走系统默认行为"));
+    }
+}
+
 // ───────────────────────── 终端日志与颜色（组 E）─────────────────────────
 
 /// 日志器：`-v` 详细 / `-vv` 调试；`--log <文件>` 同时写文件
@@ -352,6 +398,9 @@ fn main() -> ExitCode {
             )
         );
     }
+
+    // Ctrl-C 接管：全进程**只在这里装一次**（`--pick` 与解压两条路共用同一份分派逻辑）
+    装中断接管();
 
     if argv.len() < 2 {
         eprint!("{}", 文案().t("help.text", &[]));
@@ -1222,21 +1271,11 @@ fn do_extract(a: 解压参数) -> ExitCode {
     let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));
     let cancel = CancelToken::new();
 
-    // Ctrl-C 接管：把信号转成引擎的「取消」——
-    // 好处是取消走的是同一条路（已解出的文件保留、写了一半的删掉、退出码 130），
+    // Ctrl-C 的接管**已经在 `装中断接管()` 里装好**（全进程唯一一次）——
+    // 这里只把令牌挂上去，handler 就会在解压阶段把它转成引擎的「取消」：
+    // 取消走的是同一条路（已解出的文件保留、写了一半的删掉、退出码 130），
     // 而不是被信号直接打死留一堆半成品。
-    {
-        let c = cancel.clone();
-        let _ = ctrlc::set_handler(move || {
-            if c.is_cancelled() {
-                // 第二次 Ctrl-C：用户等不及了，直接退
-                eprintln!("\n{}", 文案().t("cli.interrupted_again", &[]));
-                std::process::exit(130);
-            }
-            c.cancel_with("user pressed ctrl-c");
-            eprintln!("\n{}", 文案().t("cli.interrupted", &[]));
-        });
-    }
+    取消令牌.set(cancel.clone()).ok();
 
     let report = batch::run_batch(jobs, &opts, &sink, &cancel, |job, opts, sink, cancel| {
         // **一个坏包不该带走整批**：解压库碰到畸形数据时有可能 panic（自家 fuzz

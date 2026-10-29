@@ -6,6 +6,8 @@
 #   ② 管道 / 非交互终端里跑不进全屏，给出降级提示
 #   ③ 中文文件名不错行
 #   ④ 退出后终端复原（stty -a 与进入前一致）
+#   ⑤ Ctrl-C 打断后光标必须显示回来（`\x1b[?25h`）、退 130、不报成「勾选出错」
+#      —— 2026-10-29 补；以前光标会一直不显示，得 `reset` 才回来
 #
 # 为什么用 python 开 pty：dialoguer 要真终端才肯画界面 ——
 # 普通子进程的 stdin 不是 TTY，测不到真实按键路径。
@@ -28,7 +30,7 @@ if [ -n "$(find src -name '*.rs' -newer "$BIN" -print -quit)" ]; then
 fi
 
 python3 - "$BIN" <<'PY'
-import os, pty, select, shutil, subprocess, sys, time, zipfile
+import os, pty, select, shutil, subprocess, sys, termios, time, zipfile
 from pathlib import Path
 
 BIN = sys.argv[1]
@@ -127,6 +129,63 @@ if code2 == 0 and not (out_cancel.exists() and any(out_cancel.rglob("*"))):
     ok("Esc 取消：退出码 0、一个文件都没解")
 else:
     bad(f"取消行为不对：退出码 {code2}，产物 {listing(out_cancel) if out_cancel.exists() else '无目录'}")
+
+# ── ④ Ctrl-C 打断：光标必须复原、退 130、不能报成「勾选出错」（验收⑤，2026-10-29）──
+def 按下中断(out_dir):
+    """发一个 \\x03，返回 (退出码, 屏幕, termios 是否与进屏前一致)"""
+    master, slave = pty.openpty()
+    进屏前 = termios.tcgetattr(master)
+    p = subprocess.Popen([BIN, "--pick", str(zip_path), "-o", str(out_dir)],
+                         stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+    os.close(slave)
+    time.sleep(0.9)
+    buf = b""
+    def 读(截止):
+        nonlocal buf
+        while time.time() < 截止:
+            r, _, _ = select.select([master], [], [], 0.05)
+            if not r:
+                continue
+            try:
+                d = os.read(master, 65536)
+            except OSError:
+                return          # 从端全关 → EIO，缓冲已读完
+            if not d:
+                return
+            buf += d
+    读(time.time() + 0.4)
+    os.write(master, b"\x03")
+    读(time.time() + 1.0)
+    try:
+        p.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        p.kill(); p.wait()
+    离开前 = termios.tcgetattr(master)
+    os.close(master)
+    return p.returncode, buf.decode("utf-8", "replace"), 进屏前 == 离开前
+
+out_intr = work / "out_intr"
+c3, s3, 终端复原 = 按下中断(out_intr)
+if c3 == 130:
+    ok("Ctrl-C 后按 SIGINT 惯例退出（退出码 130）")
+else:
+    bad(f"Ctrl-C 退出码不对：{c3}")
+if chr(27) + "[?25h" in s3:          # chr(27) = ESC，不用转义免得歧义
+    ok("Ctrl-C 后光标显示回来（\\x1b[?25h）—— 不用 reset")
+else:
+    bad("Ctrl-C 后没有 \\x1b[?25h，光标会一直不显示")
+if "交互勾选出错" in s3:
+    bad("Ctrl-C 被当成「交互勾选出错」报出来了（应该安静退 130）")
+else:
+    ok("Ctrl-C 没被当成出错报给用户")
+if 终端复原:
+    ok("Ctrl-C 后 termios 与进屏前一致（stty 不用手动修）")
+else:
+    bad("Ctrl-C 后 termios 变了")
+if not (out_intr.exists() and any(out_intr.rglob("*"))):
+    ok("Ctrl-C 后一个文件都没解")
+else:
+    bad(f"Ctrl-C 后居然解出了 {listing(out_intr)}")
 
 print(f"\n  通过 {n_pass} · 失败 {n_fail}")
 sys.exit(1 if n_fail else 0)

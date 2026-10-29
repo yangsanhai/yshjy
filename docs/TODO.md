@@ -7,13 +7,18 @@
 > 原则是「真人会撞上的概率优先」，不看实现难度。
 > 每次开工只做最上面那一行的「下一项」，出现的新问题不插队，加到表尾。
 
-最后更新：2026-10-29（第三期 B「干扰数据/假签名」+ C「移动端 seek 三档」完成 → 回归全绿 → **0.9.30 已出包**）
+最后更新：2026-10-29（`--pick` 被 Ctrl-C 打断后的光标复原**已修**，回归全绿；
+**代码改完了但还没出包** —— 装机跑的还是 0.9.30）
 
-**当前状态**：**0.9.30 已出包并已装机**（2026-10-29 22:17 用户执行 `sudo apt install` 覆盖安装）。
-`dpkg -l yshjy` = **0.9.30**、`/usr/bin/yshjy --version` = 0.9.30、桌面菜单认领 **14 种格式**、
-三种补全（bash/zsh/fish）都装到系统目录、无用户级 desktop 覆盖（`~/.local/bin/yshjy` 是指向 `/usr/bin/yshjy` 的软链）。
-`dist/yshjy_0.9.30_amd64.deb` 9.9M + 两档 `tar.gz`（同一轮构建，`test-packages.sh` **37 项全绿**）。
-旧包（0.9.21–0.9.29 + 4 个 `*.before-tree`，共 55 项）已按用户要求清掉，`dist/` 只留 0.9.30 全套 7 项。
+**当前状态**：装机上是 **0.9.30**（2026-10-29 22:17 用户 `sudo apt install` 装的）。
+
+**工作区里有一处未出包的改动**：`--pick` 的 Ctrl-C 光标复原（`src/main.rs` + `src/pick.rs`，
+证据见 `CHANGELOG.md`「未发布 · 2026-10-29」一节）。要装到机器上得重新出包 → `sudo apt install`。
+
+**0.9.30 装机现场（历史，别重复验）**：`dpkg -l yshjy` = 0.9.30、`--version` = 0.9.30、
+桌面菜单认领 **14 种格式**、三种补全（bash/zsh/fish）都装到系统目录、
+`~/.local/bin/yshjy` 是指向 `/usr/bin/yshjy` 的软链（不是覆盖）。
+`dist/` 只留 0.9.30 全套 7 项（旧包 0.9.21–0.9.29 + 4 个 `*.before-tree` 共 55 项已按用户要求清掉）。
 
 **装机后真机实测（1200 条目 · 带干扰数据）**：`ys 包 -o 验证.mp4 --decoy 4 --decoy-signatures`
 → 1200 条目、布局 free 原子、🎭 4 段共 64 KB、自检通过；`--list` 与第三方 `7z l` 都列出 **1200 files**；
@@ -26,11 +31,14 @@
 > 注：`strings libapp.so` 查中文新字符串恒为 0（Dart AOT 读不出中文字符串，连「选择文件」都是 0），
 > 别用这个方法验包新旧，直接开界面看。
 
-**当前该做的（2026-10-29 第三期收尾后）**：
-1. ✅ 装机与真机实测已完成（见上「装机后真机实测」）。
-2. 只剩两件：`--pick` 被 Ctrl-C 后光标不恢复（用户 2026-10-28 口径「这轮不做」，等点头）、
-   「多平台适配」整块（用户口径**最后做**，探测结论见下面那张表，别重复调研）。
-3. 安卓批要补验的 seek 清单见下面「⏸ 最后做：多平台适配」那一节的子清单（第三期 C 的落地部分）。
+**当前该做的（2026-10-29 Ctrl-C 光标修完之后）**：
+1. ✅ 装机与真机实测（0.9.30）已完成（见上「装机后真机实测」）。
+2. ✅ `--pick` 被 Ctrl-C 后光标不恢复 —— 2026-10-29 修好，证据在下面表尾那条 + `CHANGELOG.md`。
+3. 只剩两件：
+   - **给这轮改动出包**（版本号 → `build-deb.sh` → `release.sh` → `test-packages.sh` → 装机验；
+     流程见 `docs/RELEASE-CHECK.md`）。**要不要出、出哪个号等用户发话**。
+   - 「**多平台适配**」整块（用户口径**最后做**，探测结论见下面那张表，别重复调研）。
+4. 安卓批要补验的 seek 清单见下面「⏸ 最后做：多平台适配」那一节的子清单（第三期 C 的落地部分）。
 
 ### ⏸ 最后做：多平台适配（整块延后；已探测清楚，到时候别重复调研）
 
@@ -115,33 +123,44 @@
   `org.gnome.Nautilus` 激活次数，修后**增加 0 次**。**以后新写「会真执行 sfx 产物」的探针，
   一律带 `YSHJY_SFX_NO_OPEN=1`（`YSHJY_SFX_SILENT=1` 同理，别问确认）。**
 
-- [ ] **`--pick` 被 Ctrl-C 中断后光标不恢复**（2026-10-28 实测，pty 探针）
-  〔2026-10-29 复核：本轮清表尾四条时**按老口径仍未做**，等你点头再动〕：发 `\x03` 后进程以
-  SIGINT 结束（rc=-2），屏幕上只有 `\x1b[?25l`（隐藏光标）没有对应的 `\x1b[?25h`，
-  真实终端里光标会一直不显示，得 `reset` 才回来。
-  根因：中断走信号路径，`dialoguer` 的复原代码没有执行机会。
-  **用户口径（2026-10-28）：这轮不做，就记在这里等以后。** 已在 `docs/CLI-SPEC.md` §4.5
-  写明「正常退出请用 Esc / q」，所以不算哑坑。
-  **动手时的执行顺序（照这个走，别即兴）**：
-  ① 先引 `signal-hook`（或 `ctrlc`），MIT/Apache，在 `deny.toml` 白名单内 —— **加依赖前先跑
-     `cargo deny check` 四项全绿**，红了就换实现方式；
-  ② handler 只做三件事：`\x1b[?25h` 显光标 → `crossterm::terminal::disable_raw_mode()` →
-     `exit(130)`。**别在 handler 里做别的**（信号上下文不能干重活）；
-  ③ 只在 `--pick` 进屏期间装、退出时摘掉，别让整个程序的 Ctrl-C 行为变味；
-  ④ 验收要能测出来：`tests/pick.sh` 加一项 —— pty 里发 `\x03` 后，输出流里必须出现
-     `\x1b[?25h` 且退出码 130；顺手断言「不影响正常路径」（Esc / 勾选确认仍退出码 0）。
-  备用方案（不行再加）：`rustix` 自己装 handler，不破 `forbid(unsafe_code)`。
-  **2026-10-28 补拆 `inquire` 后确认了根因、并发现第二条解法**（详见
-  `refs/tech/keka-nanazip-inquire-etc.md` §3）：
-  - 根因有了上游背书 —— `inquire/src/error.rs:27-33` 注释原话（SIGINT 那句在 `:32`）：
-    「This error will be returned only when using `crossterm` or `termion` as the terminal back-end.
-    **If using `console`, pressing Ctrl+C will trigger SIGINT.**」而 **dialoguer 用的正是 `console`**。
-    所以不是我们写错了，是后端选型决定的。
-  - **解法 B（新）**：`--pick` 自己用 crossterm 读键（`Cargo.toml` 里已有 `crossterm = "0.29"`），
-    Ctrl+C 就是 `KeyCode::Char('c') + CONTROL`，**不进信号路径**，收尾代码在同一函数里顺序执行；
-    代价是要自己重写分页/过滤/非 TTY 降级（即 `REFERENCE-INDEX.md:136-140` 那条「别自己写 raw mode」的反面）。
-  - **执行建议**：先试 A（改动最小）；若 handler 里 `disable_raw_mode` 出现不可重入问题，
-    再退 B。**别两条一起上。**
+- [x] ✅ **已修（2026-10-29）：`--pick` 被 Ctrl-C 打断后光标不恢复，得 `reset`**
+  原记录（2026-10-28 pty 实测）：发 `\x03` 后进程以 SIGINT 结束（rc=-2），屏幕上只有
+  `\x1b[?25l`（隐藏光标）没有对应的 `\x1b[?25h`，真实终端里光标会一直不显示。
+  〔2026-10-29 用户点头，本轮做掉〕
+
+  **根因是两层**（动手时才暴露第二层，原记录只写了第一层）：
+  ① `console` 后端把 Ctrl-C 变成 SIGINT，`dialoguer` 的复原代码没有执行机会（原记录已写）；
+  ② 一旦接管 SIGINT（信号不再杀进程），`dialoguer` 的阻塞读会被 `EINTR` 打断 →
+     `interact_opt()` 返回 `IO error: read interrupted`，**会被当成「❌ 交互勾选出错」报给用户**。
+  所以「handler 里补一行显光标」不够，**主线程那条 Err 路也得收**。
+
+  **落地（没走方案 B 自己写按键循环；`ctrlc` 已在依赖里，没加新依赖）**：
+  - `src/main.rs` 新增 `装中断接管()`：Ctrl-C **全进程只装一次**、按阶段分派 ——
+    `--pick` 在屏 → 复原屏幕 + 退 130；解压中 → 转成引擎「取消」；其余阶段 → 退 130（等价系统默认）。
+    这也顺手收掉一个隐患：`ctrlc` 全进程只允许装一次（第二次 `MultipleHandlers`），
+    原来的 `let _ =` 会把它吞掉 —— 若 `--pick` 先装过，解压那边的取消接管就**静默失效**。
+  - `src/pick.rs`：`在屏中` 标志 + `屏幕守卫`（RAII，早退/出错也复位）、`中断复原()`
+    （只在界面里写 `\x1b[?25h`，重复写幂等）、`是中断()`（标志 或 错误文本，双保险 ——
+    两个线程谁先醒没保证）；`interact_opt()` 的 `Err` 先判中断，是就复原 + 退 130。
+  - 退出码 130 统一成 `main::中断退出码` 常量。
+  - **termios 不用碰**：实测 `console` 的 raw mode 是 RAII 的，被信号打断时自己复原
+    （pty 前后对比 lflag / ICANON / ECHO / ISIG 完全一致）→ 省掉一层 unsafe 快照。
+
+  **验收**：`tests/pick.sh` 新增第 ⑤ 组 5 项（退 130 / 有 `\x1b[?25h` / 不出现「交互勾选出错」/
+  termios 一致 / 一个文件都没解），单项反向验证过（注释掉 `装中断接管()` 重编 → 当场红 2 条）。
+  回归：`pick.sh` **11 通过 0 失败**、`tests/all.sh` **41 通过 / 0 失败 / 5 跳过 / 203 秒**、
+  `cargo test` **357 + 29 + 2 全绿**、clippy `-D warnings` 干净。
+  额外实测「解压中的 Ctrl-C 没变味」：2 万碎文件包解到一半发 SIGINT → 退 130、打印
+  「⏹ 收到 Ctrl-C —— 正在收尾」、保留已解 6890 个文件、残留 `.yshjy-part` 0 个。
+  文档同步：`docs/CLI-SPEC.md` §4.5 那段「Ctrl-C 得 reset」已改成「干净退 130」。证据见
+  `CHANGELOG.md`「未发布 · 2026-10-29 Ctrl-C 光标复原」一节。
+
+  > 原计划的执行顺序留档（**已完成，别再照它做一遍**）：① 依赖已够（`ctrlc` 在架）；
+  > ② handler 只做复原 + 退 130；③ 只在进屏期间生效；④ `tests/pick.sh` 加断言。
+  > 备用方案 B（自己用 crossterm 读键、不进信号路径）**没用上**，留在
+  > `refs/tech/keka-nanazip-inquire-etc.md` §3 备查：
+  > 根因上游背书是 `inquire/src/error.rs:27-33`——「**If using `console`, pressing Ctrl+C will trigger SIGINT.**」
+  > 而 dialoguer 用的正是 `console`。
 
 ### 待查 / 改进（2026-10-28 补拆参考项目时新发现，按铁律记表尾，不插队）
 
