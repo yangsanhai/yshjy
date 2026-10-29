@@ -615,6 +615,19 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             }
         };
 
+        // 条目在中央目录里声明的大小：拿它给输出**提前**封顶。
+        //
+        // 这就是 libarchive `entry_bytes_declared` 的同一件事（见
+        // `refs/tech/libarchive.md` §4）：格式读取器不一定自己管住"到底吐了多少"，
+        // 上层就拿头部声明值当上限 —— 多写的丢弃、少写的按截断报错。
+        //
+        // 为什么必须在**写之前**封顶，而不是像以前那样写完再比对：声明 1 KB、实际
+        // 吐 10 GB 的坏包/恶意包，先写满磁盘再报错等于把用户的磁盘当人质（budget
+        // 只管总量，管不到"这一条明显在超发"）。封顶后多出来的字节根本不落盘。
+        //
+        // 声明是 0 的情况（老式「数据描述符」流式写入的包）不封顶：那时 `size()`
+        // 本来就不可信，只能靠 budget 的总量限额兜底。
+        let expected = file.size();
         let mut buf = vec![0u8; 64 * 1024];
         let mut written = 0u64;
         let mut read_err = None;
@@ -628,23 +641,41 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             match file.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    if let Err(e) = budget.record(n as u64) {
-                        // 「跳过 / 取消」是控制流，不是坏数据：走取消收尾（保留已解文件）
-                        if e.is_cancelled() {
-                            cancelled_now = true;
-                        } else {
-                            read_err = Some(format!("安全限额中止: {e}"));
+                    // 只接受「声明范围内」的字节数
+                    let 允许 = if expected > 0 {
+                        (expected.saturating_sub(written)).min(n as u64) as usize
+                    } else {
+                        n
+                    };
+                    if 允许 > 0 {
+                        if let Err(e) = budget.record(允许 as u64) {
+                            // 「跳过 / 取消」是控制流，不是坏数据：走取消收尾（保留已解文件）
+                            if e.is_cancelled() {
+                                cancelled_now = true;
+                            } else {
+                                read_err = Some(format!("安全限额中止: {e}"));
+                            }
+                            break;
                         }
+                        if let Err(e) =
+                            std::io::Write::write_all(part.as_file(), &buf[..允许])
+                        {
+                            report.note_io_error(&e);
+                            read_err = Some(format!("写盘失败: {e}"));
+                            break;
+                        }
+                        written += 允许 as u64;
+                        // 进度：节流由 ctx 负责（100ms 合并推送，避免刷爆外壳）
+                        ctx.advance(允许 as u64, Some(&name));
+                    }
+                    if 允许 < n {
+                        // 多写：声明之外的数据一律不要，这一条按数据错误处理
+                        read_err = Some(format!(
+                            "条目声明 {expected} 字节，实际数据更多 —— 已丢弃超出的 {} 字节",
+                            n - 允许
+                        ));
                         break;
                     }
-                    if let Err(e) = std::io::Write::write_all(part.as_file(), &buf[..n]) {
-                        report.note_io_error(&e);
-                        read_err = Some(format!("写盘失败: {e}"));
-                        break;
-                    }
-                    written += n as u64;
-                    // 进度：节流由 ctx 负责（100ms 合并推送，避免刷爆外壳）
-                    ctx.advance(n as u64, Some(&name));
                 }
                 Err(e) => {
                     read_err = Some(format!("读取失败: {e}"));
@@ -662,7 +693,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
 
         // 读满校验（DESIGN §17.6 / AUDIT 3-12）：声明大小 vs 实际读出。
         // 分卷拼错位时库可能「成功」返回但少读几字节 —— 不校验就是假成功。
-        let expected = file.size();
+        // （多写的分支在上面的循环里已经先一步报错了，这里只管少写。）
         if read_err.is_none() && expected > 0 && written != expected {
             read_err = Some(format!(
                 "条目声明 {expected} 字节，实际读出 {written} 字节 —— 分卷可能拼错位或数据被截断"

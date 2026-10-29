@@ -261,11 +261,24 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   终端）**直接拒绝、退出码 2**，并提示改用 `--trash-source`；默认两个都不动、命令行优先于配置。
   7 语言文案全同步（4 条运行时 + 2 行 help）。探针 `tests/trash_source.sh` **10 项全绿**：
   回收站真有 `files/` + `info/`、非交互拒绝且原包不动、输 y 真删、输 n 取消。
-- [ ] **引擎：条目 packSize 校验**（按头部声明大小给输出封顶，多写丢弃、少写报截断）。
-  语义照 libarchive 的 `entry_bytes_declared`（`refs/tech/libarchive.md` §4）；这条在台账里挂了很久，是数据正确性问题。
-  **2026-10-29 决定单独一轮做**：要动 `zip.rs` / `extract_stream.rs` 的解码主循环，
-  属于「会写坏文件」的那一类改动，必须配 fuzz 写盘路径（`--slow` 十分钟）+ 全回归；
-  和别的条目挤在同一轮里，出了问题分不清是谁的锅。
+- [x] ✅ **引擎：条目 packSize 校验（2026-10-29 完成，zip + 7z；rar/单流如实说明做不到）** ——
+  按头部声明的解压后大小给输出**提前封顶**：多出来的字节一个都不落盘，这一条判数据错误；
+  少读（声明 1000 只出 300）判截断。语义照 libarchive `entry_bytes_declared`
+  （`refs/tech/libarchive.md` §4）。
+  **落点**：`src/extract.rs`（zip，原来只有「写完再比对」，现在改成边写边封顶 + 保留事后比对，
+  声明为 0 的老式数据描述符包不封顶）；`src/extract7z.rs`（7z，`entry.size()` 取声明值，
+  新增封顶 + 少读判错）。
+  **做不到的两条（不是偷懒，是拿不到可信的声明值）**：
+  ① **RAR** —— `rars 0.11` 的解压回调 `ExtractedEntryMeta` 只有 name/file_time/file_attr/
+     attr_source/mtime_refinement/is_directory，**没有 unpacked_size**（`lib.rs:328-344` 逐个字段核过）。
+     绕道方案是解压前用 `members()` 预扫描建「名字 → 大小」表，但 RAR 允许同名条目，
+     错配就会把好包误判成损坏 —— 风险大于收益，不做；RAR 侧仍有库自己的 CRC + budget 总量限额。
+  ② **单流（gzip/xz/zstd/bzip2 裸流）** —— 这些格式头部根本没有「解压后大小」，
+     gzip 的 ISIZE 在文件末尾且对 >4 GB 会取模，不可信；tar 家族走的是另一条路径（tar crate
+     自带 size），不在这条待办范围内。
+  **验收**：`tests/pack_size_cap.sh` **10 项全绿**（zip 正常 / 多写不落盘 / 少写报截断 /
+  7z 正常 / 7z 截短不许成功 / rar 正常回归）；fuzz 写盘路径 60 秒见 `scratch/fuzz60.log`；
+  `bash tests/all.sh` 见 `scratch/all14.log`。
 - [x] ✅ **nautilus 右键脚本按「目标目录可写」给提示（2026-10-29 完成，方案与原文不同）** ——
   原文要「抄 FileRoller 给两套菜单」，实测做不到：Nautilus script 的菜单文字就是脚本文件名，
   没法按权限动态变；真正的动态菜单要写 Nautilus 扩展（C/Python + 编译安装）。

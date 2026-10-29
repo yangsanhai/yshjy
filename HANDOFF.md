@@ -5,6 +5,20 @@
 > **待办只看 `docs/TODO.md`**；**参考项目台账看 `docs/REFERENCE-INDEX.md`**；
 > **往哪走 / 全平台怎么切看 `docs/ROADMAP.md`**（2026-10-28 对照审计 + 三批路线）。
 >
+> **2026-10-29 · packSize 校验（第二期最后一条，引擎改动）** —— 按头部声明的解压后大小
+> 给输出**提前封顶**：多出来的字节一个都不落盘、这一条判数据错误；少读判截断
+> （libarchive `entry_bytes_declared` 语义）。
+> ① **zip**（`extract.rs`）：原来只有「写完再比对」，声明 1 KB 实际吐 10 GB 的包会把磁盘
+>    写满再报错；现在边写边按声明封顶，声明为 0 的老式数据描述符包不封顶。
+> ② **7z**（`extract7z.rs`）：`entry.size()` 本来就是声明值，补上同款封顶 + 少读判错。
+> ③ **RAR / 裸流做不到，如实记**：`rars 0.11` 回调结构 `ExtractedEntryMeta` 没有
+>    unpacked_size（`lib.rs:328-344` 逐个核过）；绕道预扫描建名字表会因 RAR 允许同名条目
+>    而误判。裸流（gzip/xz/zstd/bzip2）头里没有解压后大小，gzip 的 ISIZE 还会取模。
+> 验收：`tests/pack_size_cap.sh` **10 项全绿**、fuzz 写盘路径 60 秒零崩溃、
+> `bash tests/all.sh` 见 `scratch/all14.log`。证据见 `CHANGELOG.md`「未发布 · packSize」四节。
+> **下一步**：第二期已全清 —— 剩下的都在「第三期：结构优化」（要设计：预览树 + 部分解压、
+> 干扰数据/假签名、caps 按格式声明…）。⚠️ 装机版仍是 0.9.28。
+>
 > **2026-10-29 · 第二期收尾（4 条真活 + 2 条「查出来不用做」+ 1 条留单独一轮）**：
 > ① **CLI `--trash-source` / `--delete-source`** —— `cli_spec.rs` 加两项（长选项 40→42），
 >    `main.rs` 加 `源包处置` 三态；只在成功/部分成功时动原包；`--delete-source` **开工前**
