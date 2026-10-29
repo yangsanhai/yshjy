@@ -51,6 +51,7 @@ text = """
                                   要不要多套一層同名資料夾，加這個就永遠建同名資料夾
   -q, --quiet                     只輸出結果（腳本用）
   --force 跳過解壓前的磁碟空間預檢（空間不夠時會直接拒絕開始）
+  --test  只測不寫：完整解碼 + 校驗，一個位元組都不落盤（查包完不完整用）
   --lang <語言>                   切換介面語言（如 en、ja、ko、ru、es）
   --show-config 看目前設定（設定檔在哪、各項現在是什麼值）
   --tail                          打包用「附加到檔尾」佈局（預設藏進 free 原子；封面是圖片/文字時自動用它）
@@ -146,6 +147,8 @@ video_unplayable = "封面影片本身有問題"
 internal = "內部錯誤"
 
 [cli]
+test_mode = "🔍 只測不寫：完整解碼 + 校驗，一個位元組都不落盤"
+test_source_conflict = "❌ --test 不能和 --trash-source / --delete-source 一起用 —— 只測不寫時沒有產物可以對照，刪原包等於丟掉唯一的材料"
 delete_source_needs_tty = "❌ --delete-source 會永久刪除原包，只能在互動終端裡用。腳本裡請改用 --trash-source（進資源回收筒，可還原）"
 delete_source_warn = "⚠️  即將永久刪除 {count} 個原包（不進資源回收筒，刪了找不回來）。\n   建議確認解出來的內容完整再繼續。"
 delete_source_aborted = "（已取消，原包一個都沒動）"
@@ -199,6 +202,7 @@ rescue_extract_failed = "   ❌ 抽取失敗：{err}"
 rescue_failed = "❌ 救援失敗：{err}"
 
 [result.phrase]
+verified = "校驗通過（沒落盤）"
 ok = "解開"
 partial = "解開 {done}/{total} 個"
 cancelled = "已取消（解出 {done}/{total}）"

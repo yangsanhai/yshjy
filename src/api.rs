@@ -241,6 +241,11 @@ pub fn 解压(
         dest: job.dest.clone(),
         smart_dir: true,
         force: 参数.get("force").and_then(|v| v.as_bool()).unwrap_or(false),
+        // 只测不写：界面/脚本可以只要「这个包完好么」而不要产物
+        verify_only: 参数
+            .get("verify_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         limits: crate::safety::Limits {
             ask: ask.cloned(),
             ..Default::default()
@@ -688,6 +693,11 @@ pub fn 批量(
         dest,
         smart_dir,
         force: false,
+        // 批量也支持只测不写（协议 batch 命令）
+        verify_only: 参数
+            .get("verify_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         limits: crate::safety::Limits {
             max_ratio: cfg.safety.zip_bomb_ratio,
             warn_executables: cfg.safety.warn_executables,

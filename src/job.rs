@@ -735,7 +735,8 @@ pub fn run_job(
 ) -> JobOutcome {
     let ctx = UnpackCtx::new(job.id, sink.clone())
         .with_cancel(cancel.clone())
-        .with_encoding(opts.encoding.clone());
+        .with_encoding(opts.encoding.clone())
+        .with_verify_only(opts.verify_only);
     let started = Instant::now();
 
     // ① 识别 + 预览
@@ -764,7 +765,8 @@ pub fn run_job(
 
     // ①' 空间预检（体感最直接的护栏：14 GB 的包解到一半磁盘满，前面时间全白费）
     //      只有预估得出总大小时才拦人 —— 拿不准就放行，见 safety::check_space 的说明
-    if !opts.force {
+    // 只测不写时不做空间预检：不解字节到磁盘，磁盘够不够与这次运行无关
+    if !opts.force && !opts.verify_only {
         let need = prepared
             .as_ref()
             .ok()
@@ -793,7 +795,13 @@ pub fn run_job(
     //
     // 放在空间预检**之后**：预检就把人拦下来的话，没必要在配置目录里留一份空记录。
     // 记录本身是「增强」——打不开就静默从头解，绝不让解压因为这个失败。
-    let resume = crate::resume::ResumeLog::open(&job.input, &dest);
+    // 只测不写：既不沿用「上次解过就跳过」（那会让 --test 什么都没测到），
+    // 也不往用户配置目录里写记录
+    let resume = if opts.verify_only {
+        None
+    } else {
+        crate::resume::ResumeLog::open(&job.input, &dest)
+    };
     let ctx = match &resume {
         Some(log) => {
             if log.有记录() {

@@ -457,7 +457,8 @@ where
                 crate::extract::Overwrite::Rename => out_path = unique_path(&out_path),
             }
         }
-        if let Some(parent) = out_path.parent()
+        if !ctx.verify_only
+            && let Some(parent) = out_path.parent()
             && let Err(e) = fs::create_dir_all(parent)
         {
             rep2.borrow_mut()
@@ -469,7 +470,7 @@ where
             ctx.diagnostic(crate::event::DiagnosticCode::RiskyEntry, name.clone());
         }
 
-        let f = match crate::io::PartFile::create(&out_path) {
+        let f = match crate::io::PartFile::create_with(&out_path, ctx_owned.verify_only) {
             Ok(f) => f,
             Err(e) => {
                 rep2.borrow_mut().note_io_error(&e);

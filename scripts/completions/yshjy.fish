@@ -22,6 +22,7 @@ for bin in yshjy yshys
     complete -c $bin -l pick -d '全屏勾选要解哪些（↑↓ 选 · 空格勾 · a 全选 · Enter 确认）'
     complete -c $bin -s j -l jobs -x -a '1 2 4 8' -d '同时跑几个'
     complete -c $bin -s f -l force -d '跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）'
+    complete -c $bin -l test -d '只测不写：完整解码 + 校验，一个字节都不落盘（查包完不完整用）'
     complete -c $bin -l no-smart-dir -d '关掉「智能解压」：默认会看包里有没有单一顶层目录来决定'
     complete -c $bin -l keep -d '打包时保留中间 ZIP（排错用）'
     complete -c $bin -l trash-source -d '解完把原包移进回收站（能还原）'

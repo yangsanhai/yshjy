@@ -89,6 +89,7 @@ pub fn drill_once(
             dest: Some(输出),
             smart_dir: true,
             force: false,
+            verify_only: false,
             limits: crate::safety::Limits::default(),
         };
         let out = crate::job::run_job(&job, &opts, sink, 取消);
@@ -162,6 +163,7 @@ mod tests {
             dest: Some(解压区.clone()),
             smart_dir: false,
             force: false,
+            verify_only: false,
             limits: crate::safety::Limits::default(),
         };
         let mut job = Job::new(1, outer.clone(), std::fs::metadata(&outer).unwrap().len());

@@ -109,7 +109,8 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   `org.gnome.Nautilus` 激活次数，修后**增加 0 次**。**以后新写「会真执行 sfx 产物」的探针，
   一律带 `YSHJY_SFX_NO_OPEN=1`（`YSHJY_SFX_SILENT=1` 同理，别问确认）。**
 
-- [ ] **`--pick` 被 Ctrl-C 中断后光标不恢复**（2026-10-28 实测，pty 探针）：发 `\x03` 后进程以
+- [ ] **`--pick` 被 Ctrl-C 中断后光标不恢复**（2026-10-28 实测，pty 探针）
+  〔2026-10-29 复核：本轮清表尾四条时**按老口径仍未做**，等你点头再动〕：发 `\x03` 后进程以
   SIGINT 结束（rc=-2），屏幕上只有 `\x1b[?25l`（隐藏光标）没有对应的 `\x1b[?25h`，
   真实终端里光标会一直不显示，得 `reset` 才回来。
   根因：中断走信号路径，`dialoguer` 的复原代码没有执行机会。
@@ -138,14 +139,16 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 
 ### 待查 / 改进（2026-10-28 补拆参考项目时新发现，按铁律记表尾，不插队）
 
-- [ ] 🔴 **bash 补全的真 bug：没装 bash-completion 包时，带空格的文件名被劈成两个候选**。
+- [x] ✅ **已完成（2026-10-29）**：`gen-cli-assets.py` 三处 fallback 改成 `mapfile -t COMPREPLY < <(…)`，新探针 `tests/completions.sh` 11 项（旧脚本跑会红在劈词/目录/注册三条）；顺带实测否决 `IFS=$'\n' COMPREPLY=(…)` 前缀写法（会泄漏全局 IFS）。原记录：
+  🔴 **bash 补全的真 bug：没装 bash-completion 包时，带空格的文件名被劈成两个候选**。
   `scripts/completions/yshjy.bash` 的 fallback 是 `COMPREPLY=($(compgen -f -- "$cur"))`，
   命令替换按默认 IFS 再分词 → `有 空格.zip` 变成 `有` + `空格.zip`。实测：无 bash-completion 时
   COMPREPLY 2 个元素（错），装了是 1 个（对），clap 的 `IFS=$'\n'` 写法也是 1 个（对）。
   修法见 `refs/tech/clap-complete-mangen.md` §6.1（生成器 `gen-cli-assets.py:295`、`:312` 两处）。
   验收：新增 `tests/completions.sh`，断言带空格文件名只出一条候选。
 
-- [ ] 🟡 **新增探针 `tests/ffi-header-sync.sh`**：`ffi/include/yshjy.h` 是手写的第二份真源
+- [x] ✅ **已完成（2026-10-29）**：探针 4 项（函数集合双向 diff / ABI 版本 / `yshjy_` 前缀 / ffi 版本号），反向验证过。**顺带抓到真漂移**：`ffi/Cargo.toml` 停在 0.9.20 → 已改 0.9.29，并做成断言（发版漏改会红）。原记录：
+  🟡 **新增探针 `tests/ffi-header-sync.sh`**：`ffi/include/yshjy.h` 是手写的第二份真源
   （头文件 43 行 vs `ffi/src/lib.rs` 9 个 `extern "C"`），改了实现忘改头文件就会漂移 ——
   和 man 页版本号、补全 18/35 项是**同一种病**（已经栽过两次）。做法照 `tests/cli_spec_match.sh`：
   两边抓函数名清单 `diff`，不一致就红。参考 `refs/tech/hiddify-core-c-abi.md` §7.1-B。
@@ -159,10 +162,12 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
   并把这条写进 `tests/all.sh` 的收尾。**别只记「记得手动清」** —— 那就是这次攒到 7 G 的原因。
   铁律不变：动手前先念清单给用户确认，`rm -rf` 单独一条命令。
 
-- [ ] 🟢 `complete` 那行补 `-o nosort -o bashdefault -o default`（bash ≥4.4 才有 `nosort`），
+- [x] ✅ **已完成（2026-10-29）**：`-o nosort -o bashdefault -o default` 都补了（nosort 判 bash ≥ 4.4），并在「故意不给候选」的分支里 `compopt +o default` 关掉回落。原记录：
+  🟢 `complete` 那行补 `-o nosort -o bashdefault -o default`（bash ≥4.4 才有 `nosort`），
   用户可感知的差别：选项候选不再被 bash 按字母序重排。位置 `gen-cli-assets.py:316`。
 
-- [ ] 🟢 `--test`（测试包完整性）作为独立能力位 —— `Ark` 的插件元数据里 `SupportsTesting: true`
+- [x] ✅ **已完成（2026-10-29）**：做成 CLI `--test` + 协议 `verify_only`（不设 caps 字段：七种格式都能测，加个恒真字段等于假能力位）。只测不写走 IO 层空设备，不建目录/不设属性/跳过空间预检/停用续传，与源包处置互斥；`tests/verify_only.sh` 8 项全绿。原记录：
+  🟢 `--test`（测试包完整性）作为独立能力位 —— `Ark` 的插件元数据里 `SupportsTesting: true`
   是一个独立能力（`refs/tech/ark-fileroller.md` §2）。我们现在只有打包侧的 `--no-checksum`，
   解压侧没有「只测不写」的动作。另记：Ark 的能力是**按 MIME 声明**的，我们的 `caps` 是全局一份。
 

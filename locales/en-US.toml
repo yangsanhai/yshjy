@@ -48,6 +48,7 @@ COMMON OPTIONS:
                                   nesting another same-named folder. This flag always nests.
   -q, --quiet                     print results only (for scripts)
   --force                         skip the pre-extraction free-space check (which otherwise
+  --test                          Verify only: full decode + checksum without writing anything (use it to test an archive)
                                   refuses to start when the disk is too full)
   --lang <lang>                   switch the UI language (e.g. zh-CN, ja, ko, ru, es)
   --show-config                   show current settings (where the config file is, and its values)
@@ -149,6 +150,8 @@ video_unplayable = "The cover video itself is broken"
 internal = "Internal error"
 
 [cli]
+test_mode = "🔍 Verify only: full decode + checksum, not a single byte is written to disk"
+test_source_conflict = "❌ --test cannot be combined with --trash-source / --delete-source — there is no output to compare against, so deleting the source would throw away your only copy"
 delete_source_needs_tty = "❌ --delete-source permanently deletes the source archive and only works in an interactive terminal. In scripts use --trash-source (recoverable)"
 delete_source_warn = "⚠️  About to permanently delete {count} source archive(s) (not moved to Trash, cannot be undone).\n   Make sure the extracted content is complete before continuing."
 delete_source_aborted = "(Cancelled — no source archive was touched)"
@@ -202,6 +205,7 @@ rescue_extract_failed = "   ❌ Extraction failed: {err}"
 rescue_failed = "❌ Rescue failed: {err}"
 
 [result.phrase]
+verified = "verified (nothing written)"
 ok = "extracted"
 partial = "extracted {done}/{total}"
 cancelled = "cancelled ({done}/{total} done)"
