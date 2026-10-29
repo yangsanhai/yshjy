@@ -74,6 +74,10 @@ pub enum ErrorCode {
     NeedPassword,
     /// 密码错误
     WrongPassword,
+    /// **头加密**：连文件清单都加密了（7z `-mhe=on` 这类）——
+    /// 没密码时连「里面有哪几个文件」都读不出来，与「内容加密、清单可读」是两种情况，
+    /// 文案必须分开，否则用户会以为「我给了密码怎么还不行」。
+    HeadEncrypted,
     /// 既不是压缩包，也没藏着压缩包
     NotArchive,
     /// 文件不完整（被截断）
@@ -130,8 +134,8 @@ impl ErrorCode {
         match self {
             PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
             | DestIsFile | Internal => 1,
-            NeedPassword | WrongPassword | NotArchive | Truncated | MissingVolume | DataLost
-            | EncryptedUnbreakable | VideoUnplayable => 2,
+            NeedPassword | WrongPassword | HeadEncrypted | NotArchive | Truncated | MissingVolume
+            | DataLost | EncryptedUnbreakable | VideoUnplayable => 2,
             Cancelled => exit_code::CANCELLED,
         }
     }
@@ -143,7 +147,7 @@ impl ErrorCode {
             PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
             | DestIsFile | Internal => exit_code::ERROR,
             NotArchive => exit_code::NOT_ARCHIVE,
-            NeedPassword | WrongPassword | EncryptedUnbreakable => exit_code::PASSWORD,
+            NeedPassword | WrongPassword | HeadEncrypted | EncryptedUnbreakable => exit_code::PASSWORD,
             Truncated | MissingVolume | DataLost | VideoUnplayable => exit_code::ERROR,
             Cancelled => exit_code::CANCELLED,
         }
@@ -163,6 +167,7 @@ impl ErrorCode {
             DestIsFile => "DEST_IS_FILE",
             NeedPassword => "NEED_PASSWORD",
             WrongPassword => "WRONG_PASSWORD",
+            HeadEncrypted => "HEAD_ENCRYPTED",
             NotArchive => "NOT_ARCHIVE",
             Truncated => "TRUNCATED",
             MissingVolume => "MISSING_VOLUME",

@@ -549,7 +549,9 @@ fn main() -> ExitCode {
 
     let json = has("--json");
     if has("--list") || has("-l") {
-        return do_list(&targets, quiet, json, 编码.as_deref());
+        // 密码必须传下去：7z 头加密（-mhe=on）的包，不给密码连清单都读不出来，
+        // 以前这里写死 None，于是 `--list -p 密码 头加密.7z` 永远报「需要解压码」。
+        return do_list(&targets, quiet, json, 编码.as_deref(), val_of("--password").as_deref());
     }
     if has("--rescue") {
         return do_rescue(&targets, &val_of("--dest"), quiet);
@@ -709,7 +711,13 @@ fn mask(pw: &str) -> String {
 ///
 /// 和 v0.4 的区别：以前只有 ZIP 能列，现在 ZIP / 7z / RAR / 单流都能列；
 /// 并且会发出 `PreviewReady` 事件 —— 这就是界面 S3「列出内容 → 勾选」的数据源。
-fn do_list(targets: &[String], quiet: bool, json: bool, encoding: Option<&str>) -> ExitCode {
+fn do_list(
+    targets: &[String],
+    quiet: bool,
+    json: bool,
+    encoding: Option<&str>,
+    password: Option<&str>,
+) -> ExitCode {
     use std::sync::Arc;
     use yshjy::ctx::UnpackCtx;
     use yshjy::event::EventSink;
@@ -720,7 +728,7 @@ fn do_list(targets: &[String], quiet: bool, json: bool, encoding: Option<&str>) 
         let sink: Arc<dyn EventSink> = Arc::new(终端出口::new(quiet, json));
         let ctx = UnpackCtx::new(1, sink).with_encoding(encoding.map(str::to_string));
 
-        match yshjy::preview::preview(&path, &ctx, None) {
+        match yshjy::preview::preview(&path, &ctx, password) {
             Ok((_target, pv)) => {
                 if json {
                     println!("{}", 预览_json(t, &pv));
@@ -1705,6 +1713,7 @@ fn 失败文案(code: yshjy::error::ErrorCode) -> String {
         C::DestIsFile => "error.dest_is_file",
         C::NeedPassword => "error.password_missing",
         C::WrongPassword => "error.password_wrong",
+        C::HeadEncrypted => "error.head_encrypted",
         C::NotArchive => "error.not_archive",
         C::Truncated => "error.truncated",
         C::MissingVolume => "error.missing_volume",

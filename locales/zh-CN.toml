@@ -127,6 +127,7 @@ failed = "❌ {input} —— 没解开：{reason}"
 cancelled = "⏹ {input} —— 已取消（已解出的文件保留）"
 
 [error]
+head_encrypted = "这个包连文件清单都加密了（头加密）—— 必须先给解压码，否则连里面有几个文件都看不到"
 not_archive = "这不是压缩包（没找到可识别的压缩数据）"
 password_wrong = "解压码不对"
 password_missing = "这个包带锁，需要解压码"

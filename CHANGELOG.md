@@ -67,7 +67,25 @@
 「`--password`/`--select`/`--split`/`--level` 故意不给候选」的设计，所以在那些分支里
 `compopt +o default` 显式关掉回落（探针 4 项盯着这个行为）。
 
-### 五、回归
+### 五、7z 头加密（`-mhe=on`）：说清「连清单都加密了」，并修掉一个真 bug
+
+头加密的包**连文件清单都读不到**，之前一律报「这个包带锁，需要解压码」——用户会以为
+「我给了密码怎么还不行」或者「给了密码就能列」。现在拆成独立错误码 `HEAD_ENCRYPTED`：
+
+- **无密码 + 读头失败** → `HEAD_ENCRYPTED`（「必须先给解压码，否则连里面有几个文件都看不到」）；
+- **给了密码仍读不出头** → `WRONG_PASSWORD`（「解压码不对」，别把「给错了」说成「没给」）；
+- **内容加密（清单可读）** → 维持原样（能列清单 + 标出 N 个带锁条目），不许误报成头加密。
+
+**顺带修掉的真 bug**：`main.rs` 的 `do_list` 调用 `preview(&path, &ctx, None)` 时把密码写死成
+`None`，于是 `yshjy --list -p 密码 头加密.7z` **永远**报「需要解压码」—— 用户手里的密码
+根本没被用上（只有 `--list` 这条路径如此，解压路径一直是对的）。
+
+新码同步了四处（`exit_code` / `cli_exit_code` / `as_str` 穷尽 match + 7 个语言包的
+`error.head_encrypted`）+ 界面码表 `gui/lib/humanize.dart`。
+探针 `tests/head_encrypted.sh` **5 项全绿**：无密码→HEAD_ENCRYPTED、**正确密码→能列清单**（bug 回归）、
+错误密码→WRONG_PASSWORD、内容加密→不误报、正确密码→真解出文件。没装 7z 时自动跳过。
+
+### 六、回归
 
 `bash tests/all.sh` —— **35 通过 / 0 失败 / 5 跳过 / 约 185 秒**
 （第一次跑红在 `cargo test --release` 的「长选项总数」钉桩：42 → 43，正是它该拦的）；`cargo test` 336+29+2、`cargo clippy -D warnings` 干净。

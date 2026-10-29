@@ -16,6 +16,8 @@ String errorText(String code) => switch (code) {
       'DATA_LOST' => '文件坏了，只能救回一部分',
       'ENCRYPTED_UNBREAKABLE' => '这个包加密了，而且没法试出解压码',
       'NEED_PASSWORD' => '这个包需要解压码',
+      // 头加密：连文件清单都看不到，必须强调「清单也加密了」
+      'HEAD_ENCRYPTED' => '这个包连文件清单都加密了，必须给解压码才能看里面有什么',
       'WRONG_PASSWORD' => '解压码不对',
       'INVALID_ARGUMENT' => '参数不对（选的东西可能不合适）',
       'NOT_ENOUGH_SPACE' => '磁盘空间不够了，清一点再试',

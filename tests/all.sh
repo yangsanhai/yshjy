@@ -146,6 +146,12 @@ if [ -n "$BIN" ]; then
   run "FFI 头文件对账（ffi-header-sync.sh）" bash tests/ffi-header-sync.sh
   # --test 只测不写：完整解码 + 校验，但一个字节都不落盘（7-Zip 的 t / Ark 的 SupportsTesting）
   run "只测不写（verify_only.sh）" bash tests/verify_only.sh "$BIN"
+  # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
+  if command -v 7z >/dev/null 2>&1; then
+    run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"
+  else
+    skip "7z 头加密" "没装 7z（sudo apt install -y p7zip-full 后才会跑）"
+  fi
   # --pick 全屏勾选：非 TTY 拒绝 + pty 里勾选结果与 --select 逐字节一致
   run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
   # 进度条：单任务等价 / -j 2 两行独立 / TERM=dumb 不沉默 / 管道零污染
