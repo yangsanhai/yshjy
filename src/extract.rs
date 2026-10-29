@@ -496,8 +496,28 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             }
             // 同名已存在（Replace 策略或重解一遍）先删掉，否则 symlink 直接 EEXIST
             let _ = fs::remove_file(&out_path);
-            match std::os::unix::fs::symlink(&目标, &out_path) {
-                Ok(_) => {
+            // 建链接：Unix 直接建符号链接；**Windows 上普通用户建符号链接要管理员权限**，
+            // 所以退回「目标是什么就复制什么」（目录建同名目录、文件复制一份），并记一条
+            // SlowPath 让界面看得到 —— 不许静默丢条目。代价说清：脚本链接在 Windows 上
+            // 不会保持「跟随」，但内容一定在（这也是 2026-10-29 修 Windows 编译阻塞的落点）。
+            #[cfg(unix)]
+            let 建链接: std::io::Result<()> = std::os::unix::fs::symlink(&目标, &out_path);
+            #[cfg(not(unix))]
+            let 建链接: std::io::Result<()> = {
+                let 真身 = opts.dest.join(&目标);
+                match std::fs::metadata(&真身) {
+                    Ok(m) if m.is_dir() => fs::create_dir_all(&out_path),
+                    Ok(_) => fs::copy(&真身, &out_path).map(|_| ()),
+                    Err(e) => Err(e),
+                }
+            };
+            match 建链接 {
+                Ok(()) => {
+                    #[cfg(not(unix))]
+                    ctx.diagnostic(
+                        crate::event::DiagnosticCode::SlowPath,
+                        format!("{name}：这个系统不支持符号链接，已按目标内容复制"),
+                    );
                     ctx.resume_record(&name, &out_path, crate::resume::条目种类::链接);
                     ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
                     report.files.push(ExtractedFile {
