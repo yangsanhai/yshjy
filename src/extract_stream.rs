@@ -876,6 +876,15 @@ mod tests {
         assert_eq!(strip_suffix(Path::new("c.tgz"), ArchiveFormat::Gzip), None);
     }
 
+    /// 在 dir 里跑一个外部工具，成功与否只看退出码；工具不存在或失败都返回 false
+    fn 跑工具(prog: &str, args: &[&str], dir: &Path) -> bool {
+        std::process::Command::new(prog)
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
     /// 用系统工具造各格式样本（测试环境一般都有）
     fn make_with(cmd: &str, input: &[u8], ext: &str) -> Option<Vec<u8>> {
         let dir = std::env::temp_dir().join(format!(
@@ -887,12 +896,14 @@ mod tests {
         std::fs::create_dir_all(&dir).ok()?;
         let src = dir.join("in.bin");
         std::fs::write(&src, input).ok()?;
-        let ok = std::process::Command::new("bash")
-            .arg("-c")
-            .arg(format!("cd {dir:?} && {cmd} in.bin 2>/dev/null && ls"))
-            .output()
-            .ok()?;
-        if !ok.status.success() {
+        // 为什么不走 `bash -c "cd … && …"`：原生进程起 bash 会撞上 System32 的 WSL bash
+        // （CreateProcess 的搜索顺序 System32 先于 PATH，`where bash` 看不出这个坑），
+        // Windows 路径在 WSL 里不存在 → 永远失败 → 这批测试在 Windows 全是静默跳过的假绿
+        // （2026-10-30 W8 实测）。直起工具 + current_dir 两边平台才都真跑
+        let (prog, rest) = cmd.split_once(' ').unwrap_or((cmd, ""));
+        let 参数: Vec<&str> = rest.split_whitespace().collect();
+        let ok = 跑工具(prog, &参数, &dir);
+        if !ok {
             let _ = fs::remove_dir_all(&dir);
             return None;
         }
@@ -944,6 +955,15 @@ mod tests {
 
     #[test]
     fn tar_能展开成目录树() {
+        // 没有系统 tar 就跳过并明说（不许假绿）
+        let 有tar = std::process::Command::new("tar")
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success());
+        if !有tar {
+            eprintln!("环境没有 tar 命令，跳过");
+            return;
+        }
         let dir = std::env::temp_dir().join(format!("yshjy_tar_{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -951,13 +971,17 @@ mod tests {
         std::fs::write(dir.join("src/a.txt"), b"tar content a").unwrap();
         std::fs::write(dir.join("b.txt"), b"tar content b").unwrap();
 
-        // 造 tar（+ 各种外层压缩）
-        let made = std::process::Command::new("bash")
-            .arg("-c")
-            .arg(format!("cd {dir:?} && tar cf plain.tar src b.txt"))
+        // 造 tar（+ 各种外层压缩）—— 直起 tar，不走 bash（原因见 make_with 里的注释）
+        let made = std::process::Command::new("tar")
+            .args(["cf", "plain.tar", "src", "b.txt"])
+            .current_dir(&dir)
             .output()
             .unwrap();
-        assert!(made.status.success(), "tar 命令应当可用");
+        assert!(
+            made.status.success(),
+            "tar 命令应当可用（stderr: {}）",
+            String::from_utf8_lossy(&made.stderr)
+        );
 
         for (name, outer) in [
             ("plain.tar", None),
@@ -974,13 +998,11 @@ mod tests {
                     ArchiveFormat::Zstd => "zstd -k -f",
                     _ => continue,
                 };
-                let r = std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(format!("cd {dir:?} && {cmd} plain.tar 2>/dev/null"))
-                    .output()
-                    .unwrap();
-                if !r.status.success() {
-                    continue; // 环境没这个命令
+                let (prog, rest) = cmd.split_once(' ').unwrap();
+                let 参数: Vec<&str> = rest.split_whitespace().collect();
+                // 环境没这个压缩器（Windows 常见缺 zstd）→ 跳过这一档，明着不算失败
+                if !跑工具(prog, &参数, &dir) {
+                    continue;
                 }
             }
             let src = dir.join(name);
