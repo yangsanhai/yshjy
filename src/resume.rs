@@ -270,7 +270,7 @@ impl ResumeLog {
         // 上层当「没有记录」从头解）。所以「截断重来」单独开 truncate 句柄：
         // 仍然是**原地截断不删文件**，原来选 set_len 而非「删了重建」为的是少一次竞态，
         // 这条性质 truncate 同样保住
-        let mut file = if !指纹吻合 {
+        let file = if !指纹吻合 {
             let mut f = OpenOptions::new()
                 .create(true)
                 .truncate(true)

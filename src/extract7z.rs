@@ -530,7 +530,7 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                 name,
                 out_path,
                 size: written,
-                encrypted: !opts.password.is_none(),
+                encrypted: opts.password.is_some(),
             });
             Ok(true)
         },

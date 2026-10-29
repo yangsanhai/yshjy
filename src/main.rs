@@ -281,7 +281,7 @@ const 黄: &str = "33";
 /// 读不到就返回 `None`（预检降级放行 —— 与「读不到 /proc」同一待遇，
 /// 绝不能因为探针失败拦住解压）。
 #[cfg(windows)]
-fn windows可用内存MiB() -> Option<u64> {
+fn windows可用内存mib() -> Option<u64> {
     use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
     // SAFETY: 只写我们自己的 MEMORYSTATUSEX（先填 dwLength），API 不在调用后持有指针；
     // 返回 0 = 失败（典型是结构体长度没填对），按 None 降级。
@@ -302,7 +302,7 @@ fn main() -> ExitCode {
     // Windows 上 lib 碰不了 GlobalMemoryStatusEx（禁 unsafe），外壳注册探针后
     // 解压前的内存预检才有真实数字 —— 以前永远读不到，防 OOM 的内存闸形同虚设（W5）
     #[cfg(windows)]
-    yshjy::hardware::注册内存探针(windows可用内存MiB);
+    yshjy::hardware::注册内存探针(windows可用内存mib);
     // 崩溃兜底要**最早装**：后面每一步（读配置、解析语言包、扫目录）都可能炸，
     // 装晚了那几秒里的崩溃就没有现场了。
     crash::装兜底();
@@ -1460,16 +1460,13 @@ fn 读一行不回显() -> Option<String> {
         return Some(line.trim_end_matches(['\r', '\n']).to_string());
     }
     use dialoguer::Password;
-    match Password::new()
+    // Ctrl-C 在 raw mode 里是普通按键，dialoguer 报 Interrupted → .ok() 把它归入 None ——
+    // 与「直接回车」同路（放弃），让流程继续走「没有解压码」
+    Password::new()
         .with_prompt("   请输入解压码（输入时不显示；直接回车 = 放弃）")
         .allow_empty_password(true)
         .interact()
-    {
-        Ok(p) => Some(p),
-        // Ctrl-C 在 raw mode 里是普通按键，dialoguer 报 Interrupted ——
-        // 按「放弃」算，与「直接回车」同路，让流程继续走「没有解压码」
-        Err(_) => None,
-    }
+        .ok()
 }
 
 /// 多任务进度状态（只有 `-j 2` 以上真的并行时才会启用）
@@ -2898,7 +2895,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows内存探针给得出真实数字() {
-        let m = windows可用内存MiB().expect("真 Windows 上应读得到可用内存（W5）");
+        let m = windows可用内存mib().expect("真 Windows 上应读得到可用内存（W5）");
         assert!(m > 0, "可用内存不可能为 0");
         // 就算 2 TB 内存的怪机器也到不了 2^31 MiB；超了说明换算出错
         assert!(m < (1u64 << 31), "可用内存 {m} MiB 不合常理");
@@ -2909,7 +2906,7 @@ mod tests {
     fn windows注册探针后引擎读得到内存() {
         // 探针没注册时 available_mem_mib 在 Windows 上是 None（没有 /proc），
         // 注册后必须给得出数 —— 这就是内存闸从「形同虚设」到「有数可比」的那一步
-        yshjy::hardware::注册内存探针(windows可用内存MiB);
+        yshjy::hardware::注册内存探针(windows可用内存mib);
         let m = yshjy::hardware::available_mem_mib()
             .expect("注册探针后 available_mem_mib 不该再是 None");
         assert!(m > 0);

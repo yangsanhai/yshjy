@@ -662,7 +662,7 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 |---|---|---|---|
 | W1 | ✅ 时区（**2026-10-30 已修**，证据见 CHANGELOG） | 🔴 用户一眼看得见 | ~~解出来的文件时间 +8 小时~~ 实测解出 mtime 与源一致 |
 | W2 | ✅ 续传（**2026-10-30 已修，两层根因**，证据见 CHANGELOG） | 🔴 功能假死 | ~~append 下 set_len 被拒~~ 之外还有 **canonicalize 存在与否指纹漂移**（验收时实测挖出） |
-| W3 | 回收站写错地方 | 🟠 | 只认 XDG，Windows 上会建到当前盘根目录，资源管理器还不认 |
+| W3 | ✅ 回收站（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~只认 XDG~~ Windows 引 trash 5.2 走系统回收站（COM），Unix XDG 实现保留 |
 | W4 | ✅ 密码明文（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~关回显只有 Unix 分支~~ 换 dialoguer::Password，顺手删手写 termios |
 | W5 | ✅ 内存预检（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~读 /proc，Windows 永远「内存未知」~~ 外壳注册 GlobalMemoryStatusEx 探针，预检实时取数 |
 | W6 | ✅ 配置 `~`（**2026-10-30 已修**，证据见 CHANGELOG） | 🟡 | ~~展开只认 HOME~~ 走 paths::home（USERPROFILE 优先） |
@@ -701,22 +701,11 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 > 改为 Windows 纯词法归一（Unix 行为一字不动）。真机验收：硬杀后重跑出现
 > 「⏩ 接着上次没解完的来（上次已完成 19 项）」，50/50 全齐 0 副本；`resume::` 单测 12 条全绿。
 
-### W3 回收站（`--trash-source` 在 Windows 上是错的）
+### W3 ✅ 回收站（2026-10-30 已修，证据全文见 CHANGELOG.md「[未发布] 2026-10-30」）
 
-- **现状**：`src/trash.rs:15-22` `trash_dir()` 只认 `XDG_DATA_HOME` / `HOME`
-- **后果**：Windows 上没有 `HOME` → 退到相对路径 `.local/share/Trash`，会落在**当前工作目录所在盘的根**；
-  而且写的是 XDG 的 `.trashinfo`，Windows 资源管理器不认
-- **修法（2026-10-30 查完 `refs/upstream/trash-rs` 后定的）**：**只能引 crate，自己写不进去**。
-  理由：COM 调 `IFileOperation` 必须有 `unsafe`，而 `src/lib.rs:14` 是 `#![forbid(unsafe_code)]`，
-  `pub mod trash` **在 lib 里** —— 与 `crash.rs`（bin 的模块，unsafe 合法）不同，这里物理上写不了。
-  → `[target.'cfg(windows)'.dependencies] trash = "5.2"`（`Byron/trash-rs`，MIT，255★，2026-10 仍更新）；
-  它只在 Windows 构建时拉进来，**Linux 那半的依赖与产物一个字节都不变**。
-  **抄它实现时必须知道的一个坑**（`refs/upstream/trash-rs/src/windows.rs:92-118`）：
-  `PerformOperations()` **返回成功不代表真删了**，还要查 `GetAnyOperationsAborted()`；
-  另外它用 `FOF_ALLOWUNDO | FOF_NO_UI | FOF_WANTNUKEWARNING`（最后一个保证回收站不可用时会问，不静默永久删）。
-  **退一步也可以但必须明说**：Windows 上 `--trash-source` 直接报「此平台暂不支持」，
-  **不许静默建个错的目录**
-- **验收**：Windows 上要么真进回收站（资源管理器能还原），要么给人话错误
+- ~~只认 XDG，Windows 上会建到当前盘根~~ → Windows 引 `trash 5.2`（COM IFileOperation，
+  系统回收站、能还原、不弹窗；crate 自己处理了「PerformOperations 成功≠真删」的坑），
+  Unix XDG 实现保留。真删进系统回收站的单测已过；「资源管理器能还原」留老板一眼。
 
 ### W4 ✅ 输密码回显（2026-10-30 已修，证据全文见 CHANGELOG.md「[未发布] 2026-10-30」）
 
