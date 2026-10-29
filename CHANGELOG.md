@@ -71,8 +71,32 @@
   审计验收里「造超内存的包应被拦下来」一条：拦截**比较逻辑**是平台无关代码（Linux 侧已验），
   Windows 侧本次交付的是缺失的「可用内存」读数；造一个字典 ≥ 空闲内存的真 7z 需要压缩端
   实际分配同量内存，代价过大，留给老板想做时再补（`7z a -md=<接近空闲内存>`）。
+### W6 ✅ 配置里的 `~` 在 Windows 也能展开
+
+- **根因**：`展开波浪号()` 只认 `HOME`，Windows 用户主目录在 `USERPROFILE` →
+  配置里写 `dir = "~/出"` 永远不展开。
+- **改法**：走已有的 `paths::home()`（它已按平台优先 `USERPROFILE`）。测试同步改
+  （比较从字符串换 PathBuf：Windows 分隔符是 `\`，字符串比对永远不等）。
+- **验收**：`config::` 13 条全绿（含原来在 Windows 必挂的 `波浪号会展开`）。
+
+### W8 ✅ 单测在 Windows 清零（353 过 3 挂 → **355 过 0 挂**）
+
+- `resume::` 10 条 → 已随 **W2** 修复全绿；
+- `config::波浪号会展开` → 已随 **W6** 修复全绿；
+- `paths::xdg_绝对路径优先`：`/tmp/state` 在 Windows 不算绝对路径（没盘符）→
+  按审计加 `#[cfg(unix)]`（纯 Unix 语义的用例）；
+- `extract_stream::tar_能展开成目录树`：**挖出比 tar 更深的假绿根源** ——
+  原生进程 `Command::new("bash")` 撞上 **System32 的 WSL bash**（CreateProcess 搜索顺序
+  System32 先于 PATH，`where bash` 看不出来；WSL 里 Windows 路径不存在）。
+  这不止挂了 tar 一条：**make_with 系的 gzip/xz/bzip2/zstd 四条在 Windows 一直是
+  「静默跳过」的假绿**（bash cd 失败 → 返回 None → 测试打印跳过还显示通过）。
+  全部改为直起工具 + `current_dir`（不走 bash），现在这五条在 Windows **真跑真过**；
+  Linux 路径行为不变（同样直起工具，无 bash 参与，原本语义一致）。
+- **改动文件**：`src/paths.rs`、`src/extract_stream.rs`（仅测试代码）。
+- **验收**：`cargo test --lib` **355 过 / 0 挂**（基线 341/14）；bin 34/0。
 
 ## [未发布] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
+
 
 
 

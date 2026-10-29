@@ -64,11 +64,14 @@ pub fn config_path() -> PathBuf {
 }
 
 /// 把配置里的 `~` 展开成用户主目录
+///
+/// 走 [`crate::paths::home`] 而不是直接读 `HOME`：Windows 用户的主目录在 `USERPROFILE`，
+/// 只认 `HOME` 的话配置里写 `dir = "~/出"` 在 Windows 上永远不展开（审计 W6）
 pub fn 展开波浪号(p: &str) -> PathBuf {
     if let Some(rest) = p.strip_prefix("~/")
-        && let Some(h) = std::env::var("HOME").ok().filter(|s| !s.is_empty())
+        && let Some(h) = crate::paths::home()
     {
-        return PathBuf::from(h).join(rest);
+        return h.join(rest);
     }
     PathBuf::from(p)
 }
@@ -687,13 +690,13 @@ zip_bomb_ratio = 50
 
     #[test]
     fn 波浪号会展开() {
-        // 只在有 HOME 的环境下检查
-        if let Ok(h) = std::env::var("HOME")
-            && !h.is_empty()
-        {
+        // 只在有主目录的环境下检查（Windows 看 USERPROFILE，Unix 看 HOME —— 统一走 paths::home，
+        // 比较用 PathBuf：Windows 的分隔符是 \，拿字符串比永远不等）
+        if let Some(h) = crate::paths::home() {
             assert_eq!(
-                展开波浪号("~/下载/出").display().to_string(),
-                format!("{h}/下载/出")
+                展开波浪号("~/下载/出"),
+                h.join("下载/出"),
+                "主目录存在时 ~ 必须展开"
             );
         }
         // 不带波浪号的路径原样

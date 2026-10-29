@@ -665,9 +665,9 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 | W3 | 回收站写错地方 | 🟠 | 只认 XDG，Windows 上会建到当前盘根目录，资源管理器还不认 |
 | W4 | ✅ 密码明文（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~关回显只有 Unix 分支~~ 换 dialoguer::Password，顺手删手写 termios |
 | W5 | ✅ 内存预检（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~读 /proc，Windows 永远「内存未知」~~ 外壳注册 GlobalMemoryStatusEx 探针，预检实时取数 |
-| W6 | 配置 `~` 不展开 | 🟡 | 展开只认 `HOME` |
+| W6 | ✅ 配置 `~`（**2026-10-30 已修**，证据见 CHANGELOG） | 🟡 | ~~展开只认 HOME~~ 走 paths::home（USERPROFILE 优先） |
 | W7 | 回归套件跑不全 | 🟡 | 缺 `zip` / `rar` / `unrar` |
-| W8 | 单测 14 挂 | 🟡 | 10 条是 W2 的根因，3 条是环境，1 条已归到 W6 |
+| W8 | ✅ 单测 14 挂（**2026-10-30 清零：355 过 0 挂**） | 🟡 | 10 条随 W2、1 条随 W6；paths 加 cfg(unix)；tar/make_with 系挖出 **WSL bash 假绿**（直起工具修复） |
 | W9 | 图形界面 | ⛔ 用户点名要 | 脚手架在，Flutter 没装；Dart 侧 3 处写死 Unix 路径 |
 | W10 | 本机构建环境 | 🔧 不是代码 | 代理 / 沙箱两个坑，不解决编不动 |
 
@@ -731,11 +731,19 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
   实时取数，与 W1 共用 feature 零新增依赖）；盘型（只影响提示与并行度）按审计「可以暂时不做」搁置。
   「造超内存包被拦」的端到端演示因压缩端要实分配同量内存而留待老板（详见 CHANGELOG）。
 
-### W6 配置里的 `~` 不展开（`src/config.rs:64-73`）
+### W6 ✅ 配置里的 `~` 不展开（2026-10-30 已修，证据全文见 CHANGELOG.md）
 
-- `展开波浪号()` 只认 `HOME`；Windows 用户在 `config.toml` 里写 `dir = "~/出"` 不会展开
-- **修法**：改用 `crate::paths::home()`（它已按平台优先 `USERPROFILE`）
-- **验收**：`config::tests::波浪号会展开` 在 Windows 上也绿
+- ~~`展开波浪号()` 只认 `HOME`~~ → 走 `paths::home()`（Windows 优先 `USERPROFILE`）；
+  测试比较换 PathBuf（Windows 分隔符 `\`，字符串比对永不等）
+
+### W8 ✅ 单测在 Windows 上 14 挂（2026-10-30 清零，证据全文见 CHANGELOG.md）
+
+- 10 条 `resume::tests::*` → 随 **W2** 全绿；`config::波浪号会展开` → 随 **W6** 全绿
+- `paths::tests::xdg_绝对路径优先` → 加 `#[cfg(unix)]`（`/tmp` 在 Windows 没盘符，纯 Unix 语义）
+- `extract_stream::tests::tar_能展开成目录树` → **挖出更深假绿根源**：原生进程
+  `Command::new("bash")` 撞上 System32 的 **WSL bash**（CreateProcess 搜索顺序 System32 先于
+  PATH）→ make_with 系的 gzip/xz/bzip2/zstd 四条一直是「静默跳过」的假绿。
+  全部改直起工具 + `current_dir`，五条现在**真跑真过**。**结果：355 过 / 0 挂**
 
 ### W7 回归套件在 Windows 上跑不全
 
@@ -743,14 +751,6 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 - 本机 Git Bash 实测：有 `7z` / `unzip` / `file` / `python3` / `sha256sum` / `mkfifo`，**缺 `zip` / `rar` / `unrar`**
 - **修法**：造 zip 夹具改用 `7z a -tzip`（本机有）；RAR 用例在没有 `rar` 的机器上**跳过并明说**，不许假绿
 - **验收**：Windows 上 `bash tests/all.sh` 能跑完并给出「通过 / 失败 / 跳过」三项数字
-
-### W8 单测在 Windows 上 14 挂（分三类）
-
-- 10 条 `resume::tests::*` → **W2 的根因**，修完应该一起绿
-- `config::tests::波浪号会展开` → **W6**
-- `paths::tests::xdg_绝对路径优先` → 纯函数测试用了 `/tmp/state`，Windows 上 `/tmp/...` **不算绝对路径**（没有盘符）→ 这条测试该加 `#[cfg(unix)]`
-- `extract_stream::tests::tar_能展开成目录树` → 需要系统 `tar` 命令；Windows 上改成「没有 tar 就跳过并明说」
-- **验收**：`cargo test` 在 Windows 上除明确跳过的以外全绿（Linux 上必须仍是 388 全过）
 
 ### W9 图形界面（用户 2026-10-30 明确：**一定要上**）
 
