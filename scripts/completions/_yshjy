@@ -11,7 +11,7 @@ _yshjy() {
         '(-l --list)'{-l,--list}'' \
         '--rescue' \
         '--extract-cover' \
-        '(-o --dest)'{-o,--dest}'[解压到哪]:目录:_directories' \
+        '(-o --dest)'{-o,--dest}'[解压到哪]:目录:_files -/' \
         '(-p --password)'{-p,--password}'[解压码 / 打包密码]:密码:' \
         '--password-file[密码本：每行一个（# 注释），只对这次命令有效]:文件:_files' \
         '--no-auto-password[不自动从「说明.txt」和密码本找解压码]' \
@@ -22,6 +22,8 @@ _yshjy() {
         '(-f --force)'{-f,--force}'[跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）]' \
         '--no-smart-dir[关掉「智能解压」：默认会看包里有没有单一顶层目录来决定]' \
         '--keep[打包时保留中间 ZIP（排错用）]' \
+        '--trash-source[解完把原包移进回收站（能还原）]' \
+        '--delete-source[解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）]' \
         '--split[打包时分卷（如 2G / 500M，也认纯字节数）]:大小:' \
         '--level:0-9:' \
         '--layout:L1|L2:(L1 L2)' \

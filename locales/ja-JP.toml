@@ -64,6 +64,8 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
   --log <ファイル>                ログをファイルに書く（不具合報告用）
   --no-color                      色を付けない（パイプ/ログ向け）
   --keep                          パック時の一時 ZIP を残す（調査用）
+  --trash-source                  解凍後に元のアーカイブをゴミ箱へ移動（復元できます）
+  --delete-source                 解凍後に元のアーカイブを完全削除（元に戻せません。1 回確認し、非対話では拒否します）
   --level 0-9                     パック時の圧縮レベル：0 = 無圧縮（最速）、9 = 最小サイズ（既定 6）
   --sfx / --sfx-linux             自己解凍アーカイブ（.exe / .sh）。--split とは併用不可、--cover 不要、説明.txt は作りません
   --caps                          形式ごとの対応表（解凍 / パック / 暗号化 / 分割 / 再開）を表示
@@ -144,6 +146,12 @@ video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"
 
 [cli]
+delete_source_needs_tty = "❌ --delete-source は元のアーカイブを完全削除します。対話端末でのみ使えます。スクリプトでは --trash-source（ゴミ箱へ移動・復元可能）を使ってください"
+delete_source_warn = "⚠️  {count} 個の元アーカイブを完全削除します（ゴミ箱に入らず、元に戻せません）。\n   解凍結果が完全かどうか確認してから続けてください。"
+delete_source_aborted = "（中止しました。元のアーカイブは何も触っていません）"
+source_trashed = "🗑  元のアーカイブをゴミ箱へ移動しました（{count} 個）"
+source_deleted = "🗑  元のアーカイブを完全削除しました（{count} 個・ゴミ箱に入りません）"
+source_action_failed = "   ⚠ {input}：元のアーカイブを処理できませんでした（{reason}）"
 pick_prompt = "展開する項目を選ぶ（スペースで切替 · a で全選択 · Enter で確定）— {input}"
 pick_no_tty = "❌ --pick は対話端末で使ってください。スクリプトでは --select \"1,3,5\" を使ってください"
 pick_cancelled = "（キャンセルしました。何もしていません）"

@@ -64,6 +64,8 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   --log <파일>                    로그를 파일로 저장 (버그 신고용)
   --no-color                      색상 없이 출력 (파이프/로그용)
   --keep                          패키징 중간 ZIP 보관 (조사용)
+  --trash-source                  압축을 푼 뒤 원본 압축 파일을 휴지통으로 이동 (복원 가능)
+  --delete-source                 압축을 푼 뒤 원본 압축 파일을 영구 삭제 (복구 불가, 한 번 확인하며 비대화형에서는 거부)
   --level 0-9                     패킹 압축 수준: 0 = 저장(가장 빠름), 9 = 최소 크기 (기본 6)
   --sfx / --sfx-linux             자동 압축 풀림 파일(.exe / .sh). --split 과 함께 쓸 수 없고 --cover 도 불필요, .설명.txt 는 만들지 않음
   --caps                          형식별 지원표(해제 / 패킹 / 암호화 / 분할 / 이어받기) 보기
@@ -144,6 +146,12 @@ video_unplayable = "표지 동영상 자체가 손상되었습니다"
 internal = "내부 오류"
 
 [cli]
+delete_source_needs_tty = "❌ --delete-source 는 원본 압축 파일을 영구 삭제하며 대화형 터미널에서만 쓸 수 있습니다. 스크립트에서는 --trash-source(휴지통 이동, 복원 가능)를 쓰세요"
+delete_source_warn = "⚠️  원본 압축 파일 {count} 개를 영구 삭제합니다(휴지통에 들어가지 않고 복구 불가).\n   압축이 제대로 풀렸는지 확인한 뒤 진행하세요."
+delete_source_aborted = "(취소했습니다. 원본 압축 파일은 그대로입니다)"
+source_trashed = "🗑  원본 압축 파일을 휴지통으로 이동했습니다 ({count} 개)"
+source_deleted = "🗑  원본 압축 파일을 영구 삭제했습니다 ({count} 개, 휴지통 아님)"
+source_action_failed = "   ⚠ {input}: 원본 압축 파일을 처리하지 못했습니다 ({reason})"
 pick_prompt = "압축을 풀 항목 선택 (스페이스로 선택 · a 전체 선택 · Enter 확인) — {input}"
 pick_no_tty = "❌ --pick 은 대화형 터미널에서 사용하세요. 스크립트에서는 --select \"1,3,5\" 를 쓰세요"
 pick_cancelled = "(취소했습니다. 아무것도 하지 않았습니다)"

@@ -73,6 +73,8 @@ pub const OPTS: &[Opt] = &[
     opt("--force", Some("-f"), None, false),              // 跳过磁盘空间预检
     opt("--no-smart-dir", None, None, false),
     opt("--keep", None, None, false),                     // 保留中间 ZIP
+    opt("--trash-source", None, None, false),             // 解完把原包移进回收站（可还原）
+    opt("--delete-source", None, None, false),            // 解完永久删除原包（要二次确认）
     // ── 打包路径 ────────────────────────────────────────────────
     opt("--split", None, Some("大小"), false),
     opt("--level", None, Some("0-9"), false),
@@ -211,13 +213,13 @@ mod tests {
 
     /// 长选项总数钉桩 —— 加选项时**必须**同步改这里（故意的：逼你确认补全/man 也跟着更新）
     ///
-    /// 40 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的 `--dump-cli-spec`
-    /// + `--pick`（全屏勾选）。
+    /// 42 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的 `--dump-cli-spec`
+    /// + `--pick`（全屏勾选）+ 2026-10-29 的 `--trash-source` / `--delete-source`。
     #[test]
-    fn 长选项总数是_40() {
+    fn 长选项总数是_42() {
         assert_eq!(
             OPTS.len(),
-            40,
+            42,
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

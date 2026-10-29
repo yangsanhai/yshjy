@@ -113,6 +113,10 @@ if [ -n "$BIN" ]; then
   run "冒烟测试（smoke.sh）" bash tests/smoke.sh "$BIN"
   run "错误文案探针（errmsgs.sh）" bash tests/errmsgs.sh "$BIN"
   run "重名策略探针（conflict.sh）" bash tests/conflict.sh "$BIN"
+  # 原包处置：--trash-source 进回收站 / --delete-source 二次确认（唯一不可逆的一类）
+  run "原包处置（trash_source.sh）" bash tests/trash_source.sh "$BIN"
+  # 文件管理器右键脚本：可写→原地解；只读→改投「下载」且通知说明（不许静默失败）
+  run "右键脚本（nautilus_script.sh）" bash tests/nautilus_script.sh "$BIN"
   run "RAR 缺卷判定（rar_volume.sh）" bash tests/rar_volume.sh "$BIN"
   run "zip 符号链接（zip_symlink.sh）" bash tests/zip_symlink.sh "$BIN"
   run "默认打开方式（mime_default.sh）" bash tests/mime_default.sh gui/linux/yshjy.desktop

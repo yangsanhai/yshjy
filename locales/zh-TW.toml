@@ -64,6 +64,8 @@ text = """
   --log <檔案>                    把日誌寫進檔案（報錯時發給開發者）
   --no-color                      不上色（管線 / 日誌友善）
   --keep                          打包時保留中間 ZIP（排錯用）
+  --trash-source                  解完把原包移到資源回收筒（可還原）
+  --delete-source                 解完永久刪除原包（無法還原；會先問一次，非互動直接拒絕）
   --level 0-9                     打包壓縮級別：0 = 僅儲存（最快），9 = 最小體積（預設 6）
   --sfx / --sfx-linux             打包成自解壓包（.exe / .sh），雙擊自己解開；不能與 --split 同用、不用 --cover，這種包不產生 .說明.txt
   --caps                          看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 續傳）
@@ -144,6 +146,12 @@ video_unplayable = "封面影片本身有問題"
 internal = "內部錯誤"
 
 [cli]
+delete_source_needs_tty = "❌ --delete-source 會永久刪除原包，只能在互動終端裡用。腳本裡請改用 --trash-source（進資源回收筒，可還原）"
+delete_source_warn = "⚠️  即將永久刪除 {count} 個原包（不進資源回收筒，刪了找不回來）。\n   建議確認解出來的內容完整再繼續。"
+delete_source_aborted = "（已取消，原包一個都沒動）"
+source_trashed = "🗑  原包已移到資源回收筒（{count} 個）"
+source_deleted = "🗑  原包已永久刪除（{count} 個，不回資源回收筒）"
+source_action_failed = "   ⚠ {input}：原包沒處理成功（{reason}）"
 pick_prompt = "選要解的項目（空格勾選 · a 全選 · Enter 確認）—— {input}"
 pick_no_tty = "❌ --pick 要在互動終端裡用；腳本裡請改用 --select \"1,3,5\""
 pick_cancelled = "（已取消，什麼都沒做）"
