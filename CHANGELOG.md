@@ -133,6 +133,34 @@
   它们的旧 mtime 曾骗过 gen-cli-assets 的「二进制比源码旧」检查）。
 - **验收**：`bash tests/all.sh --no-gui` **35 过 / 0 挂 / 9 跳**；引擎侧 `cargo test` 354+34 全绿不变。
 
+### W9 ✅ 图形界面在 Windows 落地（flutter build windows 出包 + 托盘 + 关窗口设置）
+
+- **三处写死 Unix 路径改走 platform_paths**（`main.dart` 配置、`home_page.dart` 密码本、
+  `engine.dart` 引擎名 → Windows 找 `yshjy.exe`）—— 发布包里引擎跟界面同目录即用（bfb2781）。
+- **设置页新增「关窗口时（正忙的话）」**（用户 2026-10-30 拍板）：`tray` 缩到托盘 / `exit` 直接退出，
+  **默认分平台且与 Linux 相反**（Windows 默认直接退出、Linux 默认缩托盘）。存 `config.toml`
+  的 `[general] close_action`，引擎侧 config.rs 收编该字段（非法值丢弃，单测守着）；
+  「直接退出」正忙时先 cancel 引擎、给它 400ms 在数据块边界收尾再放行。
+- **Windows 托盘**（C++，`Shell_NotifyIcon`）：实现与 Linux GTK 侧**同一份 `yshjy/tray` 协议**
+  （hide_window / set_status / notify / quit_now ← Dart，request_quit → Dart 托盘菜单「退出」
+  绕回 Dart 取消引擎再真退），外加气球通知（notify.dart 在 Windows 走这条，不再静默跳过）。
+  撤图标/悬停提示/菜单/前台激活都处理了；`OnDestroy` 先撤通道防悬空指针。
+- **两个只在 Windows 会撞上的构建坑**（都记进了 CMakeLists/代码注释）：
+  1. **MSVC 按 GBK 读无 BOM 源码** —— runner 里出现中文注释/宽字符串后，UTF-8 字节被 GBK
+     误配对能把「下一行声明」吞进注释（实测成员集体失踪）；CMake 加 `/utf-8` 解决；
+  2. flutter 的 `EncodableValue` 变体里**没有 std::wstring**（MethodChannel 字符串是 UTF-8
+     std::string）—— 读出来转宽字符（新增 `utils::Utf8ToWide`）再喂 Win32 API。
+- **改动文件**：`gui/lib/{main,app_settings,app_shell,tray,notify}.dart`、
+  `gui/lib/pages/home_page.dart`、`gui/lib/pages/settings_page.dart`、
+  `gui/windows/runner/{win32_window.h,win32_window.cpp,flutter_window.h,flutter_window.cpp,utils.h,utils.cpp,CMakeLists.txt}`、
+  `src/config.rs`（+1 单测）、`gui/analysis_options.yaml`、`gui/pubspec.lock`。
+- **验收证据**（2026-10-30 本机实跑）：`flutter build windows --release` 出包（77 秒）；
+  flutter analyze 干净（仅 1 条既有 info）、flutter test **43 过 / 3 跳**；引擎引擎 exe 同目录；
+  真启动：界面正常渲染（截图核过）、状态目录走 `%LOCALAPPDATA%`、**空闲关窗 → 进程干净退出**；
+  `cargo test --lib` **355 过 / 0 挂**（两连跑）、clippy 干净。
+  **留给老板肉眼**：拖包进窗口解压/打包、正忙时关窗看托盘、托盘菜单「显示窗口/退出」、
+  设置页改「关窗口时」并保存、桌面通知气球。
+
 ## [未发布] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
 
 

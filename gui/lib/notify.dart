@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'platform_paths.dart';
+import 'tray.dart';
 
 /// 桌面通知（Linux 走系统 `notify-send`）。
 ///
@@ -37,6 +38,12 @@ class Notifier {
 
   /// 发一条通知。true = 已交给系统（不代表一定显示出来）。
   static Future<bool> send(String title, String body) async {
+    if (Platform.isWindows) {
+      // Windows 走托盘气球（W9）：图标是原生的，通知挂同一个图标最省事；
+      // 没有原生实现（widget 测试/老壳）时 Tray.notify 自己吞异常并返回 false
+      if (!enabled) return false;
+      return Tray.notify(title, body);
+    }
     if (!Platform.isLinux) return false;
     if (!enabled) return false;
     try {

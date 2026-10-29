@@ -12,6 +12,10 @@ void CreateAndAttachConsole();
 // encoded in UTF-8. Returns an empty std::string on failure.
 std::string Utf8FromUtf16(const wchar_t* utf16_string);
 
+// UTF-8 → UTF-16（W9 托盘通道：Dart 的 MethodChannel 字符串是 UTF-8，
+// Win32 的 NOTIFYICONDATA 要宽字符 —— 与上面的 Utf8FromUtf16 配对）
+std::wstring Utf8ToWide(const std::string& utf8_string);
+
 // Gets the command line arguments passed in as a std::vector<std::string>,
 // encoded in UTF-8. Returns an empty std::vector<std::string> on failure.
 std::vector<std::string> GetCommandLineArguments();

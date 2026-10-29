@@ -34,6 +34,12 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+# 托盘（Shell_NotifyIcon）在 shell32 里（W9）
+target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
+# 源码与执行字符集都用 UTF-8：runner 里开始有中文注释/宽字符串（W9），
+# 不加这条 MSVC 会按系统代码页（GBK）读源码，UTF-8 字节被误配对时能把
+# 「下一行声明」吞进注释里（实测：成员声明集体失踪，-Werror 报成员不存在）
+target_compile_options(${BINARY_NAME} PRIVATE /utf-8)
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

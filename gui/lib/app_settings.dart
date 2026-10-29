@@ -38,3 +38,39 @@ Future<bool> openAfterExtractEnabled() async {
     return false;
   }
 }
+
+/// 关窗口时的动作：`tray`（缩到托盘）| `exit`（直接退出）。
+///
+/// 默认值**分平台**（用户 2026-10-30 拍板）：Windows 默认「直接退出」—— 多数
+/// Windows 用户点 X 就是想关；Linux 默认「缩到托盘」—— 正忙时关窗口是把它
+/// 藏到后台跑完，这是 Linux 版一直以来的行为。**别把两边的默认值抄反。**
+/// 每次现读配置（文件很小），设置页改完立刻生效，不用重启。
+Future<String> closeActionSetting() async {
+  final fallback = Platform.isWindows ? 'exit' : 'tray';
+  try {
+    final f = File('$configDir/config.toml');
+    if (!await f.exists()) return fallback;
+    var inGeneral = false;
+    final text = await f.readAsString();
+    for (final line in text.split('\n')) {
+      final t = line.trim();
+      if (t.startsWith('[') && t.endsWith(']')) {
+        inGeneral = t == '[general]';
+        continue;
+      }
+      if (!inGeneral || t.isEmpty || t.startsWith('#')) continue;
+      final i = t.indexOf('=');
+      if (i <= 0) continue;
+      if (t.substring(0, i).trim() != 'close_action') continue;
+      var v = t.substring(i + 1).trim();
+      if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+        v = v.substring(1, v.length - 1);
+      }
+      return (v == 'tray' || v == 'exit') ? v : fallback;
+    }
+    return fallback;
+  } catch (_) {
+    // 配置读不到/写坏 → 按平台默认走，绝不让关窗口这件事出错
+    return fallback;
+  }
+}

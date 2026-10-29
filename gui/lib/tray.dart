@@ -64,6 +64,20 @@ class Tray {
     });
   }
 
+  /// 托盘气球通知（Windows 走 Shell_NotifyIcon 的 NIF_INFO；Linux 的通知
+  /// 走 notify-send，见 notify.dart —— 两边出口不同，这里只放 Windows 这条）。
+  static Future<bool> notify(String title, String body) async {
+    try {
+      await _ch.invokeMethod<void>('notify', <String, dynamic>{
+        'title': title,
+        'body': body,
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 让原生真的退出进程（走 GApplication 的正常退出流程）。
   ///
   /// 异常照样吃掉：退不出去也不能因此崩界面 —— 顶多进程还留着。

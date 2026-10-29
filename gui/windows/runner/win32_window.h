@@ -55,6 +55,27 @@ class Win32Window {
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
 
+  // ── 托盘（W9）─────────────────────────────────────────────────────
+  // 与 Linux 侧 gui/linux/runner/my_application.cc 的 "yshjy/tray" 通道同一套协议：
+  // Dart 决定「藏不藏 / 退不退」，原生只负责画图标、收鼠标、传话。
+
+  // 把窗口藏进托盘（进程、引擎照跑）。首次调用会顺带把图标挂上去。
+  void HideToTray();
+
+  // 托盘气球通知（解压完成 / 失败提醒用；窗口可见时也照发）。
+  void ShowTrayBalloon(const std::wstring& title, const std::wstring& body);
+
+  // 同步托盘悬停提示里的状态行（节流过的进度文案）。
+  void SetTrayStatus(const std::wstring& text);
+
+  // Dart 已把引擎收拾干净，原生这里真退（摘图标 → PostQuitMessage）。
+  void QuitFromTray();
+
+  // 托盘菜单点「退出」时回话给 Dart（由 Dart 取消引擎后再调 QuitFromTray）。
+  // 为什么绕这一圈：引擎是子进程，原生单方面退会让引擎读 stdin 撞 EOF 硬中断，
+  // 和 Linux 侧 request_quit → quit_now 的两段式是同一个道理。
+  void SetQuitRequestCallback(std::function<void()> cb);
+
  protected:
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
@@ -94,6 +115,22 @@ class Win32Window {
 
   // window handle for top level window.
   HWND window_handle_ = nullptr;
+
+  // ── 托盘状态（W9）──
+  // Shell_NotifyIcon 的回传消息号：WM_APP 起，避开系统保留区间
+  static constexpr UINT kTrayCallbackMsg = WM_APP + 1;
+  // 托盘菜单项 ID（TrackPopupMenu TPM_RETURNCMD 的返回值判断用）
+  static constexpr int kMenuRestore = 1;
+  static constexpr int kMenuQuit = 2;
+  NOTIFYICONDATAW tray_{};
+  bool tray_added_ = false;
+  std::wstring tray_status_;
+  std::function<void()> quit_request_callback_;
+
+  void EnsureTrayIcon();
+  void RemoveTrayIcon();
+  void RestoreFromTray();
+  void ShowTrayMenu();
 
   // window handle for hosted content.
   HWND child_content_ = nullptr;

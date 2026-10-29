@@ -36,6 +36,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _notify = true;
   /// 解压完成后是否自动打开输出目录（默认关：批量解压会弹一堆窗口）
   bool _openAfter = false;
+  // 关窗口时：tray（缩到托盘）| exit（直接退出），默认分平台（见 app_settings.dart）
+  String _closeAction = Platform.isWindows ? 'exit' : 'tray';
   bool _loaded = false;
   bool _saving = false;
 
@@ -65,6 +67,10 @@ class _SettingsPageState extends State<SettingsPage> {
         _theme = gen['theme'] ?? 'auto';
         _notify = (gen['notify'] ?? 'on') != 'off';
         _openAfter = (gen['open_after'] ?? 'off') == 'on';
+        final ca = gen['close_action'];
+        _closeAction = (ca == 'tray' || ca == 'exit')
+            ? ca!
+            : (Platform.isWindows ? 'exit' : 'tray');
         _loaded = true;
       });
     } catch (_) {
@@ -157,6 +163,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'theme': _theme,
         'notify': _notify ? 'on' : 'off',
         'open_after': _openAfter ? 'on' : 'off',
+        'close_action': _closeAction,
       });
       Notifier.enabled = _notify; // 立刻生效，不用重启
       await f.parent.create(recursive: true);
@@ -300,6 +307,26 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           value: _openAfter,
           onChanged: (v) => setState(() => _openAfter = v),
+        ),
+        DropdownButtonFormField<String>(
+          initialValue: _closeAction,
+          decoration: const InputDecoration(
+            labelText: '关窗口时（正忙的话）',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'tray', child: Text('缩到托盘（后台跑完）')),
+            DropdownMenuItem(value: 'exit', child: Text('直接退出')),
+          ],
+          onChanged: (v) => setState(() => _closeAction = v ?? 'exit'),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          Platform.isWindows
+              ? '默认「直接退出」。选「缩到托盘」后，正忙时点关闭会藏进托盘继续跑，从托盘图标随时回来。'
+              : '默认「缩到托盘」。正忙时点关闭会藏进托盘继续跑，从托盘菜单随时回来；空闲时照旧直接退出。',
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
         Align(

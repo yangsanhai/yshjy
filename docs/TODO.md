@@ -668,7 +668,7 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 | W6 | ✅ 配置 `~`（**2026-10-30 已修**，证据见 CHANGELOG） | 🟡 | ~~展开只认 HOME~~ 走 paths::home（USERPROFILE 优先） |
 | W7 | ✅ 回归套件（**2026-10-30 全绿：35 过/0 挂/9 明说跳过**，四个深坑见 CHANGELOG） | 🟡 | ~~缺 zip/rar/unrar~~ 7z 造夹具 + MSYS .exe 兜底/星平面 grep/GBK 输出/kill -INT 四坑修平 |
 | W8 | ✅ 单测 14 挂（**2026-10-30 清零：355 过 0 挂**） | 🟡 | 10 条随 W2、1 条随 W6；paths 加 cfg(unix)；tar/make_with 系挖出 **WSL bash 假绿**（直起工具修复） |
-| W9 | 图形界面 | ⛔ 用户点名要 | 脚手架在，Flutter 没装；Dart 侧 3 处写死 Unix 路径 |
+| W9 | ✅ 图形界面（**2026-10-30 落地**，证据见 CHANGELOG） | ⛔ 用户点名要 | ~~Flutter 没装、3 处 Unix 路径~~ 出包实测通过 + Windows 托盘 + 关窗口设置（默认分平台） |
 | W10 | 本机构建环境 | 🔧 不是代码 | 代理 / 沙箱两个坑，不解决编不动 |
 
 ### W1 ✅ 时区（2026-10-30 已修，证据全文见 CHANGELOG.md「[未发布] 2026-10-30」）
@@ -743,23 +743,15 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
   无控制台的原生子进程，优雅取消场景在 Windows 跳过、硬杀路径全真跑
 - **验收达成**：`bash tests/all.sh --no-gui` = **35 过 / 0 挂 / 9 跳（每条跳过带原因）**
 
-### W9 图形界面（用户 2026-10-30 明确：**一定要上**）
+### W9 ✅ 图形界面（2026-10-30 落地，证据全文见 CHANGELOG.md「[未发布] 2026-10-30」）
 
-- **脚手架不用重跑**：`gui/windows/`（CMakeLists / runner / Runner.rc / win32_window）已经在了
-- **要装的**：Flutter SDK（Windows 桌面）；VS 的「使用 C++ 的桌面开发」—— 本机已有
-  MSVC 14.50 + Windows SDK 10.0.26100，装完应该能直接 `flutter build windows`
-- **Dart 侧三处写死 Unix 路径**（真正要改的代码）：
-  1. `gui/lib/main.dart:12`：`env['XDG_CONFIG_HOME'] ?? '${env['HOME']}/.config'` 找配置目录
-  2. `gui/lib/pages/home_page.dart:2314`：同样写法找密码本 `passwords.txt`
-     → 这两处 Windows 上会算成 `/.config`；而 `gui/lib/platform_paths.dart` **已经写好了**
-     正确的 Windows 分支（`APPDATA` / `LOCALAPPDATA`），**只是这两处没走它**
-  3. `gui/lib/engine.dart:256-263`：引擎路径写死 `'yshjy'`，Windows 上要 `yshjy.exe`
-- 另：`gui/lib/notify.dart:40` 托盘通知只有 Linux 分支，Windows 上要另外接
-- **设置页新增一项（用户 2026-10-30 拍板）**：「关窗口时：**缩到托盘** / **直接退出**」，
-  **默认「直接退出」**。注意这与 Linux 版的行为**相反**（Linux 默认缩托盘，见
-  `gui/lib/app_shell.dart`）—— 别把 Linux 的默认值照抄过来。配置项要存进 `config.toml`
-  （引擎侧 `config.rs` 加字段，界面读它），别只存在界面内存里。
-- **验收**：Windows 上 `flutter build windows` 出 exe，双击能开界面、能解压、能打包
+- 三处写死 Unix 路径 → 全走 platform_paths；`flutter build windows` 出包实测通过
+- 设置页新增「关窗口时（正忙的话）」：tray/exit，**默认分平台**（Windows=exit、Linux=tray），
+  存 `[general] close_action`（引擎侧收编 + 单测）
+- Windows 托盘（C++ Shell_NotifyIcon）：与 Linux GTK 同一份 `yshjy/tray` 协议 + 气球通知
+- 两个 Windows 构建深坑已记档：MSVC 按 GBK 读无 BOM 源码（CMake 加 `/utf-8`）、
+  EncodableValue 无 wstring（新增 Utf8ToWide）
+- **留老板肉眼**：GUI 拖包解压/打包、正忙关窗进托盘、托盘菜单、气球通知、设置页保存
 
 ### W10 本机构建环境（不是代码问题，但会挡路 —— **下次开工先看这条**）
 

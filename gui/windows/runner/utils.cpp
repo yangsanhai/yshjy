@@ -67,3 +67,22 @@ std::string Utf8FromUtf16(const wchar_t* utf16_string) {
   }
   return utf8_string;
 }
+
+std::wstring Utf8ToWide(const std::string& utf8_string) {
+  if (utf8_string.empty()) {
+    return std::wstring();
+  }
+  // 先算宽字符数（带结尾 NUL），再按那个尺寸转一次 —— 两步是 Win32 的固定套路
+  int wide_len = MultiByteToWideChar(CP_UTF8, 0, utf8_string.c_str(),
+                                     static_cast<int>(utf8_string.size()),
+                                     nullptr, 0);
+  if (wide_len <= 0) {
+    return std::wstring();
+  }
+  std::wstring wide(static_cast<size_t>(wide_len), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8_string.c_str(),
+                      static_cast<int>(utf8_string.size()), &wide[0], wide_len);
+  // 去掉 MultiByteToWideChar 写进末尾的 NUL，std::wstring 自带
+  wide.resize(static_cast<size_t>(wide_len - 1));
+  return wide;
+}
