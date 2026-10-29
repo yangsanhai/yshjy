@@ -422,6 +422,10 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
 
             let mut buf = vec![0u8; 64 * 1024];
             let mut written = 0u64;
+            // 条目在 7z 头里声明的大小：给输出提前封顶（同 libarchive 的
+            // `entry_bytes_declared`，见 refs/tech/libarchive.md §4）。
+            // 声明 0 的条目（空文件 / 目录）不封顶。
+            let declared = entry.size();
             loop {
                 // 取消检查下沉到数据块级：单个大文件也能及时停
                 if ctx.is_cancelled() {
@@ -431,35 +435,69 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                     return Ok(false);
                 }
                 match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        if let Err(e) = budget.record(n as u64) {
-                            // 跳过 / 取消：按取消收尾（不是"数据坏了"）
-                            if e.is_cancelled() {
-                                drop(part);
-                                report.cancelled = true;
-                                ctx.entry_done(idx, &name, ItemResult::Skipped, 0);
-                                return Ok(false);
-                            }
-                            report.budget_hit = true;
-                            report
-                                .skipped
-                                .push((name.clone(), format!("安全限额中止: {e}")));
-                            drop(part);
-                            ctx.entry_done(idx, &name, ItemResult::DataError, 0);
-                            return Ok(false); // 停止
-                        }
-                        if let Err(e) = part.as_file().write_all(&buf[..n]) {
-                            report.note_io_error(&e);
-                            report
-                                .skipped
-                                .push((name.clone(), format!("写盘失败: {e}")));
+                    Ok(0) => {
+                        // 少写：声明了却没读够 —— 数据被截断，这一条算坏
+                        if declared > 0 && written != declared {
+                            report.skipped.push((
+                                name.clone(),
+                                format!(
+                                    "条目声明 {declared} 字节，实际读出 {written} 字节 —— 数据被截断"
+                                ),
+                            ));
                             drop(part);
                             ctx.entry_done(idx, &name, ItemResult::DataError, 0);
                             return Ok(true);
                         }
-                        written += n as u64;
-                        ctx.advance(n as u64, Some(&name));
+                        break;
+                    }
+                    Ok(n) => {
+                        // 只接受「声明范围内」的字节数（多出来的一个字节都不落盘）
+                        let 允许 = if declared > 0 {
+                            declared.saturating_sub(written).min(n as u64) as usize
+                        } else {
+                            n
+                        };
+                        if 允许 > 0 {
+                            if let Err(e) = budget.record(允许 as u64) {
+                                // 跳过 / 取消：按取消收尾（不是"数据坏"）
+                                if e.is_cancelled() {
+                                    drop(part);
+                                    report.cancelled = true;
+                                    ctx.entry_done(idx, &name, ItemResult::Skipped, 0);
+                                    return Ok(false);
+                                }
+                                report.budget_hit = true;
+                                report
+                                    .skipped
+                                    .push((name.clone(), format!("安全限额中止: {e}")));
+                                drop(part);
+                                ctx.entry_done(idx, &name, ItemResult::DataError, 0);
+                                return Ok(false); // 停止
+                            }
+                            if let Err(e) = part.as_file().write_all(&buf[..允许]) {
+                                report.note_io_error(&e);
+                                report
+                                    .skipped
+                                    .push((name.clone(), format!("写盘失败: {e}")));
+                                drop(part);
+                                ctx.entry_done(idx, &name, ItemResult::DataError, 0);
+                                return Ok(true);
+                            }
+                            written += 允许 as u64;
+                            ctx.advance(允许 as u64, Some(&name));
+                        }
+                        if 允许 < n {
+                            report.skipped.push((
+                                name.clone(),
+                                format!(
+                                    "条目声明 {declared} 字节，实际数据更多 —— 已丢弃超出的 {} 字节",
+                                    n - 允许
+                                ),
+                            ));
+                            drop(part);
+                            ctx.entry_done(idx, &name, ItemResult::DataError, 0);
+                            return Ok(true);
+                        }
                     }
                     Err(e) => {
                         report

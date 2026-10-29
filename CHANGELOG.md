@@ -2,6 +2,43 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-29（引擎：条目 packSize 校验 —— 多写不落盘、少写报截断）
+
+> 这条在台账里挂了一个月，语义出自 libarchive 的 `entry_bytes_declared`
+> （`refs/tech/libarchive.md` §4）：**不是拒绝解压，而是拿头部声明的解压后大小给输出封顶**。
+
+### 一、zip：从「写完再比对」改成「边写边封顶」
+
+原来的写法是先把压缩流全读出来写盘、写完再拿 `file.size()` 比对。问题是：声明 1 KB、
+实际吐 10 GB 的坏包/恶意包，**磁盘先被写满再报错** —— budget 只管总量，管不到「这一条
+明显在超发」。现在在写循环里按声明值算「这一块允许写多少」，超出的字节直接丢弃并判数据
+错误，半成品照旧由 `.yshjy-part` 的 Drop 删掉。
+
+- 声明为 0 的老式「数据描述符」包**不封顶**：那种包头里本来就没有可信大小，硬封会让
+  正常包解不出来，只能靠 budget 兜底；
+- 「少写」的判定保留（原来那条 `written != expected`），现在注释写明它只管少写。
+
+### 二、7z：`entry.size()` 本来就是声明值，之前没人用
+
+`decompress_with_extract_fn_and_password` 的回调里 `entry` 带 `size()`。补上和 zip 同款的
+封顶 + 少读判错（`Ok(0)` 时 `written != declared` → 该条判数据错误）。
+
+### 三、RAR 与裸流：拿不到可信声明值，如实不做
+
+- **RAR**：`rars 0.11` 的回调结构 `ExtractedEntryMeta` 字段是 `name_is_unicode / name /
+  file_time / file_attr / attr_source / mtime_refinement / is_directory`
+  （`lib.rs:328-344` 逐个核过），**没有 unpacked_size**。绕道用 `members()` 预扫描建
+  「名字 → 大小」表也能做，但 RAR 允许同名条目，错配会把好包误判成损坏 —— 风险大于收益。
+  RAR 侧仍有库自身的 CRC 校验 + budget 总量限额。
+- **裸流（gzip/xz/zstd/bzip2）**：格式头里没有解压后大小；gzip 的 ISIZE 在末尾且 >4 GB 取模，
+  不可信。tar 家族走 tar crate 自己的 size，不在这条范围内。
+
+### 四、验收
+
+`tests/pack_size_cap.sh` **10 项**（zip 正常 / 多写→不落盘 + 人话原因 / 少写→报「声明 1000、
+实际不足」/ 7z 正常 / 7z 截短→不许成功 / rar 正常回归）；fuzz 写盘路径 60 秒零崩溃；
+`bash tests/all.sh` 见 `scratch/all14.log`。
+
 ## [未发布] · 2026-10-29（第二期收尾：原包处置 / 右键脚本 / 补全 + 两条「查出来不用做」）
 
 > 第二期原计划 7 条。做完 4 条真活，另外 2 条**核实后发现根本不用做**（一条早做好了、
