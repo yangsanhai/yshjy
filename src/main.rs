@@ -1316,6 +1316,11 @@ struct 终端出口 {
     cols: usize,
     /// 多任务进度（`-j ≥ 2` 才启用，见 `多任务状态`）
     多任务: std::sync::Mutex<多任务状态>,
+    /// 每个任务（job）的**第一帧时刻** —— 进度行里的「已用时」从这儿算。
+    /// 引擎的进度事件里不带 elapsed（协议面不用为一行文字升版），所以外壳自己记。
+    /// 按 job 分开记：`-j 2` 时两个任务各有各的起点，不能共用一个。
+    /// 任务结束不主动清 —— job 号递增、一次运行里条数有限，留着比加清理更省事。
+    开始时刻: std::sync::Mutex<std::collections::HashMap<u64, std::time::Instant>>,
 }
 
 impl 终端出口 {
@@ -1335,6 +1340,7 @@ impl 终端出口 {
                 _ => 80,
             },
             多任务: std::sync::Mutex::new(多任务状态::new()),
+            开始时刻: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -1395,6 +1401,18 @@ impl yshjy::event::EventSink for 终端出口 {
                         .into_inner()
                         .observe(progress.done_bytes, progress.total_bytes),
                 };
+                // 「已用时」：第一次见到这个 job 时记下时刻，之后每帧算差值
+                let 已用 = {
+                    let mut m = match self.开始时刻.lock() {
+                        Ok(m) => m,
+                        Err(p) => p.into_inner(),
+                    };
+                    Some(
+                        m.entry(*job)
+                            .or_insert_with(std::time::Instant::now)
+                            .elapsed(),
+                    )
+                };
 
                 // ── 多任务（-j 2 以上）：每个任务一条独立行，交给 indicatif 统一重绘 ──
                 // 这条路径不用我们的 200ms 节流 —— indicatif 自带绘制节流。
@@ -1405,7 +1423,7 @@ impl yshjy::event::EventSink for 终端出口 {
                 if let Some(pb) = 多行条 {
                     // 前缀「   [bar:20] 100%  」约占 30 列
                     let 可用 = self.cols.saturating_sub(30);
-                    pb.set_message(进度消息(progress, &eta, current.as_deref(), 可用));
+                    pb.set_message(进度消息(progress, &eta, current.as_deref(), 可用, 已用));
                     let 千分 = progress
                         .fraction()
                         .map(|f| (f * 1000.0).round() as u64)
@@ -1432,7 +1450,7 @@ impl yshjy::event::EventSink for 终端出口 {
                     }
                     *last = Some(now);
                 }
-                let line = 画进度行(progress, &eta, current.as_deref(), self.cols);
+                let line = 画进度行(progress, &eta, current.as_deref(), self.cols, 已用);
                 eprint!("\r{line}\x1b[K");
             }
             Event::EntryFinished { path, result, .. } if !result.is_ok() => {
@@ -1859,13 +1877,16 @@ fn 截断显示宽度(s: &str, width: usize) -> String {
 
 /// 画一行进度条（**纯函数**，不碰终端，便于单测）
 ///
-/// 放不下时**从右往左依次丢**：当前文件名 → 速度/剩余 → 第几项，
+/// 放不下时**从右往左依次丢**：当前文件名 → 已用时 → 剩余 → 速度 → 第几项，
 /// 保证「进度条 + 百分比 + 字节」这三样永远在。
+/// `已用时` 由调用方给（外壳按 job 记第一帧时刻算出来）—— 这里只管渲染，
+/// 所以单测能直接塞一个值进去，不用等真实时间流逝。
 fn 画进度行(
     progress: &yshjy::progress::ProgressView,
     eta: &yshjy::progress::Eta,
     current: Option<&str>,
     cols: usize,
+    已用时: Option<std::time::Duration>,
 ) -> String {
     use unicode_width::UnicodeWidthStr;
 
@@ -1901,23 +1922,26 @@ fn 画进度行(
         eta,
         current,
         cols.saturating_sub(line.width()),
+        已用时,
     ));
     line
 }
 
-/// 进度行的**文字部分**（字节 · 项号 · 速度 · 剩余 · 文件名），不含条与百分比。
+/// 进度行的**文字部分**（字节 · 项号 · 速度 · 剩余 · 已用时 · 文件名），不含条与百分比。
 ///
 /// 抽出来给两条渲染路径共用：
 /// - 单任务：`画进度行` 拼上条和百分比，用 `\r` 重画（已测好，不动）
 /// - 多任务（`-j 2` 以上）：塞进 indicatif 的 `{msg}`，条和重画交给它管
 ///
 /// **算法只写一份** —— 否则两个路径的「剩余时间」会算出不同结果。
-/// `可用宽` 是这一行还剩多少列可写；不够就按「项号 → 速度 → 剩余 → 文件名」的顺序放弃。
+/// `可用宽` 是这一行还剩多少列可写；不够就按「文件名 → 已用时 → 剩余 → 速度 → 项号」放弃
+/// （最先丢的永远是文件名，最后才轮到「第几项」，因为「进度条 + 百分比 + 字节」是底线）。
 fn 进度消息(
     progress: &yshjy::progress::ProgressView,
     eta: &yshjy::progress::Eta,
     current: Option<&str>,
     可用宽: usize,
+    已用时: Option<std::time::Duration>,
 ) -> String {
     use unicode_width::UnicodeWidthStr;
 
@@ -1950,8 +1974,14 @@ fn 进度消息(
         .filter(|d| d.as_secs() >= 1)
         .map(|d| format!("  剩 {}", 时长可读(d)))
         .unwrap_or_default();
+    // 已用时（对的就是 indicatif 里 `{elapsed}` 那个字段）：跟「剩余」是同一类信息，挨着放。
+    // 同样「不足 1 秒不显示」—— 刚起来的任务写「已 0 秒」纯噪音，还白占宽度。
+    let 已用段 = 已用时
+        .filter(|d| d.as_secs() >= 1)
+        .map(|d| format!("  已 {}", 时长可读(d)))
+        .unwrap_or_default();
 
-    // 先加「第几项」，再加速度/剩余 —— 宽度不够就从后往前放弃
+    // 先加「第几项」，再加速度/剩余/已用 —— 宽度不够就从后往前放弃（已用最先丢）
     if line.width() + 项段.width() <= 可用宽 {
         line.push_str(&项段);
     }
@@ -1960,6 +1990,19 @@ fn 进度消息(
     }
     if line.width() + 剩余段.width() <= 可用宽 {
         line.push_str(&剩余段);
+    }
+    // 「已用时」是最后才加的，而且要先给文件名留位置 ——
+    // 实测抓到的坑：加完已用后 100 列终端上「当前文件名」被挤掉了，而文件名恰恰是
+    // 用户最想看的（「现在在解哪个文件」）。所以：宁可不显示已用，也别挤掉文件名。
+    // 留 8 列跟下面文件名的准入线是同一个数（`剩余宽 >= 8` 才放文件名）：
+    // 少于 8 列的文件名只剩省略号，等于没显示，那就该牺牲已用。
+    let 给文件名留 = if current.is_some_and(|n| !n.is_empty()) {
+        8
+    } else {
+        0
+    };
+    if line.width() + 已用段.width() + 给文件名留 <= 可用宽 {
+        line.push_str(&已用段);
     }
 
     // 剩下的位置给当前文件名
@@ -2600,11 +2643,20 @@ mod tests {
             speed_bps: Some(12.4 * 1024.0 * 1024.0),
             remaining: Some(Duration::from_secs(72)),
         };
-        let line = 画进度行(&p, &eta, Some("data/game.bin"), 100);
+        // 已用时塞个真值：80 秒 → 「已 1 分 20 秒」（就是 indicatif 的 {elapsed}）
+        // 宽度给 160：这条测的是「每段都在」，不是窄屏取舍（窄屏另有一条测试）
+        let line = 画进度行(
+            &p,
+            &eta,
+            Some("data/game.bin"),
+            160,
+            Some(Duration::from_secs(80)),
+        );
         assert!(line.contains("50.0%"), "要有百分比：{line}");
         assert!(line.contains('█') && line.contains('░'), "要有条状进度：{line}");
         assert!(line.contains("12.4 MB/s"), "要有速度：{line}");
         assert!(line.contains("剩 1 分 12 秒"), "要有剩余时间：{line}");
+        assert!(line.contains("已 1 分 20 秒"), "要有已用时：{line}");
         // 显示的是「正在处理第几个」：done_files=3 → 第 4/10 项
         assert!(line.contains("4/10 项"), "要有第几项：{line}");
         assert!(line.contains("data/game.bin"), "要有当前文件：{line}");
@@ -2622,7 +2674,7 @@ mod tests {
             speed_bps: Some(100.0),
             remaining: Some(Duration::from_millis(300)),
         };
-        let line = 画进度行(&p, &eta, None, 100);
+        let line = 画进度行(&p, &eta, None, 100, None);
         assert!(!line.contains("剩 0 秒"), "别写「剩 0 秒」：{line}");
         assert!(!line.contains("剩"), "不足一秒就别显示剩余：{line}");
     }
@@ -2640,7 +2692,13 @@ mod tests {
             remaining: Some(Duration::from_secs(5)),
         };
         for cols in [40usize, 60, 80, 120, 200] {
-            let line = 画进度行(&p, &eta, Some("很长的中文文件名要截断/并且/还有/子目录/文件.bin"), cols);
+            let line = 画进度行(
+                &p,
+                &eta,
+                Some("很长的中文文件名要截断/并且/还有/子目录/文件.bin"),
+                cols,
+                Some(Duration::from_secs(9)),
+            );
             use unicode_width::UnicodeWidthStr;
             assert!(
                 line.width() <= cols,
@@ -2660,11 +2718,64 @@ mod tests {
             total_files: 0,
         };
         let eta = Eta::default();
-        let line = 画进度行(&p, &eta, None, 80);
+        let line = 画进度行(&p, &eta, None, 80, None);
         assert!(!line.contains("/0 B"), "总量未知别显示 /0 B：{line}");
         assert!(line.contains("5.0 MB"), "已解量要显示：{line}");
         assert!(line.contains("…"), "未知进度用省略号表示：{line}");
         // 没有速度样本时不该出现 /s
         assert!(!line.contains("/s"), "没有估算就别瞎写速度：{line}");
+    }
+
+    #[test]
+    fn 已用不足一秒不显示已零秒() {
+        let p = ProgressView {
+            done_bytes: 10,
+            total_bytes: 100,
+            done_files: 0,
+            total_files: 1,
+        };
+        let eta = Eta::default();
+        let line = 画进度行(&p, &eta, None, 100, Some(Duration::from_millis(400)));
+        assert!(!line.contains("已 0 秒"), "别写「已 0 秒」：{line}");
+        assert!(!line.contains("已 "), "不足一秒就别显示已用：{line}");
+    }
+
+    #[test]
+    fn 窄终端先丢已用再丢剩余() {
+        let p = ProgressView {
+            done_bytes: 500,
+            total_bytes: 1000,
+            done_files: 0,
+            total_files: 1,
+        };
+        let eta = Eta {
+            speed_bps: Some(1_000_000.0),
+            remaining: Some(Duration::from_secs(30)),
+        };
+        // 宽终端：已用和剩余都在
+        let 宽 = 画进度行(&p, &eta, None, 200, Some(Duration::from_secs(12)));
+        assert!(宽.contains("已 12 秒"), "宽终端要有已用：{宽}");
+        assert!(宽.contains("剩 30 秒"), "宽终端要有剩余：{宽}");
+        // 窄终端（40 列、没有文件名）：已用被丢，百分比保住
+        let 窄 = 画进度行(&p, &eta, None, 40, Some(Duration::from_secs(12)));
+        use unicode_width::UnicodeWidthStr;
+        assert!(窄.width() <= 40, "40 列下画出了 {} 列：{窄}", 窄.width());
+        assert!(!窄.contains("已 "), "窄下来该先丢已用：{窄}");
+        assert!(窄.contains("50.0%"), "百分比不能丢：{窄}");
+        // 属性断言（比「某个具体列数下丢谁」稳得多）：任何宽度下都
+        // ①不超宽 ②「已用出现 ⇒ 文件名也一定在」—— 这就是「给文件名留 12 列」的保险丝
+        for cols in [60usize, 80, 95, 100, 110, 120, 160] {
+            let l = 画进度行(
+                &p,
+                &eta,
+                Some("data/game.bin"),
+                cols,
+                Some(Duration::from_secs(12)),
+            );
+            assert!(l.width() <= cols, "{cols} 列超宽了：{l}");
+            if l.contains("已 12 秒") {
+                assert!(l.contains("game.bin"), "{cols} 列下有已用却没文件名：{l}");
+            }
+        }
     }
 }
