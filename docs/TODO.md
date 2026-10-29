@@ -661,7 +661,7 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 | # | 项 | 性质 | 一句话 |
 |---|---|---|---|
 | W1 | ✅ 时区（**2026-10-30 已修**，证据见 CHANGELOG） | 🔴 用户一眼看得见 | ~~解出来的文件时间 +8 小时~~ 实测解出 mtime 与源一致 |
-| W2 | 断点续传静默失效 | 🔴 功能假死 | `append` 模式下 `set_len(0)` 被 Windows 拒绝 → 每次从头解，不报错 |
+| W2 | ✅ 续传（**2026-10-30 已修，两层根因**，证据见 CHANGELOG） | 🔴 功能假死 | ~~append 下 set_len 被拒~~ 之外还有 **canonicalize 存在与否指纹漂移**（验收时实测挖出） |
 | W3 | 回收站写错地方 | 🟠 | 只认 XDG，Windows 上会建到当前盘根目录，资源管理器还不认 |
 | W4 | 输密码明文显示 | 🟠 | 关回显只有 Unix 分支 |
 | W5 | 内存预检失效 | 🟠 | 读 `/proc`，Windows 上永远「内存未知」→ 防炸弹的内存闸形同虚设 |
@@ -693,17 +693,13 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
   `crash.rs` 是 bin 的模块（不在 `lib.rs` 的 `#![forbid(unsafe_code)]` 管辖内），unsafe 合法。
 - **验收**：解出的 mtime 与资源管理器显示一致；补一条 `#[cfg(windows)]` 单测（偏移落在 `-43200..=50400`）
 
-### W2 修断点续传（本机才会暴露的真 bug）
+### W2 ✅ 修断点续传（2026-10-30 已修，两层根因，证据全文见 CHANGELOG.md「[未发布] 2026-10-30」）
 
-- **现状**：`src/resume.rs:268-283`，`.create(true).append(true).open()` 之后 `file.set_len(0)`
-- **实测证据**：10 行的最小复现（`/tmp/rsmini/m.rs`）→ `set_len: Err(Os { code: 5, kind: PermissionDenied })`
-- **根因**：`append(true)` 在 Windows 上只给 `FILE_APPEND_DATA`，没有 `GENERIC_WRITE`；
-  `SetEndOfFile` 需要写权限 → 拒绝。于是 `open_in` 走 `.ok()?` 提前返回 `None`，
-  `src/job.rs:803` 把 `None` 当「没有记录」→ **每次从头解，不崩不报错**（续传是「增强」，
-  打不开就静默降级，设计上没错，Windows 上等于把增强整个丢了）
-- **修法**：要截断的那一支单独开一份 `.create(true).truncate(true).write(true)`；
-  或统一 `.create(true).read(true).write(true)` 后自己维护追加位置（append 语义自己管）
-- **验收**：`cargo test resume::` 10 条全绿；真机解到一半 Ctrl-C 再重跑，应收到 `Resumed` 事件
+> **根因一**：`append` 句柄上 `set_len(0)` 被拒（os error 5）→ 截断分支单独开 truncate 句柄。
+> **根因二（验收时实测挖出，比第一层深）**：`绝对化()` 走 canonicalize，Windows 上输出目录
+> 存在与否返回的字符串不同（`\\?\` 前缀），指纹哈希跟着漂 → 查不到上次的记录。
+> 改为 Windows 纯词法归一（Unix 行为一字不动）。真机验收：硬杀后重跑出现
+> 「⏩ 接着上次没解完的来（上次已完成 19 项）」，50/50 全齐 0 副本；`resume::` 单测 12 条全绿。
 
 ### W3 回收站（`--trash-source` 在 Windows 上是错的）
 
