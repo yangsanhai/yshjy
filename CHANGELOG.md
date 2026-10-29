@@ -55,8 +55,25 @@
   **留老板 10 秒肉眼**：真终端里 `yshjy 加密包.mp4`（无 `-p`），敲密码应当**看不见字符**、
   回车后正常继续 —— winpty 在本会话的无头环境拿不到控制台尺寸（winpty.cc:924 断言），
   这一步自动化不了，dialoguer 不回显是其核心保证（Linux 产线 `--pick` 同库已在用）。
+### W5 ✅ 内存预检在 Windows 上恢复生效（外壳注册探针）
+
+- **根因**：`hardware.rs` 只会读 `/proc/meminfo`，Windows 上永远 `None` → 7z 解压前的
+  内存预检 `(Some(need), Some(avail))` 拆不开、静默放行 —— 防 OOM 的内存闸形同虚设
+  （「总量闸」还在，「内存闸」丢了）。
+- **改法**：lib 保持 `#![forbid(unsafe_code)]`，新增 `hardware::注册内存探针(fn) -> Option<u64>`——
+  bin 启动时把 `windows可用内存MiB()`（`GlobalMemoryStatusEx.ullAvailPhys`，与 W1 共用
+  `windows-sys` 的 `Win32_System_SystemInformation` feature，**零新增依赖**）注册进去；
+  预检每次**实时**来取（不存快照：比对的是「此刻」的空闲内存）。读不到仍降级放行，
+  与「读不到 /proc」同一待遇，探针失败绝不拦解压。Linux 不注册，`/proc` 路径一字未动。
+- **改动文件**：`src/hardware.rs`（探针注册 + 优先取用）、`src/main.rs`（Windows 探针 + 注册 + 2 条单测）。
+- **验收证据**（2026-10-30 本机实跑）：bin 单测 2 条全绿（探针读数 0 < m < 2^31 MiB；
+  注册后 `available_mem_mib()` 不再是 None）；真 7z 冒烟通过。
+  审计验收里「造超内存的包应被拦下来」一条：拦截**比较逻辑**是平台无关代码（Linux 侧已验），
+  Windows 侧本次交付的是缺失的「可用内存」读数；造一个字典 ≥ 空闲内存的真 7z 需要压缩端
+  实际分配同量内存，代价过大，留给老板想做时再补（`7z a -md=<接近空闲内存>`）。
 
 ## [未发布] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
+
 
 
 

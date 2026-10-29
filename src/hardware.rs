@@ -185,8 +185,30 @@ pub fn available_mem_mib() -> Option<u64> {
     read_available_mem_mib()
 }
 
-/// 读可用内存（Linux: /proc/meminfo 的 MemAvailable）
+/// 外壳注册的平台内存探针
+///
+/// 为什么绕这一道：Windows 读可用内存要 `GlobalMemoryStatusEx`（unsafe），
+/// 而本 crate 是 `#![forbid(unsafe_code)]` —— 和时区偏移一样，「碰系统 API」的活
+/// 只能归 bin（见 `main::windows可用内存MiB`），启动时注册、之后每次**实时**来取
+/// （不存快照：预检比对的是「此刻」还剩多少内存）。
+static 平台探针: std::sync::RwLock<Option<fn() -> Option<u64>>> = std::sync::RwLock::new(None);
+
+/// 注册平台内存探针（外壳启动早期调用；重复注册以后一次为准）
+///
+/// Linux 不注册 —— `/proc/meminfo` 那条路本来就是实时的。
+pub fn 注册内存探针(f: fn() -> Option<u64>) {
+    if let Ok(mut g) = 平台探针.write() {
+        *g = Some(f);
+    }
+}
+
+/// 读可用内存（Linux/Android: /proc/meminfo 的 MemAvailable；Windows: 外壳注册的探针）
 fn read_available_mem_mib() -> Option<u64> {
+    if let Ok(g) = 平台探针.read()
+        && let Some(f) = *g
+    {
+        return f();
+    }
     let s = std::fs::read_to_string("/proc/meminfo").ok()?;
     for line in s.lines() {
         if let Some(rest) = line.strip_prefix("MemAvailable:") {
