@@ -13,7 +13,7 @@ for bin in yshjy yshys
     complete -c $bin -s l -l list
     complete -c $bin -l rescue
     complete -c $bin -l extract-cover
-    complete -c $bin -s o -l dest -r -F -d '解压到哪'
+    complete -c $bin -s o -l dest -r -a "(__fish_complete_directories)" -d '解压到哪'
     complete -c $bin -s p -l password -x -d '解压码 / 打包密码'
     complete -c $bin -l password-file -r -F -d '密码本：每行一个（# 注释），只对这次命令有效'
     complete -c $bin -l no-auto-password -d '不自动从「说明.txt」和密码本找解压码'
@@ -24,6 +24,8 @@ for bin in yshjy yshys
     complete -c $bin -s f -l force -d '跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）'
     complete -c $bin -l no-smart-dir -d '关掉「智能解压」：默认会看包里有没有单一顶层目录来决定'
     complete -c $bin -l keep -d '打包时保留中间 ZIP（排错用）'
+    complete -c $bin -l trash-source -d '解完把原包移进回收站（能还原）'
+    complete -c $bin -l delete-source -d '解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）'
     complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M，也认纯字节数）'
     complete -c $bin -l level -x
     complete -c $bin -l layout -x -a 'L1 L2'

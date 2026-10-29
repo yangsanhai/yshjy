@@ -329,7 +329,9 @@ def gen_zsh(opts: list[dict], descs: dict[str, str]) -> str:
         if o["value"]:
             action, cand = VALUE_ACTIONS.get(o["long"], ("file", None))
             if action == "dir":
-                tail = ":目录:_directories"
+                # 只补目录：`_directories` 在有些 zsh 补全主题里不认，`_files -/`
+                # 是 clap 生成器用的写法，跨版本更稳（2026-10-29 抄 clap）
+                tail = ":目录:_files -/"
             elif action == "none":
                 tail = f":{o['value']}:"
             elif action == "words":
@@ -388,7 +390,9 @@ def gen_fish(opts: list[dict], descs: dict[str, str]) -> str:
         if o["value"]:
             action, cand = VALUE_ACTIONS.get(o["long"], ("file", None))
             if action == "dir":
-                parts.append("-r -F")
+                # 只补目录：fish 的 `-F` 会把文件也列进候选，`(__fish_complete_directories)`
+                # 才是「只要目录」。⚠️ 必须双引号 —— 单引号里 fish 不执行命令替换
+                parts.append('-r -a "(__fish_complete_directories)"')
             elif action == "file":
                 parts.append("-r -F")
             elif action == "words":

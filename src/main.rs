@@ -673,6 +673,15 @@ fn main() -> ExitCode {
         smart_dir: !has("--no-smart-dir"),
         force: has("--force"),
         encoding: 编码.clone(),
+        // 原包处置：命令行是「这一次」的口子。两个都写以 --delete-source 为准
+        // （更狠的那个），二次确认里会说清楚到底哪个生效。
+        source_action: if has("--delete-source") {
+            源包处置::永久删除
+        } else if has("--trash-source") {
+            源包处置::回收站
+        } else {
+            源包处置::不动
+        },
     })
 }
 
@@ -1008,6 +1017,20 @@ fn try_list_by_rescue(path: &str, quiet: bool) -> Option<ExitCode> {
     Some(ExitCode::from(code::OK))
 }
 
+/// 解压完怎么处置原包（**命令行这一次**的意图）
+///
+/// 为什么不复用 `config.output.on_done`：那是长期偏好（界面设置页写进去的），
+/// 命令行是「这一条命令就这么干」的临时口子 —— 命令行没写就按配置走，写了以命令行为准。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum 源包处置 {
+    /// 不动（默认）
+    不动,
+    /// 移进系统回收站（可还原）
+    回收站,
+    /// 永久删除（**不可恢复**，必须二次确认）
+    永久删除,
+}
+
 /// 解压（v0.5：多目标 + 批量 + 事件驱动渲染）
 ///
 /// 编排全在引擎里（`yshjy::job`），这里只干两件事：
@@ -1028,6 +1051,8 @@ struct 解压参数 {
     force: bool,
     /// 文件名编码（--encoding）
     encoding: Option<String>,
+    /// 解完怎么处置原包（--trash-source / --delete-source）
+    source_action: 源包处置,
 }
 
 fn do_extract(a: 解压参数) -> ExitCode {
@@ -1043,6 +1068,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
         smart_dir,
         force,
         encoding,
+        source_action,
     } = a;
     use std::sync::Arc;
     use yshjy::batch;
@@ -1086,6 +1112,30 @@ fn do_extract(a: 解压参数) -> ExitCode {
             "{}",
             文案().t("cli.queued", &[("count", &expanded.len().to_string())])
         );
+    }
+
+    // --delete-source 是不可恢复的破坏性动作：开工前必须问一句。
+    //
+    // 非交互（管道 / 脚本 / --quiet / --json）一律拒绝 —— 破坏性动作绝不在没人
+    // 看着的场合里静默通过（用户口径：删东西要先问）。想自动化请用 --trash-source
+    // （进回收站，能还原）。
+    if source_action == 源包处置::永久删除 {
+        use std::io::IsTerminal;
+        if quiet || json || !std::io::stdin().is_terminal() {
+            eprintln!("{}", 文案().t("cli.delete_source_needs_tty", &[]));
+            return ExitCode::from(code::USAGE);
+        }
+        eprintln!(
+            "{}",
+            文案().t(
+                "cli.delete_source_warn",
+                &[("count", &expanded.len().to_string())]
+            )
+        );
+        if !问是否继续() {
+            eprintln!("{}", 文案().t("cli.delete_source_aborted", &[]));
+            return ExitCode::from(code::OK);
+        }
     }
 
     let jobs = {
@@ -1152,6 +1202,26 @@ fn do_extract(a: 解压参数) -> ExitCode {
         }
     });
 
+    // 处置原包（--trash-source / --delete-source）：放在打印结果之前，
+    // 让用户看到的顺序是「解开了 → 原包已移入回收站」，而不是看完结果才悄悄动文件。
+    // --json 模式不打印这句（不能污染 JSON 流）。
+    if source_action != 源包处置::不动 {
+        let (成, _败) = 处置原包(&report, source_action);
+        if !json && 成 > 0 {
+            println!(
+                "{}",
+                文案().t(
+                    if source_action == 源包处置::回收站 {
+                        "cli.source_trashed"
+                    } else {
+                        "cli.source_deleted"
+                    },
+                    &[("count", &成.to_string())]
+                )
+            );
+        }
+    }
+
     if json {
         println!("{}", 汇总_json(&report));
     } else {
@@ -1183,6 +1253,62 @@ fn 找_带锁的包(paths: &[PathBuf]) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// 处置原包：移回收站 / 永久删除。返回（成功条数, 失败条数）。
+///
+/// 只动「成功 / 部分成功」的 —— 失败时原包是用户重试的唯一材料（与 `job.rs` 里
+/// `on_done == "trash"` 的口径一致）。单个失败不影响退出码：内容已经出来了，
+/// 删不掉原包是次要问题，说一句就够，不该让整条命令变红。
+fn 处置原包(report: &yshjy::batch::BatchReport, action: 源包处置) -> (usize, usize) {
+    use yshjy::error::Outcome;
+    let (mut 成, mut 败) = (0usize, 0usize);
+    if action == 源包处置::不动 {
+        return (0, 0);
+    }
+    for j in &report.jobs {
+        if !matches!(
+            &j.outcome,
+            Outcome::Success | Outcome::Partial { .. }
+        ) {
+            continue;
+        }
+        let 结果: Result<(), String> = match action {
+            源包处置::回收站 => yshjy::trash::move_to_trash(&j.input)
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
+            _ => std::fs::remove_file(&j.input).map_err(|e| e.to_string()),
+        };
+        match 结果 {
+            Ok(()) => 成 += 1,
+            Err(e) => {
+                败 += 1;
+                eprintln!(
+                    "{}",
+                    文案().t(
+                        "cli.source_action_failed",
+                        &[("input", &j.input.display().to_string()), ("reason", &e)]
+                    )
+                );
+            }
+        }
+    }
+    (成, 败)
+}
+
+/// 危险动作前的二次确认：只认 y / yes，回车或别的都当「不要」。
+///
+/// 为什么不用 dialoguer：CLI 里其它交互（密码、--pick）都是自己写的，这里也只读
+/// 一行；非交互场景本来就被上游拦掉了（`IsTerminal`），不值得为此多背一条依赖。
+fn 问是否继续() -> bool {
+    use std::io::Write;
+    eprint!("   继续请输 y（其它任意输入 = 取消）：");
+    let _ = std::io::stderr().flush();
+    let mut buf = String::new();
+    if std::io::stdin().read_line(&mut buf).is_err() {
+        return false;
+    }
+    matches!(buf.trim(), "y" | "Y" | "yes" | "YES" | "Yes")
 }
 
 /// 问用户要解压码（关闭回显；直接回车 = 放弃）

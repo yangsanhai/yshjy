@@ -64,6 +64,8 @@ OPCIONES HABITUALES:
   --log <archivo>                 escribir un registro en archivo (para reportes)
   --no-color                      sin colores (para tuberías/registros)
   --keep                          conservar el ZIP intermedio al empaquetar
+  --trash-source                  tras extraer, mover el archivo original a la papelera (recuperable)
+  --delete-source                 tras extraer, borrar el archivo original definitivamente (no se puede deshacer; pregunta una vez y se niega si no es interactivo)
   --level 0-9                     nivel de compresión al empaquetar: 0 = sin comprimir (rápido), 9 = tamaño mínimo (por defecto 6)
   --sfx / --sfx-linux             empaquetar como archivo autoextraíble (.exe / .sh); no se puede con --split, --cover no hace falta, no se crea .说明.txt
   --caps                          mostrar la tabla de capacidades por formato (extraer / empaquetar / cifrado / volúmenes / reanudar)
@@ -144,6 +146,12 @@ video_unplayable = "El vídeo de portada está dañado"
 internal = "Error interno"
 
 [cli]
+delete_source_needs_tty = "❌ --delete-source borra el archivo original definitivamente y solo funciona en una terminal interactiva. En scripts usa --trash-source (papelera, recuperable)"
+delete_source_warn = "⚠️  Se van a borrar definitivamente {count} archivo(s) original(es) (no van a la papelera, no se puede deshacer).\n   Comprueba que lo extraído esté completo antes de continuar."
+delete_source_aborted = "(Cancelado: no se tocó ningún archivo original)"
+source_trashed = "🗑  Archivo(s) original(es) movidos a la papelera ({count})"
+source_deleted = "🗑  Archivo(s) original(es) borrados definitivamente ({count}, sin pasar por la papelera)"
+source_action_failed = "   ⚠ {input}: no se pudo procesar el archivo original ({reason})"
 pick_prompt = "elige qué entradas extraer (espacio para marcar · a para todas · Enter para confirmar) — {input}"
 pick_no_tty = "❌ --pick necesita un terminal interactivo; en scripts usa --select \"1,3,5\""
 pick_cancelled = "(cancelado, no se hizo nada)"

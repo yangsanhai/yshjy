@@ -59,23 +59,59 @@ fi
   printf '选中：%s\n' "${paths[@]}"
 } >>"$LOG" 2>&1
 
+# 目标目录能不能写？不能写就换个地方解，并在通知里说清楚 —— 绝不静默失败。
+#
+# 为什么不像 FileRoller 那样给「解压到…」菜单项：Nautilus script 的菜单文字就是
+# 脚本文件名，没法按权限动态变；真正按「能不能写」分两套菜单要写 Nautilus 扩展
+# （C/Python + 编译安装），是另一个量级的工程。这里退一步：能写就原地解，不能写
+# （U 盘、/mnt、别人的文件夹）就解到「下载」里，通知里明说解到哪了。
+fallback_dir() {
+  local d
+  for d in "${XDG_DOWNLOAD_DIR:-}" "$HOME/下载" "$HOME/Downloads" "$HOME"; do
+    [ -n "$d" ] && [ -d "$d" ] && [ -w "$d" ] && { printf '%s' "$d"; return 0; }
+  done
+  return 1
+}
+
 ok=0
 bad=0
+moved=0
 for p in "${paths[@]}"; do
   [ -e "$p" ] || continue
   dir="$(dirname "$p")"
   base="$(basename "$p")"
-  echo "── 正在解：$p" >>"$LOG" 2>&1
-  # 解到包所在目录（CLI 默认建同名文件夹）；--quiet 只留结果
-  if ( cd "$dir" && "$BIN" jy "$base" --quiet ) >>"$LOG" 2>&1; then
-    ok=$((ok + 1))
+  if [ -w "$dir" ]; then
+    echo "── 正在解：$p（原地）" >>"$LOG" 2>&1
+    # 解到包所在目录（CLI 默认建同名文件夹）；--quiet 只留结果
+    if ( cd "$dir" && "$BIN" jy "$base" --quiet ) >>"$LOG" 2>&1; then
+      ok=$((ok + 1))
+    else
+      bad=$((bad + 1))
+    fi
   else
-    bad=$((bad + 1))
+    dl="$(fallback_dir)"
+    if [ -z "$dl" ]; then
+      echo "── $p：原文件夹不能写，也没有可写的「下载」目录" >>"$LOG" 2>&1
+      bad=$((bad + 1))
+      continue
+    fi
+    out="$dl/解压-$base"
+    echo "── 正在解：$p → $out（原文件夹不可写）" >>"$LOG" 2>&1
+    if ( cd "$dir" && "$BIN" jy "$base" --quiet -o "$out" ) >>"$LOG" 2>&1; then
+      ok=$((ok + 1))
+      moved=$((moved + 1))
+    else
+      bad=$((bad + 1))
+    fi
   fi
 done
 
 if [ "$bad" -eq 0 ]; then
-  notify "解压完成" "$ok 个包已解开（跟包在同一个文件夹里）"
+  if [ "$moved" -eq 0 ]; then
+    notify "解压完成" "$ok 个包已解开（跟包在同一个文件夹里）"
+  else
+    notify "解压完成" "$ok 个包已解开；其中 $moved 个原文件夹不能写，已解到「下载」里"
+  fi
 else
   notify "有 $bad 个没解开" "$ok 个成功；详细原因见 $LOG"
 fi

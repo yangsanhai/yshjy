@@ -67,6 +67,8 @@ COMMON OPTIONS:
   --log <file>                    write a log file (for bug reports)
   --no-color                      disable colors (pipe/log friendly)
   --keep                          keep the intermediate ZIP when packing
+  --trash-source                  Move the source archive to Trash after extracting (recoverable)
+  --delete-source                 Permanently delete the source archive after extracting (cannot be undone; asks once, refuses when non-interactive)
   --level 0-9                     pack compression level: 0 = store (fastest), 9 = smallest (default 6)
   --sfx / --sfx-linux             pack a self-extracting archive (.exe / .sh) that unpacks on double-click; cannot be used with --split, --cover not needed, no .说明.txt written
   --caps                          show the capability table per format (extract / pack / encryption / volumes / resume)
@@ -147,6 +149,12 @@ video_unplayable = "The cover video itself is broken"
 internal = "Internal error"
 
 [cli]
+delete_source_needs_tty = "❌ --delete-source permanently deletes the source archive and only works in an interactive terminal. In scripts use --trash-source (recoverable)"
+delete_source_warn = "⚠️  About to permanently delete {count} source archive(s) (not moved to Trash, cannot be undone).\n   Make sure the extracted content is complete before continuing."
+delete_source_aborted = "(Cancelled — no source archive was touched)"
+source_trashed = "🗑  Source archive(s) moved to Trash ({count})"
+source_deleted = "🗑  Source archive(s) permanently deleted ({count}, not in Trash)"
+source_action_failed = "   ⚠ {input}: could not handle the source archive ({reason})"
 pick_prompt = "pick entries to extract (space to toggle · a for all · Enter to confirm) — {input}"
 pick_no_tty = "❌ --pick needs an interactive terminal; in scripts use --select \"1,3,5\" instead"
 pick_cancelled = "(cancelled, nothing was done)"
