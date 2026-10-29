@@ -274,10 +274,35 @@ const 红: &str = "31";
 const 绿: &str = "32";
 const 黄: &str = "33";
 
+/// Windows 可用内存（MiB）—— 给引擎解压前的内存预检（W5）
+///
+/// lib 是 `#![forbid(unsafe_code)]`，碰 `GlobalMemoryStatusEx` 的活归外壳：
+/// 启动时把这个函数注册进 `hardware::注册内存探针`，预检每次实时来取。
+/// 读不到就返回 `None`（预检降级放行 —— 与「读不到 /proc」同一待遇，
+/// 绝不能因为探针失败拦住解压）。
+#[cfg(windows)]
+fn windows可用内存MiB() -> Option<u64> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    // SAFETY: 只写我们自己的 MEMORYSTATUSEX（先填 dwLength），API 不在调用后持有指针；
+    // 返回 0 = 失败（典型是结构体长度没填对），按 None 降级。
+    unsafe {
+        let mut st: MEMORYSTATUSEX = std::mem::zeroed();
+        st.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+        if GlobalMemoryStatusEx(&mut st) == 0 {
+            return None;
+        }
+        Some(st.ullAvailPhys / 1024 / 1024)
+    }
+}
+
 fn main() -> ExitCode {
     // 时区要最先注入：崩溃日志、诊断包、ZIP 条目时间全都靠它显示成"本地时间"
     // （引擎自己碰不了 localtime_r，这一步只能外壳做）
     crash::注入本地时区();
+    // Windows 上 lib 碰不了 GlobalMemoryStatusEx（禁 unsafe），外壳注册探针后
+    // 解压前的内存预检才有真实数字 —— 以前永远读不到，防 OOM 的内存闸形同虚设（W5）
+    #[cfg(windows)]
+    yshjy::hardware::注册内存探针(windows可用内存MiB);
     // 崩溃兜底要**最早装**：后面每一步（读配置、解析语言包、扫目录）都可能炸，
     // 装晚了那几秒里的崩溃就没有现场了。
     crash::装兜底();
@@ -2869,6 +2894,26 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use yshjy::progress::{Eta, ProgressView};
+
+    #[cfg(windows)]
+    #[test]
+    fn windows内存探针给得出真实数字() {
+        let m = windows可用内存MiB().expect("真 Windows 上应读得到可用内存（W5）");
+        assert!(m > 0, "可用内存不可能为 0");
+        // 就算 2 TB 内存的怪机器也到不了 2^31 MiB；超了说明换算出错
+        assert!(m < (1u64 << 31), "可用内存 {m} MiB 不合常理");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows注册探针后引擎读得到内存() {
+        // 探针没注册时 available_mem_mib 在 Windows 上是 None（没有 /proc），
+        // 注册后必须给得出数 —— 这就是内存闸从「形同虚设」到「有数可比」的那一步
+        yshjy::hardware::注册内存探针(windows可用内存MiB);
+        let m = yshjy::hardware::available_mem_mib()
+            .expect("注册探针后 available_mem_mib 不该再是 None");
+        assert!(m > 0);
+    }
 
     #[test]
     fn 时长说法分档() {

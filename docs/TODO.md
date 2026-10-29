@@ -664,7 +664,7 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 | W2 | ✅ 续传（**2026-10-30 已修，两层根因**，证据见 CHANGELOG） | 🔴 功能假死 | ~~append 下 set_len 被拒~~ 之外还有 **canonicalize 存在与否指纹漂移**（验收时实测挖出） |
 | W3 | 回收站写错地方 | 🟠 | 只认 XDG，Windows 上会建到当前盘根目录，资源管理器还不认 |
 | W4 | ✅ 密码明文（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~关回显只有 Unix 分支~~ 换 dialoguer::Password，顺手删手写 termios |
-| W5 | 内存预检失效 | 🟠 | 读 `/proc`，Windows 上永远「内存未知」→ 防炸弹的内存闸形同虚设 |
+| W5 | ✅ 内存预检（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~读 /proc，Windows 永远「内存未知」~~ 外壳注册 GlobalMemoryStatusEx 探针，预检实时取数 |
 | W6 | 配置 `~` 不展开 | 🟡 | 展开只认 `HOME` |
 | W7 | 回归套件跑不全 | 🟡 | 缺 `zip` / `rar` / `unrar` |
 | W8 | 单测 14 挂 | 🟡 | 10 条是 W2 的根因，3 条是环境，1 条已归到 W6 |
@@ -724,17 +724,12 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
 - **已修**：整个函数换 `dialoguer::Password`（跨平台关回显 + 退格编辑），删手写 termios unsafe；
   管道/stderr 重定向走普通读降级。**唯一留给人的**：真终端敲密码不显示字符这 10 秒肉眼验收。
 
-### W5 内存预检 / 机械盘探测（`src/hardware.rs:196-240`）
+### W5 ✅ 内存预检 / 机械盘探测（2026-10-30 已修内存半边，证据全文见 CHANGELOG.md）
 
-- 只读 `/proc/meminfo`、`/proc/mounts`、`/sys/block/*/queue/rotational`，Windows 上全 `None`
-- 当前是**降级不崩**（`ok()?`），但解压前的内存预检在 Windows 上**等于没有**
-  —— 防解压炸弹的「总量闸」还在，**「内存闸」丢了**
-- **修法**：Windows 用 `GlobalMemoryStatusEx` + `MEMORYSTATUSEX.ullAvailPhys`（已核对在
-  `windows-sys` 的 `Win32::System::SystemInformation`，与 **W1 共用同一个 feature**，不额外加依赖）；
-  盘型可以暂时不做（只影响提示与并行度）。
-  另一条路（不推荐）：`sysinfo` crate —— `rustdesk/src/common.rs:929` 就这么干，但为了一行内存
-  把整包依赖拖进来不划算，而我们本来就只需要这一个数
-- **验收**：Windows 上能报出真实可用内存；造一个超内存的包应被拦下来
+- ~~只读 `/proc/meminfo`、`/proc/mounts`、`/sys/block/*/queue/rotational`，Windows 上全 `None`~~
+- **已修（内存闸）**：`hardware::注册内存探针`（lib 禁 unsafe，探针归 bin：`GlobalMemoryStatusEx`
+  实时取数，与 W1 共用 feature 零新增依赖）；盘型（只影响提示与并行度）按审计「可以暂时不做」搁置。
+  「造超内存包被拦」的端到端演示因压缩端要实分配同量内存而留待老板（详见 CHANGELOG）。
 
 ### W6 配置里的 `~` 不展开（`src/config.rs:64-73`）
 
