@@ -3,14 +3,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'app_shell.dart';
+import 'platform_paths.dart';
 import 'theme_mode.dart';
 
 /// 启动前读一次 `[general] theme`（之后由设置页切换，不用重启）
 Future<void> _loadThemeMode() async {
   try {
-    final env = Platform.environment;
-    final base = env['XDG_CONFIG_HOME'] ?? '${env['HOME']}/.config';
-    final f = File('$base/yshjy/config.toml');
+    // 配置目录走 platform_paths 的唯一真源（以前手写 XDG/HOME，Windows 上算成 /.config）
+    final f = File('$configDir${Platform.pathSeparator}config.toml');
     if (!await f.exists()) return;
     final text = await f.readAsString();
     var inGeneral = false;
