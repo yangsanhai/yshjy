@@ -1,5 +1,22 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-30 深夜 · Windows 审计清单 W1~W10 全部清账（ZCode 自主夜跑，老板授权直接提交）** ——
+> 审计表（`docs/TODO.md`「2026-10-30 Windows 实测审计」）**十项全 ✅**，每项一个提交、
+> 证据全文在 `CHANGELOG.md` 的「[未发布] 2026-10-30」：
+> **W1 时区**（6c430f5）→ **W2 续传两层根因**（94dd695，append 权限 + canonicalize 指纹漂移）→
+> **W4 密码回显**（2b15deb，dialoguer::Password）→ **W5 内存闸**（b14d42e，外壳注册探针）→
+> **W6 波浪号**（641a8ca）→ **W8 单测清零**（8474087，挖出 WSL bash 假绿）→
+> **W3 回收站**（dcc28eb，trash crate 走系统回收站）→ **W7 回归套件全绿**（e9a8de1，
+> `tests/all.sh --no-gui` = **35 过 / 0 挂 / 9 明说跳过**，四个深坑见 CHANGELOG）→
+> **W9 图形界面**（bfb2781 + 本次提交）：`flutter build windows` 出包实测、
+> 设置页「关窗口时」tray/exit（默认分平台）、Windows 托盘 C++（同一份 yshjy/tray 协议）+ 气球通知。
+> **全库现状**：`cargo test` **355 过 / 0 挂**（基线 341/14）、clippy 干净、flutter test 43 过 / 3 跳。
+> **下一个会话先看**：①老板的 GUI 肉眼验收清单（CHANGELOG W9 节末尾）；②W2 的真 Ctrl-C 交互路径
+> 只能真终端验；③Linux 侧把 main 拉过去重跑 `bash tests/all.sh`（本分支改动在移动硬盘同一份 .git）。
+> **别重踩**：MSYS `[ -x ]` 对无后缀名兜底 .exe；MSYS grep 星平面 emoji 要 LC_ALL=C 或 ASCII 标记；
+> Windows 7-Zip 输出文件名是 GBK；MSVC 无 BOM 按 GBK 读源码（runner CMake 已加 /utf-8）；
+> MSYS kill -INT 送不进原生子进程（无控制台）；heredoc 传 python 的 \n 会被吃一层转义。
+
 > **2026-10-30 收工 · 环境已配齐 + 参考项目查完（代码仍然一行未改）** ——
 > ① **Windows 环境备齐**：Inno Setup 6.7.3（`INNO_SETUP_PATH` 已设）、Flutter 3.47.8（`D:\flutter`，
 > 进了 PATH，`PUB_CACHE` 挪到 `D:\pub-cache` 免得吃 C 盘）。**C 盘只剩 ~10 G，装什么一律 D 盘。**

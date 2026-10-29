@@ -100,6 +100,10 @@ pub struct General {
     pub default_mode: String,
     /// 并行任务数（默认 1，对机械盘友好）
     pub jobs: usize,
+    /// 关窗口时：`tray`（缩到托盘）| `exit`（直接退出）。**界面行为**，引擎自己不消费；
+    /// 入库到这里只是让它有一份校验过的家（写非法值会被丢弃，见 load_from）。
+    /// 默认值分平台：Windows `exit`、其余 `tray`（用户 2026-10-30 拍板，两边别抄反）。
+    pub close_action: Option<String>,
 }
 
 impl Default for General {
@@ -108,6 +112,7 @@ impl Default for General {
             language: None,
             default_mode: "auto".into(),
             jobs: 1,
+            close_action: None,
         }
     }
 }
@@ -219,6 +224,13 @@ impl Config {
             }
             if let Some(x) = t.get("jobs").and_then(|x| x.as_integer()) {
                 cfg.general.jobs = x.max(1) as usize;
+            }
+            if let Some(x) = t.get("close_action").and_then(|x| x.as_str()) {
+                // 只认两个合法值；写错当没写（界面按平台默认走）
+                match x.trim() {
+                    "tray" | "exit" => cfg.general.close_action = Some(x.trim().to_string()),
+                    _ => {}
+                }
             }
         }
         if let Some(t) = v.get("password") {
@@ -507,6 +519,24 @@ mod tests {
         assert_eq!(cfg.safety.zip_bomb_ratio, 100);
         assert!(cfg.general.language.is_none());
         assert!(cfg.output_dir().is_none());
+    }
+
+    // 关窗口动作（W9）：合法值收编、非法值丢弃（界面按平台默认走）
+    #[test]
+    fn close_action_只认合法值() {
+        let dir = 临时目录("closeaction");
+        let f = dir.join("config.toml");
+        // TOML 单引号字面串，免引号转义
+        std::fs::write(&f, "[general]\nclose_action = 'tray'\n").unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(cfg.general.close_action.as_deref(), Some("tray"));
+
+        std::fs::write(&f, "[general]\nclose_action = '最小化'\n").unwrap();
+        let cfg = Config::load_from(&f);
+        assert_eq!(
+            cfg.general.close_action, None,
+            "写错值当没写（非法值不收）"
+        );
     }
 
     #[test]

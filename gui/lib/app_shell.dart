@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'app_settings.dart';
 
 import 'package:flutter/material.dart';
 import 'dart:ui' show AppExitResponse;
@@ -210,8 +211,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   Future<AppExitResponse> didRequestAppExit() async {
     if (!_client.busy) return AppExitResponse.exit;
-    // 藏窗口 = 取消这次退出请求（return cancel），窗口关不掉是故意的：
-    // 引擎还在跑，退出请求一旦放行进程就没了。
+    // 正忙时关窗口：动作由设置页的「关窗口时」决定（默认分平台，见 app_settings）。
+    // 「缩到托盘」= 取消这次退出请求，把窗口藏起来让引擎后台跑完；
+    // 「直接退出」= 先 cancel 引擎、给它 400ms 在数据块边界收尾（与托盘「退出」
+    // 菜单同一条路），再放行 —— 用户明确选了退出，强扭的瓜不甜。
+    final action = await closeActionSetting();
+    if (action == 'exit') {
+      await _client.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      return AppExitResponse.exit;
+    }
     await Tray.hideWindow();
     return AppExitResponse.cancel;
   }
