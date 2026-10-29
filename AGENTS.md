@@ -10,9 +10,35 @@
 - 界面：`gui/`（Flutter，Linux 桌面）
 - 协议：引擎和界面的唯一通道，`docs/PROTOCOL.md`（stdin/stdout 一行一个 JSON）
 
+## 仓库在两台机器上（同一份，走移动硬盘）
+
+> 用户 2026-10-30 定的：**这个项目要在两台电脑上一起做**，仓库放在**移动硬盘**里，
+> 哪台机器上开工就把硬盘插上去。**同一份 `.git` 历史**，两边都能提交、都能 `git pull`。
+
+| 机器 | 仓库路径 | 系统 | 能做什么 |
+|---|---|---|---|
+| 开发机（旧） | `~/hermes/yshjy` | Linux | 完整（引擎 + Flutter 界面 + 出 deb 包 + 跑 `tests/all.sh`） |
+| 这台（新） | `E:\yshjy-20261030` | Windows 11 | 引擎已通（MSVC）；**图形界面是 Windows 的主战场** |
+
+**跨机器的四条**：
+1. **`target/` 不要同步、也不要当备份** —— 它是按平台生成的（Linux 那份 14 G 在 Windows 上一个也用不上），删了随时重建。
+2. **别删 `.git`** —— 两边靠它同步。
+3. **NTFS 不支持 Unix 软链**：Linux 上 69 个软链拷过来已被展开成实体文件（文件数比源多 343 个），
+   **反向拷回 Linux 时注意这一点**，别以为是多了什么。
+   **同样被丢掉的还有可执行位**：`git status` 里那些 `scripts/*.sh`、`tests/*.sh`、
+   `assets/sfx/yshjy-sfx.exe` 的「修改」，全是 `mode change 100755 => 100644`，
+   **内容一个字节没变**（2026-10-30 核对过）。拷回 Linux 后要 `chmod +x` 回来，
+   **别在 Windows 上把这批 mode change 提交掉** —— 那会把 Linux 那边的执行位也一起改坏。
+4. 开工前先 `git status` 看一眼有没有另一台机器没提交的改动；提交仍按「硬规矩 3」
+   （改完停手，监工审过再提），别因为是新机器就自己 commit。
+
 ## 建置与验收（照抄就对了）
 
 ```bash
+# Windows 这台 —— 编译前先看 docs/TODO.md 的 W10（代理要置空、沙箱要关）
+cd /e/yshjy-20261030
+CARGO_HTTP_PROXY= cargo build --release     # 产物 target/release/yshjy.exe
+CARGO_HTTP_PROXY= cargo test
 # 引擎（Rust）
 cd ~/hermes/yshjy
 cargo test                    # 单元测试，300+ 条

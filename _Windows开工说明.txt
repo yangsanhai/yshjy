@@ -1,0 +1,74 @@
+════════════════════════════════════════════
+yshjy（杨三海解压）· Windows 开工说明
+副本时间：2026-10-30 00:4x
+来源：Linux 本机 ~/hermes/yshjy（git 提交 e494259，装机版 0.9.31）
+════════════════════════════════════════════
+
+【这份是什么】
+项目的**全量快照**，24G，一个文件没落下，包含 .git 历史（308M）。
+9 个关键文件已逐个 sha256 比对过，与源完全一致。
+
+⚠️ 先知道一件事：24G 里有 **14G 是 target/（Linux 编译产物）**，
+里面是 .so / .rlib / 无扩展名的 ELF 可执行文件 —— **拿到 Windows 上毫无用处，也不能运行**。
+Windows 上第一次 `cargo build` 会自己重新生成一份 target/（所以别以为"拷了就能跑"）。
+同理 gui/build（170M）、ffi/target（663M）也都是 Linux 的产物。
+
+【Windows 上要装的东西】
+1. Rust：https://rustup.rs  → 装完默认就是 MSVC 工具链
+2. Visual Studio Build Tools（勾"使用 C++ 的桌面开发"）+ Windows 10/11 SDK
+   （rustup 提示缺链接器时就是这个没装；不想装 VS 也可以改用 GNU 工具链 + mingw-w64）
+3. 只做命令行版：上面两条就够
+4. 要做图形界面版：再装 Flutter SDK（Windows 桌面支持）+ Visual Studio 的"桌面开发 C++"
+
+【第一步：先读这两个文件（10 分钟）】
+1. HANDOFF.md —— 最上面一条就是 2026-10-29 夜的实测结论，3 秒了解现状
+2. docs/TODO.md —— 顶部「📊 完成度总览」是唯一真源；第 6 条是**已排好的优先级**
+
+【第一件活：补 Windows 时区占位（预计 1 小时，做完账本上多一个完整平台）】
+
+文件：src/crash.rs，第 78~82 行，现在是这么个占位：
+
+    /// 非 Unix 先返回 0（将来的 Windows 版用 `GetTimeZoneInformation` 补）
+    #[cfg(not(unix))]
+    fn 本地时区偏移秒() -> i64 {
+        0
+    }
+
+后果：Windows 上解压出来的文件时间会比真实时间**差 8 小时**（东八区）。
+要做的：让它返回真正的本地偏移（秒，东八区 = +28800）。
+
+两条路线（选一条）：
+  A. windows-sys 调 GetTimeZoneInformation（推荐，符合原注释里的打算）
+     Cargo.toml 加：
+       [target.'cfg(windows)'.dependencies]
+       windows-sys = { version = "0.59", features = ["Win32_System_Time"] }
+     然后在 crash.rs 里处理 TIME_ZONE_INFORMATION 的 Bias / StandardBias / DaylightBias
+     以及 SYSTEMTIME 的 wHour/wMinute，算出「UTC 偏移秒」。
+
+  B. 用现成 crate（省事，但多一个依赖）：`time` 或 `chrono` 带 local-offset 特性。
+     注意有的实现内部用 unsafe，必须先确认不违反引擎的 #![forbid(unsafe_code)]
+     —— crash.rs 属于**外壳**，外壳允许 unsafe（引擎不允许），所以放在这里是对的。
+
+验收：
+  - Windows 上解一个包，文件修改时间应与资源管理器本地时间一致（不再差 8 小时）
+  - `cargo test` 全绿；给这条补一个 `#[cfg(windows)]` 的单测（至少验 offset 落在 -43200..=50400 秒）
+
+【第二件：出 Windows 的 zip 包】
+  引擎已经能交叉编出 13MB 的 yshjy.exe（本机 wine 验过），你只需要：
+    cargo build --release --target x86_64-pc-windows-gnu   （或用 MSVC 目标）
+  然后打包 exe + 必要 doc/补全，并写 docs/BUILD-Windows.md（现在还没有这份文档）
+
+【第三件：图形界面版（可选，最后做）】
+  gui/ 里目前只有 android / ios / linux / macos，**没有 windows 目录**。
+  先 `flutter create --platforms=windows .`（在 gui/ 里执行）再编。
+
+【注意这些，别踩】
+- 别把 target/ 当资产备份或同步，它随平台变化，删了随时能重建
+- 别删 .git —— 里面是完整历史，你在 Win 上可以接着提交
+- 这台机器（Linux）拷过来的 69 个软链已被展开成实体文件（NTFS 不支持 Unix 软链），
+  所以文件数比源多 343 个，属于正常；反向拷回 Linux 时注意这一点
+- 项目的规矩写在 docs/TODO.md 末尾「用法」三句话：开工读 HANDOFF → 只做最上面那一项 →
+  收工跑 tests/all.sh 全绿 → 证据写 CHANGELOG → 本地 git 提交
+- 半路发现新问题：**不要顺手改**，追加到 docs/TODO.md 表尾
+
+════════════════════════════════════════════

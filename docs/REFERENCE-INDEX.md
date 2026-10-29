@@ -162,6 +162,8 @@
 | `fastforge/` | LeanFlutter/flutter_distributor（已改名 fastforge） | 21M | Flutter 桌面一键出 deb/rpm/AppImage/exe/dmg |
 | `flutter_rust_bridge/` | fzyzcjy（sparse：codegen + docs + 集成示例） | 12M | 另一条 FFI 路（rustdesk 走这条），需要自动生成桥接时才看 |
 | `clap/` | clap-rs/clap ⭐16.8k | 6.5M | `clap_complete` / `clap_mangen` 源码 |
+| `trash-rs/` | Byron/trash-rs ⭐255（2026-10-30 拉） | 474K | 跨平台回收站：Windows 走 COM `IFileOperation`（`src/windows.rs:92`）。**W3 的唯一可抄来源**——我们 `src/lib.rs` 是 `#![forbid(unsafe_code)]`，自己写不了 COM |
+| `time/` | time-rs/time（2026-10-30 拉） | 3.1M | Windows 本地时区偏移的正确写法：`src/sys/local_offset_at/windows.rs` **不碰 Bias，让 Windows 算**。**W1 照它改**（我们只取「现在」，可以再简化成 `GetLocalTime - GetSystemTime`） |
 
 ### 9.1 终端外壳（CLI）
 

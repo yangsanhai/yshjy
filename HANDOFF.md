@@ -1,5 +1,31 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-30 收工 · 环境已配齐 + 参考项目查完（代码仍然一行未改）** ——
+> ① **Windows 环境备齐**：Inno Setup 6.7.3（`INNO_SETUP_PATH` 已设）、Flutter 3.47.8（`D:\flutter`，
+> 进了 PATH，`PUB_CACHE` 挪到 `D:\pub-cache` 免得吃 C 盘）。**C 盘只剩 ~10 G，装什么一律 D 盘。**
+> 操作手册见新建的 **`docs/BUILD-Windows.md`**（编译 / 测 / 出两个包 / 五个 Windows 坑）。
+> ② **参考项目结论**（都已拉进 `refs/upstream/`，台账在 `docs/REFERENCE-INDEX.md` §9）：
+> **W1 时区**改成 `GetLocalTime - GetSystemTime`（**不要自己算 Bias**，夏令时让 Windows 算），
+> 出处 `refs/upstream/time/…/windows.rs`；**W3 回收站自己写不进去** —— COM 要 unsafe，
+> 而 `trash.rs` 在 `lib.rs` 的 `#![forbid(unsafe_code)]` 里，**只能引 `trash` crate**，
+> 出处 `refs/upstream/trash-rs/src/windows.rs:92`（含「`PerformOperations` 成功≠真删了」那个坑）；
+> **W9 关窗口**照 `refs/upstream/localsend/app/lib/widget/watcher/window_watcher.dart`（它的默认值
+> 正好是「直接退出」，与用户拍板一致）；**出两个包**照 `refs/upstream/hatchzip/packaging/`。
+> ③ 意外收获：`hatchzip` 与 `delete_when_unzip` 就是延后项 `--reclaim` 的现成实现。
+> **下一轮开工：W1 → W2 → W4**（都在 `docs/TODO.md` 末尾，编号不用重新排）。
+>
+> **2026-10-30 · 第一次在真 Windows 机器上编 / 跑（代码一行未改，装机版仍是 Linux 的 0.9.31）** ——
+> 仓库副本在 `E:\yshjy-20261030`，机器上 Rust 1.95 + MSVC 14.50 + Win SDK 10.0.26100 齐备，
+> **`cargo build --release` 57 秒出 7.8 MB `yshjy.exe`**，`--version` / `--caps` 正常，
+> 真解了一个伪装成 `.mp4` 的中文名 zip，内容正确。**引擎在 Windows 上是通的，不是"编不动"。**
+> `cargo test` 实测 **341 过 / 14 挂 / 1 ignored**。
+> **待办与证据全部落在 `docs/TODO.md` 末尾「2026-10-30 Windows 实测审计」一节（W1~W10），
+> 这里不另记。** 一句话：W1 时区（+8 小时，实测复现）、W2 断点续传在 Windows 上静默失效
+> （`append` 模式下 `set_len` 被拒，10 条单测抓到）、W3 回收站写错地方、W4 密码明文显示、
+> W5 内存预检失效、W9 图形界面（用户点名一定要上，脚手架已在、Flutter 待装）。
+> **编译两个坑（W10）**：`CARGO_HTTP_PROXY=` 置空（注册表里残留 7890 代理，直连其实是通的）；
+> cargo 要执行自己生成的程序，受限环境里会 `os error 5`。
+>
 > **2026-10-29 夜 · 真机实测：磁盘满预检 + 报成功后拔盘（代码一行未改，装机仍是 0.9.31）** ——
 > 拿用户那块 14.6G U盘（切 512MiB exFAT）做的，**两条硬结论**：
 > ① 磁盘满预检 3 次全命中（剩 110M 想解 300M → 直接拒、0 字节落地），「写到一半才满」本机造不出
