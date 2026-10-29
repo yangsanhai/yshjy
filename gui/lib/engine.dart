@@ -24,6 +24,11 @@ class EntryItem {
   final int index;
   final String path;
   final int size;
+
+  /// 压缩后大小（引擎 `EntryView.packed`；未知则 null）。
+  /// 树视图里用它标「压不动」的文件（PeaZip 默认展示这一列，调研 07:632）。
+  final int? packed;
+
   final bool isDir;
   final bool encrypted;
   final bool risky;
@@ -36,6 +41,7 @@ class EntryItem {
     required this.isDir,
     required this.encrypted,
     required this.risky,
+    this.packed,
     this.modified,
   });
 
@@ -43,6 +49,7 @@ class EntryItem {
         index: (j['index'] as num?)?.toInt() ?? 0,
         path: j['path'] as String? ?? '',
         size: (j['size'] as num?)?.toInt() ?? 0,
+        packed: (j['packed'] as num?)?.toInt(),
         isDir: j['is_dir'] == true,
         encrypted: j['encrypted'] == true,
         risky: j['is_risky'] == true,

@@ -4,6 +4,26 @@
 > 由 `scripts/scan-src.py` 从源码扫出来；数字是扫的，不是手写计划）。
 > **待办只看 `docs/TODO.md`**；**参考项目台账看 `docs/REFERENCE-INDEX.md`**；
 > **往哪走 / 全平台怎么切看 `docs/ROADMAP.md`**（2026-10-28 对照审计 + 三批路线）。
+> **2026-10-29 · 第三期 A：预览树 + 部分解压（**纯界面轮，引擎一行没改**）**
+> ① 新增 `gui/lib/entry_tree.dart`：平铺清单 → 目录树（纯 Dart、不 import Flutter，可直接 `flutter test`）。
+>    节点带子树合计的 `size`/`packed`/`fileCount`/`encryptedCount`；同名中间目录合并；空目录
+>    显示但不可勾；`packed` 任一子项未知就整树记 `null`（不拿 0 冒充）。
+> ② 预览页改树形（默认树，可切平铺）：三态勾选（勾目录 = 整棵子树，半选时点一下 = 全选）、
+>    状态栏 `已选 N / M 个文件 · 合计 X`（按文件条数算）、面包屑**真过滤**、
+>    **目录行右侧「只看这一层」下钻入口**（方案没写，截图验收才发现「只能回不能进」）、
+>    列标题「大小 / 压缩后」。
+> ③ `EntryItem.packed`：引擎**一直**在发（`src/event.rs:112` + `--list --json` 实测有 `"packed":6`），
+>    只是 Dart 侧没解析 → 补解析，不动协议、不升版本。
+> ④ 测试：`entry_tree_test.dart` **19 条** + `preview_tree_widget_test.dart` **7 条**（真点界面，
+>    为此给 `HomePage` 加 `debugPreview` 注入口，生产永传 null）+ `tests/tree_select.sh` **7 项**
+>    （挂进 all.sh；序号串 vs 通配产物逐字节一致；**反向验证过会红**）。
+> ⑤ 回归：`flutter test` **46 条全绿**（须给隔离 `XDG_CONFIG_HOME`）、analyze 仅 2 条既有 info、
+>    `bash tests/all.sh` 日志 `~/.hermes/cache/scratch/all_tree.log`。真机实测 **1026 条目**包渲染正常。
+> ⑥ 坑记档：widget 测试默认视口 800×600，ListView **看不见的行不 build** → `find` 报「找不到」，
+>    会被误判成功能坏；测试里设 1200×2000。**真机绝对指针手点不可靠**（一次点击把「已选 1001」
+>    点成「已选 1」），状态机类交互一律走 widget 测试。
+> **下一轮**：第三期 ② B 干扰数据 / 假签名（方案 §B 已写，引擎 + 打包侧，要单独一轮）。
+>
 > **2026-10-29 · 第三轮：表尾待查清完 + 两个新能力 + 打包补 prerm + 第三期方案**
 > ① 表尾 4 条全清：**bash 补全 IFS 劈词（真 bug，改 `mapfile`；实测否决 `IFS=$'\n'` 前缀写法——
 >    会泄漏全局 IFS）**、FFI 头文件对账探针（顺带抓到 `ffi/Cargo.toml` 版本停在 0.9.20）、

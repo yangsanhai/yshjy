@@ -156,6 +156,9 @@ if [ -n "$BIN" ]; then
   fi
   # --pick 全屏勾选：非 TTY 拒绝 + pty 里勾选结果与 --select 逐字节一致
   run "全屏勾选（pick.sh）" bash tests/pick.sh "$BIN"
+  # 预览树（第三期 A）：界面勾目录 = 传一串序号，这条验「送出去的序号」与
+  # 等价通配表达式产物逐字节一致（树的构建/三态由 gui/test/entry_tree_test.dart 覆盖）
+  run "预览树选择一致性（tree_select.sh）" bash tests/tree_select.sh "$BIN"
   # 进度条：单任务等价 / -j 2 两行独立 / TERM=dumb 不沉默 / 管道零污染
   run "多任务进度（progress_multi.sh）" bash tests/progress_multi.sh "$BIN"
 else
