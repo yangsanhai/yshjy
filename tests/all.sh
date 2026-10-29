@@ -150,6 +150,15 @@ if [ "$GUI" = 1 ]; then
   CFGTMP="${TMPDIR:-/tmp}/yshjy-all-cfg"
   mkdir -p "$CFGTMP"
   run "flutter test" bash -c "cd gui && XDG_CONFIG_HOME='$CFGTMP' '$FLUTTER' test"
+  # 窗口尺寸记忆（P10）：这条必须真的开界面窗口 —— Wayland 不许外部查询
+  # 别人窗口的几何、GNOME 48 的截图接口对非 shell 进程也不给用（都实测过），
+  # 只靠界面里 YSHJY_WINDOW_TRACE 的打点断言。默认跳过：用户明确讨厌回归
+  # 时往桌面弹窗（被文件管理器弹窗抓到过两次）。
+  if [ "${YSHJY_GUI_VISIBLE_TEST:-}" = 1 ]; then
+    run "窗口尺寸记忆（gui_window_state.sh）" bash tests/gui_window_state.sh
+  else
+    skip "窗口尺寸记忆" "会开界面窗口，设 YSHJY_GUI_VISIBLE_TEST=1 才跑"
+  fi
 else
   skip "界面测试" "用 --no-gui 关掉了"
 fi

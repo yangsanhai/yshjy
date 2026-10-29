@@ -56,6 +56,9 @@ typedef struct {
   int w;
   int h;
   gboolean maximized;
+  // 防抖句柄（0 = 没有待写的保存）。拖动窗口时 configure 事件一秒几十次，
+  // 不能每来一次就写一次文件。
+  guint save_timer;
 } WindowSizeState;
 
 static gchar* window_state_dir(void) {
@@ -65,6 +68,21 @@ static gchar* window_state_dir(void) {
   }
   const gchar* home = g_getenv("HOME");
   return g_strdup_printf("%s/.local/state/yshjy", home != NULL ? home : ".");
+}
+
+// 探针开关：设了 `YSHJY_WINDOW_TRACE=1` 就把「读到的 / 应用的 / 写回的」
+// 尺寸打到 stderr。
+//
+// 为什么需要它：窗口到底多大，程序自己以外没人量得准 —— Wayland 协议不许
+// 客户端查询别人的窗口几何，截图在 GNOME 48 也对非 shell 进程关着
+// （实测 `org.gnome.Shell.Screenshot` 回 AccessDenied）。所以留一条打点，
+// 让 `tests/gui_window_state.sh` 能断言「上次的尺寸真的被采用了」。
+static gboolean window_trace_enabled(void) {
+  static int cached = -1;  // -1 还没判断 / 0 关 / 1 开
+  if (cached < 0) {
+    cached = (g_getenv("YSHJY_WINDOW_TRACE") != nullptr) ? 1 : 0;
+  }
+  return cached == 1;
 }
 
 static gboolean load_window_size(WindowSizeState* st) {
@@ -88,14 +106,68 @@ static gboolean load_window_size(WindowSizeState* st) {
   return ok;
 }
 
+// 把当前尺寸写盘。原来这段只在 destroy 里做，现在抽出来给「防抖保存」复用。
+static void save_window_size(const WindowSizeState* st) {
+  gchar* dir = window_state_dir();
+  g_mkdir_with_parents(dir, 0700);
+  gchar* path = g_build_filename(dir, "gui-window.txt", nullptr);
+  gchar* text = g_strdup_printf("%d %d %d\n", st->w, st->h, st->maximized ? 1 : 0);
+  g_file_set_contents(path, text, -1, nullptr);
+  if (window_trace_enabled()) {
+    g_printerr("window: save %dx%d maximized=%d\n", st->w, st->h,
+               st->maximized ? 1 : 0);
+  }
+  g_free(text);
+  g_free(path);
+  g_free(dir);
+}
+
+static gboolean save_timer_cb(gpointer data) {
+  WindowSizeState* st = (WindowSizeState*)data;
+  st->save_timer = 0;
+  save_window_size(st);
+  return G_SOURCE_REMOVE;
+}
+
+// 尺寸变了先攒 800ms 再写盘。
+//
+// 为什么不再「只在关窗时写」：这一版界面有个反直觉的行为 —— 正在解压时点
+// 关闭按钮是**藏到托盘**（不是销毁窗口），而托盘「退出」最终走
+// `g_application_quit`，两条路都不一定会走到 `destroy` 信号。实测用户用了
+// 一个月，`gui-window.txt` 一次都没生成（目录里只有 crash/ 和 history），
+// 「记住窗口大小」等于没做。改成随改随存之后，哪怕进程被硬杀、被注销、
+// 被 Wayland 合成器干掉，尺寸也已经落盘了。
+static void schedule_save(WindowSizeState* st) {
+  if (st->save_timer != 0) return;  // 已经在等：等的那一次会带上最新值
+  st->save_timer = g_timeout_add(800, save_timer_cb, st);
+}
+
 static gboolean on_configure(GtkWidget* widget, GdkEventConfigure* event,
                              gpointer data) {
   WindowSizeState* st = (WindowSizeState*)data;
-  // 只记「非最大化」尺寸：最大化时 configure 给的是整块屏幕
+  // 只记「非最大化」尺寸：最大化时窗口就是整块屏幕
+  //
+  // ⚠️ 用的是 `gtk_window_get_size`，**不是** `event->width/height`：
+  // Wayland 下 configure 事件报的是「含 CSD 装饰/阴影的 surface 尺寸」，比内容区
+  // 大一圈（本机实测宽多 112、高多 144）。存进文件、下次又当内容区喂给
+  // `set_default_size`，窗口就会一轮比一轮大 —— 实测预置 880x700 → 存回
+  // 992x849 → 再开 1104x849，雪球滚下去。`gtk_window_get_size` 是「不含装饰」
+  // 的内容区尺寸，和 `gtk_window_set_default_size` 同一个基准，闭环才稳。
+  int cw = st->w;
+  int chh = st->h;
+  gtk_window_get_size(GTK_WINDOW(widget), &cw, &chh);
   if (!gtk_window_is_maximized(GTK_WINDOW(widget))) {
-    st->w = event->width;
-    st->h = event->height;
+    st->w = cw;
+    st->h = chh;
   }
+  if (window_trace_enabled()) {
+    // 顺带把「事件给的 surface 尺寸」也打出来：两者差多少是 CSD 的锅，
+    // 换主题/换桌面后对不上时，一眼就能看出是基准又漂了。
+    g_printerr("window: configure surface %dx%d content %dx%d maximized=%d\n",
+               event->width, event->height, cw, chh,
+               gtk_window_is_maximized(GTK_WINDOW(widget)) ? 1 : 0);
+  }
+  schedule_save(st);
   return FALSE;
 }
 
@@ -104,20 +176,20 @@ static gboolean on_state_track(GtkWidget* widget, GdkEventWindowState* event,
   (void)widget;
   WindowSizeState* st = (WindowSizeState*)data;
   st->maximized = (event->new_window_state & GDK_WINDOW_STATE_MAXIMIZED) != 0;
+  // 最大化/还原也要记：下次开机照样按这个状态开
+  schedule_save(st);
   return FALSE;
 }
 
 static void on_destroy_save_size(GtkWidget* widget, gpointer data) {
   (void)widget;
   WindowSizeState* st = (WindowSizeState*)data;
-  gchar* dir = window_state_dir();
-  g_mkdir_with_parents(dir, 0700);
-  gchar* path = g_build_filename(dir, "gui-window.txt", NULL);
-  gchar* text = g_strdup_printf("%d %d %d\n", st->w, st->h, st->maximized ? 1 : 0);
-  g_file_set_contents(path, text, -1, NULL);
-  g_free(text);
-  g_free(path);
-  g_free(dir);
+  // 定时器可能还挂着：先摘掉，否则它会在 st 被 free 之后拿到野指针
+  if (st->save_timer != 0) {
+    g_source_remove(st->save_timer);
+    st->save_timer = 0;
+  }
+  save_window_size(st);
   g_free(st);
 }
 
@@ -399,11 +471,20 @@ static void my_application_activate(GApplication* application) {
   WindowSizeState* size_state = g_new0(WindowSizeState, 1);
   size_state->w = win_w;
   size_state->h = win_h;
+  // 文件里的原值（没读到就是 0x0）—— 探针靠它区分「用了上次的」和「走默认比例」
+  int saved_w = 0;
+  int saved_h = 0;
   if (load_window_size(size_state)) {
+    saved_w = size_state->w;
+    saved_h = size_state->h;
     win_w = CLAMP(size_state->w, min_w, (int)(work.width * 0.98));
     win_h = CLAMP(size_state->h, min_h, (int)(work.height * 0.98));
     size_state->w = win_w;
     size_state->h = win_h;
+  }
+  if (window_trace_enabled()) {
+    g_printerr("window: load raw %dx%d -> apply %dx%d (work %dx%d)\n", saved_w,
+               saved_h, win_w, win_h, work.width, work.height);
   }
   gtk_window_set_default_size(window, win_w, win_h);
   // 用户手动拖小时也别小到布局散架
