@@ -88,6 +88,46 @@ pub enum Shape {
     Tar,
 }
 
+impl Shape {
+    /// 机器可读标识（协议 / 日志用；展示名归外壳）
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Plain => "plain",
+            Self::Volumes => "volumes",
+            Self::Single => "single",
+            Self::Tar => "tar",
+        }
+    }
+}
+
+/// 对外声明的「格式 × 形状」组合 —— **唯一真源**
+///
+/// 为什么放在引擎里而不是 CLI：`--caps` 要读它，协议 `hello.formats` 也要读它，
+/// FFI 宿主（iOS）没法 spawn 子进程，只能走协议 —— 清单留在外壳里就得手抄一份，
+/// 而「手抄的第二份真源」在这个项目里已经漂过三次（man 页版本号 / bash 补全选项 / FFI 头文件）。
+pub const 能力组合: &[(crate::layout::ArchiveFormat, Shape)] = &[
+    (crate::layout::ArchiveFormat::Zip, Shape::Plain),
+    (crate::layout::ArchiveFormat::Zip, Shape::Volumes),
+    (crate::layout::ArchiveFormat::SevenZ, Shape::Volumes),
+    (crate::layout::ArchiveFormat::Rar4, Shape::Plain),
+    (crate::layout::ArchiveFormat::Rar5, Shape::Plain),
+    (crate::layout::ArchiveFormat::Tar, Shape::Tar),
+    (crate::layout::ArchiveFormat::Gzip, Shape::Single),
+    (crate::layout::ArchiveFormat::Xz, Shape::Single),
+    (crate::layout::ArchiveFormat::Zstd, Shape::Single),
+    (crate::layout::ArchiveFormat::Bzip2, Shape::Single),
+    (crate::layout::ArchiveFormat::Brotli, Shape::Single),
+    (crate::layout::ArchiveFormat::Lz4, Shape::Single),
+];
+
+/// 每一条「格式 × 形状」的实际能力（找不到 handler 的组合自动跳过）
+pub fn 能力行() -> Vec<(crate::layout::ArchiveFormat, Shape, Caps)> {
+    能力组合
+        .iter()
+        .filter_map(|(f, s)| find(*f, *s).map(|h| (*f, *s, h.caps())))
+        .collect()
+}
+
 /// 格式能力声明
 ///
 /// 抄的是 7-Zip「能力靠探测、主接口不膨胀」的**结果**，换了个更简单的实现方式：

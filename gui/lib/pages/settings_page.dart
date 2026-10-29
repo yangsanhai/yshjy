@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -441,18 +440,22 @@ class _CapsTableState extends State<_CapsTable> {
       _err = null;
     });
     try {
-      final r = await Process.run(
-        EngineClient.executable,
-        ['--caps', '--json'],
-      ).timeout(const Duration(seconds: 5));
+      // 走**传输层**问引擎（协议 `hello.formats`），不再 spawn 子进程跑 `--caps`：
+      // ① iOS 禁止 fork/exec，子进程这条路在手机端物理上跑不了（而 caps 表就是要给手机端看的）；
+      // ② 桌面端也省一次进程启动，还和「界面只依赖 EngineTransport」这条规矩保持一致。
+      final h = await EngineClient.instance.hello();
       if (!mounted) return;
-      if (r.exitCode != 0) {
-        setState(() => _err = '引擎返回 ${r.exitCode}（老版本引擎没有 --caps）');
+      final raw = h['formats'];
+      if (raw is! List) {
+        // 老引擎（还没有 hello.formats）—— 如实说读不到，别假装是空表
+        setState(() {
+          _err = '这个引擎版本太旧（hello 里没有 formats），升级引擎后就能看';
+          _rows = null;
+        });
         return;
       }
-      final list = jsonDecode(r.stdout as String) as List;
       setState(() {
-        _rows = list.map((e) => (e as Map).cast<String, dynamic>()).toList();
+        _rows = raw.map((e) => (e as Map).cast<String, dynamic>()).toList();
       });
     } catch (e) {
       if (mounted) setState(() => _err = '$e');
@@ -503,7 +506,8 @@ class _CapsTableState extends State<_CapsTable> {
                 SizedBox(
                   width: 96,
                   child: Text(
-                    '${r['format']}',
+                    // format / shape 都是机器标识（zip / volumes…），展示名在这里拼
+                    r['shape'] == 'volumes' ? '${r['format']}（分卷）' : '${r['format']}',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ),

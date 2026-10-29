@@ -85,7 +85,29 @@
 探针 `tests/head_encrypted.sh` **5 项全绿**：无密码→HEAD_ENCRYPTED、**正确密码→能列清单**（bug 回归）、
 错误密码→WRONG_PASSWORD、内容加密→不误报、正确密码→真解出文件。没装 7z 时自动跳过。
 
-### 六、回归
+### 六、`caps` 按格式声明（协议 `hello.formats`）+ 界面不再 spawn 子进程
+
+TO-DO 原文是「`caps` 按格式声明（Ark 的做法，协议面升版，影响 GUI + FFI 两侧）」。
+查下来缺的不是能力位本身（`InArchive::caps()` 一直是按 handler 返回的），而是**协议面**：
+`hello.caps` 只有全局五项，前端想知道「这个格式能不能选条目」只能 spawn 一个子进程跑 `--caps`，
+而 **iOS 禁止 fork/exec** —— 手机端那条路物理上跑不了。
+
+- **格式清单升成引擎里的唯一真源**：`unpack::能力组合` + `unpack::能力行()`。
+  CLI `--caps` 与协议 `hello.formats` 读同一份（`main.rs` 里原来那份硬编码组合清单删了）。
+  这是本项目第 4 次治「手抄第二份真源」（前三次：man 页版本号、bash 补全选项、FFI 头文件）。
+- **协议加 `hello.formats`**：12 条，每条 `format` + `shape` + 6 个能力位。
+  `format` / `shape` 都是**机器标识**（`zip` / `rar5` / `volumes` / `single`…），展示名归前端。
+  **只加不删 → 协议版本不升**；老前端不认识 `formats` 就忽略，行为不变。
+- **界面改成走传输层**：设置页「各格式能力」原来 `Process.run(--caps --json)`，
+  现在是 `EngineClient.instance.hello()` 读 `formats`（老引擎没有就如实说「版本太旧」）。
+  这一改同时解决了 iOS 端根本读不出能力表的问题。
+- `--caps --json` 的输出多一个 `shape` 字段、`format` 变成机器标识（原来混着「zip（分卷）」这种展示名）。
+
+**验收**：`tests/caps_protocol.py` **5 项全绿** —— 协议与 CLI 逐字段一致（同源）、
+zip 能选条目而 gzip 不能（证明能力真按格式）、7z 声明头加密而 zip 不声明、标识全是 ASCII 机器名、
+全局 `caps` 五项仍在（老前端兼容）。`flutter analyze` 只剩两条既有 info。
+
+### 七、回归
 
 `bash tests/all.sh` —— **35 通过 / 0 失败 / 5 跳过 / 约 185 秒**
 （第一次跑红在 `cargo test --release` 的「长选项总数」钉桩：42 → 43，正是它该拦的）；`cargo test` 336+29+2、`cargo clippy -D warnings` 干净。
