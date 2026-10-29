@@ -4,6 +4,24 @@
 > 由 `scripts/scan-src.py` 从源码扫出来；数字是扫的，不是手写计划）。
 > **待办只看 `docs/TODO.md`**；**参考项目台账看 `docs/REFERENCE-INDEX.md`**；
 > **往哪走 / 全平台怎么切看 `docs/ROADMAP.md`**（2026-10-28 对照审计 + 三批路线）。
+> **2026-10-29 · 第三轮：表尾待查清完 + 两个新能力 + 打包补 prerm + 第三期方案**
+> ① 表尾 4 条全清：**bash 补全 IFS 劈词（真 bug，改 `mapfile`；实测否决 `IFS=$'\n'` 前缀写法——
+>    会泄漏全局 IFS）**、FFI 头文件对账探针（顺带抓到 `ffi/Cargo.toml` 版本停在 0.9.20）、
+>    `complete` 补 `-o nosort -o bashdefault -o default`（并给「故意不给候选」的位置
+>    `compopt +o default` 关回落）、**新能力 `--test` 只测不写**（开关收在 IO 层空设备，
+>    七条落盘路径解码逻辑不动；不建目录/不设属性/跳过空间预检/停用续传；与源包处置互斥）。
+> ② 7z 头加密单独说人话（新码 `HEAD_ENCRYPTED`，错密码单独报 `WRONG_PASSWORD`），
+>    顺带修掉 **`do_list` 把密码写死 `None`** 的真 bug（头加密包带正确密码也列不出内容）。
+> ③ `caps` 按格式声明：`unpack::能力组合` 升成唯一真源，协议 `hello.formats` 给 12 条
+>    （只加不删 → 协议版本不升）；界面不再 spawn `--caps` 子进程（iOS 跑不了），改走 `EngineClient.hello()`。
+> ④ `build-deb.sh` 补 `prerm`：只在 `remove|purge` 动手，**升级早退**（不许杀掉用户正在跑的解压）；
+>    `test-packages.sh` 37 项全绿。
+> ⑤ **第三期方案已写**：`docs/THIRD-PHASE-PLAN.md`（A 预览树 / B 干扰数据+假签名 / C 移动端 seek，
+>    每条带参考出处、设计决策、边界、验收）。**这三条本轮只写方案、代码一行没动。**
+> 回归：`bash tests/all.sh` **38 通过 / 0 失败 / 5 跳过 / 180 秒**；`cargo test` 336+29+2；clippy 干净。
+> 五个新探针：`completions.sh`(11) / `ffi-header-sync.sh`(4) / `verify_only.sh`(8) /
+> `caps_protocol.py`(5) / `head_encrypted.sh`(5)。**下一轮：按方案 ①A（预览树）开工。**
+>
 > **2026-10-29 · 0.9.29 已出包并装机（收尾轮）** —— 五处版本号同步（`Cargo.toml` /
 > `gui/pubspec.yaml` / `docs/yshjy.1` 的 `.TH` 由生成器带出 / `docs/PROTOCOL.md` 两份示例 /
 > `CHANGELOG.md` 四个「未发布」段改成 `[0.9.29]`）。`dist/` 里：`yshjy_0.9.29_amd64.deb`（9.8M）

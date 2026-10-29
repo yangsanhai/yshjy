@@ -297,8 +297,11 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 ### 第三期：结构优化（2–3 天，要设计）—— 方案 §3.3
 
 - [ ] 预览树 + 部分解压（界面）—— 引擎有 `select`，界面还是平铺
+  📐 方案见 `docs/THIRD-PHASE-PLAN.md` §A（依据 PeaZip 结构树 + 设计决策 + 边界 + 验收）。
 - [ ] 干扰数据 / 假签名（打包）—— 要定「打多少、怎么打、会不会影响播放」
+  📐 方案见 `docs/THIRD-PHASE-PLAN.md` §B（只允许 L1/L2 布局、固定种子可复现、打完三条自检）。
 - [ ] 移动端 seek 三档 —— 跟 Android 一起做（SAF 不支持随机定位）
+  📐 方案见 `docs/THIRD-PHASE-PLAN.md` §C（本轮只做探测 + 块缓存 + 协议字段，落地留 Android 批）。
 - [x] ✅ **已完成（2026-10-29）**：`unpack::能力组合` / `能力行()` 升成唯一真源，协议 `hello.formats` 给 12 条（format + shape + 6 个能力位），CLI `--caps` 读同一份；**协议不用升版**（只加字段，老前端忽略即可）。界面侧顺手治了老毛病：设置页原来 spawn `--caps --json` 子进程，iOS 上根本跑不了，改成走 `EngineClient.hello()`。探针 `tests/caps_protocol.py` 5 项（含「两边逐字段一致」与「能力确实按格式」）。原记录：
   `caps` 按格式声明（Ark 的做法，协议面升版，影响 GUI + FFI 两侧）
 - [x] ✅ **已完成（2026-10-29）**：新错误码 `HEAD_ENCRYPTED`（连清单都加密 → 必须先去要密码），错误密码单独报 `WRONG_PASSWORD`（不许把「给错了」说成「没给」）。**顺带修掉一个真 bug**：`do_list` 里密码写死 `None`，导致 `--list -p 密码 头加密.7z` 永远失败。`tests/head_encrypted.sh` 5 项全绿。原记录：
