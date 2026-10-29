@@ -5,6 +5,21 @@
 > **待办只看 `docs/TODO.md`**；**参考项目台账看 `docs/REFERENCE-INDEX.md`**；
 > **往哪走 / 全平台怎么切看 `docs/ROADMAP.md`**（2026-10-28 对照审计 + 三批路线）。
 >
+> **2026-10-29 · 测试基建轮（引擎一行没改，只动 `tests/` + 文档）**：
+> ① TODO 表尾那条「`cargo test --release` 偶发失败」**定性为确定性**：`rar_atomic` /
+>    `pack_progress` / `resume` 默认用 `target/debug/yshjy`，而 `all.sh` 第 1 关**只建 release**
+>    → 只要改过 `Cargo.toml` / `src` 却没手动 `cargo build` 就必红（实测差 5 分钟，不是 I/O / OOM）。
+>    修法：`all.sh` 第 1 关补 `cargo build --quiet`（debug，增量 8 秒、无改动近 0 秒）。
+>    **试过「三个探针全改 release」：不可行、别再走** —— release 解 81 MB 只要 151 ms，
+>    `rar_atomic` 的中断点（耗时÷3）打不中、`pack_progress` 只剩 1 条进度事件，当场假红。
+> ② `pack_progress.sh` 执行自解压 `.sh` 验证产物时漏了 `YSHJY_SFX_NO_OPEN=1` → 每轮回归在
+>    用户桌面弹一个文件管理器（被用户当场抓到两次）。已修，验收方式是「journal 里
+>    `org.gnome.Nautilus` 激活次数 +0」。**以后会真执行 sfx 产物的探针一律带这个开关。**
+> 回归：`bash tests/all.sh` **30 通过 / 0 失败 / 4 跳过 / 188 秒**（`scratch/all10.log`）。
+> 证据见 `CHANGELOG.md`「未发布 · 2026-10-29」。
+> **还没动的下一步**：`docs/TODO.md` 第一期三条（重写 `REFERENCE-INDEX.md` 状态列 →
+> `extract.rs:499` cfg 隔离 → 进度条补「已用时」）。
+>
 > **本轮（2026-10-28 夜 · 纯文档轮，代码与产物一行没动）**：
 > ① 新增 `docs/INTERNALS.md`（代码全景）+ `scripts/scan-src.py`（数字由源码扫出，可重跑）；
 > ② 新增 `docs/ROADMAP.md`（体检五类 + 参考项目 16 条 + 四期方案 + 全平台路线）；

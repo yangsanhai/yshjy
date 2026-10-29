@@ -81,6 +81,10 @@ fi
 # ───────────────────────── 1. 编译与静态检查 ─────────────────────────
 head_ "1. 编译与静态检查"
 run "cargo build --release" cargo build --release --quiet
+# debug 也建一份：rar_atomic / pack_progress / resume 三个探针必须用 debug（release 太快，
+# 它们的「耗时÷3 定中断点」「进度事件条数」假设会失效 → 假红，2026-10-29 实测）。
+# 增量编译约 8 秒，无改动时近 0 秒。
+run "cargo build（debug，探针用）" cargo build --quiet
 run "cargo clippy（-D warnings）" bash -c 'cargo clippy --quiet -- -D warnings'
 # 右键菜单脚本（N7）：语法 + 「能不能自己找到引擎」的干跑
 run "右键脚本语法检查" bash -c 'bash -n gui/linux/nautilus-script-yshjy && bash -n scripts/install-nautilus.sh && bash -n scripts/build-deb.sh'

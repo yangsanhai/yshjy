@@ -25,6 +25,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 MB=${1:-60}
+# 用 debug（与 pack_progress.sh 一致）：`tests/all.sh` 两档都会建 —— 详见那个文件同处注释
 BIN=${BIN:-target/debug/yshjy}
 if [ ! -x "$BIN" ]; then
   echo "先编译：cargo build（找不到 $BIN）" >&2

@@ -18,6 +18,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 MB=${1:-150}
+# ★ 必须用 debug，不是 release：本探针按「进度事件条数 / 分母会不会换」判定，而 release 解 80MB
+#   只要 0.15 秒、只发得出 1 条事件 —— 换 release 后 3 项断言当场全红（2026-10-29 实测）。
+#   `tests/all.sh` 第 1 关会同时建 release 与 debug，两档都保证最新；单独手跑前先 `cargo build`。
 BIN=${BIN:-target/debug/yshjy}
 if [ ! -x "$BIN" ]; then
   echo "先编译：cargo build（找不到 $BIN）" >&2
@@ -116,8 +119,11 @@ if [ -x "$T/自解压.sh" ]; then ok "自解压 .sh 可执行"; else bad "自解
 
 # 自解压产物真解一遍（进度改到落盘路径上了，必须验证没写坏）
 # 注意：存根会自己在当前目录下建一个以脚本名命名的子目录，所以用 find 找产物
+# ★ YSHJY_SFX_NO_OPEN=1 不能少：存根跑完默认会 `xdg-open` 打开目标目录，测试里就会
+#   当着用户的面弹出文件管理器窗口（2026-10-29 实际被用户抓到两次）。其它四个 sfx 探针
+#   （protocol_sfx / protocol_sfx_linux / sfx_stub_test）早就设了，只有这里漏了。
 mkdir -p "$T/解开"
-if ( cd "$T/解开" && sh "$T/自解压.sh" >/dev/null 2>&1 ) \
+if ( cd "$T/解开" && YSHJY_SFX_NO_OPEN=1 sh "$T/自解压.sh" >/dev/null 2>&1 ) \
    && [ -n "$(find "$T/解开" -name '大文件.bin' -print -quit)" ]; then
   ok "自解压 .sh 真的能解开"
 else
