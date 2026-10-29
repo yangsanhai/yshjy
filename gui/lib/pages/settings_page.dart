@@ -35,6 +35,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String _theme = 'auto';
   /// 处理完成后是否发桌面通知
   bool _notify = true;
+  /// 解压完成后是否自动打开输出目录（默认关：批量解压会弹一堆窗口）
+  bool _openAfter = false;
   bool _loaded = false;
   bool _saving = false;
 
@@ -63,6 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _onDone = out['on_done'] ?? 'keep';
         _theme = gen['theme'] ?? 'auto';
         _notify = (gen['notify'] ?? 'on') != 'off';
+        _openAfter = (gen['open_after'] ?? 'off') == 'on';
         _loaded = true;
       });
     } catch (_) {
@@ -154,6 +157,7 @@ class _SettingsPageState extends State<SettingsPage> {
       updated = _upsertSection(updated, 'general', {
         'theme': _theme,
         'notify': _notify ? 'on' : 'off',
+        'open_after': _openAfter ? 'on' : 'off',
       });
       Notifier.enabled = _notify; // 立刻生效，不用重启
       await f.parent.create(recursive: true);
@@ -285,6 +289,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           value: _notify,
           onChanged: (v) => setState(() => _notify = v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('解压完自动打开输出目录'),
+          subtitle: Text(
+            '默认关闭。批量解一堆包时不要开（会一个包弹一个窗口）；只解一个包想看结果时再打开，'
+            '或者直接用完成页的「打开输出目录」按钮。',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: _openAfter,
+          onChanged: (v) => setState(() => _openAfter = v),
         ),
         const SizedBox(height: 14),
         Align(

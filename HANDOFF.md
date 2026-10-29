@@ -15,8 +15,13 @@
 > ② `pack_progress.sh` 执行自解压 `.sh` 验证产物时漏了 `YSHJY_SFX_NO_OPEN=1` → 每轮回归在
 >    用户桌面弹一个文件管理器（被用户当场抓到两次）。已修，验收方式是「journal 里
 >    `org.gnome.Nautilus` 激活次数 +0」。**以后会真执行 sfx 产物的探针一律带这个开关。**
-> 回归：`bash tests/all.sh` **30 通过 / 0 失败 / 4 跳过 / 188 秒**（`scratch/all10.log`）。
-> 证据见 `CHANGELOG.md`「未发布 · 2026-10-29」。
+> ③ **「解完要不要自动打开文件夹」定了口径**（用户问的）：自解压 `.sh` = 真人在终端跑或双击
+>    才开、脚本调用/重定向不开（存根四条判定，假 `xdg-open` 四场景验过）；**界面默认不开**，
+>    设置页新增「解压完自动打开输出目录」开关（存 `[general] open_after`，批量只开第一个目录）；
+>    命令行永不开。业界依据：WinRAR/Bandizip 都有这个开关、7-Zip 不做、NanaZip 做成选项。
+> 回归：`bash tests/all.sh` **30 通过 / 0 失败 / 4 跳过 / 179 秒**（`scratch/all11.log`），
+> 整轮跑下来文件管理器激活次数 **+0**；`flutter analyze` 仅一条既有 info、`flutter test` 20 条绿。
+> 证据见 `CHANGELOG.md`「未发布 · 2026-10-29」（四节）。
 > **还没动的下一步**：`docs/TODO.md` 第一期三条（重写 `REFERENCE-INDEX.md` 状态列 →
 > `extract.rs:499` cfg 隔离 → 进度条补「已用时」）。
 >

@@ -145,7 +145,11 @@ fi
 # ───────────────────────── 4. 界面 ─────────────────────────
 head_ "4. 界面（flutter test）"
 if [ "$GUI" = 1 ]; then
-  run "flutter test" bash -c "cd gui && '$FLUTTER' test"
+  # app_settings_test 要读写 configDir（`[general] open_after`），必须给它隔离的
+  # XDG_CONFIG_HOME —— 否则测试自带的安全闸会拒绝跑（绝不动用户真实 config.toml）
+  CFGTMP="${TMPDIR:-/tmp}/yshjy-all-cfg"
+  mkdir -p "$CFGTMP"
+  run "flutter test" bash -c "cd gui && XDG_CONFIG_HOME='$CFGTMP' '$FLUTTER' test"
 else
   skip "界面测试" "用 --no-gui 关掉了"
 fi
