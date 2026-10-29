@@ -137,7 +137,42 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 exit 0
 EOF
-chmod 755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
+# ── 卸载前钩子（2026-10-29 补：此前只有 postinst + postrm，卸载后托盘里会挂着
+#    一个「已被删掉的程序」，用户配置里也留着一堆指向它的「双击默认打开」条目）──
+cat > "$STAGE/DEBIAN/prerm" <<'EOF'
+#!/bin/sh
+set -e
+# 只在**真要卸载**时动手。升级（dpkg 传的是 `upgrade <新版本>`）什么都不做 ——
+# 用户可能正让它在解一个 8 GB 的包，升级把他的活杀掉是不可接受的。
+case "${1:-}" in
+  remove|purge) ;;
+  *) exit 0 ;;
+esac
+
+# ① 停掉还在跑的界面：它「关窗口 = 藏到托盘」，卸载后托盘里会留一个已被删掉的进程。
+#    用 TERM 不用 KILL —— 强杀会让正在解压的包留下 .yshjy-part；
+#    卸载软件的副作用不该包括「砸坏他正在做的事」。
+if command -v pkill >/dev/null 2>&1; then
+  pkill -TERM -x yshjy_gui 2>/dev/null || true
+fi
+
+# ② 清掉 postinst 设过的「双击压缩包用我打开」。不清的话用户配置里会留一堆
+#    指向已卸载程序的条目，重装/换路径时会莫名其妙。改文件前先备份；
+#    改不动就算（卸载本身不该因为这个失败）。
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+  UHOME=$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)
+  if [ -n "$UHOME" ] && [ -d "$UHOME" ]; then
+    for f in "$UHOME/.config/mimeapps.list" "$UHOME/.local/share/applications/mimeapps.list"; do
+      [ -f "$f" ] || continue
+      grep -q 'yshjy\.desktop' "$f" 2>/dev/null || continue
+      cp -p "$f" "$f.yshjy-uninstall.bak" 2>/dev/null || true
+      sed -i '/yshjy\.desktop/d' "$f" 2>/dev/null || true
+    done
+  fi
+fi
+exit 0
+EOF
+chmod 755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm" "$STAGE/DEBIAN/prerm"
 
 # ── 手册与补全 ──
 gzip -9c docs/yshjy.1 > "$STAGE/usr/share/man/man1/yshjy.1.gz"
@@ -240,6 +275,17 @@ if dpkg-deb -e "$OUT" "$TMPX/DEBIAN" 2>/dev/null || dpkg-deb --control "$OUT" "$
     echo "!! postinst 里的 xdg-mime 没带 HOME——会写进 /root/.config/mimeapps.list" >&2
     fail=1
   fi
+fi
+# ④ 卸载钩子必须在，且**升级分支不许杀进程**（否则「升级」会干掉用户正在跑的解压）
+if [ ! -f "$TMPX/DEBIAN/prerm" ]; then
+  echo "!! 包里没有 prerm（卸载后托盘残留 + 用户配置留垃圾条目）" >&2; fail=1
+else
+  [ "$(stat -c %a "$TMPX/DEBIAN/prerm")" = "755" ] \
+    || { echo "!! prerm 权限不是 755" >&2; fail=1; }
+  sh -n "$TMPX/DEBIAN/prerm" 2>/dev/null \
+    || { echo "!! prerm 语法错误" >&2; fail=1; }
+  grep -q 'upgrade' "$TMPX/DEBIAN/prerm" \
+    || { echo "!! prerm 没区分 upgrade —— 升级会把用户正在跑的解压杀掉" >&2; fail=1; }
 fi
 [ "$fail" -eq 0 ] || { echo "!! 自查未通过" >&2; exit 1; }
 

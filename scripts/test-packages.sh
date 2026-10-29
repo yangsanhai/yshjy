@@ -77,6 +77,16 @@ fi
 # ③ man 页必须是 644（gzip 重定向曾按 umask 出 664）
 MODE=$(dpkg-deb -c "$DEB" 2>/dev/null | awk '$6 ~ /man1\/yshjy\.1\.gz$/ {print $1}' | head -1)
 [ "$MODE" = "-rw-r--r--" ] && ok "man 页权限 644" || no "man 页权限是 $MODE（应 -rw-r--r--）"
+# ③b prerm 必须在、权限 755、语法过、且升级分支早退（别在 upgrade 时杀用户的解压）
+if [ -f "$T/ctl/prerm" ]; then
+  ok "包内有 prerm（卸载前钩子）"
+  [ "$(stat -c %a "$T/ctl/prerm")" = "755" ] && ok "prerm 权限 755" || no "prerm 权限不是 755"
+  sh -n "$T/ctl/prerm" 2>/dev/null && ok "prerm 语法通过（sh -n）" || no "prerm 语法错误"
+  grep -q 'upgrade' "$T/ctl/prerm" && ok "prerm 区分了 upgrade（升级不杀进程）" \
+    || no "prerm 没区分 upgrade —— 升级会干掉用户正在跑的解压"
+else
+  no "包内缺 prerm"
+fi
 # ④ 属性基准：属主必须 root/root（dpkg-deb --root-owner-group）
 if dpkg-deb -c "$DEB" 2>/dev/null | awk '{print $2}' | grep -qv '^root/root$'; then
   no "有文件属主不是 root/root"
