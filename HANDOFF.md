@@ -4,6 +4,24 @@
 > 由 `scripts/scan-src.py` 从源码扫出来；数字是扫的，不是手写计划）。
 > **待办只看 `docs/TODO.md`**；**参考项目台账看 `docs/REFERENCE-INDEX.md`**；
 > **往哪走 / 全平台怎么切看 `docs/ROADMAP.md`**（2026-10-28 对照审计 + 三批路线）。
+> **2026-10-29 · 第三期 B + C（干扰数据 / 假签名 · 移动端 seek 三档）** —— 第三期到此清完。
+> **① B `--decoy`**：新模块 `src/pack/decoy.rs`（8 单测）+ `pack::build_ctx_decoy` + CLI + 协议。
+>    噪声只写在「压缩数据之外」（L1 封面后 / L2 free 原子 pad 后），绝不进盒子本体与压缩流；
+>    随机量由 `种子(输入路径, 盐)` 派生，**同一份输入两次打包 sha256 完全相同**。
+>    **方案被实测推翻两处**（都记进 CHANGELOG 一节）：㈠「噪声 ≤ 外壳 10%」不可行（内置封面
+>    1688 B，10% = 168 B，连最小段 4 KiB 都放不下；实测噪声长度对 file / 7z / unzip 无影响）
+>    → 改绝对上限 1 MiB；㈡「假签名后跟随机字节」会**随机性地骗坏 7-Zip**（20 种子 × 2 长度
+>    实测 17/40 失败）→ 改「签名 + 30 字节零 + 其余随机」（0/40）。`pack::decoy` 模块头有实测表，
+>    **别改回纯随机**。
+>    探针 `tests/decoy.sh` **14 项全绿**（已挂 all.sh）；反向验证：把写噪声挪到 ZIP 之后 → 当场红 2 条。
+> **② C seek 三档**：`src/seek.rs`（`SeekAbility` + 探测 + `复制到本地` 带空间预检，6 单测）+
+>    `src/io/blockcache.rs`（32 KiB 块 / 8 MiB LRU，回退到已淘汰块**明确报错不装 EOF**，7 单测）+
+>    协议 `hello.caps.seek_probe` 与 `scan` 的 `seek` / `seek_label`。探针 `tests/seek_probe.py` **7 项**。
+>    **没做也不冒充**：本机无 Android，「SAF 的 content:// 算哪一档」未验证 —— 落地清单在 `docs/TODO.md`。
+>    **坑**：探针一开始把 FIFO 塞进 `scan`，引擎 `job::identify` 会 open FIFO → 永久阻塞（120 秒超时）；
+>    FIFO 改由单测覆盖（只探测不打开）。**以后别把管道/FIFO 放进 scan 的 paths**。
+> **下一轮**：出包（0.9.30）+ 装机，之后只剩「多平台适配」整块与 `--pick` 光标那条（等用户点头）。
+
 > **2026-10-29 · 第三期 A：预览树 + 部分解压（**纯界面轮，引擎一行没改**）**
 > ① 新增 `gui/lib/entry_tree.dart`：平铺清单 → 目录树（纯 Dart、不 import Flutter，可直接 `flutter test`）。
 >    节点带子树合计的 `size`/`packed`/`fileCount`/`encryptedCount`；同名中间目录合并；空目录

@@ -7,23 +7,22 @@
 > 原则是「真人会撞上的概率优先」，不看实现难度。
 > 每次开工只做最上面那一行的「下一项」，出现的新问题不插队，加到表尾。
 
-最后更新：2026-10-29（第三期 A「预览树 + 部分解压」完成 → 出包 → 装机 → 回归全绿）
+最后更新：2026-10-29（第三期 B「干扰数据/假签名」+ C「移动端 seek 三档」完成 → 回归全绿；**未出包**）
 
-**当前状态**：**0.9.29 已出包并已装机**（2026-10-29 21:46 覆盖安装，**含第三期 A 的树形预览**）；
-`dpkg -l yshjy` = 0.9.29；`dist/yshjy_0.9.29_amd64.deb` 9.9M + 两档 `tar.gz`（与 deb 同一次构建）；
-`scripts/test-packages.sh` **37 项全绿**；`bash tests/all.sh` **39 通过 / 0 失败 / 5 跳过 / 182 秒**
-（日志 `~/.hermes/cache/scratch/all_tree.log`）；`flutter test` **46 条全绿**（其中 19 条树逻辑 +
-7 条界面交互是 2026-10-29 新增）。
-装机三验：`~/.local/bin/yshjy` → `/usr/bin/yshjy`、无用户级 desktop 覆盖、菜单认领 14 种格式；
-界面实测「大小 / 压缩后」列标题与目录行「只看这一层」下钻箭头都在（1026 条目包截图核对）。
+**当前状态**：**工作区代码已完成 B + C，装机版仍是含第三期 A 的 0.9.29**（`dpkg -l yshjy` = 0.9.29）。
+回归：`cargo test` **357 + 29 + 2 全绿**（B 新增 8 条 decoy、C 新增 6 条 seek + 7 条 blockcache）；
+`cargo clippy --all-targets -- -D warnings` 干净；`bash tests/all.sh` **41 通过 / 0 失败 / 5 跳过 / 191 秒**
+（日志 `~/.hermes/cache/scratch/all_phase3bc.log`；上一轮 39 通过，本轮 +`decoy.sh` +`seek_probe.py`）；
+`flutter test` 46 条全绿（本轮没动界面）；`scripts/gen-cli-assets.py` 已重跑（补全 + man 页 46 个长选项）。
 > 注：`strings libapp.so` 查中文新字符串恒为 0（Dart AOT 读不出中文字符串，连「选择文件」都是 0），
 > 别用这个方法验包新旧，直接开界面看。
 
-**当前该做的（2026-10-29 第三期 A 收尾后）**：第三期还剩两条 ——
-1. **② 干扰数据 / 假签名**（打包侧，要动引擎 + 打包器，单独一轮；方案 `docs/THIRD-PHASE-PLAN.md` §B）
-2. **③ 移动端 seek 三档**（只做探测 + 块缓存 + 协议字段，落地验收留 Android 批；方案 §C）
-另有一条等用户点头：`--pick` 被 Ctrl-C 后光标不恢复（用户 2026-10-28 口径「这轮不做」）。
-「多平台适配」整块仍按用户口径**最后做**（探测结论见下面那张表，别重复调研）。
+**当前该做的（2026-10-29 第三期收尾后）**：
+1. **出包 + 装机**（等用户发话）：五处版本号 → `scripts/build-deb.sh` → `scripts/release.sh` →
+   `scripts/test-packages.sh` → `sudo apt install`。本轮是引擎改动，装完要真跑一个 1000+ 条目的包。
+2. 之后只剩两件：`--pick` 被 Ctrl-C 后光标不恢复（用户 2026-10-28 口径「这轮不做」，等点头）、
+   「多平台适配」整块（用户口径**最后做**，探测结论见下面那张表，别重复调研）。
+3. 安卓批要补验的 seek 清单见下面「⏸ 最后做：多平台适配」那一节的子清单（第三期 C 的落地部分）。
 
 ### ⏸ 最后做：多平台适配（整块延后；已探测清楚，到时候别重复调研）
 
@@ -33,6 +32,18 @@
 | 安卓 | 装 SDK + NDK + **JDK 17**（现装 25 太新，apt 仓库暂无 17）→ `cargo-ndk` 编 `.so` → `ffigen` 生成 Dart 绑定 → `flutter build apk`；分区存储照 localsend：私有目录直写、外部走 SAF、**不许静默失败** | 本机 | SDK/NDK 都没装；磁盘余 74G（够，约吃 15–20G）；`dl.google.com` 直连 200 能下 |
 | Windows | 命令行版：`cargo build --release --target x86_64-pc-windows-gnu`（目标 + mingw + wine 10 都已装，本机可验）；图形界面版只能在 Windows 上编 | **用户在 Win 上自己编** | 平台目录已铺 `gui/windows/`（未提交）；待写 `BUILD-Windows.md` |
 | 苹果（macOS + iOS） | 「专属层」：`ffi/` C ABI → Dart 侧 ffigen 绑定 + `FfiTransport` → `ios/` + `macos/` 工程 → `BUILD-iOS.md`（免费 Apple ID 自签，7 天有效期可续） | **用户最后用 GitHub 编** | 平台目录已铺 `gui/ios/`、`gui/macos/`（未提交）；不买 99 美元账号、不上架、不公证 |
+
+#### 安卓批要补验的 seek 清单（第三期 C 的落地部分，**别当成已完成**）
+
+代码已经就位（`src/seek.rs` 探测三档 + `src/io/blockcache.rs` 块缓存 + 协议 `scan.seek`），
+但「手机上到底是哪一档」本机验不了（无 Android SDK / 无设备）。到安卓批要回答：
+
+- [ ] SAF 打开的 `content://` 句柄在主流机型上属于哪一档（实测走 `seek_ability`，别猜）
+- [ ] 若判成 `block_cache`：8 MiB 上限够不够解一个 2 GB 的 zip（zip 要来回跳 central dir）
+- [ ] 若判成 `copy_first`：复制兜底的**预检数字**（`safety::check_space` 的 available 与真实
+      可写空间是否一致；分区存储下私有目录的配额）
+- [ ] 复制过程被杀 / 空间中途耗尽时的清理（现在只保证「抄完核对字节数」）
+- [ ] `scan` 的 `seek` 字段在界面上真的会被用（提示「会先复制一份，占 X MB」）
 
 > 苹果口径（用户 2026-10-28 定，别再问）：不上架、不公证、不买开发者账号，发源码 / 未签名包，谁要谁自己签名 —— 花钱 0。
 > **上 GitHub 前两件必修（已探测，别重查）**：① `.git` 300 MB，历史里有 `target-full/` 编译产物（最大 65 MB），
