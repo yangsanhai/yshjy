@@ -4,9 +4,10 @@
 > 去 `refs/` 哪个文件哪一行看参考实现、抄什么、改我们哪个文件。
 > 状态：✅ 已实现 · 🟡 部分 · ❌ 未做（括号里是计划批次）
 >
-> ⚠️ **2026-10-28 逐条核实：状态列有 14 条失真**（标着 ❌/🟡 但代码里早就做完了，
-> 逐条证据在 `docs/ROADMAP.md` §1.2）。**照它排活前先核一遍**，或先按 §1.2 把状态列重写好
-> ——那是 `docs/ROADMAP.md` 一期的第一项（不修它，谁拿这张表干活都白干）。
+> ✅ **2026-10-29：状态列已重写**。上一版有 **14 条失真**（标 ❌/🟡 但代码里早就做完了，
+> 差点让人把已完成的批次重做一遍）。这 14 条现在**每条都带实测证据（文件:行）**，
+> 是拿 `grep` 一条条核过的，不是照抄上一份审计结论 —— 复核过程见 `docs/TODO.md` 一期的第一项。
+> 以后补功能前照样先查这张表；**发现「要做的东西已经在了」，就把状态改掉，别让它再漂一次**。
 
 ---
 
@@ -27,17 +28,17 @@
 
 | 设计项 | 设计出处 | 台账锚点 | 参考源码 | 抄什么 | 我们的落点 | 状态 |
 |---|---|---|---|---|---|---|
-| **密码多编码重试** | DESIGN §17.1 | `tech/对比-测试构建与编码.md:68`（2.1.13） | `sevenz-rust/src/encryption/password.rs:52-61` | 密码转 UTF-16LE；候选按编码展开逐个试 | `src/extract.rs:172,349`、`src/extract_rar.rs` | ❌ 第20批 |
-| **Unicode Path 0x7075** | §17.3 | `tech/对比-测试构建与编码.md:64`（2.1.9） | `zip2/src/extra_fields/zipinfo_utf8.rs:1-96` | `UnicodeExtraField` + `unwrap_valid`（CRC 校验后采用） | `src/layout/zip.rs:436` `decode_name` | ❌ 第21批 |
-| **EOCD 分块倒扫** | §17.6 / AUDIT | `tech/xadmaster.md:28`（①-02） | `XADZipParser.m:118-191`（图解 :176-183） | 64 KiB 一块从尾往前，每块留 20 字节重叠 | `src/layout/zip.rs:41,131` | ❌ 第21批 |
+| **密码多编码重试** | DESIGN §17.1 | `tech/对比-测试构建与编码.md:68`（2.1.13） | `sevenz-rust/src/encryption/password.rs:52-61` | 密码转 UTF-16LE；候选按编码展开逐个试 | `src/extract.rs:190`、`src/extract_rar.rs` | ✅ 0.9.26 · `extract.rs:190 密码候选`（ASCII 短路；非 ASCII 展开 UTF-8→GBK→UTF-16LE） |
+| **Unicode Path 0x7075** | §17.3 | `tech/对比-测试构建与编码.md:64`（2.1.9） | `zip2/src/extra_fields/zipinfo_utf8.rs:1-96` | `UnicodeExtraField` + `unwrap_valid`（CRC 校验后采用） | `src/layout/zip.rs:436` `decode_name` | ✅ 0.9.26 · `zip.rs:375-388`（读 extra，先验 CRC32 再采用） |
+| **EOCD 分块倒扫** | §17.6 / AUDIT | `tech/xadmaster.md:28`（①-02） | `XADZipParser.m:118-191`（图解 :176-183） | 64 KiB 一块从尾往前，每块留 20 字节重叠 | `src/layout/zip.rs:41,131` | ✅ 0.9.26 · `zip.rs:149`（64 KiB 一块 + 20 B 重叠，按位置推进） |
 | **全文件签名扫描** | §13 武器① | `tech/7zip.md:45`（2.6） | `Archive/Zip/ZipIn.cpp:618,723-756` | `FindPK_4` + 内容校验（强判定） | `src/job.rs`、`src/scan.rs` | ✅ |
 | **LOCALS 无目录兜底** | §13 武器③ | `tech/7zip.md:113`（5.1）、`:116`（5.4） | `Archive/Zip/ZipIn.cpp:2530,2735-2742` | CD 读出来对不上 → 退回扫 local header 重建 | `src/rescue.rs` | ✅ |
 | **分段虚接（Concat）** | §13 武器② | `tech/7zip.md:10`、`tech/README.md:120` | `7zip/CPP/7zip/Common/StreamBinder.cpp` 思路 | 多段拼成一条可 seek 的逻辑流 | `src/unpack.rs`、`src/extract7z.rs` | 🟡 主路径有，E3 未全覆盖 |
 | **结构校验防假签名** | §13 武器④ | `tech/7zip-工程层.md:50,54`（1.11/1.15） | `CPP/7zip/UI/Common/OpenArchive.cpp` | 1 MiB 头缓冲 → 候选队列 → 实际解析验证 | `src/scan.rs` | ✅ |
 | **7z 头加密 vs 内容加密** | §17.4 | `tech/sevenz-rust+steganographier.md:51`（J-15） | `sevenz-rust/src/reader.rs:381-423` | 内容加密头明文可列表；头加密直接要密码 | `src/preview.rs:322`（现硬编码 `false`） | 🟡 第20批 |
-| **双维度识别进度** | §17.6（D1） | `tech/7zip-工程层.md:91`（3.3） | `CPP/7zip/Archive/IArchive.h:177-181` | `SetTotal(files, bytes)` 两个维度 | `src/scan.rs`（无 ctx） | ❌ 第21批 |
+| **双维度识别进度** | §17.6（D1） | `tech/7zip-工程层.md:91`（3.3） | `CPP/7zip/Archive/IArchive.h:177-181` | `SetTotal(files, bytes)` 两个维度 | `src/job.rs:311` | ✅ 0.9.26 · `job.rs:311` emit `ScanProgress{total_bytes,total_files}` |
 | **嵌套包下钻一层** | §17.6 | `tech/xadmaster.md:91,92`（③-09/③-10） | XADMaster 递归解压 | 继承父级密码与编码，只下一层 | `src/drill.rs`（`extract.drill`） | ✅ 21批组C |
-| **解压前内存预检** | §17.6 | `tech/对比-同名技术择优.md:306` | 7-Zip `MemoryRequest` | 按字典×块×线程估峰值，跟可用内存比 | `src/hardware.rs` | ❌ 第22批 |
+| **解压前内存预检** | §17.6 | `tech/对比-同名技术择优.md:306` | 7-Zip `MemoryRequest` | 按字典×块×线程估峰值，跟可用内存比 | `src/hardware.rs:179`、`src/extract7z.rs:239` | ✅ 0.9.26 · `extract7z.rs:239 内存预检`（字典峰值 + 256 MB 预留 vs 可用内存；仅 7z 需要） |
 | **炸弹限额改成询问** | §17.7 | `tech/7zip-工程层.md:77`（2.9） | 7-Zip 的预算协商 | 抛结构化请求（required/allowed），界面问一句 | `src/ask.rs` + `src/safety.rs` + `serve.rs` 的 answer | ✅ 21批组B |
 | **条目 packSize 校验** | AUDIT §3-12 | `tech/7zip.md:68`（3.5） | 7-Zip 的 dataAfterEnd 判定 | 读满判定，多出/不足都报「拼接错位」 | `src/layout/zip.rs:58` | ❌ 第22批 |
 
@@ -51,14 +52,14 @@
 | 批量队列 + 三段式完成卡 | P1 | `analysis/07` §9.1（Sunpack `f08.png`） | 结果标题 / 量化副标题 / 直达按钮 | `home_page.dart:727-811` | ✅ |
 | 失败卡可执行化 | P3 | `analysis/07` §1.3（v2 `print_final_completion`） | 「可能原因清单」升级成按钮 | `home_page.dart:474-503` | ✅ |
 | 密码卡三件套 | P4 | `analysis/07` §4.1（眼睛图标）、§9.2（优先级五档）、§9.4（近期密码/不保存） | 眼睛切换、近期密码 chips、不保存勾选 | `home_page.dart:1260`（裸 obscureText） | 🟡 第20批 |
-| 试密码可视化 + 速度/ETA | P4 | `analysis/07` §9.4、`:248`（要超过 Bandizip） | 「正在试第 3/12 个」、速度、剩余时间 | `home_page.dart:1017-1078`（只有已传/总量） | ❌ 第20批 |
-| 输出目录 + 原包处理 | P5 / §17.2 | `analysis/07` §234-238 | Bandizip 路径对话框 + 安全默认三件套 | `home_page.dart:344`（不传 dest） | ❌ 第20批 |
+| 试密码可视化 + 速度/ETA | P4 | `analysis/07` §9.4、`:248`（要超过 Bandizip） | 「正在试第 3/12 个」、速度、剩余时间 | `home_page.dart:198,1017-1078` | ✅ 0.9.26 · `home_page.dart:198` 吃 `PASSWORD_TRY`（「正在试第 i/M 个」+ 速度/ETA） |
+| 输出目录 + 原包处理 | P5 / §17.2 | `analysis/07` §234-238 | Bandizip 路径对话框 + 安全默认三件套 | `home_page.dart:556,617,810` | ✅ 0.9.26 · 输出目录 `dest: _outDir`（`home_page.dart:556,617,810`）+ 原包处理（设置页 keep/trash，`config.rs:155`） |
 | 设置页可写 | P5 | — | 路径可改、语言可选 | `settings_page.dart` | 🟡 |
 | 预览树 + 部分解压 | P7 | `analysis/07` §7（PeaZip 结构树） | 树形结构 + 勾选 + 面包屑 | 预览页平铺 | ❌ 第22批 |
-| 完成卡分享文案 | P8 | `analysis/07` §952-954、§1.3 | 「复制给对方：这是伪装包，用…打开」 | 完成卡无此按钮 | ❌ 第22批 |
-| 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | — | ❌ 第23批 |
-| 新手引导 | P11 | `analysis/07` §5.1（隐写者 ①–⑪ 编号步骤） | 三步浮层 | — | ❌ 第23批 |
-| 历史页可点开文件 | — | `analysis/07` §130-131（别清空历史）、§135 | 条目可打开所在目录 | `history_page.dart:102-121`（无 onTap） | ❌ 第20批顺带 |
+| 完成卡分享文案 | P8 | `analysis/07` §952-954、§1.3 | 「复制给对方：这是伪装包，用…打开」 | 完成卡无此按钮 | ✅ 0.9.28 · `home_page.dart:1836`「复制解压方法」 |
+| 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | `theme_mode.dart`（尺寸记忆未做） | 🟡 主题已做（`theme_mode.dart` / `main.dart:69`，设置页可切）；**窗口尺寸/位置记忆未做**（要引 `window_manager`，见 `docs/TODO.md` 第二期） |
+| 新手引导 | P11 | `analysis/07` §5.1（隐写者 ①–⑪ 编号步骤） | 三步浮层 | — | ✅ 0.9.26 · `app_shell.dart:114` 三步引导（只弹一次，标记写在 state 目录） |
+| 历史页可点开文件 | — | `analysis/07` §130-131（别清空历史）、§135 | 条目可打开所在目录 | `history_page.dart:128` | ✅ 0.9.26 · `history_page.dart:128` onTap 定位到输出目录 |
 
 ---
 
@@ -68,7 +69,7 @@
 |---|---|---|---|---|---|
 | 尾部拼接 / free 原子布局 | §14.1 / §15 | `analysis/steganographier-hide.md` §2.1、§2.2 | 字节级布局图（普通模式 vs ZArchiver 模式） | `src/pack/` | ✅ |
 | 布局兼容性矩阵 | §15 | `analysis/05-压缩布局验证.md` §2.1/§2.2/§2.3 | 16 个样本的实测矩阵（含最意外的 L5 分散多段） | `src/pack/` | ✅ 尾部 + free 原子 |
-| 分卷生成 | §14.2 | `analysis/steganographier-hide.md` §Q4（分卷怎么处理） | `.001/.002` 命名与切分 | `--split` 未实现 | ❌ 第20批 |
+| 分卷生成 | §14.2 | `analysis/steganographier-hide.md` §Q4（分卷怎么处理） | `.001/.002` 命名与切分 | `src/pack_post.rs:83`、`--split` | ✅ 0.9.26 · `pack_post.rs:83 split_file` + CLI `--split`（`cli_spec.rs:77`） |
 | 密码内嵌（自动带码） | §14.3 | `analysis/steganographier-hide.md` §Q5（密码怎么设） | 打包时写进说明书，解压端自动抓 | `src/pack/`、`src/password_hint.rs` | ✅ |
 | 封面嵌入 / 素材 | §14.2 | `tech/README.md:109` | `Steganographier.py:1843-1889` 内置封面 | `src/pack/cover.rs` | ✅ 打包侧 |
 | 说明书 + 校验和 | §14.2 | `analysis/steganographier-hide.md` §Q6 | 输出命名 / 说明书 / 大小-时长校验 | 部分 | 🟡 第20批 |
@@ -132,9 +133,9 @@
 | 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
 |---|---|---|---|---|
 | **进度条模板** | `upstream/indicatif/src/style.rs:270-350`（模板变量：`{percent} {bytes} {total_bytes} {elapsed} {eta} {bytes_per_sec} {wide_msg}`）、`examples/download-speed.rs:10-12` | 模板变量集；`{wide_bar}` 自动铺满终端宽度；`progress_chars("#>-")` 指定填充字符；`{eta}` 由库自己算 | `src/main.rs` 的 `画进度行` | 🟡 手搓版已通（条/速度/剩余/项号），**缺 `{elapsed}` 已用时** |
-| **多任务并发进度** | `upstream/indicatif/src/multi.rs`、`examples/multi-tree-ext.rs`、`examples/multi.rs`（截图见 README） | `MultiProgress` 给每个任务一条独立进度行，统一在顶部重绘 —— 我们 `-j 2` 时不再是两行互相覆盖 | 同上（需重写为 indicatif） | ❌ 未做 |
-| **多选交互（`--pick`）** | `upstream/dialoguer/src/prompts/multi_select.rs:253-302`（键位：`↓/Tab/j` 下移、`↑/BackTab/k` 上移、`←/h` 上页、`→/l` 下页、`空格` 勾选、`a` 全选、`Esc/q` 取消、`Enter` 确认）；`upstream/inquire/KEY_BINDINGS.md`（键位文档写法）、`inquire/inquire/src/terminal/crossterm.rs:338-353`（终端后端抽象） | **别自己写 raw mode 循环**：直接用 `dialoguer::MultiSelect`，上面那套键位是业界共识；文档照 `KEY_BINDINGS.md` 的表格形式写一份中文的 | 新增 `src/pick.rs`，`--pick` 走它 | ❌ 未做 |
-| **列表/表格输出** | `upstream/comfy-table/README.md:205,255-283`（宽度来源优先级：显式 `set_width` → `crossterm::terminal::size`；依赖 `unicode-width` 算中文宽度） | 列宽自适应算法；`--list` 的结果按「序号 / 大小 / 加密 / 路径」四列对齐，中文不歪 | `src/main.rs` 的 `--list` 输出 | ❌ 未做 |
+| **多任务并发进度** | `upstream/indicatif/src/multi.rs`、`examples/multi-tree-ext.rs`、`examples/multi.rs`（截图见 README） | `MultiProgress` 给每个任务一条独立进度行，统一在顶部重绘 —— 我们 `-j 2` 时不再是两行互相覆盖 | `main.rs:1238-1260` | ✅ 0.9.27 · `main.rs:1246` indicatif `MultiProgress`（延迟到真的出现第二个任务才切） |
+| **多选交互（`--pick`）** | `upstream/dialoguer/src/prompts/multi_select.rs:253-302`（键位：`↓/Tab/j` 下移、`↑/BackTab/k` 上移、`←/h` 上页、`→/l` 下页、`空格` 勾选、`a` 全选、`Esc/q` 取消、`Enter` 确认）；`upstream/inquire/KEY_BINDINGS.md`（键位文档写法）、`inquire/inquire/src/terminal/crossterm.rs:338-353`（终端后端抽象） | **别自己写 raw mode 循环**：直接用 `dialoguer::MultiSelect`，上面那套键位是业界共识；文档照 `KEY_BINDINGS.md` 的表格形式写一份中文的 | `src/pick.rs`（0.9.27 已落地） | ✅ 0.9.27 · `src/pick.rs` + `cli_spec.rs:71`（dialoguer `MultiSelect`，键位照抄） |
+| **列表/表格输出** | `upstream/comfy-table/README.md:205,255-283`（宽度来源优先级：显式 `set_width` → `crossterm::terminal::size`；依赖 `unicode-width` 算中文宽度） | 列宽自适应算法；`--list` 的结果按「序号 / 大小 / 加密 / 路径」四列对齐，中文不歪 | `src/main.rs:869-905` | ✅ 0.9.27 · `main.rs:872` comfy-table（中文按显示宽度对齐、窄终端折行） |
 | **解压后删除源压缩包** | `unzip -m`（move 语义，成功即删）；WinRAR 解压对话框「删除压缩文件：永不 / 总是 / 询问」；Bandizip 同功能 + 更安全的「移到回收站」变体；7-Zip 的 `-sdel` 是**压缩**后删源、解压侧没有该功能（p7zip issue #154 里官方建议自己 `rm`） | 「只在**完全成功**后删」「可改成移到回收站」「分卷要整组处理」「删之前说清不可恢复」 | 新增 `--delete-source` / `--trash-source`；界面解压页一个开关（默认关） | ❌ 未做 |
 
 **两条教训（写在这里，免得下次又手搓）**：
@@ -166,10 +167,10 @@
 
 | 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
 |---|---|---|---|---|
-| **补全与 man 页不手写** | `upstream/ouch/build.rs:20-39`（`include!("src/cli/args.rs")` 拿到同一份 clap 定义，`clap_mangen::generate_to` + `clap_complete::generate_to` 写进 `OUCH_ARTIFACTS_FOLDER`）、`upstream/ouch/Cargo.toml:77-79`（`clap_complete` / `clap_complete_nushell` / `clap_mangen`） | 补全和 man **由 clap 定义在构建期生成**，打包时塞进 deb；`scripts/completions/` 手写副本整个退休 | 新增 `build.rs` 生成段 | ❌ 未做 —— TODO 里「三个补全脚本补齐」应当改成这条（根因是手抄副本会漂移，不是缺内容） |
-| 表格输出 | comfy-table（§8 已有） | 列宽自适应 | `--list` | ❌ |
-| 多任务进度 | indicatif（§8 已有） | `MultiProgress` | `-j 2` | ❌ |
-| 交互多选 | dialoguer（§8 已有） | `MultiSelect` 键位 | `--pick` | ❌ |
+| **补全与 man 页不手写** | `upstream/ouch/build.rs:20-39`（`include!("src/cli/args.rs")` 拿到同一份 clap 定义，`clap_mangen::generate_to` + `clap_complete::generate_to` 写进 `OUCH_ARTIFACTS_FOLDER`）、`upstream/ouch/Cargo.toml:77-79`（`clap_complete` / `clap_complete_nushell` / `clap_mangen`） | 补全和 man **由 clap 定义在构建期生成**，打包时塞进 deb；`scripts/completions/` 手写副本整个退休 | `scripts/gen-cli-assets.py` + `src/cli_spec.rs` | ✅ 0.9.27/0.9.28 · `scripts/gen-cli-assets.py` 从 `src/cli_spec.rs` 生成（自研生成脚本，不是 clap 构建期；同样达到「不手写、不漂移」） |
+| 表格输出 | comfy-table（§8 已有） | 列宽自适应 | `--list` | ✅ 0.9.27（见 §8「列表/表格输出」） |
+| 多任务进度 | indicatif（§8 已有） | `MultiProgress` | `-j 2` | ✅ 0.9.27（见 §8「多任务并发进度」） |
+| 交互多选 | dialoguer（§8 已有） | `MultiSelect` 键位 | `--pick` | ✅ 0.9.27（见 §8「多选交互」） |
 
 ### 9.2 全平台 GUI
 

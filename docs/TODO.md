@@ -160,8 +160,22 @@ Windows 编译实锤阻塞）；可执行条目按三批记在下面「2026-10-2
 
 ### 第一期：对齐与止血（半天）—— 方案 `docs/ROADMAP.md` §3.1
 
-- [ ] **重写 `docs/REFERENCE-INDEX.md` 的状态列**（14 条失真，逐条证据在 `ROADMAP.md` §2.2）。
-  **排第一是因为不修它，后面所有人都在拿错地图打仗**。改完抽查 10 条与代码一致。
+- [x] ✅ **重写 `docs/REFERENCE-INDEX.md` 的状态列（2026-10-29 完成）** —— 上一版 **14 条失真**
+  （标 ❌/🟡 但代码里早就做完了；逐条证据原本在 `ROADMAP.md` §1.2，注意不是 §2.2）。
+  这次**不是照抄上一份审计**：14 条逐条 `grep` 复核，每条都换成实测的 `文件:行`，落点列一并更正
+  （例：`extract.rs:172,349`→`190 密码候选`、`src/scan.rs（无 ctx）`→`job.rs:311`、
+  `--split 未实现`→`pack_post.rs:83`）。后 3 条在 §9.1 重复登记的也指回 §8 实现。
+  **重写时又抓到 2 条同一类失真**（不在原 14 条里，ROADMAP 上一轮漏了）：
+  ① 「输出目录 + 原包处理」标 ❌ 但 `dest: _outDir` 与设置页 keep/trash 都在 → 改 ✅；
+  ② 「主题 + 窗口尺寸记忆」整条标 ❌ 但主题早能切 → 改 🟡（只剩尺寸/位置记忆没做）。
+  回验：抽查 10 条证据行号逐行打印核对（`extract.rs:190` 是 `密码候选`、`zip.rs:149` 是
+  「64 KiB + 20 B 重叠」、`job.rs:311` 发 `ScanProgress`、`extract7z.rs:239` 内存预检、
+  `app_shell.dart:114` 三步引导、`main.rs:1246` MultiProgress、`main.rs:872` comfy-table、
+  `pack_post.rs:84` split_file、`home_page.dart:1836` 复制解压方法、`history_page.dart:128` onTap），
+  **10/10 都对得上**。仍在标 ❌ 的表格行是 **9 条**（`grep -c` + 逐块列数校验过，不是估的），
+  已确认为真缺口不是失真：条目 packSize 校验 / 预览树+部分解压 / 干扰数据+假签名 / 移动端 seek 三档 /
+  解压后删除源开关 / 移动端桥接（ffigen）/ Android 分区存储 / 发布工作流拆法 / 工作流单文件骨架。
+  （另有 1 行标 ❌ 的是 Keka「无法拆：上游闭源」，不是缺口。）
 - [ ] **`src/extract.rs:499` cfg 隔离**（Windows 路线第一个实锤阻塞，实测 `E0433: cannot find unix in os`）。
   `#[cfg(unix)]` 用 `std::os::unix::fs::symlink`；`#[cfg(windows)]` 用 `std::os::windows::fs::symlink_file`，
   失败退回「复制一份」并标 `SLOW_PATH`（不静默）。**顺手全仓扫一遍** `grep -rn "std::os::unix\|std::os::linux\|libc::" src/`
