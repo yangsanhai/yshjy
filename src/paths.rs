@@ -80,6 +80,9 @@ fn unix_state_from(xdg: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBu
 mod tests {
     use super::*;
 
+    // 只在 Unix 上测：`/tmp/state` 在 Windows 不算绝对路径（没有盘符），
+    // is_absolute 的语义是平台相关的（W8）
+    #[cfg(unix)]
     #[test]
     fn xdg_绝对路径优先() {
         assert_eq!(
