@@ -20,6 +20,7 @@
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::pack::cover::BuiltinCover;
+use crate::pack::decoy::DecoyOptions;
 // 写侧加密目前还挂在 zip 的 unstable 门后（读侧已稳定）
 use std::fs;
 use std::io::{Read, Seek, Write};
@@ -27,6 +28,7 @@ use std::path::{Path, PathBuf};
 use zip::unstable::write::FileOptionsExt as _;
 
 pub mod cover;
+pub mod decoy;
 
 /// 伪装布局
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,6 +86,10 @@ pub struct PackReport {
     pub entries: usize,
     /// 用的什么布局
     pub layout: PackLayout,
+    /// 干扰数据字节数（`--decoy` 没开时是 0）
+    pub noise_size: u64,
+    /// ZIP 数据在产物里的起点偏移（自检用它核对「噪声确实在压缩数据之外」）
+    pub zip_offset: u64,
     /// 自检发现的问题（空 = 全好）
     pub warnings: Vec<String>,
     /// `--keep` 时保留的中间 ZIP（默认已删除，这里是 None）
@@ -206,9 +212,24 @@ pub fn build_ctx<W: Write>(
     out: &mut W,
     进度: &mut dyn FnMut(PackTick),
 ) -> Result<PackReport> {
+    build_ctx_decoy(opts, &DecoyOptions::none(), out, 进度)
+}
+
+/// 同 [`build_ctx`]，但可以顺便在压缩数据之外撒干扰数据（第三期 B）
+///
+/// 为什么要单开一个函数、而不是给 [`PackOptions`] 加字段：那个结构体在测试里
+/// 有十几处**逐字段**构造，加字段会把它们全改一遍（同 [`build_plain`] 的注释）。
+pub fn build_ctx_decoy<W: Write>(
+    opts: &PackOptions,
+    decoy: &DecoyOptions,
+    out: &mut W,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<PackReport> {
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
+    // 参数越界要在**动磁盘之前**就报错（别打到一半才发现 --decoy 填错）
+    decoy.validate()?;
 
     // ① 封面：用户给的，或内置素材
     let cover: Vec<u8> = match &opts.cover {
@@ -249,24 +270,44 @@ pub fn build_ctx<W: Write>(
     out.write_all(&cover)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover: {e}")))?;
 
-    // 压缩完了：告诉外壳「接下来还要写 zip_size 字节」，进度条才不会停在压缩阶段的百分比
-    进度(PackTick::TotalHint(zip_size));
+    // 干扰数据的种子：只由输入路径派生（**不看系统时间**），
+    // 这样同一份输入打两次，产物逐字节一致 —— 用户能校验自己分享的东西。
+    let 噪声种子 = decoy::种子(&opts.inputs, 0x00DE_C0DE);
+    let 噪声总量 = decoy.total();
+
+    // 压缩完了：告诉外壳「接下来还要写多少字节」，进度条才不会停在压缩阶段的百分比
+    进度(PackTick::TotalHint(zip_size + 噪声总量));
 
     let mut atom_overhead = 0u64;
+    let noise_size;
+    let mut pad_len = 0u64;
     match layout {
         PackLayout::TailAppend => {
+            // L1：噪声写在「封面之后、ZIP 起点之前」
+            noise_size = 写噪声带进度(out, decoy, 噪声种子, 进度)?;
             拷贝带进度(&tmp, out, 进度)?;
         }
         PackLayout::FreeAtom => {
-            let pad = make_pad(opts.pad_range);
-            let payload_len = pad.len() as u64 + zip_size;
+            // `--decoy` 开启时 pad 也走稳定种子 —— 否则 pad 每次不同，整包哈希就变了，
+            // 「同一份输入两次打包逐字节一致」这条验收过不去。
+            let pad = if decoy.is_on() {
+                make_pad_seeded(opts.pad_range, 噪声种子 ^ 0x5EED)
+            } else {
+                make_pad(opts.pad_range)
+            };
+            pad_len = pad.len() as u64;
+            // L2：噪声写在「free 原子内 pad 之后、ZIP 起点之前」（原子结构不变）
+            let payload_len = pad_len + 噪声总量 + zip_size;
             atom_overhead = write_free_atom_header(out, payload_len)?;
             out.write_all(&pad)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write pad: {e}")))?;
 
+            noise_size = 写噪声带进度(out, decoy, 噪声种子, 进度)?;
             拷贝带进度(&tmp, out, 进度)?;
         }
     }
+    // ZIP 起点：自检要拿它核对「噪声确实全在压缩数据之外」
+    let zip_offset = cover_size + atom_overhead + pad_len + noise_size;
 
     if 保留中间产物已开启() {
         // `--keep`：留着中间 ZIP（外壳会把路径打出来）
@@ -275,12 +316,14 @@ pub fn build_ctx<W: Write>(
     }
 
     Ok(PackReport {
-        total_size: cover_size + zip_size + atom_overhead,
+        total_size: cover_size + zip_size + atom_overhead + pad_len + noise_size,
         zip_size,
         cover_size,
         entries,
         // 报告**实际用的**布局（可能被上面降级过），不是 opts 里那个
         layout,
+        noise_size,
+        zip_offset,
         warnings,
         intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
@@ -336,6 +379,10 @@ pub fn build_plain_ctx<W: Write>(
         entries,
         // 普通压缩没有「布局」概念；字段保留给协议兼容，对外由 `mode` 区分
         layout: PackLayout::TailAppend,
+        // 普通压缩（标准 ZIP）不支持干扰数据：没有外壳可藏，加了只是往 ZIP 前面
+        // 塞垃圾，会把别人的 unzip 搞出 warning —— CLI/协议层会明确拒绝这个组合。
+        noise_size: 0,
+        zip_offset: 0,
         warnings: Vec::new(),
         intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
@@ -345,13 +392,22 @@ pub fn build_plain_ctx<W: Write>(
 ///
 /// 用系统时间做种子（避免为这点小事拖进 `rand` 依赖，也符合"依赖最小"原则）。
 /// 保证首两字节不是 `PK`，让 `free` 原子内部不以 ZIP 签名开头。
-fn make_pad((lo, hi): (usize, usize)) -> Vec<u8> {
-    let span = hi.saturating_sub(lo).max(1);
+fn make_pad(range: (usize, usize)) -> Vec<u8> {
     let seed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_nanos() as usize ^ (d.as_secs() as usize))
+        .map(|d| d.as_nanos() as u64)
         .unwrap_or(7);
-    let pad_len = lo + (seed % span);
+    make_pad_seeded(range, seed)
+}
+
+/// 同 [`make_pad`]，但随机量由调用方给种子
+///
+/// `--decoy` 开启时必须走这条：pad 若还用系统时间，产物每次都不一样，
+/// 「同一份输入两次打包逐字节一致」就过不去（见 `pack::decoy` 模块头）。
+fn make_pad_seeded((lo, hi): (usize, usize), seed: u64) -> Vec<u8> {
+    let span = hi.saturating_sub(lo).max(1);
+    let seed = if seed == 0 { 7 } else { seed };
+    let pad_len = lo + (seed as usize % span);
     let mut pad = vec![0u8; pad_len];
     let mut x = (seed as u32) | 1;
     for b in pad.iter_mut() {
@@ -365,6 +421,22 @@ fn make_pad((lo, hi): (usize, usize)) -> Vec<u8> {
         pad[0] = 0;
     }
     pad
+}
+
+/// 写干扰数据并顺手报进度（`Wrote` 的字节也进分母，见调用处的 `TotalHint`）
+///
+/// 不带 `--decoy` 时 [`decoy::写噪声`] 直接返回 0 —— 一个字节都不写、也不报事件。
+fn 写噪声带进度<W: Write>(
+    out: &mut W,
+    decoy: &DecoyOptions,
+    种子: u64,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<u64> {
+    let n = crate::pack::decoy::写噪声(out, decoy, 种子)?;
+    if n > 0 {
+        进度(PackTick::Wrote(n, None));
+    }
+    Ok(n)
 }
 
 /// 写 `free` 原子头，返回写入的字节数
@@ -551,6 +623,21 @@ fn add_dir<W: Write + Seek>(
 /// 对齐生成方的教训（`Steganographier.py` 的输出目录快照仲裁）：
 /// **不能"以为成功了"就完事**，必须回读验证。
 pub fn self_check(path: &Path, expect_entries: usize) -> Result<Vec<String>> {
+    self_check_at(path, expect_entries, None, 0)
+}
+
+/// 同 [`self_check`]，另外核对「ZIP 起点」与「噪声长度」（`--decoy` 的验收）
+///
+/// 为什么用「起点比对」而不是「再解压一遍」：
+/// 噪声全在 ZIP 区间之外 ⇒ 解出来的内容必然与不加干扰时完全一致，
+/// 起点比对是这条性质**更严格**的验证（字节级），代价只是一次定位。
+/// 真解压一遍留在 `tests/decoy.sh` 里跑（那里有 `--test` 与产物 sha256 对比）。
+pub fn self_check_at(
+    path: &Path,
+    expect_entries: usize,
+    expect_zip_offset: Option<u64>,
+    noise_size: u64,
+) -> Result<Vec<String>> {
     let mut warnings = Vec::new();
     let mut f = fs::File::open(path)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open out: {e}")))?;
@@ -575,6 +662,20 @@ pub fn self_check(path: &Path, expect_entries: usize) -> Result<Vec<String>> {
     }
     if layout.base == 0 && layout.entries_total > 0 {
         warnings.push("自检：ZIP 起点为 0，说明封面没有真正包裹住数据".to_string());
+    }
+    if let Some(exp) = expect_zip_offset {
+        if layout.base != exp {
+            warnings.push(format!(
+                "自检：ZIP 起点应为 {exp} 字节，实际 {}",
+                layout.base
+            ));
+        }
+        if noise_size > 0 && layout.base < noise_size {
+            warnings.push(format!(
+                "自检：ZIP 起点 {} 落在 {} 字节干扰数据之内 —— 噪声写进了压缩数据",
+                layout.base, noise_size
+            ));
+        }
     }
     Ok(warnings)
 }
@@ -728,6 +829,8 @@ pub fn build_sfx_ctx<W: Write>(
         cover_size: 存根大小,
         entries,
         layout: PackLayout::TailAppend,
+        noise_size: 0,
+        zip_offset: 存根大小,
         warnings: Vec::new(),
         intermediate: None,
     })
@@ -800,6 +903,8 @@ pub fn build_sfx_sh_ctx<W: Write>(
         cover_size: 偏移,
         entries,
         layout: PackLayout::TailAppend,
+        noise_size: 0,
+        zip_offset: 偏移,
         warnings: Vec::new(),
         intermediate: None,
     })

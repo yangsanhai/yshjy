@@ -13,14 +13,14 @@ _yshjy_complete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --encoding --select --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --level --layout --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
+    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --encoding --select --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --level --layout --decoy --decoy-size --decoy-signatures --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
 
     case "$prev" in
         -o|--dest)
             if declare -F _filedir >/dev/null; then _filedir -d; else mapfile -t COMPREPLY < <(compgen -d -- "$cur"); fi
             return 0
             ;;
-        -p|--password|--select|--split|--level)
+        -p|--password|--select|--split|--level|--decoy|--decoy-size)
             # 这几项故意不给候选（密码不该进 history、序号/大小无候选）。
             # 但加了 `-o default` 之后，空 COMPREPLY 会被 readline 回落成文件名补全 ——
             # 于是 `--password <TAB>` 冒出一串文件名。这里显式关掉回落（bash ≥ 4.4 才有 compopt）。

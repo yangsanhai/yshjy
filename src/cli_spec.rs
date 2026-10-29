@@ -80,6 +80,9 @@ pub const OPTS: &[Opt] = &[
     opt("--split", None, Some("大小"), false),
     opt("--level", None, Some("0-9"), false),
     opt("--layout", None, Some("L1|L2"), false),
+    opt("--decoy", None, Some("N"), false),                // 撒几段干扰数据（0 = 不打）
+    opt("--decoy-size", None, Some("大小"), false),         // 每段多大（4K–1M）
+    opt("--decoy-signatures", None, None, false),           // 每段夹一枚假特征码
     opt("--cover", None, Some("文件"), false),
     opt("--tail", None, None, false),
     opt("--no-checksum", None, None, false),
@@ -216,12 +219,13 @@ mod tests {
     ///
     /// 43 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的 `--dump-cli-spec`
     /// + `--pick`（全屏勾选）+ 2026-10-29 的 `--trash-source` / `--delete-source`
-    /// + `--test`（只测不写：完整解码 + 校验，一个字节都不落盘）。
+    /// + `--test`（只测不写：完整解码 + 校验，一个字节都不落盘）
+    /// + 2026-10-29 第三期 B 的 `--decoy` / `--decoy-size` / `--decoy-signatures`。
     #[test]
-    fn 长选项总数是_43() {
+    fn 长选项总数是_46() {
         assert_eq!(
             OPTS.len(),
-            43,
+            46,
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

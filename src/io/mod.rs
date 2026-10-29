@@ -8,16 +8,19 @@
 //! | [`SegmentReader`] | 把多个分散的数据段"虚接"成连续流 | 数据被切开分插（E3 场景） |
 //! | [`InterruptibleReader`] | 可中断读取 | 用户点取消要能立刻生效 |
 //! | [`PartFile`] | 先写 `.yshjy-part`，写完原子改名 | 中途失败 / 被杀不留半截正式文件 |
+//! | [`BlockCache`] | 给「只能顺序读」的源套上可 seek 的外观 | 手机存储（SAF）/ 管道流 |
 //!
 //! 前三个都用标准库 trait 实现，**不依赖任何平台 API**，可在 Linux/Windows/Android 通用。
 
 pub mod atomic;
+pub mod blockcache;
 pub mod interrupt;
 pub mod patch;
 pub mod segment;
 pub mod window;
 
 pub use atomic::{PartFile, PartWriter, PART_SUFFIX};
+pub use blockcache::{BlockCache, 默认上限 as 块缓存上限, 默认块大小};
 pub use interrupt::InterruptibleReader;
 pub use segment::SegmentReader;
 pub use window::Window;

@@ -40,6 +40,8 @@ VALUE_ACTIONS = {
     "--level": ("none", None),                  # 0-9
     "--jobs": ("words", ["1", "2", "4", "8"]),
     "--layout": ("words", ["L1", "L2"]),
+    "--decoy": ("none", None),                  # 段数，无候选
+    "--decoy-size": ("none", None),             # 如 16K / 1M，无候选
     "--encoding": ("words", ["utf-8", "gbk", "big5", "sjis"]),
     "--lang": ("words", ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "ru-RU", "es-ES"]),
     "--password-file": ("file", None),

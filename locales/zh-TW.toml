@@ -69,6 +69,9 @@ text = """
   --delete-source                 解完永久刪除原包（無法還原；會先問一次，非互動直接拒絕）
   --level 0-9                     打包壓縮級別：0 = 僅儲存（最快），9 = 最小體積（預設 6）
   --sfx / --sfx-linux             打包成自解壓包（.exe / .sh），雙擊自己解開；不能與 --split 同用、不用 --cover，這種包不產生 .說明.txt
+  --decoy <N>                     打包時撒 N 段干擾資料（最多 64 段，預設 0 = 不打）
+  --decoy-size <大小>             每段多大（4K–1M，預設 16K）
+  --decoy-signatures              每段裡夾一枚假特徵碼（騙掃描器；預設關）
   --caps                          看各格式的能力表（能解 / 能打包 / 加密 / 分卷 / 續傳）
 
 範例：
@@ -184,6 +187,9 @@ pack_layout_free = "free 原子"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ 自檢通過（這個檔案能播放，也能被我們解回來）"
 pack_selfcheck_bad = "   ❌ 自檢失敗：{err}"
+pack_decoy = "   🎭 干擾資料：{count} 段，共 {total}（每段 {size}，假簽章：{sig}）"
+pack_decoy_sig_on = "開"
+pack_decoy_sig_off = "關"
 pack_failed = "❌ 打包失敗：{err}"
 pack_create_failed = "❌ 無法建立輸出檔案：{err}"
 pack_missing = "❌ 找不到：{path}"

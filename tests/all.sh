@@ -103,7 +103,7 @@ run "cargo test --release" cargo test --release --quiet
 # ───────────────────────── 3. 协议探针 ─────────────────────────
 head_ "3. 协议探针（引擎 ↔ 界面之间的契约）"
 if [ -n "$BIN" ]; then
-  for t in protocol_select protocol_level protocol_serve_eof protocol_pack_cover protocol_cover_only protocol_rescue protocol_sfx protocol_sfx_linux protocol_cancel_job; do
+  for t in protocol_select protocol_level protocol_serve_eof protocol_pack_cover protocol_cover_only protocol_rescue protocol_sfx protocol_sfx_linux protocol_cancel_job seek_probe; do
     if [ -f "tests/$t.py" ]; then
       run "$t" env YSHJY_BIN="$BIN" python3 "tests/$t.py"
     else
@@ -146,6 +146,7 @@ if [ -n "$BIN" ]; then
   run "FFI 头文件对账（ffi-header-sync.sh）" bash tests/ffi-header-sync.sh
   # --test 只测不写：完整解码 + 校验，但一个字节都不落盘（7-Zip 的 t / Ark 的 SupportsTesting）
   run "只测不写（verify_only.sh）" bash tests/verify_only.sh "$BIN"
+  run "干扰数据/假签名（decoy.sh）" bash tests/decoy.sh "$BIN"
   # caps 按格式声明：协议 hello.formats 与 CLI --caps 必须同源（手抄第二份真源的老病）
   run "能力表同源（caps_protocol.py）" env YSHJY_BIN="$BIN" python3 tests/caps_protocol.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归

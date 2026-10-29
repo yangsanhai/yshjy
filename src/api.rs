@@ -94,7 +94,11 @@ pub fn hello() -> Value {
             "resume_level": "entry",
             // 关掉窗口后引擎还在后台跑（藏到托盘继续解），这是真做出来了，
             // 所以能力位如实写 true —— 前端可以据此显示「后台继续」。
-            "background": true
+            "background": true,
+            // 能不能「选文件后立刻探测它属于哪一档读法」（第三期 C）。
+            // 探到了不等于落地做完了：真到 copy_first 时复制那份还在 Android 批验。
+            // 老前端不认识这个键就忽略 → 只加不删，协议版本不用升。
+            "seek_probe": true
         },
         // 按格式声明的能力表（Ark 的 `SupportsTesting: true` 是同一个思路：能力挂在**格式**上，
         // 不是全局一份）。前端据此决定「这个格式能不能选条目 / 能不能给密码 / 能不能打包」。
@@ -164,6 +168,10 @@ pub fn 扫描(参数: &Value) -> Result<Value, Value> {
             }
             Err(_) => ("UNKNOWN".to_string(), 1),
         };
+        // 这个位置能不能跳着读（第三期 C）：full / block_cache / copy_first。
+        // 界面据此提示「这个位置不能跳着读，会先复制一份（占 X MB）」——
+        // 提示文案归界面，引擎只给机器标识 + 一个现成的标签。
+        let seek = crate::seek::seek_ability(p);
         items.push(json!({
             "path": p.display().to_string(),
             "name": p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
@@ -173,6 +181,8 @@ pub fn 扫描(参数: &Value) -> Result<Value, Value> {
             "looks_like": looks_like,
             "mime": mime,
             "archive": kind != "UNKNOWN",
+            "seek": seek.as_str(),
+            "seek_label": seek.label(),
         }));
     }
     Ok(json!({"items": items, "expanded": 展开.len(), "given": paths.len()}))
@@ -487,6 +497,42 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         }
     }
 
+    // 干扰数据（第三期 B）：`decoy` = 段数，`decoy_size` = 每段字节，`decoy_signatures` = 假签名。
+    // 只有伪装布局（L1/L2）支持 —— 普通压缩是标准 ZIP，前面塞垃圾会让别人的 unzip 报 warning；
+    // 自解压靠**写死的偏移**找数据，插噪声会直接把它弄坏。两种都明确报错，不静默忽略。
+    let decoy = crate::pack::decoy::DecoyOptions {
+        count: 参数.get("decoy").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+        size: 参数
+            .get("decoy_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(16 * 1024) as usize,
+        signatures: 参数
+            .get("decoy_signatures")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    };
+    decoy.validate().map_err(错误对象)?;
+    if decoy.is_on() {
+        if 普通压缩 {
+            return Err(错误值(
+                "BAD_PARAM",
+                "普通压缩（标准 ZIP）不支持干扰数据 —— 加噪声会让别人的 unzip 报警告；请用伪装模式",
+            ));
+        }
+        if 自解压.is_some() {
+            return Err(错误值(
+                "BAD_PARAM",
+                "自解压包不支持干扰数据 —— 存根靠写死的偏移找数据，插噪声会把它弄坏",
+            ));
+        }
+    }
+    if decoy.signatures && !decoy.is_on() {
+        return Err(错误值(
+            "BAD_PARAM",
+            "decoy_signatures 要配合 decoy（段数）用，单独给没有意义",
+        ));
+    }
+
     // 外壳文件（伪装模式）：任意类型，用户选什么就是什么。
     //
     // 之前协议没这个参数，界面只能拿三个内置小素材 —— 用户想伪装成 PDF / 安装包 /
@@ -585,7 +631,7 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
     } else if 自解压.is_some() {
         crate::pack::build_sfx_ctx(&opts, &mut bw, &mut 报)
     } else {
-        crate::pack::build_ctx(&opts, &mut bw, &mut 报)
+        crate::pack::build_ctx_decoy(&opts, &decoy, &mut bw, &mut 报)
     }
     .map_err(错误对象)?;
     // 收尾补一条终态，保证界面看到的进度是最终值
@@ -631,6 +677,12 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         "entries": rep.entries,
         "level": opts.level,
         "layout": format!("{:?}", rep.layout),
+        // 干扰数据（第三期 B）：界面要能显示「撒了几段、占多少」，
+        // 跟 CLI 的 `cli.pack_decoy` 是同一份信息
+        "noise_size": rep.noise_size,
+        "noise_segments": decoy.count,
+        "noise_segment_size": decoy.size,
+        "noise_signatures": decoy.signatures,
         "warnings": rep.warnings,
         "volumes": post_rep.as_ref().map(|p| p.volumes.iter().map(|x| x.display().to_string()).collect::<Vec<_>>()).unwrap_or_default(),
         "checksum": post_rep.as_ref().and_then(|p| p.checksum.as_ref()).map(|x| x.display().to_string()),

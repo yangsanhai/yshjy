@@ -45,6 +45,7 @@ pub mod rescue;
 pub mod restore;
 pub mod resume;
 pub mod safety;
+pub mod seek;
 pub mod scan;
 pub mod select;
 pub mod tools;
