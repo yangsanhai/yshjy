@@ -1,4 +1,30 @@
-# 发布检查（T5）—— 0.9.26 对外发布前的逐项核对
+# 发布检查（T5）—— 逐项核对
+
+## 0.9.29 发布记录（2026-10-29，最新一次）
+
+> 这一版把「窗口尺寸记忆 / 原包处置（CLI + 界面）/ 右键脚本只读目录 / packSize 封顶」四块
+> 送进装机版。流程与 0.9.26 那轮完全一致（下表就是那轮的快照，数字换成 33 项）：
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| 五处版本号同步 | 手工改 `Cargo.toml` / `gui/pubspec.yaml` / `docs/PROTOCOL.md` 两份示例 / `CHANGELOG.md` 段落标题，`docs/yshjy.1` 由生成器带出 | 5/5 |
+| 界面 release 构建 | `cd gui && flutter build linux --release` | 成功 |
+| 出 deb | `bash scripts/build-deb.sh` | `dist/yshjy_0.9.29_amd64.deb` 9.8M，自查 14 种格式通过 |
+| 出两档 tar.gz | `bash scripts/release.sh` | `yshjy-` / `yshjy-full-` 各 3.8M |
+| 验包 | `bash scripts/test-packages.sh` | **33 项全绿** |
+| 装机 | `sudo apt install ./dist/yshjy_0.9.29_amd64.deb` | `dpkg -l yshjy` = 0.9.29 |
+
+**这一轮踩到的（断言又一次立功）**：先出 deb、再单独跑验包时红了一项 ——
+「tar.gz 里版本 0.9.28 ≠ deb 版本 0.9.29（两个包不是同一次构建）」。原因是只跑了
+`build-deb.sh` 没跑 `release.sh`，`dist/` 里最新的 tar.gz 还是上一版。
+**顺序记住：先 `release.sh`（出 tar.gz）再 `build-deb.sh`（出 deb），或者两个都跑完再验包。**
+
+装机后的实测：`--version` = 0.9.29、桌面项认领 **14 种格式**、`--help` 里有
+`--trash-source` / `--delete-source`、GUI 二进制里带窗口尺寸记忆的打点（`gui-window.txt`）。
+
+---
+
+# 0.9.26 那轮的逐项核对（历史，留作模板）
 
 > 结论先行：**可以发**。deb 32 项实测全过；配套 tar.gz 与 deb 同版本、同一次构建。
 > AppImage **本轮不做**，理由与将来的配方写在最后（§4），决定要做的条件是「要给非 Debian 系的人」。
