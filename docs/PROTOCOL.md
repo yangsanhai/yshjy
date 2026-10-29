@@ -80,11 +80,11 @@
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
 | `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
 | `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?`, `drill?`, `ask?`, `select?`, `encoding?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`ask:true` 表示前端能处理 `ASK_USER`（不写 = 限额命中直接失败）；**`select` = 文件级挑选**（v0.9.24 起）：字符串表达式（`all` / `1,3,5` / `*.exe` / `目录/**` / `required`）或正整数数组（序号，与 `PREVIEW_READY` 的 `index` 一致），不传 = 全解，非法表达式回 `BAD_PARAM`（**不会**静默全解）；`encoding` = 文件名代码页（`gbk` / `big5` / `sjis` / `utf-8`，`auto` 等同不传） |
-| `pack` | `inputs[]`, `out`, `cover?`, `sfx?`, `password?`, `tail?`, `mode?`, `split?`, `checksum?`, `readme?`, `level?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装（老行为）；**`cover` = 外壳文件的绝对路径，伪装模式必填，任意类型**（引擎按文件头决定布局：MP4 走 free 原子，其他走尾部追加）；**`sfx:true` = 生成 Windows 自解压 exe**（输出必须 `.exe`，与 `cover`/`split`/`password` 互斥）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode；**`level` = 压缩级别 0-9**（0 = 仅存储最快、9 = 压缩最小，默认 6，结果里回显实际用的 `level`，越界回 `BAD_PARAM`） |
+| `pack` | `inputs[]`, `out`, `cover?`, `sfx?`, `password?`, `tail?`, `mode?`, `split?`, `checksum?`, `readme?`, `level?`, `decoy?`, `decoy_size?`, `decoy_signatures?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装（老行为）；**`cover` = 外壳文件的绝对路径，伪装模式必填，任意类型**（引擎按文件头决定布局：MP4 走 free 原子，其他走尾部追加）；**`sfx:true` = 生成 Windows 自解压 exe**（输出必须 `.exe`，与 `cover`/`split`/`password` 互斥）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode；**`level` = 压缩级别 0-9**（0 = 仅存储最快、9 = 压缩最小，默认 6，结果里回显实际用的 `level`，越界回 `BAD_PARAM`） |
 | `cancel` | — | 取消当前任务（整批停） |
 | `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
 | `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |
-| `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` |
+| `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` / **`seek` / `seek_label`** |
 | `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `ask?`, `select?`, `encoding?` | 顺序批量解压，返回逐项结果；`ask` / `select` / `encoding` 与 `extract` 同规则（同一次批量里所有包都按这个挑选） |
 | `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
 | `rescue` | `path`, `dest?`, `list_only?`, `encoding?` | **救援**（＝CLI `--rescue`）：中央目录坏了也按 local header 重建清单并抢救数据。`list_only:true` 只重建清单、**一个字节都不落盘**（界面可以先说「能救回 N 个」再动手）；不给 `dest` 时落到 `<包名>.rescue`；只认 ZIP 家族，认不出回 `NOT_ARCHIVE`（**不许**折成 `DATA_LOST`，否则用户会去重下好包）。结果带 `entries_total` / `entries_done` / `dest` / `files[]` / `skipped[]` / `rebuilt[]` |
@@ -103,6 +103,7 @@
 | `resume` | bool | 断点续传：中断后重开能接着解 |
 | `resume_level` | string | 续传粒度。`"entry"` = **条目之间**（已完整解出的文件不再重解，正在写的那个重来）；将来做了条目内部块级续传会变成 `"block"`，中间的 `"none"` 表示没有。前端按字符串分支，别假设是固定枚举值 |
 | `background` | bool | 关掉窗口后引擎还在后台跑（藏到托盘继续解） |
+| `seek_probe` | bool | 能探测「这个位置能不能跳着读」（`scan` 结果里的 `seek`）。**探到 ≠ 落地做完**：真到 `copy_first` 时复制那份要在手机上验，桌面侧只有代码与单测 |
 
 `resume_level` 这套三档命名借自 itchio/savior（`none` / `entry` / `block`）——
 用业界已有的词，比我们自己造一套好沟通。
@@ -116,7 +117,8 @@
 ```jsonc
 {"id":1,"cmd":"hello"} →
 {"id":1,"ok":true,"result":{
-  "caps": {"preview":true,"selective":true,"resume":true,"resume_level":"entry","background":true},
+  "caps": {"preview":true,"selective":true,"resume":true,"resume_level":"entry",
+           "background":true,"seek_probe":true},
   "formats": [
     {"format":"zip","shape":"plain","encrypted":true,"encrypted_names":false,
      "split_volumes":true,"selective":true,"restores_mtime":true,"can_create":true},
@@ -213,16 +215,26 @@
 `pack`：
 ```json
 {"total_size": 2048, "zip_size": 120, "cover_size": 1688,
- "entries": 1, "layout": "FreeAtom", "warnings": []}
+ "entries": 1, "layout": "FreeAtom", "warnings": [],
+ "noise_size": 0, "noise_segments": 0, "noise_segment_size": 16384,
+ "noise_signatures": false}
 ```
+`noise_size` = 实际撒进去的干扰数据字节数（没开 `decoy` 就是 0）；`noise_segments` /
+`noise_segment_size` / `noise_signatures` 是**回显你传的参数**，前端拿它显示
+「撒了 N 段，共 X」。`decoy` 与 `mode:"plain"`、`sfx` 互斥（回 `BAD_PARAM`，不静默忽略）。
 
 `scan`（只读文件头，不解压）：
 ```json
 {"given": 1, "expanded": 3,
  "items": [{"path": "/home/me/下载/游戏.mp4", "name": "游戏.mp4", "size": 12345,
             "kind": "Zip", "volumes": 1, "looks_like": "Zip",
-            "mime": "application/zip", "archive": true}]}
+            "mime": "application/zip", "archive": true,
+            "seek": "full", "seek_label": "可以直接读"}]}
 ```
+`seek` 是**机器标识**（`full` / `block_cache` / `copy_first`），前端按它分支：
+`full` 什么都不用做；`block_cache` 表示只能顺序读（引擎会套 32 KiB × 8 MiB 的块缓存）；
+`copy_first` 表示要先复制一份本地副本才能解，**该提示占多少空间**（`size` 字段就是那个数）。
+`seek_label` 只是现成的中文标签，**别拿它当状态机**。
 `archive: false` 表示识别不出压缩格式（`kind == "UNKNOWN"`），界面上应显示成
 「认不出，但可以拖进去试」，不要直接说失败。
 
