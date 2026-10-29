@@ -147,7 +147,7 @@
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.9.26",
+{"protocol": 1, "engine": "0.9.29",
  "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip"],
  "event_kinds": ["JOB_STARTED", "STAGE_STARTED", "STAGE_FINISHED", "...", "ASK_USER"],
  "languages": ["zh-CN", "..."]}
@@ -244,7 +244,7 @@ JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryPar
 
 ```
 → {"id":1,"cmd":"hello"}
-← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.26", ...}}
+← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.29", ...}}
 → {"id":2,"cmd":"list","path":"/home/me/游戏.mp4"}
 ← {"type":"event","kind":"STAGE_STARTED","event":{"StageStarted":{"job":2,"stage":"Locate"}}}
 ← {"type":"event","kind":"PREVIEW_READY","event":{"PreviewReady":{...}}}
