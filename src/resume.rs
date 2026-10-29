@@ -265,14 +265,18 @@ impl ResumeLog {
         let 原有 = 已完成.len() as u64;
 
         // ── 打开写句柄；指纹作废时先清空再写新头 ──
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&路径)
-            .ok()?;
-        if !指纹吻合 {
-            // truncate 走 set_len：比「删了重建」少一次竞态
-            file.set_len(0).ok()?;
+        // Windows 上 append 句柄只有 FILE_APPEND_DATA 权限，set_len(0) 会被拒
+        // （os error 5，2026-10-30 实测）——续传因此整个静默失效（open 返回 None，
+        // 上层当「没有记录」从头解）。所以「截断重来」单独开 truncate 句柄：
+        // 仍然是**原地截断不删文件**，原来选 set_len 而非「删了重建」为的是少一次竞态，
+        // 这条性质 truncate 同样保住
+        let mut file = if !指纹吻合 {
+            let mut f = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&路径)
+                .ok()?;
             let head = 行::头 {
                 v: 格式版本,
                 input: 绝对包.to_string_lossy().into_owned(),
@@ -280,13 +284,18 @@ impl ResumeLog {
                 mtime: 包时间,
                 dest: 绝对目录.to_string_lossy().into_owned(),
             };
-            写一行(&mut file, &head).ok()?;
-        } else if !末尾是换行(&路径) {
-            // 上次是被硬杀 / 断电打断的：文件末尾留着半行。
-            // 不补这个换行，新记录会**粘在坏行后面**，一起变成解不出来的垃圾行
-            // （那样丢的是本次第一条记录，虽然只多重解一个文件，但没必要）
-            let _ = file.write_all(b"\n");
-        }
+            写一行(&mut f, &head).ok()?;
+            f
+        } else {
+            let mut f = OpenOptions::new().create(true).append(true).open(&路径).ok()?;
+            if !末尾是换行(&路径) {
+                // 上次是被硬杀 / 断电打断的：文件末尾留着半行。
+                // 不补这个换行，新记录会**粘在坏行后面**，一起变成解不出来的垃圾行
+                // （那样丢的是本次第一条记录，虽然只多重解一个文件，但没必要）
+                let _ = f.write_all(b"\n");
+            }
+            f
+        };
 
         Some(std::sync::Arc::new(Self {
             路径,
@@ -484,6 +493,7 @@ fn 修改时间秒(p: &Path) -> Option<u64> {
 }
 
 /// 相对路径 → 绝对路径（拿不到 cwd 时原样返回，指纹会退化成「相对路径比较」）
+#[cfg(unix)]
 fn 绝对化(p: &Path) -> PathBuf {
     if let Ok(c) = std::fs::canonicalize(p) {
         return c;
@@ -495,6 +505,32 @@ fn 绝对化(p: &Path) -> PathBuf {
         Ok(d) => d.join(p),
         Err(_) => p.to_path_buf(),
     }
+}
+
+/// Windows 版**不许**走 canonicalize：它只在目标存在时成功，且成功时带 `\\?\` 前缀 ——
+/// 输出目录第一次跑还不存在、中断后重跑必然已存在，同一条命令会算出两个不同的指纹
+/// （哈希不同 → 查的是两份记录），续传永远对不上号（2026-10-30 实测复现）。
+/// 所以这里只用纯词法归一：转绝对 + 去前缀 + 分隔符统一，存不存在结果都一样。
+#[cfg(windows)]
+fn 绝对化(p: &Path) -> PathBuf {
+    let abs = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        match std::env::current_dir() {
+            Ok(d) => d.join(p),
+            Err(_) => p.to_path_buf(),
+        }
+    };
+    let s = abs.to_string_lossy();
+    // \\?\UNC\server\share 是网络路径的真身形式，去前缀后要补回 \\ 开头
+    let 无前缀 = if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        s.into_owned()
+    };
+    PathBuf::from(无前缀.replace('/', "\\"))
 }
 
 /// 状态文件路径：`<配置目录>/resume/<包+目录指纹>.jsonl`
@@ -782,5 +818,26 @@ mod tests {
         assert!(log.should_skip("剧集", &子目录, 条目种类::目录));
         // 同一个名字用错的种类问，不能通过（防止文件被当目录跳过）
         assert!(!log.should_skip("剧集", &子目录, 条目种类::文件));
+    }
+
+    /// W2 的另一半（2026-10-30 实测复现）：Windows 的 canonicalize 只在目标**存在**时成功
+    /// 且带 `\\?\` 前缀 —— 输出目录中断后重跑必然已存在，指纹若跟着变，续传永远对不上号
+    #[test]
+    fn windows下输出目录存在与否指纹路径一致() {
+        let base = std::env::temp_dir().join(format!("yshjy_w2_fp_{}", std::process::id()));
+        let 输出 = base.join("输出目录");
+        let _ = std::fs::remove_dir_all(&输出);
+        let 不存在时 = 绝对化(&输出);
+        std::fs::create_dir_all(&输出).unwrap();
+        let 存在时 = 绝对化(&输出);
+        let _ = std::fs::remove_dir_all(&输出);
+        assert_eq!(
+            不存在时, 存在时,
+            "同一个输出目录，存不存在必须算出同一条指纹路径"
+        );
+        assert!(
+            !不存在时.to_string_lossy().starts_with(r"\\?\"),
+            "去前缀后的路径不该再带 \\\\?\\（否则与不存在时的词法路径不同形）"
+        );
     }
 }
