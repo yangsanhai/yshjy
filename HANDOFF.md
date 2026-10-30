@@ -16,10 +16,11 @@
 > **同步方式记一笔**：`git fetch` 直接读移动硬盘仓库会报"所有权可疑"（NTFS ro 挂载 owner=root，
 > 且 `-c safe.directory` 传不进 upload-pack 子进程）→ 在盘上 `git bundle create 增量.bundle e494259..92b71f7`
 > 再本机 `git fetch bundle`，64K 就够，别为此改全局 gitconfig。
-> **已发版**：**0.9.32 已装机**（2026-10-30，含「预览页直接给解压码输入框」那一版）。
-> 装机后四项全过：`dpkg`/`--version` = 0.9.32、菜单 14 种格式、`tests/pick.sh` 11 项全绿、
-> 装机版真打包（`file` 认成 MP4）＋带码解压 AES 包 **5 个文件 sha256 与源完全一致**。
-> 发版记录见 `docs/RELEASE-CHECK.md` 顶部；`test-packages.sh` 37 项全绿。
+> **已发版**：**0.9.33 已装机**（2026-10-30）。这一轮连出三版：
+> 0.9.31（Ctrl-C）→ 0.9.32（GUI 加密包死路 + 预览页直接给解压码 + 从硬盘拉回的 W1~W9）
+> → **0.9.33（打包页：输出名跟着输入变 / 完成后显示真实路径 + 打开所在文件夹）**。
+> 装机后每轮都验四项：`dpkg`/`--version`、菜单 14 种格式、`tests/pick.sh` 11 项、
+> 装机版真打包解压 sha256。发版记录见 `docs/RELEASE-CHECK.md` 顶部。
 > **下一步**：① **fsync 那笔账**（`docs/TODO.md` 表尾 🔴 那条）仍未动 —— Linux 侧最后一个
 > 真会让用户丢数据的坑（报 ✅ 时数据还在内存里，立刻拔盘会全灭）；
 > ② Android / macOS / iOS 三平台未开始；③ 界面只有中文（架构决定，非缺陷）。
