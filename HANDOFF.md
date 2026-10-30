@@ -1,6 +1,14 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-10-31 凌晨 · T16 命令行 `--candidate` 做完（未发版，装机版仍是 0.9.36）**
+> **2026-10-31 凌晨 · T16 命令行 `--candidate` 做完，已发版并装机 0.9.37**
+
+> 发版一条龙（全真跑）：六处版本号 0.9.36→0.9.37 → `cargo build --release` →
+> `flutter build linux --release`（`version.json` = 0.9.37）→ `scripts/release.sh`
+> （两档 tar.gz 各 3.8M）→ `scripts/build-deb.sh`（deb 9.9M，自查 14 种格式通过）→
+> `scripts/test-packages.sh` **37 项全绿** → `apt-get -s` 模拟（只升级 1 个包）→ 装机。
+> 装机后五项：`dpkg`/`--version` = 0.9.37、菜单 14 种格式、`pick.sh` 11/0、
+> 真打包真解压 3 文件 sha256 逐一致、**`candidate_cli.py` 拿 `/usr/bin/yshjy` 跑 6/6**
+> （新功能在装机版上单独验过，不是只看仓库里的测试绿）。详见 `docs/RELEASE-CHECK.md` 顶层。
 >
 > 用户口径「那就按你说的优化吧」→ 按 `docs/TODO.md` 表尾挑最小的一项 T16 先做。
 >
@@ -29,7 +37,7 @@
 > `flutter analyze` 报一串 `illegal character`。
 >
 > **剩下没做的**：T7（8 项引擎能力没界面入口，要真机点 8 次）、T9（差真截图）、T11（无障碍）、
-> T14（界面多语言，两天级）、T15（覆盖率）。**还没提交 git、还没发版**。
+> T14（界面多语言，两天级）、T15（覆盖率）。**代码与发版都已提交本地 git**（只本地，没推远端）。
 
 > **2026-10-31 凌晨 · T5 / S10 多候选 + 自动找解压码默认关，已发版并装机 0.9.36**
 >
