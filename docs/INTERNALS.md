@@ -278,7 +278,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 **30 种事件**：`ASK_USER` `DIAGNOSTIC` `ENTRY_FINISHED` `EXTRACT` `EXTRACT_PROGRESS` `HIDDEN_AT_OFFSET`
 `JOB_FINISHED` `JOB_STARTED` `LAYOUT_GUESSED` `LIST` `LOCATE` `OFFSET_CORRECTED` `PACK` `PACK_PROGRESS`
 `PARTIAL_DATA` `PASSWORD_FROM_NOTES` `PASSWORD_NEEDED` `PASSWORD_TRY` `PREVIEW_READY` `REBUILT_INDEX`
-`RESUMED` `RISKY_ENTRY` `SCAN_PROGRESS` `SLOW_PATH` `SPACE_SHORTAGE` `STAGE_FINISHED` `STAGE_STARTED`
+`MOVABLE_NOT_VERIFIED` `RESUMED` `RISKY_ENTRY` `SCAN_PROGRESS` `SLOW_PATH` `SPACE_SHORTAGE` `STAGE_FINISHED` `STAGE_STARTED`
 `VERIFY` `VIDEO_UNPLAYABLE` `VOLUMES_MERGED`
 
 **17 个错误码**（`error.rs`）：`PathNotFound` `InvalidArgument` `NotEnoughSpace` `PermissionDenied`
@@ -390,3 +390,10 @@ grep -c "impl InArchive for" src/unpack.rs   # 期望 5 个实现 + 1 个测试�
 
 > 铁律：**这份文档里的数字必须是扫出来的**，手写数字会像 man 页版本号一样漂。
 > 重扫结果与文中不一致时，改文档，别改脚本让它吻合。
+
+- **落盘检验**（`flush.rs`）：解压/打包/救援/封面**四条写盘路径共用的一个判断** ——
+  目标是不是移动设备（`/usb` 路径 或 盘级 `removable=1`，移动硬盘别忘了后者）、
+  开关 `[safety] flush_movable` 开没开。真等的时候优先 `sync -f <目标>`（只刷该文件系统），
+  每 200 ms 读 `/proc/meminfo` 的 `Dirty+Writeback` 报真进度，并按本次产物字节数封顶
+  （内核读数是全系统的，不封顶会显示「打了个 15 MB 的包，还剩 472 MB」）。
+  教训：**回读自检挡不住没落盘** —— 自检读到的可能是页缓存，所以先落盘再自检。

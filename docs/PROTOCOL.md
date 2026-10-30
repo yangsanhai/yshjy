@@ -176,16 +176,24 @@
 | `RESUMED` | 这次是**接着上次没解完的**往下解（断点续传） | 提示一句「接着上次的进度来（已完成 N 项）」；否则用户会以为「一上来就有一大截进度、前面文件没动」是 bug |
 | `DIAGNOSTIC` | 不打断的提醒 | 小提示条（如 `RISKY_ENTRY` = 解出可执行文件） |
 | `ASK_USER` | 限额命中、需要用户决定 | 弹窗三选一（继续 / 跳过 / 取消），用 `answer` 回答；**60 秒不答按跳过** |
+| `PACK_PROGRESS` | 打包中 | 打包页进度条（打几 GB 的包时界面不能是死的） |
+| `FLUSH_PROGRESS` | **等真落盘**期间每 ~200 ms | 显示「还剩约 X MB 待写入 · 已等 N 秒 · 请勿拔出设备」。`pending` 是内核待写入字节数（2026-10-30 起按本次产物字节数封顶）；**`pending` 会一路降到 0**，拿它画进度条，别自己编动画 |
+| `FLUSH_FINISHED` | 等落盘结束 | `outcome` = `DONE`（已写入设备，可以安全拔出）/ `CANCELLED`（用户点了停止等待）/ `UNSUPPORTED`（平台不支持，退回全量 `sync` 也不行）。`millis` 是**等待耗时**，与解压/打包本身的用时**分开报** |
 | `JOB_FINISHED` | 任务结束 | 收尾：成功/部分成功/失败/取消 |
 
 事件字段的权威定义在 `src/event.rs`（`pub enum Event`），**那是唯一真源**。
+
+**`FLUSH_*` 只会在「`[safety] flush_movable` 开着」+「目标是移动设备」时出现**，
+其余情况一条都不会有（本机硬盘上永远不多等一秒）。前端**不要**在没有 FLUSH 事件时
+自己补一个"校验中"——那会变成假动画。开关关着但目标是移动设备时，引擎改发
+诊断 `MOVABLE_NOT_VERIFIED`，前端请提示「拔盘前请先安全弹出」。
 前端不要依赖事件的出现顺序（除了「`JOB_STARTED` 先于 `JOB_FINISHED`」这一条）。
 
 ## 结果结构（`result` 里有什么）
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.9.33",
+{"protocol": 1, "engine": "0.9.34",
  "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip"],
  "event_kinds": ["JOB_STARTED", "STAGE_STARTED", "STAGE_FINISHED", "...", "ASK_USER"],
  "languages": ["zh-CN", "..."]}
@@ -302,7 +310,7 @@ JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryPar
 
 ```
 → {"id":1,"cmd":"hello"}
-← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.33", ...}}
+← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.34", ...}}
 → {"id":2,"cmd":"list","path":"/home/me/游戏.mp4"}
 ← {"type":"event","kind":"STAGE_STARTED","event":{"StageStarted":{"job":2,"stage":"Locate"}}}
 ← {"type":"event","kind":"PREVIEW_READY","event":{"PreviewReady":{...}}}
