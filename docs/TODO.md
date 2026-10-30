@@ -24,11 +24,11 @@
 | T6 | `--force` 界面入口（与 T4 同根） | 界面 | ⬜ | 同上 |
 | T7 | 引擎有、界面没入口的其余项（E1 decoy / E2 layout / E4 test / E5 smart-dir / E6 report / E7 jobs·keep） | 界面 | ⬜ | 每项真机点一次，产物用命令行复核 |
 | T8 | S4 密码框两个「自动找」勾选 | 界面 | ⬜ | 勾/不勾各解一次加密包，行为不同 |
-| T9 | 门面：`metainfo.xml` + 多尺寸图标 + README 版本/如实说明 | 门面 | ⬜ | `appstreamcli validate` 过；README 数字与装机一致 |
-| T10 | 开源规范：SECURITY.md / CODE_OF_CONDUCT.md / issue 模板 | 门面 | ⬜ | 文件在，模板能在 GitHub 认出来 |
+| T9 | 门面：`metainfo.xml` + 多尺寸图标 + README 版本/如实说明 | 门面 | 🟡 **差真截图** | `appstreamcli validate` ✔ 通过；7 尺寸图标已接入 deb 与用户级安装；README 0.9.31→0.9.34、补「界面只有中文」。**剩**：真截图（README 那 3 张是徽章不是截图）+ 元数据里填 screenshots |
+| T10 | 开源规范：SECURITY.md / CODE_OF_CONDUCT.md / issue 模板 | 门面 | ✅ 完成 | 三份都在；issue 表单是 GitHub YAML 格式（bug_report / feature_request / config） |
 | T11 | 无障碍：`Semantics` 语义 + 键盘快捷键 | 界面 | ⬜ | `grep -c 'Semantics('` > 0 且 `flutter test` 全绿 |
 | T12 | CI 加 Flutter 测试 | 工程 | ⬜ | workflow 里有 flutter test 步骤 |
-| T13 | 台账失真 15 条 + FAQ/README 假「规划中」 | 文档 | ⬜ | 逐条 grep 核实后改写 |
+| T13 | 台账失真 + README 假「规划中」 | 文档 | ✅ 完成（16 处） | REFERENCE-INDEX 9 处（含 decoy 真身其实在 `src/pack/decoy.rs`，审计自己写错了路径）、DESIGN 3 处、GUI-PLAN 4 处；每条都先 grep 核代码再改 |
 | T14 | 界面多语言接线（474 条硬编码） | 界面 | ⬜ | 切 `--lang en` 界面变英文；**本轮不保证做完，见下方说明** |
 | T15 | 覆盖率报告（cargo llvm-cov） | 工程 | ⬜ | `scripts/cov_by_file.py` 出分文件表 |
 
@@ -36,22 +36,22 @@
 单独排**，做完 T13 再定是否连做 —— 用户口径「全搞完」，但这两项的体量是「两天级」，
 硬塞进同一轮必然做一半，会在表里如实标「顺延到下一轮」，不装完成。
 
-## 📊 完成度总览（2026-10-29 实测，不是估的）
+## 📊 完成度总览（2026-10-30 实测，不是估的）
 
 > 这张表只在这里一份，别处（HANDOFF / ROADMAP / README）写完成度一律指回这里。
 > 数字全部来自本节末尾列的实测命令；改完代码要跟着改这张表。
 
 | 块 | 状态 | 证据 |
 |---|---|---|
-| 引擎·解压 | ✅ 完成 | 10 类格式 / 12 条能力组合（`--caps` 实测）；**52 个 `.rs` / 29,584 行**（顶层 40 个） |
+| 引擎·解压 | ✅ 完成 | 12 条能力组合（`--caps` 实测）；**53 个 `.rs` / 30,774 行**（顶层 41 个） |
 | 引擎·打包与伪装 | ✅ 完成 | MP4 free 原子 + 其他外壳尾部追加 + 自解压 sfx + 分卷 + 干扰数据/假签名 |
 | 引擎·可靠性 | ✅ 完成 | 原子写入（六条落盘路径）/ 断点续传 / 救援 / packSize 封顶 / 路径穿越 / 炸弹双闸；fuzz **只读入口 2.38 亿次 + 写盘路径 7.2 万次，均零崩溃** |
-| 测试与护栏 | ✅ 完成 | `cargo test` **388 通过 / 0 失败**（357+29+2，1 ignored，2026-10-29 实跑）；`tests/all.sh` **41 通过 / 0 失败 / 5 跳过**；44 个探针脚本 + 12 份契约 golden |
+| 测试与护栏 | ✅ 完成 | `cargo test` **401 通过 / 0 失败 / 1 ignored**（2026-10-30 实跑）；`tests/all.sh` **42 通过 / 0 失败 / 5 跳过 / 200 秒**；**45 个探针脚本** + 12 份契约 golden |
 | 命令行（CLI） | ✅ 完成 | **43 个长选项**（实测 `--help`）；补全三份 + man 页均由 `cli_spec.rs` 自动生成 |
-| 图形界面（Linux） | ✅ 完成 | 5 页（首页/预览树/打包/历史/设置）+ 托盘；**17 个 dart / 5,732 行**；`flutter test` 46 条 |
-| 装包与发版 | ✅ 完成 | deb + 两档 tar.gz；菜单认领 **14 种格式**；`test-packages.sh` 37 项；0.9.31 已装机 |
+| 图形界面（Linux） | 🟡 **页面齐、缺口在入口** | 5 页（首页/预览树/打包/历史/设置）+ 托盘；**18 个 dart / 6,186 行**；`flutter test` **89 条**。**缺口**：S5 空间不足、S10 多候选、8 项引擎能力没入口、无多语言/无障碍（见「🔨 本轮施工进度」T4~T8/T11/T14） |
+| 装包与发版 | ✅ 完成 | deb + 两档 tar.gz；菜单认领 **14 种格式**；`test-packages.sh` 37 项；**0.9.34 已装机**；AppStream 元数据 + 7 尺寸图标已接进出包脚本 |
 | 协议面 | ✅ 完成 | **11 个命令 / 30 种事件 / 14 种 MIME**；协议只加不删 |
-| 多平台·Windows CLI | 🟡 差最后两步 | 引擎已交叉编出 13 MB `yshjy.exe`、wine 验过；**剩**：`crash.rs` 非 unix 时区还是 `return 0` 占位（时间差 8 小时）+ 出 zip 包 + `BUILD-Windows.md` |
+| 多平台·Windows CLI | 🟡 **引擎全绿，缺分发包** | 真 Windows 机器上编过、跑过、解过包；W1~W10 十项审计全清（时区/续传/回收站/密码回显/内存闸/波浪号/单测/回归/界面）；`docs/BUILD-Windows.md` 已写。**剩**：Windows 分发包（zip/安装器）要在他自己的 Windows 机上出 |
 | 多平台·Windows 界面 | ⛔ 本机做不了 | 必须在 Windows 上编（用户自己的 Win 机器） |
 | 多平台·Android | ⛔ 未开始 | SDK/NDK 未装（约 8–10 G）；代码侧 seek 三档已就位，落地 5 条待验清单见下 |
 | 多平台·macOS / iOS | ⛔ 未开始 | 靠 GitHub 免费 CI；零成本口径（不上架/不公证/不买账号）已定 |
