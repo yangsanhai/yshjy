@@ -71,6 +71,10 @@ class HomePage extends StatefulWidget {
   final String? debugErrorCode;
   final String? debugErrorNote;
 
+  /// 测试用：失败态的结构化 detail（空间不足的 need / available 就在这里面）。
+  /// 没有它，「三个数」只能靠真机撞小容量盘才验得到 —— 那条路要 sudo 挂 loop 盘。
+  final Map<String, dynamic>? debugErrorDetail;
+
   const HomePage({
     super.key,
     this.initialFile,
@@ -79,6 +83,7 @@ class HomePage extends StatefulWidget {
     this.debugPreview,
     this.debugErrorCode,
     this.debugErrorNote,
+    this.debugErrorDetail,
   });
 
   @override
@@ -107,6 +112,13 @@ class _HomePageState extends State<HomePage> {
 
   /// 引擎给的结构化细节（如缺分卷的 missing/found）—— 失败卡据此说"缺哪一块"
   Map<String, dynamic>? _errorDetail;
+
+  /// 空间不足的两个数（引擎的 `SPACE_SHORTAGE` 事件先到，错误对象随后才到）
+  ///
+  /// 为什么单独存：2026-10-30 真机上协议层把 detail 吞了，`_errorDetail` 是空的，
+  /// 界面上只剩一句「清一点空间再试」、三个数全无。事件是第二个来源，双保险。
+  int? _spaceNeed;
+  int? _spaceAvail;
   String? _errorNote;
   EngineError? _error;
   final TextEditingController _pwCtrl = TextEditingController();
@@ -201,6 +213,7 @@ class _HomePageState extends State<HomePage> {
       _file = '/tmp/测试包.zip';
       _errorCode = ec0;
       _errorNote = widget.debugErrorNote ?? '';
+      _errorDetail = widget.debugErrorDetail;
       _phase = Phase.error;
     }
     // 从右键菜单带文件启动：等首帧画完再开，避免 setState 早于 build
@@ -297,10 +310,14 @@ class _HomePageState extends State<HomePage> {
       case 'PASSWORD_NEEDED':
         if (!_notes.contains('需要解压码')) setState(() => _notes.add('需要解压码'));
       case 'SPACE_SHORTAGE':
-        final need = e.data['needed'];
-        if (!_notes.contains('磁盘可能不够')) {
-          setState(() => _notes.add('磁盘可能不够（需要 ${_size((need as num?)?.toInt() ?? 0)}）'));
-        }
+        // 预检失败时引擎先发这个事件，错误对象随后才到。
+        // 两路都留着：错误 detail 是主路径，事件是兜底（真机上曾出现 detail 被吞）。
+        final need = (e.data['needed'] as num?)?.toInt();
+        final avail = (e.data['available'] as num?)?.toInt();
+        setState(() {
+          if (need != null) _spaceNeed = need;
+          if (avail != null) _spaceAvail = avail;
+        });
       case 'ASK_USER':
         // 限额命中（压缩炸弹 / 解压体积超限）：引擎在等工作线程里等我们回答，
         // 60 秒不答它就自己按「跳过」往下走（USER，2026-10-17 定的交互）。
@@ -637,7 +654,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _extract() async {
+  Future<void> _extract({bool force = false}) async {
     final path = _file;
     if (path == null) return;
     setState(() {
@@ -660,6 +677,8 @@ class _HomePageState extends State<HomePage> {
         dest: _outDir,
         select: (_wantExtract && !pickedAll) ? _picked.toList() : null,
         encoding: _encoding,
+        // S5「继续试试」：跳过空间预检（引擎侧早支持，界面以前没传）
+        force: force,
       );
       if (!mounted) return;
       setState(() {
@@ -842,7 +861,12 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _phase = Phase.error;
       _errorCode = code;
-      _errorDetail = e?.detail;
+      // 事件里的两个数并进 detail：协议层漏 detail 时（真机撞过）靠这条兜底
+      _errorDetail = {
+        ...?e?.detail,
+        if (_spaceNeed != null) 'need': _spaceNeed,
+        if (_spaceAvail != null) 'available': _spaceAvail,
+      };
       _errorNote = note;
       _error = e;
     });
@@ -2255,10 +2279,110 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// S5：空间不足卡片 —— 三个数 + 三条出路
+  ///
+  /// 三条出路都必须有**真实后端行为**，不做假开关：
+  /// 换位置 = 改 `_outDir` 重解；只解压部分 = 回预览树勾选；继续试试 = 协议 `extract.force`。
+  List<Widget> _spaceShortageBlock(ColorScheme cs) {
+    return [
+      const SizedBox(height: 14),
+      Container(
+        key: const ValueKey('space-shortage'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: cs.errorContainer.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: cs.error.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '磁盘空间不够',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.error,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(_spaceLine(), style: const TextStyle(fontSize: 12, height: 1.5)),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: [
+          OutlinedButton.icon(
+            key: const ValueKey('space-change-dest'),
+            onPressed: _changeDestAndRetry,
+            icon: const Icon(Icons.folder_open, size: 18),
+            label: const Text('换个位置'),
+          ),
+          if (_preview != null)
+            OutlinedButton.icon(
+              key: const ValueKey('space-pick-part'),
+              onPressed: () => setState(() => _phase = Phase.preview),
+              icon: const Icon(Icons.checklist, size: 18),
+              label: const Text('只解压部分'),
+            ),
+          FilledButton.icon(
+            key: const ValueKey('space-force'),
+            onPressed: () => _extract(force: true),
+            icon: const Icon(Icons.play_arrow, size: 18),
+            label: const Text('继续试试'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        '「继续试试」不做空间检查：写到一半满了会停下，已经解出来的文件保留。',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+      ),
+    ];
+  }
+
+  /// 空间不足的三个人话数字
+  ///
+  /// 引擎在错误的 `detail` 里给 `need` / `available`（字节数，协议里可能是字符串）。
+  /// 拿不到就退成一句通用建议 —— **不给算错的数字**（CLI 侧同一口径，别一边猜一边不猜）。
+  String _spaceLine() {
+    int? pick(String k) {
+      final v = _errorDetail?[k];
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
+
+    final need = pick('need');
+    final avail = pick('available');
+    if (need == null || avail == null) {
+      return '清一点空间再试，或者换个地方解。';
+    }
+    final short = need > avail ? need - avail : 0;
+    return '需要 ${_size(need)} / 目标盘只有 ${_size(avail)} / 还差 ${_size(short)}';
+  }
+
+  /// 换个位置再解一次（S5 第一个按钮）
+  Future<void> _changeDestAndRetry() async {
+    final d = await getDirectoryPath(confirmButtonText: '就解到这里');
+    if (d == null || !mounted) return;
+    setState(() => _outDir = d);
+    await _extract();
+  }
+
   Widget _errorView() {
     final cs = Theme.of(context).colorScheme;
-    // 分卷中间块本来就没有文件头，探测结论必然是"认不出" —— 说出来只会误导
-    final hint = _errorCode == 'MISSING_VOLUME' ? null : _typeHint();
+    // 分卷中间块本来就没有文件头，探测结论必然是"认不出" —— 说出来只会误导。
+    // 空间不足同理：包本身好好的，说一句「认不出的文件」会让用户以为包坏了、
+    // 跑去重新下载（2026-10-30 真机截图里就是这么显示的）。
+    final hint = (_errorCode == 'MISSING_VOLUME' || _errorCode == 'NOT_ENOUGH_SPACE')
+        ? null
+        : _typeHint();
     return Center(
       key: const ValueKey('error'),
       child: ConstrainedBox(
@@ -2365,6 +2489,12 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.copy, size: 15),
                 label: const Text('复制错误详情', style: TextStyle(fontSize: 12)),
               ),
+            // S5：空间不够 —— 三个数 + 三条出路。
+            //
+            // 以前这里是死路：引擎连 `SPACE_SHORTAGE` 事件都不发（全库只有定义、零发射点），
+            // 界面那段处理代码永远收不到；而 `--force` 界面也一个参数都没传。
+            // 现在引擎发事件 + 错误 detail 带 need/available，三个按钮各有真实后端行为。
+            if (_errorCode == 'NOT_ENOUGH_SPACE') ..._spaceShortageBlock(cs),
             if (_needsPassword) ...[
               const SizedBox(height: 18),
               // 密码本里的常用解压码：点一下直接填入并重试（调研 07:874-878）
