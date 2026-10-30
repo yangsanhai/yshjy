@@ -68,6 +68,34 @@ def serve(req):
     sys.exit(1)
 
 
+def serve_allow_err(req):
+    """跑一条命令，**允许失败**：成功返回 result，失败返回 None（用来验「该拒的要拒」）"""
+    p = subprocess.run(
+        [BIN, "--serve"],
+        input=json.dumps(req) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    for line in p.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        obj = json.loads(line)
+        if obj.get("id") == req["id"]:
+            return obj["result"] if obj.get("ok") else None
+    print(f"❌ 没拿到 id={req['id']} 的回应\nstdout={p.stdout}\nstderr={p.stderr}")
+    sys.exit(1)
+
+
+def extract_to(path: Path, dest: Path, candidate=None):
+    dest.mkdir(parents=True, exist_ok=True)
+    req = {"id": 8, "cmd": "extract", "path": str(path), "dest": str(dest)}
+    if candidate is not None:
+        req["candidate"] = candidate
+    return serve(req)
+
+
 def scan_one(path):
     res = serve({"id": 1, "cmd": "scan", "paths": [str(path)]})
     items = res.get("items", [])
@@ -164,6 +192,36 @@ def main():
         ok("非包 candidates = []（不是 null，外壳不用判空）")
     else:
         bad(f"非包 candidates = {c!r}，期望 []")
+
+    # ── 6. 指定候选解压（「都试试」的引擎底座）──
+    print("6. candidate 指定第几处 → 解出来的就是那一段")
+    if len(cands) < 2:
+        bad("候选不足两条，没法验「解指定的那一处」")
+    else:
+        非选中 = [c for c in cands if not c.get("chosen")]
+        选中 = [c for c in cands if c.get("chosen")]
+        if not 非选中 or not 选中:
+            bad(f"候选里没找到「选中的那条」和「没选中的那条」：{cands}")
+        else:
+            # ① 不指定 → 引擎自己挑（应当是 chosen 那条）
+            d1 = tmp / "解默认"
+            extract_to(multi, d1)
+            有的1 = {p.name for p in d1.rglob("*") if p.is_file()}
+            # ② 指定第一条（非 chosen）→ 必须解出另一份内容
+            d2 = tmp / "解第一处"
+            extract_to(multi, d2, candidate=非选中[0]["offset"])
+            有的2 = {p.name for p in d2.rglob("*") if p.is_file()}
+            if 有的1 and 有的2 and 有的1 != 有的2:
+                ok(f"默认解出 {sorted(有的1)}，指定第 1 处解出 {sorted(有的2)}——确实是两段不同的包")
+            else:
+                bad(f"指定候选没换到另一段：默认={sorted(有的1)} 指定={sorted(有的2)}")
+            # ③ 非法 candidate → 必须报错，不许静默回退成"自己挑一个"
+            r = serve_allow_err({"id": 9, "cmd": "extract", "path": str(multi),
+                                 "dest": str(tmp / "解非法"), "candidate": 999})
+            if r is None:
+                ok("非法 candidate 被拒（没有假装成功）")
+            else:
+                bad(f"非法 candidate 居然通过了：{r}")
 
     print()
     print(f"结果：{n_pass} 通过 / {n_fail} 失败")

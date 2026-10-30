@@ -186,6 +186,34 @@ pub fn identify_with_candidates(
     Ok((t, 候选))
 }
 
+/// 按「候选起点」认出一段归档（S10 「都试试」用）
+///
+/// 与 [`identify`] 的区别只有一个：**不信自己的判断，听用户的**。
+/// 用户点了「第 2 处」，就从那个偏移精确取出那一段（[`crate::layout::zip::locate_at_base`]）。
+///
+/// 边界：候选清单里的非 ZIP 段（7z/rar 签名命中）目前解不了 —— 会老老实实报
+/// `NOT_ARCHIVE`，**不许**假装成功往上走。
+pub fn identify_at(path: &Path, ctx: &UnpackCtx, base: u64) -> Result<Target> {
+    let mut f = std::fs::File::open(path)
+        .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
+    let size = f
+        .metadata()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("stat: {e}")))?
+        .len();
+    let l = crate::layout::zip::locate_at_base(&mut f, size, base).map_err(|e| {
+        let e = e.with("candidate_offset", base);
+        附上文件类型(e, path)
+    })?;
+    ctx.diagnostic(
+        DiagnosticCode::HiddenAtOffset,
+        format!("base={} len={} (user picked candidate)", l.base, l.data_len()),
+    );
+    Ok(Target::Zip {
+        base: l.base,
+        len: l.data_len(),
+    })
+}
+
 /// 分卷组是否断在中途？返回缺失那一块的文件名
 ///
 /// 判定：拿最后一块的名字，按同样位数把序号 +1 拼出来；
@@ -446,10 +474,14 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Resu
             chosen: true,
         });
     }
-    // 高置信度在前，同档按偏移从前往后：用户从第一处开始试最省事
+    // **采用的那处排第一**，然后高置信度在前，同档按偏移从前往后。
+    //
+    // 为什么 chosen 必须第一：界面文案说的是「现在显示的是第 1 处」，
+    // 真机验时发现按偏移排序会让"第 1 处"变成用户没在看的那段 —— 指鹿为马。
     候选.sort_by(|a, b| {
-        置信度序(&b.confidence)
-            .cmp(&置信度序(&a.confidence))
+        b.chosen
+            .cmp(&a.chosen)
+            .then(置信度序(&b.confidence).cmp(&置信度序(&a.confidence)))
             .then(a.offset.cmp(&b.offset))
     });
     Ok(Target::Zip {
@@ -846,17 +878,21 @@ pub fn run_job(
     // ① 识别 + 预览
     //    预览有两个用处：喂给「智能解压三规则」判断该不该多套一层目录；
     //    同时把 `PreviewReady` 事件发给外壳（界面 S3 的数据源）
-    let prepared: Result<(Target, Option<crate::preview::Preview>)> = identify(&job.input, &ctx)
-        .map(|target| {
-            let pv = if opts.smart_dir && job.dest.is_none() {
-                crate::preview::preview(&job.input, &ctx, opts.password.as_deref())
-                    .ok()
-                    .map(|(_, p)| p)
-            } else {
-                None
-            };
-            (target, pv)
-        });
+    let prepared: Result<(Target, Option<crate::preview::Preview>)> = (|| {
+        // S10「都试试」：用户点了第 N 处 → 按那个偏移精确取，不信自己的默认判断
+        let target = match opts.candidate_offset {
+            Some(off) => identify_at(&job.input, &ctx, off)?,
+            None => identify(&job.input, &ctx)?,
+        };
+        let pv = if opts.smart_dir && job.dest.is_none() {
+            crate::preview::preview(&job.input, &ctx, opts.password.as_deref())
+                .ok()
+                .map(|(_, p)| p)
+        } else {
+            None
+        };
+        Ok((target, pv))
+    })();
 
     let dest = match &prepared {
         Ok((_, pv)) => decide_dest(job, opts, pv.as_ref()),

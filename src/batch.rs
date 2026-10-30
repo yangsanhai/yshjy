@@ -164,6 +164,12 @@ pub struct BatchOptions {
     pub encoding: Option<String>,
     /// 只测不写（`--test` / 协议 `verify_only`）：完整解码 + 校验，但**一个字节都不落盘**
     pub verify_only: bool,
+    /// 按「候选起点」解压（S10 多候选的「都试试」）：`None` = 让引擎自己挑
+    ///
+    /// 值是 `scan` 结果里 `candidates[].offset`。只对 ZIP 家族有意义，
+    /// 对不上任何一段就报 `NOT_ARCHIVE`（不许静默回退成"自己挑一个"——
+    /// 那等于用户点了第 2 处、程序偷偷解了第 1 处）。
+    pub candidate_offset: Option<u64>,
 }
 
 impl Default for BatchOptions {
@@ -179,6 +185,7 @@ impl Default for BatchOptions {
             limits: crate::safety::Limits::default(),
             encoding: None,
             verify_only: false,
+            candidate_offset: None,
         }
     }
 }
