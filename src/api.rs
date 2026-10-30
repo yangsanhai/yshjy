@@ -157,16 +157,16 @@ pub fn 扫描(参数: &Value) -> Result<Value, Value> {
         let mime = 探.as_ref().map(|x| x.mime).unwrap_or("application/octet-stream");
         let sink: Arc<dyn EventSink> = Arc::new(crate::event::NullSink);
         let ctx = UnpackCtx::new(0, sink);
-        let (kind, volumes) = match crate::job::identify(p, &ctx) {
-            Ok(t) => {
+        let (kind, volumes, 候选) = match crate::job::identify_with_candidates(p, &ctx) {
+            Ok((t, cands)) => {
                 let n = match &t {
                     crate::job::Target::SevenZ { volumes } => volumes.len(),
                     crate::job::Target::ZipSplit { volumes } => volumes.len(),
                     _ => 1,
                 };
-                (t.as_str().to_string(), n)
+                (t.as_str().to_string(), n, cands)
             }
-            Err(_) => ("UNKNOWN".to_string(), 1),
+            Err(_) => ("UNKNOWN".to_string(), 1, Vec::new()),
         };
         // 这个位置能不能跳着读（第三期 C）：full / block_cache / copy_first。
         // 界面据此提示「这个位置不能跳着读，会先复制一份（占 X MB）」——
@@ -181,6 +181,20 @@ pub fn 扫描(参数: &Value) -> Result<Value, Value> {
             "looks_like": looks_like,
             "mime": mime,
             "archive": kind != "UNKNOWN",
+            // S10 多候选：一个文件里可能塞着不止一份归档（`[垃圾][ZIP][垃圾][7z]`）。
+            // 清单来自定位时本就要跑的全文件扫描，**不是额外开销**。
+            // `confidence` 是机器标识（high/medium/low），句子由界面查文案；
+            // `chosen` = 引擎最终采用的那一处（正常包永远只有这一条）。
+            "candidates": 候选
+                .iter()
+                .map(|c| json!({
+                    "format": c.format,
+                    "offset": c.offset,
+                    "confidence": c.confidence,
+                    "note": c.note,
+                    "chosen": c.chosen,
+                }))
+                .collect::<Vec<_>>(),
             "seek": seek.as_str(),
             "seek_label": seek.label(),
         }));
