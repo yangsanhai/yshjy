@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布] · 2026-10-31（T16：命令行 `--candidate` —— 「解第 N 处」现在命令行也能表达）
+## [0.9.37] · 2026-10-31（T16：命令行 `--candidate` —— 「解第 N 处」现在命令行也能表达）
 
 **要解决的事**：S10 多候选在 0.9.36 做完了，界面能「换一处解压」、协议能 `extract.candidate`，
 但**命令行**没法指定 —— 用户拿 `yshjy` 复核产物时办不到，只能写 `--serve` 手工拼 JSON。
@@ -32,7 +32,7 @@
   ★ 坑：**Dart 不认中文标识符**（第 4 次踩）—— helper 里写了 `final 真实配置`，analyze 报一串 illegal character。
 - **回归**：`cargo test` **404 过 / 0 挂**（371 + 31 + 2）、`clippy --all-targets -D warnings` 干净、
   `flutter analyze` 干净、`flutter test` **109 过**、`bash tests/all.sh` **46 通过 / 0 失败 / 5 跳过 / 210 秒**。
-- **未发版**：装机版仍是 **0.9.36**。发版前要跑 `scripts/release.sh` + `scripts/build-deb.sh` + 装机四项验证。
+- **发版**：0.9.37 已出包并装机（见 `docs/RELEASE-CHECK.md` 顶部记录）。
 
 ## [0.9.36] · 2026-10-31（T5 / S10 多候选：一个文件里好几处藏着东西，现在能换一处解；自动找解压码改为默认关）
 
