@@ -93,8 +93,7 @@ ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            #
 ```
 </details>
 
-**当前状态**：**0.9.36 已出包（2026-10-31），待装机**（`dist/yshjy_0.9.36_amd64.deb`，
-`scripts/test-packages.sh` 37 项全绿）。装机前的状态是 0.9.35。
+**当前状态**：装机上是 **0.9.36**（2026-10-31 装机，`dpkg -l yshjy` 与 `yshjy --version` 都实测过）。
 **装机后四项实测（2026-10-30，本轮）**：① `dpkg` = 0.9.35 / `--version` = 0.9.35 ✔
 ② 菜单 `MimeType` 认领 **14 种格式** ✔ ③ `bash tests/pick.sh /usr/bin/yshjy` **11 通过 / 0 失败** ✔
 ④ 用装机版真打包再解压：5 个文件（中文名 + 三层嵌套 + 500K/200K 二进制）**sha256 逐一致**，

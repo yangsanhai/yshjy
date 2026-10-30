@@ -15,7 +15,15 @@
 | `scripts/release.sh` | 常用版 3.8M + 全能版 3.8M |
 | `scripts/build-deb.sh` | deb **9.9M**，自查通过：CLI + GUI + 菜单项(14 种格式) + 图标 + man + 三种补全 + 右键脚本，版本 0.9.36 |
 | `scripts/test-packages.sh` | **37 项全绿 / 0 失败**（含「deb 内引擎版本 == 包版本」「真打包真解压逐字节一致」） |
-| 装机 | ⏳ 待用户敲 `sudo apt install ./dist/yshjy_0.9.36_amd64.deb`（本机 sudo 需密码，助手不碰） |
+| 装机 | 0.9.35 → **0.9.36**（用户自己敲 `sudo apt install .../yshjy_0.9.36_amd64.deb`） |
+
+**装机后五项实测（2026-10-31 00:30，全部真跑）**：
+① `dpkg -l yshjy` = **0.9.36** ✔
+② `yshjy --version` = `yshjy 0.9.36（常用版）` ✔
+③ 菜单 `MimeType` **14 种格式**（zip / x-7z / rar / tar / gzip / xz / zstd / bzip2 / brotli / lz4 等）✔
+④ `bash tests/pick.sh /usr/bin/yshjy` = **11 通过 / 0 失败**（含「Ctrl-C 后一个文件都没解」）✔
+⑤ 用装机版真打包→真解压：4 个文件（中文名 + 三层嵌套 + 200KB 随机二进制）**sha256 全一致**，
+中文名无方框乱码 ✔
 
 **产物 sha256**：`yshjy-0.9.36-linux-x86_64.tar.gz` = `e32d469e6a1f3913428c583bea94f60c0ef5386cd0caee6e1f8f6ebc14c537d7`
 
