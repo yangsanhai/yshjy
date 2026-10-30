@@ -222,6 +222,7 @@ risky_entry = "se extrajeron ejecutables — comprueba el origen antes de ejecut
 slow_path = "se usó la ruta lenta (escaneo completo del archivo)"
 password_from_notes = "la contraseña se encontró en las notas de al lado"
 partial_data = "los datos están incompletos"
+movable_not_verified = "El destino es un dispositivo extraíble: usa Expulsar antes de desconectarlo o podrían quedar datos sin escribir"
 hidden_at = "el archivo está dentro del fichero; localizado en su posición real"
 rebuilt_index = "el índice estaba dañado; el listado se reconstruyó desde las cabeceras"
 offset_corrected = "los desplazamientos eran incorrectos; corregidos automáticamente"
@@ -233,6 +234,7 @@ jobs = "Tareas en paralelo"
 out_dir = "Carpeta de salida"
 conflict = "Conflicto de nombres"
 ratio = "Ratio de compresión máx."
+flush_movable = "Verificación de escritura en dispositivos extraíbles (desactivada por defecto)"
 passwords = "Lista de contraseñas"
 follow_system = "(seguir el sistema)"
 beside_package = "(junto al archivo)"
@@ -250,3 +252,15 @@ report_hint = "   Para informar: ejecuta `yshjy --report` (incluye este informe 
 not_your_fault = "   Nota: no es un error tuyo — tus archivos no se han modificado."
 save_failed = "💥 El programa se cerró inesperadamente y no se pudo guardar el informe ({err})"
 task_saved = "   ⚠ Este archivo falló y se omitió (informe: {path})"
+
+[result.hint]
+movable_eject = "   Aviso: el destino es un dispositivo extraíble. Usa Expulsar antes de desconectarlo, o se perderán los datos que siguen en caché"
+movable_flushed = "   ✅ Datos confirmados en el dispositivo ({secs}s). Puedes desconectarlo con seguridad"
+movable_cancelled = "   ⚠️ Verificación cancelada: puede que aún no se hayan escrito los datos. Usa Expulsar primero"
+movable_unsupported = "   ⚠️ No se puede verificar la escritura en este equipo. Usa Expulsar antes de desconectar"
+
+[flush]
+progress = "Esperando a que el dispositivo termine de escribir: quedan unos {mb} MB ({secs}s). No lo desconectes"
+done = "✅ Escritura verificada ({secs}s): los datos están en el dispositivo"
+cancelled = "⚠️ Verificación cancelada ({secs}s): puede que falten datos por escribir"
+unsupported = "⚠️ Verificación no disponible en este equipo (sin sync)"

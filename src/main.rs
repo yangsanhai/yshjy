@@ -1706,7 +1706,14 @@ impl yshjy::event::EventSink for 终端出口 {
             Event::Diagnostic { code, note, .. } => {
                 // 「走了慢路」是性能诊断，跟用户无关；只有排查问题时才要
                 // （想看就 --json 拿事件流，那里是完整的）
-                if matches!(code, yshjy::event::DiagnosticCode::SlowPath) {
+                //
+                // 「移动设备未检验」也跳过：下面打印汇总时会按结果单独说一遍
+                // （Done/Cancelled/Unsupported 三种说法不同），这里再说就重复了。
+                if matches!(
+                    code,
+                    yshjy::event::DiagnosticCode::SlowPath
+                        | yshjy::event::DiagnosticCode::MovableNotVerified
+                ) {
                     return;
                 }
                 self.清行();
@@ -1723,6 +1730,50 @@ impl yshjy::event::EventSink for 终端出口 {
                 eprintln!(
                     "{}",
                     文案().t("cli.password_tried", &[("count", &attempts.to_string())])
+                );
+            }
+            Event::FlushProgress {
+                job,
+                pending,
+                elapsed_ms,
+            } => {
+                // 移动设备落盘检验：必须让用户看见「在动」
+                // —— 那块廉价 U 盘写 300 MB 要好几分钟，界面一动不动就是卡死
+                if !self.tty {
+                    return;
+                }
+                let 多行条 = match self.多任务.lock() {
+                    Ok(mut m) => m.取条(*job),
+                    Err(p) => p.into_inner().取条(*job),
+                };
+                let msg = 文案().t(
+                    "flush.progress",
+                    &[
+                        ("mb", &format!("{:.0}", *pending as f64 / 1_048_576.0)),
+                        ("secs", &format!("{:.0}", *elapsed_ms as f64 / 1000.0)),
+                    ],
+                );
+                if let Some(pb) = 多行条 {
+                    pb.set_message(msg);
+                    return;
+                }
+                eprint!("\r\x1b[K{msg}");
+            }
+            Event::FlushFinished {
+                outcome, millis, ..
+            } => {
+                self.清行();
+                let key = match outcome {
+                    yshjy::flush::FlushOutcome::Done => "flush.done",
+                    yshjy::flush::FlushOutcome::Cancelled => "flush.cancelled",
+                    yshjy::flush::FlushOutcome::Unsupported => "flush.unsupported",
+                };
+                eprintln!(
+                    "{}",
+                    文案().t(
+                        key,
+                        &[("secs", &format!("{:.1}", *millis as f64 / 1000.0))]
+                    )
                 );
             }
             Event::JobFinished { job, .. } => {
@@ -1753,6 +1804,7 @@ fn 诊断文案(code: yshjy::event::DiagnosticCode) -> String {
         D::SlowPath => "diag.slow_path",
         D::PasswordFromNotes => "diag.password_from_notes",
         D::PartialData => "diag.partial_data",
+        D::MovableNotVerified => "diag.movable_not_verified",
         D::HiddenAtOffset => "diag.hidden_at",
         D::RebuiltIndex => "diag.rebuilt_index",
         D::OffsetCorrected => "diag.offset_corrected",
@@ -1935,6 +1987,32 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool, verify_only: bo
             "{}",
             上色(&行, if matches!(j.outcome, Outcome::Success) { 绿 } else { 黄 })
         );
+        // 移动设备提示（用户 2026-10-30 拍板的口径）
+        //
+        // 开关关着的时候**这一句也必须有**：没开检验的人照样会「看到 ✅ 就拔」，
+        // 不提这一句，等于我们什么都没做。
+        // 三种结局说法不同，不能混成一句「完事了」。
+        if matches!(j.outcome, Outcome::Success | Outcome::Partial { .. })
+            && let Some(d) = j.stats.dest.as_deref()
+        {
+            let 提示键 = match j.stats.flush_outcome {
+                Some(yshjy::flush::FlushOutcome::Done) => Some("result.hint.movable_flushed"),
+                Some(yshjy::flush::FlushOutcome::Cancelled) => Some("result.hint.movable_cancelled"),
+                Some(yshjy::flush::FlushOutcome::Unsupported) => {
+                    Some("result.hint.movable_unsupported")
+                }
+                None => yshjy::flush::is_removable(d).then_some("result.hint.movable_eject"),
+            };
+            if let Some(k) = 提示键 {
+                eprintln!(
+                    "{}",
+                    文案().t(
+                        k,
+                        &[("secs", &format!("{:.1}", j.stats.verify_millis as f64 / 1000.0))]
+                    )
+                );
+            }
+        }
         if verify_only {
             // 只测不写：没有产物目录可给
             continue;

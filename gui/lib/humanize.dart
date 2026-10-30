@@ -56,6 +56,8 @@ String diagText(String code) => switch (code) {
       'SLOW_PATH' => '走了慢路（全文件扫描），请耐心等',
       'PASSWORD_FROM_NOTES' => '解压码是从旁边的说明里找到的',
       'PARTIAL_DATA' => '数据不完整，能救多少算多少',
+      'MOVABLE_NOT_VERIFIED' =>
+        '目标是U盘/移动硬盘：拔盘前请先「安全弹出」，否则可能有数据还没写进盘',
       _ => '有提示（不影响使用）',
     };
 

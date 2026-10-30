@@ -36,6 +36,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _notify = true;
   /// 解压完成后是否自动打开输出目录（默认关：批量解压会弹一堆窗口）
   bool _openAfter = false;
+  // 解压后检验「移动设备是否真落盘」（默认关，见 docs/TODO.md 与 src/flush.rs）
+  bool _flushMovable = false;
   // 关窗口时：tray（缩到托盘）| exit（直接退出），默认分平台（见 app_settings.dart）
   String _closeAction = Platform.isWindows ? 'exit' : 'tray';
   bool _loaded = false;
@@ -59,6 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final text = await f.exists() ? await f.readAsString() : '';
       final out = _parseSection(text, 'output');
       final gen = _parseSection(text, 'general');
+      final saf = _parseSection(text, 'safety');
       if (!mounted) return;
       setState(() {
         _outDirCtrl.text = out['dir'] ?? '';
@@ -67,6 +70,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _theme = gen['theme'] ?? 'auto';
         _notify = (gen['notify'] ?? 'on') != 'off';
         _openAfter = (gen['open_after'] ?? 'off') == 'on';
+        // 默认关；只有明确写 on/true 才算开
+        _flushMovable = const ['on', 'true'].contains(saf['flush_movable'] ?? 'off');
         final ca = gen['close_action'];
         _closeAction = (ca == 'tray' || ca == 'exit')
             ? ca!
@@ -164,6 +169,10 @@ class _SettingsPageState extends State<SettingsPage> {
         'notify': _notify ? 'on' : 'off',
         'open_after': _openAfter ? 'on' : 'off',
         'close_action': _closeAction,
+      });
+      // 落盘检验开关：引擎读 [safety] 这一段（config.rs 的 flush_movable）
+      updated = _upsertSection(updated, 'safety', {
+        'flush_movable': _flushMovable ? 'on' : 'off',
       });
       Notifier.enabled = _notify; // 立刻生效，不用重启
       await f.parent.create(recursive: true);
@@ -307,6 +316,25 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           value: _openAfter,
           onChanged: (v) => setState(() => _openAfter = v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('解压到U盘/移动硬盘时，等数据真正写完再报成功'),
+          subtitle: Text(
+            '默认关闭。打开后：目标在U盘/移动硬盘上时，解完会多一步「正在检验落盘」，'
+            '把数据真正写进设备才算完成——中途会显示「请勿拔出设备」。'
+            '本机硬盘不受影响，一秒都不多等。\n'
+            '注意：慢速U盘上可能要等几分钟（这块盘写 300MB 约 5 分钟）。',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: _flushMovable,
+          onChanged: (v) => setState(() => _flushMovable = v),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '关着的时候也会提醒「拔盘前请先安全弹出」——提醒不花时间，但能救命。',
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
         ),
         DropdownButtonFormField<String>(
           initialValue: _closeAction,

@@ -27,6 +27,7 @@ pub mod extract;
 pub mod extract7z;
 pub mod extract_rar;
 pub mod extract_stream;
+pub mod flush;
 pub mod hardware;
 pub mod i18n;
 pub mod io;

@@ -834,8 +834,68 @@ pub fn run_job(
         }
     };
 
+    // ②' 移动设备落盘检验（用户 2026-10-30 拍板的方案）
+    //
+    // 三个条件**同时**成立才做，少一个都不做：
+    //   ① 用户在设置里主动开了 `[safety] flush_movable`（默认关 —— 慢盘上等
+    //      300 MB 要好几分钟，没开的人只会以为程序卡死）
+    //   ② 解压确实出了东西（成功 / 部分成功；失败时数据都没生成，没什么可等的）
+    //   ③ 目标在移动设备上（U 盘 / USB 移动硬盘）—— 本机硬盘一秒都不多等
+    //
+    // 耗时**单独记账**（`stats.verify_millis`），不混进解压用时：
+    // 屏幕上那句「用时 0.3 秒」当年是假话（数据还在缓存里），
+    // 现在「解压多久」和「等写盘多久」必须分开说。
+    // 取消检验**不改解压结论** —— 文件确实解出来了，只是没等它落盘，
+    // 界面靠 `FlushFinished{outcome:CANCELLED}` 提示「数据可能还在写入」。
+    if matches!(outcome, Outcome::Success | Outcome::Partial { .. })
+        && !opts.verify_only
+        && crate::config::全局配置().safety.flush_movable
+        && crate::flush::is_removable(&dest)
+    {
+        let t0 = Instant::now();
+        ctx.stage_started(Stage::Verify);
+        let tick_start = t0;
+        let r = crate::flush::wait_until_written(&dest, cancel, |pending| {
+            ctx.emit(&crate::event::Event::FlushProgress {
+                job: job.id,
+                pending,
+                elapsed_ms: elapsed_ms(tick_start),
+            });
+        });
+        let waited = elapsed_ms(t0);
+        ctx.stage_finished(Stage::Verify, waited);
+        ctx.emit(&crate::event::Event::FlushFinished {
+            job: job.id,
+            outcome: r,
+            millis: waited,
+        });
+        stats.verify_millis = waited;
+        stats.flush_outcome = Some(r);
+    }
+
+    // ②'' 没做检验、但目标在移动设备上 → 发一条诊断提醒
+    //
+    // 开关关着的人照样会「看到 ✅ 就拔」。不提这一句，这个功能等于没做。
+    // CLI 侧自己有同样的提示（渲染时跳过这条码），界面侧靠这条显示。
+    if matches!(outcome, Outcome::Success | Outcome::Partial { .. })
+        && stats.flush_outcome.is_none()
+        && crate::flush::is_removable(&dest)
+    {
+        ctx.emit(&crate::event::Event::Diagnostic {
+            job: job.id,
+            code: crate::event::DiagnosticCode::MovableNotVerified,
+            flags: stats.flags,
+            note: "target on removable device, flush check off".into(),
+        });
+    }
+
     // 收尾：保证界面看到的进度是最终值
-    stats.millis = elapsed_ms(started);
+    //
+    // `millis` 是「解压本身用了多久」—— 必须**扣掉**落盘检验那段。
+    // 不扣的话屏幕上会写「用时 5.7 秒」，而其中 5.6 秒是在等U盘写盘，
+    // 用户会以为解压慢；反过来不开检验时写「用时 0.0 秒」，又是在撒谎
+    // （数据还在缓存里）。两个数分开，各自都说真话。
+    stats.millis = elapsed_ms(started).saturating_sub(stats.verify_millis);
     ctx.force_progress(None);
 
     // 续传记录怎么处置：
