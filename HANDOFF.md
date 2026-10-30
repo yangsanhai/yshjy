@@ -1,5 +1,36 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-31 凌晨 · T16 命令行 `--candidate` 做完（未发版，装机版仍是 0.9.36）**
+>
+> 用户口径「那就按你说的优化吧」→ 按 `docs/TODO.md` 表尾挑最小的一项 T16 先做。
+>
+> - **做了什么**：`--candidate <字节偏移>` = 命令行版的「换一处解压」，与协议
+>   `extract.candidate` 同名同义，复用被验过的 `identify_at` → `BatchOptions.candidate_offset`
+>   （**没有**另写一套引擎路径）。登记进 `cli_spec.rs` 的 `OPTS` → help / man / 三份补全自动跟上。
+> - **三条「不许猜」**：非数字 → USAGE(2)；偏移对不上 → **NOT_ARCHIVE(3) 且零产物**
+>   （绝不偷偷解默认那处）；一次两个文件 → USAGE(2)（提示「它说的是这一个文件里的第几处」，
+>   且检查放在「排好 N 个任务」之前，先拒再谈排队）。
+> - **证据**：新探针 `tests/candidate_cli.py` **6/6**（已挂 `tests/all.sh`），顺手把之前
+>   一直没挂的 `tests/t5_candidates.py`（8/8）也挂上 —— 以前只手工跑，日常回归其实没覆盖 T5。
+> - **回归**：`cargo test` 404 过 / `clippy` 干净 / `flutter analyze` 干净 / `flutter test` 109 过 /
+>   `tests/all.sh` **46 通过 0 挂 5 跳 210 秒**。
+>
+> **★ 本轮撞出来的两件事（都不是 T16 本身，但都会让回归变红/变假）**
+> 1. **flutter test 一直是红的**：`settings_switch_widget_test.dart` 的保险丝判「XDG_CONFIG_HOME
+>    路径里必须含 `yshjy-test`」，而 `all.sh` 用的是 `yshjy-all-cfg` → `setUpAll` 直接炸。
+>    根子是**同一条规则手抄了两份**（另一份 `app_settings_test.dart` 判的是「是不是用户真实配置目录」）。
+>    现已收进 `gui/test/config_guard.dart` 一份实现；**反向验证过**（不设 XDG_CONFIG_HOME →
+>    两个测试都被拦，真 `config.toml` 没被碰）。顺手清掉两条既有 analyze 噪音 → 现在
+>    `flutter analyze` **No issues found**（以前"只剩一条 info"已经是旧账）。
+> 2. **加长选项必须同步那个钉桩测试**：`cli_spec.rs::长选项总数是_48` 会红（compiler 级别的提醒，
+>    故意的）。改成 49 并把 `--candidate` 写进注释。
+>
+> ★ 老坑复发：**Dart 不认中文标识符**（第 4 次）—— helper 里写 `final 真实配置`，
+> `flutter analyze` 报一串 `illegal character`。
+>
+> **剩下没做的**：T7（8 项引擎能力没界面入口，要真机点 8 次）、T9（差真截图）、T11（无障碍）、
+> T14（界面多语言，两天级）、T15（覆盖率）。**还没提交 git、还没发版**。
+
 > **2026-10-31 凌晨 · T5 / S10 多候选 + 自动找解压码默认关，已发版并装机 0.9.36**
 >
 > 用户 2026-10-30 点头的方案是「界面只说最可能的那个 + 一个『都不是？挨个试一遍』」，

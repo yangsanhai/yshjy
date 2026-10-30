@@ -2,6 +2,38 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-31（T16：命令行 `--candidate` —— 「解第 N 处」现在命令行也能表达）
+
+**要解决的事**：S10 多候选在 0.9.36 做完了，界面能「换一处解压」、协议能 `extract.candidate`，
+但**命令行**没法指定 —— 用户拿 `yshjy` 复核产物时办不到，只能写 `--serve` 手工拼 JSON。
+这笔小账记在 `docs/TODO.md` 表尾（T16）。
+
+- **选项**：`--candidate <字节偏移>`（与协议 `extract.candidate` 同名同义），登记进
+  `cli_spec.rs` 的 `OPTS` 表 → `--help` / man 页 / 三份 shell 补全**全部自动跟上**
+  （对外长选项 → 46，另有 3 个内部选项，共 49）。
+- **三条「不许猜」**：
+  ① 值不是数字 → **USAGE(2)**，提示里点名这是选项的值（不许当成没给、静默跑默认那处）；
+  ② 偏移对不上任何一段 → **NOT_ARCHIVE(3)** 且**零产物**（绝不偷偷解默认那处 ——
+     那等于用户点了第 2 处、程序解了第 1 处，是假成功）；
+  ③ 一次给两个文件 → **USAGE(2)**（一个偏移不可能同时对上两个包），提示语明说
+     「它说的是这一个文件里的第几处」。检查放在「排好 N 个任务」之前：先拒绝，再谈排队。
+- **证据**：新探针 `tests/candidate_cli.py` **6/6** —— 不给参数仍解默认那处 · `--candidate`
+  真的换到另一段（第B处 → 第A处）· 非法偏移被拒且零产物 · 非数字报 USAGE · 多文件报 USAGE ·
+  偏移没被当成待解压的文件名。**已挂进 `tests/all.sh`**；顺手把一直没挂的
+  `tests/t5_candidates.py`（8/8）也挂上（以前只手工跑过，等于日常回归没覆盖 T5）。
+- **顺手清的两个界面测试小账**（跑全量回归撞出来的，不是本轮目标）：
+  `settings_switch_widget_test.dart` 的保险丝判「路径里必须含 `yshjy-test`」，而 `all.sh`
+  用的是 `yshjy-all-cfg` → 整组 `setUpAll` 直接炸（`flutter test` 一直是红的）。根子是
+  **同一条规则手抄了两份**（`app_settings_test.dart` 判的是「是不是用户真实配置目录」）。
+  现已收进 `gui/test/config_guard.dart` 一份实现、两个测试都调它；**反向验证过**：不设
+  `XDG_CONFIG_HOME` 时两个测试都被拦，用户真实 `~/.config/yshjy/config.toml` 一个字节没动。
+  另清掉两条既有 analyze 噪音（死代码 `?? false`、多余的字符串花括号）→ `flutter analyze`
+  现在 **No issues found**。
+  ★ 坑：**Dart 不认中文标识符**（第 4 次踩）—— helper 里写了 `final 真实配置`，analyze 报一串 illegal character。
+- **回归**：`cargo test` **404 过 / 0 挂**（371 + 31 + 2）、`clippy --all-targets -D warnings` 干净、
+  `flutter analyze` 干净、`flutter test` **109 过**、`bash tests/all.sh` **46 通过 / 0 失败 / 5 跳过 / 210 秒**。
+- **未发版**：装机版仍是 **0.9.36**。发版前要跑 `scripts/release.sh` + `scripts/build-deb.sh` + 装机四项验证。
+
 ## [0.9.36] · 2026-10-31（T5 / S10 多候选：一个文件里好几处藏着东西，现在能换一处解；自动找解压码改为默认关）
 
 ### 自动找解压码改为**默认关闭**（用户 2026-10-31 口径）
