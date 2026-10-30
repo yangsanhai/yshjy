@@ -30,6 +30,41 @@ use crate::unpack;
 use crate::layout::ArchiveFormat;
 use crate::progress::CancelToken;
 
+/// 一处「可能藏着归档的地方」（S10 多候选）
+///
+/// # 为什么要有它
+/// 一个文件里可能塞着不止一份归档（`[垃圾][ZIP][垃圾][7z]`）。7-Zip 的 `-t#`
+/// （`NArchive::NParser`）就是干这个的：把整份文件切成「未知垃圾 / 内嵌归档 /
+/// 未知垃圾 / …」的分段列表。
+///
+/// 我们**不额外多扫一遍**：全文件扫描为了定位本来就撞出了 `ScanHit` 列表，
+/// 以前只取第一个就把其余扔了，现在顺手带出来给外壳。
+///
+/// # 边界
+/// 字段全是**机器标识**，句子由外壳查语言包渲染（与 `probe::FileKind` 同一条原则）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Candidate {
+    /// 格式的机器标识（`zip` / `7z` / `rar` …）
+    pub format: String,
+    /// 归档数据起点
+    pub offset: u64,
+    /// 置信度：`high` / `medium` / `low`
+    pub confidence: String,
+    /// 引擎诊断备注（英文短句，只给排错看，不渲染给用户）
+    pub note: String,
+    /// 是否就是最终采用的那一处
+    pub chosen: bool,
+}
+
+/// 置信度排序用（高的在前）
+fn 置信度序(c: &str) -> u8 {
+    match c {
+        "high" => 3,
+        "medium" => 2,
+        _ => 1,
+    }
+}
+
 /// 认出来的目标
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
@@ -106,7 +141,23 @@ impl Target {
 /// 而底层 `as_7z_volumes` 遇到断号只是"停下来"——继续解只会报 `Truncated/DataLost`，
 /// 用户看到"文件损坏"完全被误导。这里提前判死，并给出「缺哪一块 / 已找到几块」。
 pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
-    let t = identify_内(path, ctx)?;
+    Ok(identify_with_candidates(path, ctx)?.0)
+}
+
+/// 认出这是什么，**同时带回「还撞到哪些可能藏着归档的地方」**（S10 多候选）
+///
+/// 与 [`identify`] 只差一个返回值（`identify` 就是它的 `.0`，老调用点一行都不用改）。
+/// 候选清单来自定位时的全文件扫描（[`crate::scan::ScanHit`]），**不额外多扫一遍**——
+/// 那把扫描本来就要跑，只是以前把结果扔了。
+///
+/// 判定语义：只有一个候选 = 正常包，外壳**不该显示任何选择界面**；
+/// 两个以上 = 「N 处可能藏着文件」，才让用户挑（`docs/UI-SPEC.md` S10）。
+pub fn identify_with_candidates(
+    path: &Path,
+    ctx: &UnpackCtx,
+) -> Result<(Target, Vec<Candidate>)> {
+    let mut 候选: Vec<Candidate> = Vec::new();
+    let t = identify_内(path, ctx, &mut 候选)?;
     let vols = match &t {
         Target::SevenZ { volumes } => Some(volumes),
         Target::ZipSplit { volumes } => Some(volumes),
@@ -121,7 +172,18 @@ pub fn identify(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
             .with("missing", &缺)
             .with("found", v.len().to_string()));
     }
-    Ok(t)
+    // 除了 ZIP 定位那条路，别的分支（7z / RAR / 单流）不会产生多个候选，
+    // 这里补一条「最终采用」记录，让外壳永远拿到同一种形状，不必判空。
+    if 候选.is_empty() {
+        候选.push(Candidate {
+            format: t.as_str().to_string(),
+            offset: 0,
+            confidence: "high".to_string(),
+            note: "identified".to_string(),
+            chosen: true,
+        });
+    }
+    Ok((t, 候选))
 }
 
 /// 分卷组是否断在中途？返回缺失那一块的文件名
@@ -157,15 +219,15 @@ pub fn 缺卷信息(vols: &[PathBuf]) -> Option<String> {
     None
 }
 
-fn identify_内(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
+fn identify_内(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Result<Target> {
     ctx.stage_started(Stage::Locate);
     let t0 = Instant::now();
-    let r = identify_inner(path, ctx);
+    let r = identify_inner(path, ctx, 候选);
     ctx.stage_finished(Stage::Locate, elapsed_ms(t0));
     r
 }
 
-fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
+fn identify_inner(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Result<Target> {
     // ⓪ 文件夹不是包。拖一个目录进来是很常见的误操作，
     //   别让用户看到"没找到压缩包"这种答非所问的话。
     if path.is_dir() {
@@ -216,7 +278,7 @@ fn identify_inner(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
     //
     // 失败时补上「这个文件本身是什么」：外壳据此才能回答
     // "你给我的是个 MP4 视频，里面没藏东西"，而不是干巴巴一句"不是压缩包"。
-    locate_zip(path, ctx).map_err(|e| 附上文件类型(e, path))
+    locate_zip(path, ctx, 候选).map_err(|e| 附上文件类型(e, path))
 }
 
 /// 把「真实类型 / 大小 / 扩展名是否与内容相符」塞进错误的结构化参数
@@ -280,7 +342,7 @@ fn 开头像zip(f: &mut std::fs::File) -> bool {
     buf[0] == b'P' && buf[1] == b'K' && matches!(buf[2], 0x03 | 0x05 | 0x07)
 }
 
-fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
+fn locate_zip(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Result<Target> {
     let mut f = std::fs::File::open(path)
         .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
     let size = f
@@ -289,6 +351,14 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
         .len();
 
     if let Ok(l) = crate::layout::zip::locate(&mut f, size) {
+        // 正常包（不必扫全文）：只有一处，外壳据此不显示选择界面
+        候选.push(Candidate {
+            format: "zip".to_string(),
+            offset: l.base,
+            confidence: "high".to_string(),
+            note: "located".to_string(),
+            chosen: true,
+        });
         return Ok(Target::Zip {
             base: l.base,
             len: l.data_len(),
@@ -348,6 +418,40 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx) -> Result<Target> {
         DiagnosticCode::HiddenAtOffset,
         format!("base={} len={}", l.base, l.data_len()),
     );
+    // 候选清单（S10 多候选）：全文件扫描已经算出来了，别再扫一遍 ——
+    // 以前这段只拿来判「是不是没下完」，把其余命中白扔了。
+    // 注意「像归档」≠「能解开」：这只是签名命中的置信度，外壳文案必须用「可能」。
+    for h in &hits {
+        候选.push(Candidate {
+            format: h.format.as_str().to_string(),
+            offset: h.offset,
+            confidence: match h.confidence {
+                crate::scan::Confidence::High => "high",
+                crate::scan::Confidence::Medium => "medium",
+                crate::scan::Confidence::Low => "low",
+            }
+            .to_string(),
+            note: h.note.clone(),
+            chosen: h.offset == l.base,
+        });
+    }
+    // 命中起点和最终窗口起点算不齐时（`locate_with_window` 会往前找真正的 LFH），
+    // 补一条「采用的那一处」，保证清单里永远有且只有它标 chosen —— 界面据此默认勾第一。
+    if !候选.iter().any(|c| c.chosen) {
+        候选.push(Candidate {
+            format: "zip".to_string(),
+            offset: l.base,
+            confidence: "high".to_string(),
+            note: "located".to_string(),
+            chosen: true,
+        });
+    }
+    // 高置信度在前，同档按偏移从前往后：用户从第一处开始试最省事
+    候选.sort_by(|a, b| {
+        置信度序(&b.confidence)
+            .cmp(&置信度序(&a.confidence))
+            .then(a.offset.cmp(&b.offset))
+    });
     Ok(Target::Zip {
         base: l.base,
         len: l.data_len(),
@@ -1325,6 +1429,73 @@ mod tests {
         out.write_all(&zip_data).unwrap();
         drop(out);
         path
+    }
+
+    /// 造一份「视频里塞了两个 zip」：`[3MiB 填充][ZIP-A][3MiB][ZIP-B][20MiB 填充]`
+    ///
+    /// 尾部那 20 MiB 是**故意的**：`layout::zip::DEFAULT_WINDOW` 是 16 MiB，超出它
+    /// `layout::zip::locate` 才放弃、退化成全文件扫描（真实情形：包后面还跟着整部视频）。
+    /// 填充全用 0x00 —— 随机字节里可能撞出假 `PK\x03\x04`，会让断言时对时错。
+    fn two_zips_in_one(dir: &Path) -> PathBuf {
+        fn small_zip(name: &str, payload: &[u8]) -> Vec<u8> {
+            let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            let opt: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            w.start_file(name, opt).unwrap();
+            w.write_all(payload).unwrap();
+            w.finish().unwrap().into_inner()
+        }
+        let a = small_zip("A.txt", b"AAAAAAAA");
+        let b = small_zip("B.txt", b"BBBBBBBB");
+
+        let path = dir.join("藏两个.mp4");
+        let mut out = std::fs::File::create(&path).unwrap();
+        out.write_all(&vec![0u8; 3 << 20]).unwrap();
+        out.write_all(&a).unwrap();
+        out.write_all(&vec![0u8; 3 << 20]).unwrap();
+        out.write_all(&b).unwrap();
+        out.write_all(&vec![0u8; 20 << 20]).unwrap();
+        drop(out);
+        path
+    }
+
+    /// S10 多候选：正常包只给一条，外壳据此**不显示**选择界面
+    #[test]
+    fn 正常包只带一条候选且标_chosen() {
+        let dir = scratch("cand_one");
+        let p = fake_mp4_zip(&dir);
+        let ctx = UnpackCtx::quiet(1);
+        let (_t, 候选) = identify_with_candidates(&p, &ctx).unwrap();
+        assert_eq!(候选.len(), 1, "正常包应当只有一条候选：{候选:#?}");
+        assert!(候选[0].chosen, "唯一那条必须标 chosen：{候选:#?}");
+        assert_eq!(候选[0].format, "zip");
+        assert_eq!(候选[0].confidence, "high");
+    }
+
+    /// 一个文件里塞了两个 zip：两处都要报出来，且恰有一处 chosen
+    #[test]
+    fn 一个文件里两个_zip_要报出两处候选() {
+        let dir = scratch("cand_two");
+        let p = two_zips_in_one(&dir);
+        let ctx = UnpackCtx::quiet(1);
+        let (_t, 候选) = identify_with_candidates(&p, &ctx).unwrap();
+        assert!(
+            候选.len() >= 2,
+            "应当撞出两处候选，实际 {} 条：{候选:#?}",
+            候选.len()
+        );
+        let n_chosen = 候选.iter().filter(|c| c.chosen).count();
+        assert_eq!(n_chosen, 1, "chosen 必须恰好一条：{候选:#?}");
+        // 置信度只能是约定的三档机器标识（界面按它查文案）
+        for c in &候选 {
+            assert!(
+                matches!(c.confidence.as_str(), "high" | "medium" | "low"),
+                "置信度跑出三档之外：{c:#?}"
+            );
+        }
+        // 高置信度在前：用户从第一条开始试最省事
+        let 序: Vec<u8> = 候选.iter().map(|c| 置信度序(&c.confidence)).collect();
+        assert!(序.windows(2).all(|w| w[0] >= w[1]), "排序不对：{候选:#?}");
     }
 
     #[test]

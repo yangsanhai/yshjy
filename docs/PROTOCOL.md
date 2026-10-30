@@ -84,7 +84,7 @@
 | `cancel` | — | 取消当前任务（整批停） |
 | `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
 | `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |
-| `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` / **`seek` / `seek_label`** |
+| `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` / **`candidates[]`** / **`seek` / `seek_label`** |
 | `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `ask?`, `select?`, `encoding?` | 顺序批量解压，返回逐项结果；`ask` / `select` / `encoding` 与 `extract` 同规则（同一次批量里所有包都按这个挑选） |
 | `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
 | `rescue` | `path`, `dest?`, `list_only?`, `encoding?` | **救援**（＝CLI `--rescue`）：中央目录坏了也按 local header 重建清单并抢救数据。`list_only:true` 只重建清单、**一个字节都不落盘**（界面可以先说「能救回 N 个」再动手）；不给 `dest` 时落到 `<包名>.rescue`；只认 ZIP 家族，认不出回 `NOT_ARCHIVE`（**不许**折成 `DATA_LOST`，否则用户会去重下好包）。结果带 `entries_total` / `entries_done` / `dest` / `files[]` / `skipped[]` / `rebuilt[]` |
@@ -237,8 +237,22 @@
  "items": [{"path": "/home/me/下载/游戏.mp4", "name": "游戏.mp4", "size": 12345,
             "kind": "Zip", "volumes": 1, "looks_like": "Zip",
             "mime": "application/zip", "archive": true,
+            "candidates": [{"format": "zip", "offset": 3145728, "confidence": "high",
+                            "note": "LFH+CD ok", "chosen": false},
+                           {"format": "zip", "offset": 6291581, "confidence": "high",
+                            "note": "located", "chosen": true}],
             "seek": "full", "seek_label": "可以直接读"}]}
 ```
+`candidates`（S10 多候选）是**一个文件里所有像归档的位置**：
+- `offset` / `format` 直接来自定位时的全文件扫描（`scan::ScanHit`），**不是额外扫一遍**；
+- `confidence` 只有三档机器标识 `high` / `medium` / `low`，句子由界面查文案渲染
+  （`low` 是「签名像、但结构校验没过」，界面上要标成「可能是误报」）；
+- `chosen: true` 是引擎最终采用的那一处，**永远恰有一条**（正常包只有这一条）；
+- **`len(candidates) == 1` 时界面不许显示任何选择界面** —— 绝大多数包都是这种，
+  弹出来只会打扰人。只有 ≥2 才是「找到 N 处可能藏着文件的地方」。
+- 非包（`archive: false`）→ `candidates` 是**空数组**，不是 `null`。
+- ⚠️ 「像归档」≠「能解开」：`confidence` 是签名校验的结论，不是解压验证过的。
+  界面文案必须写「可能」，并且「都试试」要真的逐个去试（试失败不许报成功）。
 `seek` 是**机器标识**（`full` / `block_cache` / `copy_first`），前端按它分支：
 `full` 什么都不用做；`block_cache` 表示只能顺序读（引擎会套 32 KiB × 8 MiB 的块缓存）；
 `copy_first` 表示要先复制一份本地副本才能解，**该提示占多少空间**（`size` 字段就是那个数）。
