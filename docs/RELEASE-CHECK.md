@@ -1,6 +1,31 @@
 # 发布检查（T5）—— 逐项核对
 
-## 0.9.35 发布记录（2026-10-30，最新一次）
+## 0.9.36 发布记录（2026-10-31，最新一次）
+
+> 内容：**T5/S10 多候选**（一个文件里好几处藏着归档时，预览页告诉你「像是有 N 处」并给「换一处解压」）
+> + **自动找解压码改为默认关闭**（用户口径：程序不许默认替他翻东西）
+> + 顺手修掉一个**假测试**（`auto_pw_switch.sh` 两条只在描述里写了 `--no-auto-password`，参数没传）。
+> 详见 `CHANGELOG.md` 的 `[0.9.36]` 节。本轮 4 个提交（`234d3cc` / `5afbab9` / `0f20dfa` + 发版）。
+
+| 步骤 | 结果 |
+|---|---|
+| 五处版本号 → 0.9.36 | 6/6（`Cargo.toml` / `ffi/Cargo.toml` / `gui/pubspec.yaml` / `PROTOCOL.md` 两处 / `README` 两处；`docs/yshjy.1` 由生成器带出 = 0.9.36） |
+| `cargo build --release` | 成功（19.4 秒） |
+| `flutter build linux --release` | 成功（`version.json` = 0.9.36） |
+| `scripts/release.sh` | 常用版 3.8M + 全能版 3.8M |
+| `scripts/build-deb.sh` | deb **9.9M**，自查通过：CLI + GUI + 菜单项(14 种格式) + 图标 + man + 三种补全 + 右键脚本，版本 0.9.36 |
+| `scripts/test-packages.sh` | **37 项全绿 / 0 失败**（含「deb 内引擎版本 == 包版本」「真打包真解压逐字节一致」） |
+| 装机 | ⏳ 待用户敲 `sudo apt install ./dist/yshjy_0.9.36_amd64.deb`（本机 sudo 需密码，助手不碰） |
+
+**产物 sha256**：`yshjy-0.9.36-linux-x86_64.tar.gz` = `e32d469e6a1f3913428c583bea94f60c0ef5386cd0caee6e1f8f6ebc14c537d7`
+
+**发版前已在真机验过的两件事**（这版的重点，别只看测试绿）：
+- T5：样本 `藏两个.mp4`（[3MB垃圾][ZIP-A][3MB][ZIP-B][20MB]）→ 提示条真出现，点「换一处解压」后
+  产物从「第B处解出来的.txt」变成「第A处解出来的.txt」（`~/下载` 实测）。
+- 默认关：设置页两个开关实测都是关，文案「默认关闭。打开后…」
+  （`screenshots/auto-password-default-off.png`）。
+
+## 0.9.35 发布记录（2026-10-30）
 
 > 内容：清 `docs/AUDIT-GAP.md` 对账欠账 4 批 9 项 —— 空间不足三个数 + 三条出路、
 > 自动找解压码拆两档、设置页两个假开关接成真勾选，以及两个只读代码看不出来的界面 bug
