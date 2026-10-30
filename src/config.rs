@@ -96,8 +96,6 @@ pub struct Config {
 pub struct General {
     /// 界面语言（不写 = 跟随系统；写法见 `--help` 的 `--lang`）
     pub language: Option<String>,
-    /// 默认模式：`auto` | `extract` | `pack`
-    pub default_mode: String,
     /// 并行任务数（默认 1，对机械盘友好）
     pub jobs: usize,
     /// 关窗口时：`tray`（缩到托盘）| `exit`（直接退出）。**界面行为**，引擎自己不消费；
@@ -110,7 +108,6 @@ impl Default for General {
     fn default() -> Self {
         Self {
             language: None,
-            default_mode: "auto".into(),
             jobs: 1,
             close_action: None,
         }
@@ -246,9 +243,6 @@ impl Config {
             {
                 cfg.general.language = Some(x.trim().to_string());
             }
-            if let Some(x) = t.get("default_mode").and_then(|x| x.as_str()) {
-                cfg.general.default_mode = x.to_string();
-            }
             if let Some(x) = t.get("jobs").and_then(|x| x.as_integer()) {
                 cfg.general.jobs = x.max(1) as usize;
             }
@@ -327,7 +321,6 @@ impl Config {
              # 注意：在设置页点保存会整份重写，手写注释会丢\n\n\
              [general]\n\
              language = \"{}\"\n\
-             default_mode = \"{}\"\n\
              jobs = {}\n\n\
              [password]\n\
              file = \"{}\"\n\
@@ -342,7 +335,6 @@ impl Config {
              warn_executables = {}\n\
              flush_movable = {}\n",
             esc(&lang),
-            esc(&self.general.default_mode),
             self.general.jobs,
             esc(&self.password.file),
             self.password.auto_from_notes,

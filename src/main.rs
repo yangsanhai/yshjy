@@ -1865,6 +1865,31 @@ fn 失败文案(code: yshjy::error::ErrorCode) -> String {
 }
 
 
+/// 空间不足的三个人话数字（需要 / 只有 / 还差）
+///
+/// 引擎只给 `need` / `available` 两个结构化参数（`JobOutcome.error_detail`），
+/// 句子在这一层拼 —— 换语言不用动引擎。缺参数就返回 `None`（不乱猜，宁可只说
+/// 一句「磁盘空间不够」，也不给一个算错的「还差」）。
+fn 空间不足说明(detail: &[(String, String)]) -> Option<String> {
+    let 取 = |键: &str| {
+        detail
+            .iter()
+            .find(|(k, _)| k == 键)
+            .and_then(|(_, v)| v.parse::<u64>().ok())
+    };
+    let need = 取("need")?;
+    let available = 取("available")?;
+    let short = need.saturating_sub(available);
+    Some(文案().t(
+        "result.space_shortage",
+        &[
+            ("need", &人类可读(need)),
+            ("available", &人类可读(available)),
+            ("short", &人类可读(short)),
+        ],
+    ))
+}
+
 /// 文件类型 → 人话（CLI 版；与 `失败文案` 同一层，将来一起挪进语言包）
 fn 文件类型名(kind: &str) -> &'static str {
     match kind {
@@ -2078,21 +2103,39 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool, verify_only: bo
     } else if let Some(j) = 失败.first() {
         // 单任务：先把「❌ 文件 —— 原因」那行打出来（循环里为了合并汇报跳过了失败项）
         let (txt, icon) = 结论文案(&j.outcome, verify_only);
-        let 行 = 文案().t(
-            "result.line",
-            &[
-                ("icon", icon),
-                ("input", &j.input.display().to_string()),
-                ("text", &txt),
-                ("size", &人类可读(j.stats.bytes_written)),
-                ("secs", &format!("{:.1}", j.stats.millis as f64 / 1000.0)),
-            ],
-        );
+        let 行 = if j.stats.bytes_written == 0 && j.stats.millis < 1000 {
+            // 一个字节都没写、也几乎没耗时（识别 / 预检阶段就被拦下）：
+            // 别印「0 B，用时 0.0 秒」—— 那两个数对用户零信息量（台账 ⑤）
+            文案().t(
+                "result.line_short",
+                &[
+                    ("icon", icon),
+                    ("input", &j.input.display().to_string()),
+                    ("text", &txt),
+                ],
+            )
+        } else {
+            文案().t(
+                "result.line",
+                &[
+                    ("icon", icon),
+                    ("input", &j.input.display().to_string()),
+                    ("text", &txt),
+                    ("size", &人类可读(j.stats.bytes_written)),
+                    ("secs", &format!("{:.1}", j.stats.millis as f64 / 1000.0)),
+                ],
+            )
+        };
         // 失败红（--no-color 或非终端时原样）
         println!("{}", 上色(&行, 红));
         // 再说清楚"你给的是啥"
         if let Some(提示) = 文件类型提示(&j.input) {
             println!("   ℹ {提示}");
+        }
+        // 空间不足：把「需要 / 只有 / 还差」三个人话数字补在后面。
+        // 以前这里只有一句「磁盘空间不够」，用户不知道要清多少（S5 的另一半）。
+        if let Some(句) = 空间不足说明(&j.error_detail) {
+            println!("     {句}");
         }
         if let Some(note) = &j.note {
             println!("     ({note})");
@@ -3041,6 +3084,33 @@ mod tests {
         let m = yshjy::hardware::available_mem_mib()
             .expect("注册探针后 available_mem_mib 不该再是 None");
         assert!(m > 0);
+    }
+
+    #[test]
+    fn 空间不足说明给出三个人话数字() {
+        // 文案仓库在 main 开头才初始化；单测直接调要自己先装一份
+        let _ = I18N.set(yshjy::i18n::I18n::new(Some("zh-CN")));
+        let d = vec![
+            ("need".to_string(), (300u64 * 1024 * 1024).to_string()),
+            ("available".to_string(), (110u64 * 1024 * 1024).to_string()),
+        ];
+        let s = 空间不足说明(&d).expect("两个参数都在就该拼出句子");
+        assert!(s.contains("300.0 MB"), "需要量没进文案：{s}");
+        assert!(s.contains("110.0 MB"), "可用量没进文案：{s}");
+        assert!(s.contains("190.0 MB"), "还差没算对：{s}");
+    }
+
+    #[test]
+    fn 空间不足缺参数就不乱猜() {
+        // 宁可只说一句「磁盘空间不够」，也不给一个算错的「还差」
+        assert!(空间不足说明(&[]).is_none());
+        assert!(空间不足说明(&[("need".to_string(), "123".to_string())]).is_none());
+        // 参数坏掉（不是数字）也不能崩
+        let 坏 = vec![
+            ("need".to_string(), "很多".to_string()),
+            ("available".to_string(), "10".to_string()),
+        ];
+        assert!(空间不足说明(&坏).is_none());
     }
 
     #[test]

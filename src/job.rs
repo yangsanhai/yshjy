@@ -781,12 +781,20 @@ pub fn run_job(
                 .with("need", need.to_string())
                 .with("available", available.to_string())
                 .with("dest", dest.display().to_string());
+            // S5 的数据源。以前这个事件**只有定义、全库零发射点** —— 界面里那段
+            // `case 'SPACE_SHORTAGE'` 是死代码，用户永远看不到「还差多少」。
+            ctx.emit(&crate::event::Event::SpaceShortage {
+                job: job.id,
+                needed: need,
+                available,
+            });
             return JobOutcome {
                 id: job.id,
                 input: job.input.clone(),
                 outcome: Outcome::from_error(&e),
                 stats,
                 note: None,
+                error_detail: e.detail.clone(),
             };
         }
     }
@@ -928,6 +936,7 @@ pub fn run_job(
         outcome,
         stats,
         note: None,
+        error_detail: Vec::new(),
     }
 }
 

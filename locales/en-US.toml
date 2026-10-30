@@ -132,6 +132,9 @@ partial = "⚠ {input} — partially extracted ({done} ok, {skipped} skipped)"
 failed = "❌ {input} — failed: {reason}"
 cancelled = "⏹ {input} — cancelled (files already extracted are kept)"
 
+space_shortage = "needs {need} / only {available} free / short by {short}"
+
+line_short = "{icon} {input} — {text}"
 [error]
 head_encrypted = "This archive has its file list encrypted too (header encryption) — without the password you cannot even see what is inside"
 not_archive = "Not an archive (no recognizable compressed data found)"

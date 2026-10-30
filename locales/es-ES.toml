@@ -129,6 +129,9 @@ partial = "⚠ {input} — extraído parcialmente ({done} correctos, {skipped} o
 failed = "❌ {input} — falló: {reason}"
 cancelled = "⏹ {input} — cancelado (se conservan los archivos ya extraídos)"
 
+space_shortage = "necesita {need} / libre {available} / faltan {short}"
+
+line_short = "{icon} {input} — {text}"
 [error]
 head_encrypted = "Este paquete también tiene cifrada la lista de archivos (cifrado de cabecera) — sin la contraseña no se ve ni qué contiene"
 not_archive = "No es un archivo comprimido (no se encontraron datos comprimidos reconocibles)"
