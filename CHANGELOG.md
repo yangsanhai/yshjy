@@ -2,6 +2,39 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-30 深夜（清 `docs/AUDIT-GAP.md` 对账欠账 · 第 4 批：设置页两个开关接线 + 一个静默失效的坑）
+
+第 3 批把引擎的「自动找解压码」拆成两档，但设置页那两行还是**硬编码字符串**
+（`auto_from_notes = true（从旁边的说明文件里找）`），用户看着有、其实改不了。这一批接上。
+
+- **界面（设置页）**：新增两个真勾选「自动从「说明.txt」里找解压码」/「自动试「密码本」里的解压码」，
+  默认开（与引擎默认一致）；保存时写回 `[password]` 段；删掉原来那行假开关。
+  新增 `_readSwitch()`：同时认 TOML 布尔（`true`/`false`，用户手改）和字符串（`"on"`/`"off"`，本页保存的写法）。
+- **不需要新协议命令**：HANDOFF 之前判断「要做成真勾选，得先有读配置/写配置的协议命令」是**保守误判**。
+  设置页本来就有 `_parseSection` / `_upsertSection` 逐行读写 `config.toml`（`flush_movable` 从 0.9.34
+  起就是这么做的），`app_settings.dart` 的 `open_after` / `close_action` 也是同一套。少加一条协议命令。
+- **★ 顺藤查出的真 bug（界面看着关了、引擎还在做）**：`config.rs` 里 `auto_from_notes` /
+  `auto_from_book` / `warn_executables` 用的是 `toml::Value::as_bool()` —— 对界面写的字符串
+  `"off"` 返回 `None` → 该字段被**静默忽略** → 保持默认 `true`。也就是说：用户勾掉了
+  「自动抓解压码」，程序照样去翻包旁边的说明文件，而且永远不报错。
+  修法：三个开关统一走已有的 `取开关()`（布尔和 `on`/`off`/`yes`/`1` 都认），与 `[safety]`
+  段同一套读法。**这是本轮最值钱的一条**：光看界面截图和界面代码都发现不了，只有把
+  「界面写什么」和「引擎读什么」摆在一起比才看得出来。
+- **测试**：Rust `设置页写的字符串开关引擎也认`（字符串 off 真关掉、布尔 true 也认，两种写法同一结果）；
+  Dart `test/settings_switch_widget_test.dart` 3 条（无配置时默认开 / 两种写法都显示关 /
+  保存后写 on-off 且同段用户手写的 `file`、`max_candidates`、注释一个不丢，再进一次能读回来）。
+- **真机验证（不是只在测试里跑）**：隔离配置目录启动界面，点设置页两个开关关掉 →
+  点保存 → `config.toml` 出现 `auto_from_notes = "off"` / `auto_from_book = "off"`；
+  然后同一个加密 zip + 旁边放 `说明.txt`：开关 off 时输出「这个包带锁，需要解压码」（真的没去翻），
+  改成 on 后输出「解压码是从旁边的说明里找到的：./说明.txt: 解压码：notePW」并解开。
+  截图：`screenshots/settings-auto-password-off.jpg`、`screenshots/settings-save-button.jpg`。
+- **踩到的坑（写进测试注释了）**：`testWidgets` 用的是假时钟，`await File.readAsString()`
+  这类**真 I/O** 的 Future 在里面**永远不完成** → `_load()` 卡在第一行、界面停在默认值，
+  测试会**假绿**（我第一版就是这样绿的）。只有把 `pumpWidget` 整段放进
+  `tester.runAsync()` 才连得上真实事件循环；保存按钮同理。
+- 回归：`cargo test` **402 过 / 0 挂**、`clippy --all-targets` 干净、`flutter analyze` 只剩一条既有 info、
+  `flutter test` **102 过 / 0 挂**。
+
 ## [未发布] · 2026-10-30 夜（清 `docs/AUDIT-GAP.md` 对账欠账 · 第 3 批：自动找密码拆两档）
 
 界面 S4 要两个勾选（「先从说明文件找」/「再试试密码本」），可引擎侧**只有一个总开关**

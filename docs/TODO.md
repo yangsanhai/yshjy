@@ -23,7 +23,7 @@
 | T5 | S10 多候选：列出候选让用户选 | 界面 | ⬜ | 真机：造多候选样本，能选中并解出 |
 | T6 | `--force` 界面入口（与 T4 同根） | 界面 | ✅ 完成 | 就是 T4 的「继续试试」：`engine.dart` 的 extract 加了 force → 协议 `extract.force`。真机点过（报错卡片上那个按钮） |
 | T7 | 引擎有、界面没入口的其余项（E1 decoy / E2 layout / E4 test / E5 smart-dir / E6 report / E7 jobs·keep） | 界面 | ⬜ | 每项真机点一次，产物用命令行复核 |
-| T8 | S4 密码框两个「自动找」勾选 | 界面 | 🟡 引擎侧完成，界面待接 | 引擎拆成两档：配置 `auto_from_book`（新）+ `auto_from_notes`（原有）、开关 `--no-auto-password-notes` / `--no-auto-password-book`、总开关语义不变。探针 `tests/auto_pw_switch.sh` 8/8 过（两个包分别用两档的码加密，各自只关自己那档时行为不同）。**剩**：设置页两个勾选 + 协议参数 |
+| T8 | S4 密码框两个「自动找」勾选 | 界面 | ✅ 完成（真机点过 + 端到端验过） | 引擎拆成两档（配置 `auto_from_book` 新 + `auto_from_notes` 原有、开关 `--no-auto-password-notes` / `--no-auto-password-book`），界面设置页接成两个真勾选，保存写回 `[password]` 段。**不需要**新协议命令——设置页本来就能逐行读写 `config.toml`（`flush_movable` 一直这么干），HANDOFF 之前那句「得先加读/写配置的协议命令」是保守误判，已纠正。**真机证据**：`screenshots/settings-auto-password-off.jpg`（两个开关关）+ `settings-save-button.jpg`（保存按钮）；保存后 `config.toml` 里是 `auto_from_notes = "off"`；**端到端**：同一个加密包 + 旁边放 `说明.txt`，开关 off 时输出「这个包带锁，需要解压码」（不翻说明文件），改 on 后输出「解压码是从旁边的说明里找到的：./说明.txt: 解压码：notePW」并解开 |
 | T9 | 门面：`metainfo.xml` + 多尺寸图标 + README 版本/如实说明 | 门面 | 🟡 **差真截图** | `appstreamcli validate` ✔ 通过；7 尺寸图标已接入 deb 与用户级安装；README 0.9.31→0.9.34、补「界面只有中文」。**剩**：真截图（README 那 3 张是徽章不是截图）+ 元数据里填 screenshots |
 | T10 | 开源规范：SECURITY.md / CODE_OF_CONDUCT.md / issue 模板 | 门面 | ✅ 完成 | 三份都在；issue 表单是 GitHub YAML 格式（bug_report / feature_request / config） |
 | T11 | 无障碍：`Semantics` 语义 + 键盘快捷键 | 界面 | ⬜ | `grep -c 'Semantics('` > 0 且 `flutter test` 全绿 |
@@ -92,7 +92,8 @@ ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            #
 ```
 </details>
 
-**当前状态**：装机上是 **0.9.31**（2026-10-29 用 `sudo apt install` 覆盖 0.9.30）。
+**当前状态**：装机上是 **0.9.34**（2026-10-30 装机，`dpkg -l yshjy` 实测）。
+> 下面这四项实测是 **0.9.31 当时的记录**（2026-10-29），保留原样当历史证据，别当成 0.9.34 的实测结果。
 装机后实测四项全过：`dpkg -l` / `--version` = 0.9.31、桌面菜单认领 **14 种格式**、
 `bash tests/pick.sh /usr/bin/yshjy` **11 项全绿**（含新的 Ctrl-C 第⑤组 5 项，证明修复真的进了装机版）、
 真打包解压**逐文件 sha256 与源目录一致**。装前用 `apt-get -s` 模拟过：只升级 1 个包、0 新装 0 卸载。
