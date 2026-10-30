@@ -1,0 +1,80 @@
+name: 报告一个问题
+description: 解不开 / 解出来不对 / 界面出问题
+title: "[问题] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看两件事，能省你不少时间：
+        1. `yshjy --version` 是不是最新版（旧版的问题可能已经修了）
+        2. 「普通播放器打不开这个文件」**不是**它坏了 —— 伪装包本来就这样，用本工具打开就行
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 跑 `yshjy --version`，把整行贴进来
+      placeholder: "yshjy 0.9.34（常用版）—— 杨三海解压"
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: 系统
+      description: 跑 `uname -ra`（Windows 上写个大概版本就行，比如 Win10 22H2）
+      placeholder: "Linux 6.12.113+deb13-amd64 x86_64"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: 在哪里出的问题
+      options:
+        - 图形界面（点开程序）
+        - 命令行（终端里敲 yshjy）
+        - 两个都有
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 越具体越好：解的是什么包（zip/7z/rar/分卷？伪装成什么扩展名？多大？）、点了什么按钮、屏幕上出现了什么
+      placeholder: |
+        例：一个伪装成 .mp4 的 zip，2.3 GB，带解压码。
+        拖进界面 → 认出是 ZIP → 点开始解压 → 报「数据损坏」。
+        换 7z 打开同一个文件能正常解出。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expect
+    attributes:
+      label: 你本来以为会怎样
+      placeholder: 例：应该解出 1200 个文件
+    validations:
+      required: true
+
+  - type: textarea
+    id: report
+    attributes:
+      label: 诊断包（强烈建议）
+      description: |
+        跑 `yshjy --report`（界面里是「生成诊断包（报障用）」按钮）会生成一个脱敏的压缩包，
+        里面有版本、配置、日志，没有你的文件内容。把它拖进来。
+        如果和「恶意压缩包」有关，**不要**附原包，说清结构就行。
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我用的是最新版
+        - label: 我知道「播放器打不开」是伪装包的正常现象
+          required: true

@@ -1,0 +1,33 @@
+name: 提个想法
+description: 想要的功能 / 觉得不好用的地方
+title: "[想法] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先说一句：`docs/TODO.md` 里有一份**「不做清单」**（AppImage、7z 写包、自动更新、
+        云盘同步、内置文件管理器…），这些是已经定过不做的。提之前扫一眼，免得白写。
+
+  - type: textarea
+    id: scene
+    attributes:
+      label: 你在什么场景下觉得需要它
+      description: 说场景比说功能有用得多 —— 「网盘下的分卷包，每次都要手动挑主文件」比「加一个自动挑卷」清楚
+    validations:
+      required: true
+
+  - type: textarea
+    id: now
+    attributes:
+      label: 现在你是怎么凑合的
+      description: 命令行？换别的工具？手动改？知道现在怎么疼，才知道该改哪儿
+    validations:
+      required: false
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望它怎么用
+    validations:
+      required: false

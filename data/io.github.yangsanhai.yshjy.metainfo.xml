@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  杨三海解压（yshjy）的 AppStream 元数据。
+  GNOME 软件中心 / KDE Discover / Flathub 靠这个显示名称、简介、截图和版本说明。
+  校验：appstreamcli validate （建议加 no-net 选项，免得联网查截图）
+-->
+<component type="desktop-application">
+  <id>io.github.yangsanhai.yshjy</id>
+
+  <name>杨三海解压</name>
+  <summary>解开伪装成视频/图片的压缩包（含分卷与加密）</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      网盘资源区常见的「改后缀解压」：文件看起来是 MP4，其实是 ZIP；或者一个视频文件
+      中间藏着一整个压缩包。普通的压缩软件看不见它们，播放器打开只会报错。
+      这个工具专门按文件内部特征去找真正的压缩数据，把它解出来。
+    </p>
+    <p>主要特点：</p>
+    <ul>
+      <li>识别藏在视频/图片里、带坏索引、带干扰数据的压缩包</li>
+      <li>支持 ZIP（含分卷）、7z（含头加密）、RAR4/RAR5、TAR、gzip、xz、zstd、bzip2、brotli、lz4</li>
+      <li>中文文件名不乱码（UTF-8 → GB18030 四级回退），中文解压码免配置</li>
+      <li>解压码只从你自己的密码本和包旁边的说明文件里找，不内置密码字典</li>
+      <li>防路径穿越、防压缩炸弹；写盘先落临时文件再改名，不留半截文件</li>
+      <li>解压到 U 盘/移动硬盘时可选择「等数据真正写完再报成功」</li>
+      <li>能把文件反向伪装成视频（自用备份与合法分享）</li>
+    </ul>
+    <p>
+      整个程序没有一行网络代码：不联网、不上传、不自动收集密码。
+    </p>
+  </description>
+
+  <launchable type="desktop-id">yshjy.desktop</launchable>
+
+  <url type="homepage">https://github.com/yangsanhai/yshjy</url>
+  <url type="bugtracker">https://github.com/yangsanhai/yshjy/issues</url>
+  <url type="vcs-browser">https://github.com/yangsanhai/yshjy</url>
+
+  <developer id="io.github.yangsanhai">
+    <name>杨三海</name>
+  </developer>
+
+  <categories>
+    <category>Utility</category>
+    <category>Archiving</category>
+  </categories>
+
+  <keywords>
+    <keyword>zip</keyword>
+    <keyword>7z</keyword>
+    <keyword>rar</keyword>
+    <keyword>解压</keyword>
+    <keyword>压缩包</keyword>
+    <keyword>伪装</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <!--
+    截图：Flathub 要求至少一张。当前仓库还没有真截图（README 里那三张是徽章）。
+    真截图放 screenshots/ 目录后再填：
+    <screenshots>
+      <screenshot type="default">
+        <caption>识别出伪装成视频的压缩包，列出里面的内容</caption>
+        <image type="source">https://raw.githubusercontent.com/yangsanhai/yshjy/main/screenshots/home.png</image>
+      </screenshot>
+    </screenshots>
+  -->
+
+  <releases>
+    <release version="0.9.34" date="2026-10-30">
+      <description>
+        <p>解压到 U 盘/移动硬盘时，可选「等数据真正写完再报成功」（默认关，只对移动设备生效）。</p>
+        <p>修掉图形界面「带解压码的包永远没有输入框」——界面判断用的码名与引擎真实返回的对不上。</p>
+        <p>空间不足时 CLI 会说清「需要多少 / 只有多少 / 还差多少」。</p>
+      </description>
+    </release>
+    <release version="0.9.31" date="2026-10-29">
+      <description>
+        <p>Ctrl-C 中断后光标恢复正常；解出的文件保留。</p>
+      </description>
+    </release>
+  </releases>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+</component>
