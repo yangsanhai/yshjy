@@ -4,19 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/app_settings.dart';
 import 'package:yshjy_gui/platform_paths.dart';
 
+import 'config_guard.dart';
+
 /// 「解压完自动打开输出目录」这个开关的读取规则（`[general] open_after`）
 ///
 /// 跑法要注意：`configDir` 取 `XDG_CONFIG_HOME`，所以这个测试**必须**在隔离的
 /// 配置目录下跑（`tests/all.sh` 会设），否则会去读写用户真实的 config.toml。
 void main() {
-  File cfg() => File('${configDir}/config.toml');
+  File cfg() => File('$configDir/config.toml');
 
   setUp(() {
     // 安全闸：万一跑在真实配置目录上，直接跳过而不是动用户的配置
-    if (configDir == '$homeDir/.config/yshjy' &&
-        Platform.environment['XDG_CONFIG_HOME']?.isNotEmpty != true) {
-      fail('这个测试必须在隔离的 XDG_CONFIG_HOME 下跑，拒绝动用户真实配置');
-    }
+    // 判定收在 `config_guard.dart`（与设置页测试同一套，别再各写一份）
+    requireIsolatedConfigDir('配置读写测试');
     final f = cfg();
     f.parent.createSync(recursive: true);
     if (f.existsSync()) f.deleteSync();

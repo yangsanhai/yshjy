@@ -23,6 +23,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/pages/settings_page.dart';
 import 'package:yshjy_gui/platform_paths.dart';
 
+import 'config_guard.dart';
+
 String get _cfgPath => '$configDir/config.toml';
 
 Future<void> _pump(WidgetTester tester) async {
@@ -50,18 +52,16 @@ bool _switchValue(WidgetTester tester, String title) {
       matching: find.byType(SwitchListTile),
     ),
   );
-  return tile.value ?? false;
+  // `SwitchListTile.value` 是非空 bool —— 原来的 `?? false` 是死代码（analyze 的
+  // dead_null_aware_expression）。去掉后行为完全一样，只是不再留一条警告。
+  return tile.value;
 }
 
 void main() {
   setUpAll(() {
-    // 保险丝：跑错目录就会改到用户真配置，宁可整组报错也别偷偷写
-    if (!configDir.contains('yshjy-test')) {
-      throw StateError(
-        '设置页测试会写配置文件，必须指到临时目录：\n'
-        'XDG_CONFIG_HOME=/tmp/yshjy-test-config flutter test test/settings_switch_widget_test.dart',
-      );
-    }
+    // 保险丝：跑错目录就会改到用户真配置，宁可整组报错也别偷偷写。
+    // 判定收在 `config_guard.dart`（与 app_settings_test 同一套，别再各写一份）
+    requireIsolatedConfigDir('设置页测试');
   });
 
   setUp(() {
