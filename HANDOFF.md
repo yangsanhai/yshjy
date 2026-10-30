@@ -1,5 +1,25 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-30 · GUI「加密包是死路」已修 + Linux 侧把 W1~W9 拉回来了（装机版仍是 0.9.31）** ——
+> **用户真机报的 bug**：带解压码的包拖进图形界面，只有一句「这个包需要解压码」，
+> **永远没有输入框**。先怀疑是 Windows 编译问题，实测是界面自己写错码名，两个平台一起错。
+> **根因**：`home_page.dart::_needsPassword` 判的是 `PASSWORD_REQUIRED` / `PASSWORD_WRONG`，
+> 而 `yshjy --serve` 真实返回 `NEED_PASSWORD` / `WRONG_PASSWORD` → 条件恒假。
+> 文案表（humanize.dart）当年改对了，这个开关漏改。**连带 4 处同款错位都已修**：
+> 漏 `HEAD_ENCRYPTED`（7z `-mhe=on` 也没入口）、`camelToCode` 把 `TRUNCATED` 拆成
+> `T_R_U_N_C_A_T_E_D`、救援按钮用 `PARTIAL_DATA`（诊断码）+ `CHECKSUM_FAILED`（不存在）、
+> `errorText` 缺 `VIDEO_UNPLAYABLE`；文档 `PROTOCOL.md` / `GUI-PLAN.md` / `TODO.md` 的错码同步改正。
+> **防回归**：判断收进 `humanize.dart` 的 `codeNeedsPassword` / `codeCanRescue`，
+> 新增界面测试 **21 条**（humanize 10 + password_box_widget 11），**反向验证过**
+> （改回老写法当场红 4 条）。`flutter test` 67 过 / `cargo test` **390 过** /
+> `bash tests/all.sh` **41 过 / 0 挂**。全文见 `CHANGELOG.md` 的 `[未发布]` 顶部新小节。
+> **同步方式记一笔**：`git fetch` 直接读移动硬盘仓库会报"所有权可疑"（NTFS ro 挂载 owner=root，
+> 且 `-c safe.directory` 传不进 upload-pack 子进程）→ 在盘上 `git bundle create 增量.bundle e494259..92b71f7`
+> 再本机 `git fetch bundle`，64K 就够，别为此改全局 gitconfig。
+> **下一步**：① 出包 0.9.32 装机（要不要出等用户发话，测试已全绿）；
+> ② 真机 GUI 肉眼验一次加密包（`flutter build linux --release` 后拖包）；
+> ③ fsync 那笔账（表尾 🔴 那条）仍未动。
+
 > **2026-10-30 深夜 · Windows 审计清单 W1~W10 全部清账（ZCode 自主夜跑，老板授权直接提交）** ——
 > 审计表（`docs/TODO.md`「2026-10-30 Windows 实测审计」）**十项全 ✅**，每项一个提交、
 > 证据全文在 `CHANGELOG.md` 的「[未发布] 2026-10-30」：

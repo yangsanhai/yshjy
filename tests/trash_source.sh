@@ -53,7 +53,7 @@ if uname -s | grep -q '^MINGW'; then
   else
     bad "--trash-source：系统回收站里没找到 pkg1.zip"
   fi
-elif [ -f "$S/data/Trash/files/包.zip" ] && [ -f "$S/data/Trash/info/包.zip.trashinfo" ]; then
+elif [ -f "$S/data/Trash/files/pkg1.zip" ] && [ -f "$S/data/Trash/info/pkg1.zip.trashinfo" ]; then
   ok "--trash-source：回收站里有 files/ + info/（可还原）"
 else
   bad "--trash-source：回收站里没有完整条目（$(find "$S/data/Trash" -type f 2>/dev/null | wc -l) 个文件）"

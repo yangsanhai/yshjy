@@ -63,12 +63,22 @@ class HomePage extends StatefulWidget {
   /// 变成确定性的 widget 测试 —— 和 `autoStart` 同一个理由：只影响测试，不影响行为。
   final Preview? debugPreview;
 
+  /// 测试用：直接灌一个失败态（生产代码永远传 null）。
+  ///
+  /// 和 `debugPreview` 同一个理由 —— 「加密包失败后要出现解压码输入框」这条链路
+  /// 以前**一条测试都没有**，所以 43 条全绿也能漏着「判断条件恒假」的死 bug
+  /// （2026-10-30 用户在 Windows 上撞到：只见报错，永远没有输入框）。
+  final String? debugErrorCode;
+  final String? debugErrorNote;
+
   const HomePage({
     super.key,
     this.initialFile,
     this.onStatus,
     this.autoStart = true,
     this.debugPreview,
+    this.debugErrorCode,
+    this.debugErrorNote,
   });
 
   @override
@@ -177,6 +187,14 @@ class _HomePageState extends State<HomePage> {
         ..clear()
         ..addAll(allDirPaths(_tree));
       _crumb = '';
+    }
+    // 测试注入口：直接进失败态（与 debugPreview 同样只影响测试）
+    final ec0 = widget.debugErrorCode;
+    if (ec0 != null && ec0.isNotEmpty) {
+      _file = '/tmp/测试包.zip';
+      _errorCode = ec0;
+      _errorNote = widget.debugErrorNote ?? '';
+      _phase = Phase.error;
     }
     // 从右键菜单带文件启动：等首帧画完再开，避免 setState 早于 build
     final f = widget.initialFile;
@@ -641,14 +659,8 @@ class _HomePageState extends State<HomePage> {
   /// 密码错、缺分卷、目标无权限这类救不了 —— 给按钮只会让用户白等一场。
   /// `NOT_ARCHIVE` 要收窄：认不出压缩包时，只有「内容其实是 ZIP、只是索引坏了」
   /// 才值得试（否则用户拖进来的就是个视频，救援也只会再说一遍认不出）。
-  bool get _canRescue {
-    final code = _errorCode;
-    if (code == null || _needsPassword || code == 'MISSING_VOLUME') return false;
-    if (code == 'NOT_ARCHIVE') {
-      return (_errorDetail?['looks_like'] as String?)?.toLowerCase() == 'zip';
-    }
-    return const {'DATA_LOST', 'PARTIAL_DATA', 'CHECKSUM_FAILED'}.contains(code);
-  }
+  bool get _canRescue =>
+      codeCanRescue(_errorCode, looksLike: _errorDetail?['looks_like'] as String?);
 
   /// 救援模式：索引坏了也能按文件头把数据捞出来（协议 `rescue`）
   ///
@@ -839,8 +851,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 这次失败是不是"缺解压码"（资源分享里最常见的情况）
-  bool get _needsPassword =>
-      _errorCode == 'PASSWORD_REQUIRED' || _errorCode == 'PASSWORD_WRONG';
+  ///
+  /// 判断本身在 `humanize.dart` 的 `codeNeedsPassword`（有单测挡着）；页面里只委托，
+  /// **别在这再手写码名** —— 2026-10-30 就是这么写成 `PASSWORD_REQUIRED` 的：
+  /// 引擎从不发那个码，于是加密包在界面上只剩一句报错、永远没有输入框。
+  bool get _needsPassword => codeNeedsPassword(_errorCode);
 
   /// 用用户输入的密码再试一次
   Future<void> _retryWithPassword() async {

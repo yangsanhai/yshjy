@@ -4,8 +4,13 @@
 /// 两条铁律：
 /// 1. 查不到的码**不给用户看原始码**（D21：缺一条就不显示），只给一句通用人话；
 ///    原始码仍在日志/诊断包里，需要排查时拿得到。
-/// 2. 码的名字必须和引擎 `src/error.rs` 的 `as_str()` 一致（大写下划线），
-///    以前界面写的是 `PASSWORD_REQUIRED`，引擎发的是 `NEED_PASSWORD` —— 对不上就漏translating。
+/// 2. 码的名字必须和引擎 `src/error.rs` 的 `as_str()` 一致（大写下划线）。
+///    **以前界面写的是 `PASSWORD_REQUIRED` / `PASSWORD_WRONG`，引擎发的是
+///    `NEED_PASSWORD` / `WRONG_PASSWORD`** —— 文案表改对了，但 `home_page` 里
+///    「要不要显示解压码输入框」那个开关没跟着改，于是**加密包在界面上是死路**：
+///    只见一句「需要解压码」，永远见不到输入框（2026-10-30 用户在真机撞上）。
+///    所以这类判断一律走下面两个纯函数，**并且有单测**（`gui/test/humanize_test.dart`），
+///    别在各页面里手写码名比较。
 library;
 
 /// 错误码 → 人话（引擎 `ErrorCode::as_str()` + 外壳自己的几个码）
@@ -25,6 +30,9 @@ String errorText(String code) => switch (code) {
       'PATH_TOO_LONG' => '路径太长，这个位置放不下这么长的文件名',
       'DEST_IS_FILE' => '目标位置是个文件，不是文件夹（换个文件夹）',
       'PATH_NOT_FOUND' => '文件不存在（是不是被移走或改名了？）',
+      // 封面视频本身坏了：解压不受影响，但错误码通道也会出现这个码
+      'VIDEO_UNPLAYABLE' => '封面视频本身坏了（不影响解压）',
+      // `IO` 是外壳自造的旧码（引擎 17 个码里没有，留着兼容老日志）
       'IO' => '读写文件出错了（磁盘满了 / 磁盘有问题）',
       'CANCELLED' => '已取消（已经解出来的文件都保留着）',
       'INTERNAL' => '程序内部出错了 —— 可以点「生成诊断包」发给开发者',
@@ -78,9 +86,15 @@ String batchOutcomeText(String oc) {
   return errorText(camelToCode(oc));
 }
 
-/// `WrongPassword` → `WRONG_PASSWORD`（已经是下划线式就原样返回）
+/// `WrongPassword` → `WRONG_PASSWORD`（已经是下划线式 / 全大写就原样返回）
+///
+/// ⚠ 2026-10-30 修的第二个 bug：老实现只判「含 `_`」就原样返回，
+/// 于是**单字大写的码被逐字符拆开** —— `TRUNCATED` → `T_R_U_N_C_A_T_E_D`、
+/// `CANCELLED` → `C_A_N_C_E_L_L_E_D`，查文案必然落空，用户看到「原因不明」。
+/// 凡是「全大写」的串一律当成已经规范，不再动它。
 String camelToCode(String s) {
-  if (!s.contains(RegExp('[A-Z]')) || s.contains('_')) return s;
+  if (s.isEmpty) return s;
+  if (s.contains('_') || s == s.toUpperCase()) return s;
   final b = StringBuffer();
   for (var i = 0; i < s.length; i++) {
     final c = s[i];
@@ -88,4 +102,36 @@ String camelToCode(String s) {
     b.write(c.toUpperCase());
   }
   return b.toString();
+}
+
+/// 这个错误码是不是「缺解压码」——**界面要不要给解压码输入框，只认这个函数**
+///
+/// 三个真码（实测 `yshjy --serve` 返回的就是这三个，驼峰也认）：
+/// * `NEED_PASSWORD` —— 条目加密、没给码（解压阶段）
+/// * `WRONG_PASSWORD` —— 给了码但不对
+/// * `HEAD_ENCRYPTED` —— 连文件清单都加密（7z `-mhe=on`），预览阶段就会失败
+///
+/// 历史 bug：这里曾写成 `PASSWORD_REQUIRED` / `PASSWORD_WRONG`，**引擎从来不发
+/// 这两个码**，条件恒假 → 加密包在界面上是死路。改码名时务必同时改
+/// `gui/test/humanize_test.dart` 的断言。
+bool codeNeedsPassword(String? code) {
+  final c = camelToCode(code ?? '');
+  return c == 'NEED_PASSWORD' || c == 'WRONG_PASSWORD' || c == 'HEAD_ENCRYPTED';
+}
+
+/// 这个失败还值不值得给「试着救出来」按钮
+///
+/// 只认引擎真会发的码（`src/error.rs` 的 `ErrorCode`）：
+/// * `DATA_LOST` —— 中间有一段数据丢了，救援能捞回前后
+/// * `TRUNCATED` —— 文件没下完，救援能捞回已下的部分
+/// * `NOT_ARCHIVE` —— 只有当内容其实是 ZIP、只是索引坏了才值得试
+///
+/// 历史 bug：这里曾用 `PARTIAL_DATA`（那是**诊断码**，不是错误码，永远走不到
+/// 这条分支）和 `CHECKSUM_FAILED`（**引擎里根本不存在这个码**），
+/// 结果「坏了但能救」的包反而不给救援按钮。
+bool codeCanRescue(String? code, {String? looksLike}) {
+  final c = camelToCode(code ?? '');
+  if (c.isEmpty || codeNeedsPassword(c) || c == 'MISSING_VOLUME') return false;
+  if (c == 'NOT_ARCHIVE') return (looksLike ?? '').toLowerCase() == 'zip';
+  return const {'DATA_LOST', 'TRUNCATED'}.contains(c);
 }

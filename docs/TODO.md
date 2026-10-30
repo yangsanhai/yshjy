@@ -515,8 +515,11 @@ ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            #
 - [x] **「救援模式」入口** ✅ **已完成（2026-10-28，0.9.28）** —— 协议新增 `rescue` 命令
   （`api::救援`，移植 CLI 那条链），`serve.rs` 走「一次一个任务」调度（慢路径 + 可 cancel），
   `hello.features` 带上它；Dart `EngineClient.rescue()`（30 分钟超时）；失败页在**救得回来**的错误上
-  才给「试着救出来（索引坏了也能抢救）」按钮（`DATA_LOST` / `PARTIAL_DATA` / `CHECKSUM_FAILED`，
+  才给「试着救出来（索引坏了也能抢救）」按钮（`DATA_LOST` / `TRUNCATED`，
   以及 `NOT_ARCHIVE` 但 `looks_like=zip`；密码错、缺分卷不给）。
+  > 2026-10-30 修正：本节原来写的 `PARTIAL_DATA` / `CHECKSUM_FAILED` 两个码都不对 ——
+  > `PARTIAL_DATA` 是**诊断码**（`DiagnosticCode`，不进错误码通道），`CHECKSUM_FAILED`
+  > 引擎里**根本不存在**。判断已收进 `humanize.dart::codeCanRescue` 并加单测。
   `list_only:true` 只重建清单不落盘；不给 dest 落 `<包名>.rescue`（与 CLI 一致）。
   **不用 `tests/contract/` 的 CLI golden 兜（那份已有 `rescue.json`），改用真实进程协议探针**：
   `tests/protocol_rescue.py` **22 项全绿**（样本＝现造「中央目录签名被打乱的 zip」），已挂 `tests/all.sh`。

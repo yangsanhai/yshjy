@@ -7,6 +7,58 @@
 > 仓库搬到 Windows 机器（`E:\yshjy-20261030`，与 Linux 机走移动硬盘同一份 `.git`）后的第一轮代码改动。
 > 待办来源与验收标准：`docs/TODO.md` 的「2026-10-30 Windows 实测审计」。**装机版仍是 0.9.31。**
 
+### GUI 加密包是死路（用户在 Windows 真机撞上；Linux 同源，已修）
+
+**现象**：需要解压码的包拖进图形界面 → 只显示一句「这个包需要解压码」，
+**永远找不到输入解压码的地方**，等于死路。CLI 同一个包能正常要密码、正常解开。
+先被当成 Windows 编译问题，实际是界面的判断写错了码名，两个平台一起错。
+
+**根因（三个，同一个病：码名凭印象写）**：
+
+1. `home_page.dart` 的 `_needsPassword` 判的是 `PASSWORD_REQUIRED` / `PASSWORD_WRONG` ——
+   实测 `yshjy --serve` 真实返回的是 **`NEED_PASSWORD` / `WRONG_PASSWORD`**，两对全不匹配
+   → 「要不要显示输入框」的条件**恒假**。历史上 N1 批修过文案表 `humanize.dart`，
+   但这个开关漏改，于是「文案对了、框永不出现」。
+2. 漏了 **`HEAD_ENCRYPTED`**（7z `-mhe=on` 连文件清单都加密，预览阶段就失败）→ 这类包同样没有输入框。
+3. `camelToCode` 老实现把**单字大写的码逐字符拆开**：`TRUNCATED` → `T_R_U_N_C_A_T_E_D`、
+   `CANCELLED` → `C_A_N_C_E_L_L_E_D`，查文案必然落空、用户看到「原因不明」。
+
+**连带查出并修掉的同类问题**：
+
+- `_canRescue` 用了 `PARTIAL_DATA`（那是**诊断码**，不进错误码通道）和
+  `CHECKSUM_FAILED`（**引擎里根本不存在**）→ 「坏了但能救」的包反而不给救援按钮。
+  改成真码 `DATA_LOST` / `TRUNCATED`（`NOT_ARCHIVE` 仍要 `looks_like=zip` 才给）。
+- `errorText` 缺 `VIDEO_UNPLAYABLE` —— 引擎 17 个码里唯一没文案的。
+- `docs/PROTOCOL.md`「错误码」一节的示例表写的 `PASSWORD_REQUIRED` / `PASSWORD_WRONG` / `IO`
+  **三个码引擎里都不存在**，已换成 17 码全表并加警告；`docs/GUI-PLAN.md`、`docs/TODO.md`
+  救援条目同步改正。
+
+**防回归（这次的重点：之前 46 条界面测试全绿却漏着它）**：
+
+- 判断收进纯函数 `humanize.dart::codeNeedsPassword` / `codeCanRescue`，页面只委托；
+- 新增 `gui/test/humanize_test.dart` **10 条**：引擎 17 个错误码 / 10 个诊断码逐个断言有专属文案
+  （将来引擎加码而界面漏文案会红）＋ 「历史废码必须为 false」显式钉死；
+- 新增 `gui/test/password_box_widget_test.dart` **11 条**：给 `HomePage` 加测试注入口
+  `debugErrorCode`（与 `debugPreview` 同性质），断言 `NEED_PASSWORD` / `WRONG_PASSWORD` /
+  `HEAD_ENCRYPTED` / 驼峰名 → 出现「用这个解压码重试」；非密码码 → 不出现；`DATA_LOST` → 有救援按钮；
+- **反向验证**：把 `_needsPassword` 改回 `PASSWORD_REQUIRED` 老写法 → 密码那 4 条当场红，改回即绿；
+- `flutter test`（带 `XDG_CONFIG_HOME` 隔离，按 `tests/all.sh` 的跑法）= **67 过 / 0 挂**。
+
+**顺手同步**：从移动硬盘把 W1~W9 九个提交（`92b71f7`）拉回 Linux 并 ff 合并，
+本次是 Linux 侧第一次跑这套改动的测试。
+
+**Linux 侧实跑证据（2026-10-30）**：
+
+- `cargo test` = **390 过 / 0 挂 / 1 ignored**（`359 + 29 + 2`；合并进来的 W1 多了 3 条时区测试，
+  基线 357 → 360 属预期）；
+- `bash tests/all.sh` = **41 过 / 0 挂 / 5 跳过，182 秒**；
+- 顺手清掉一个**测试自己的老账**：`tests/trash_source.sh` 的 Linux 断言还在找
+  `Trash/files/包.zip`，可 W7 早把夹具改名成 `pkg1.zip`（Windows 的 powershell 过不了中文名），
+  于是 Linux 侧必红「回收站里没有完整条目（2 个文件）」—— 而那 2 个文件正是
+  `files/pkg1.zip` + `info/pkg1.zip.trashinfo`，**产品逻辑一直是对的，纯粹是断言名字没跟着改**。
+  改成 `pkg1.zip` 后 10/10 绿。
+  > 教训：**夹具改名时，所有断言里的名字要一起改**；这类"名字对不上"跟本次的码名错位是同一个病。
+
 ### W1 ✅ 修时区偏移（解出的文件时间不再 +8 小时）
 
 - **根因**：`crash.rs` 的 `本地时区偏移秒()` 只有 `#[cfg(unix)]` 分支，Windows 上写死 0 ——
