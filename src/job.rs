@@ -847,30 +847,31 @@ pub fn run_job(
     // 现在「解压多久」和「等写盘多久」必须分开说。
     // 取消检验**不改解压结论** —— 文件确实解出来了，只是没等它落盘，
     // 界面靠 `FlushFinished{outcome:CANCELLED}` 提示「数据可能还在写入」。
-    if matches!(outcome, Outcome::Success | Outcome::Partial { .. })
-        && !opts.verify_only
-        && crate::config::全局配置().safety.flush_movable
-        && crate::flush::is_removable(&dest)
-    {
-        let t0 = Instant::now();
-        ctx.stage_started(Stage::Verify);
-        let tick_start = t0;
-        let r = crate::flush::wait_until_written(&dest, cancel, |pending| {
+    if matches!(outcome, Outcome::Success | Outcome::Partial { .. }) && !opts.verify_only {
+        let tick0 = Instant::now();
+        let mut began = false;
+        let r = crate::flush::flush_if_needed(&dest, stats.bytes_written, cancel, &mut |pending| {
+            // 第一次回调才宣布进入「校验」阶段 —— 开关关着时一秒都不该显示这一阶段
+            if !began {
+                ctx.stage_started(Stage::Verify);
+                began = true;
+            }
             ctx.emit(&crate::event::Event::FlushProgress {
                 job: job.id,
                 pending,
-                elapsed_ms: elapsed_ms(tick_start),
+                elapsed_ms: elapsed_ms(tick0),
             });
         });
-        let waited = elapsed_ms(t0);
-        ctx.stage_finished(Stage::Verify, waited);
-        ctx.emit(&crate::event::Event::FlushFinished {
-            job: job.id,
-            outcome: r,
-            millis: waited,
-        });
-        stats.verify_millis = waited;
-        stats.flush_outcome = Some(r);
+        if let Some((结局, millis)) = r {
+            ctx.stage_finished(Stage::Verify, millis);
+            ctx.emit(&crate::event::Event::FlushFinished {
+                job: job.id,
+                outcome: 结局,
+                millis,
+            });
+            stats.verify_millis = millis;
+            stats.flush_outcome = Some(结局);
+        }
     }
 
     // ②'' 没做检验、但目标在移动设备上 → 发一条诊断提醒

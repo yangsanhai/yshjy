@@ -62,6 +62,12 @@ class _PackPageState extends State<PackPage> {
   Progress? _progress;
   String? _current;
   StreamSubscription<EngineEvent>? _sub;
+  // ── 打包产物的落盘检验（引擎的 FLUSH_PROGRESS / FLUSH_FINISHED）──
+  // 打包到 U 盘时，屏幕报「完成」那一刻数据可能还在缓存里；
+  // 而且它紧接着的自检读的也是缓存 —— 所以这一步要显示出来，别让用户以为卡死。
+  bool _flushing = false;
+  int _flushPending = 0;
+  int _flushSecs = 0;
 
   @override
   void initState() {
@@ -70,14 +76,28 @@ class _PackPageState extends State<PackPage> {
     _sub = _client.events.listen(_onEvent);
   }
 
-  /// 只关心打包进度，别的 kind（解压进度/诊断…）不归这页管
+  /// 只关心打包进度和它的落盘检验，别的 kind（解压进度/诊断…）不归这页管
   void _onEvent(EngineEvent e) {
-    if (e.kind != 'PACK_PROGRESS') return;
     if (!mounted) return;
-    setState(() {
-      _progress = e.progress;
-      _current = e.current;
-    });
+    switch (e.kind) {
+      case 'PACK_PROGRESS':
+        setState(() {
+          _progress = e.progress;
+          _current = e.current;
+        });
+      case 'FLUSH_PROGRESS':
+        setState(() {
+          _flushing = true;
+          _flushPending = (e.data['pending'] as num?)?.toInt() ?? 0;
+          _flushSecs = ((e.data['elapsed_ms'] as num?)?.toInt() ?? 0) ~/ 1000;
+        });
+      case 'FLUSH_FINISHED':
+        setState(() {
+          _flushing = false;
+        });
+      default:
+        break;
+    }
   }
 
   @override
@@ -574,18 +594,24 @@ class _PackPageState extends State<PackPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   LinearProgressIndicator(
-                    value: _progress?.fraction,
+                    // 检验阶段不看百分比：这条进度条画的是"打包"，检验是另一件事
+                    value: _flushing ? null : _progress?.fraction,
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(3),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _progress == null
-                        ? '正在准备…'
-                        : '${((_progress!.fraction ?? 0) * 100).toStringAsFixed(1)}% · '
-                            '${_size(_progress!.doneBytes)} / ${_size(_progress!.totalBytes)}'
-                            '${_current == null ? '' : ' · $_current'}',
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    _flushing
+                        ? '正在检验落盘：还剩约 ${_size(_flushPending)} 待写入 · 已等 $_flushSecs 秒 · ⚠️ 请勿拔出设备'
+                        : _progress == null
+                            ? '正在准备…'
+                            : '${((_progress!.fraction ?? 0) * 100).toStringAsFixed(1)}% · '
+                                '${_size(_progress!.doneBytes)} / ${_size(_progress!.totalBytes)}'
+                                '${_current == null ? '' : ' · $_current'}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _flushing ? cs.primary : cs.onSurfaceVariant,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

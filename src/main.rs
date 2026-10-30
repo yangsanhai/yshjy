@@ -2646,6 +2646,59 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             {
                 println!("中间文件（--keep 保留）：{}", tmp.display());
             }
+            // 落盘检验 —— **必须排在自检之前**
+            //
+            // 自检是把包读回来验证，但读回来命中的是**页缓存**：盘上有没有东西它不知道。
+            // 2026-10-30 记一笔：打包到 U 盘报完成、自检还说"通过"，拔盘包就没了。
+            // 先等真落盘，再自检读到的才是盘上的数据。
+            {
+                let cancel = yshjy::progress::CancelToken::new();
+                let t0 = std::time::Instant::now();
+                let r = yshjy::flush::flush_if_needed(
+                    std::path::Path::new(&out),
+                    rep.total_size,
+                    &cancel,
+                    &mut |pending| {
+                        // 只在真终端里画覆盖行：管道（`| tail`、脚本）里 \r 不生效，
+                        // 会刷成一整屏重复的"正在检验落盘"
+                        if !quiet && std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+                            let msg = 语.t(
+                                "flush.progress",
+                                &[
+                                    ("mb", &format!("{:.0}", pending as f64 / 1_048_576.0)),
+                                    ("secs", &format!("{:.0}", t0.elapsed().as_secs())),
+                                ],
+                            );
+                            eprint!("\r\x1b[K{msg}");
+                        }
+                        // 事件照发（--json / 界面都要能看到，不能只在终端上画）
+                        ctx.emit(&yshjy::event::Event::FlushProgress {
+                            job: 0,
+                            pending,
+                            elapsed_ms: t0.elapsed().as_millis() as u64,
+                        });
+                    },
+                );
+                if let Some((结局, millis)) = r {
+                    ctx.emit(&yshjy::event::Event::FlushFinished {
+                        job: 0,
+                        outcome: 结局,
+                        millis,
+                    });
+                    let key = match 结局 {
+                        yshjy::flush::FlushOutcome::Done => "flush.done",
+                        yshjy::flush::FlushOutcome::Cancelled => "flush.cancelled",
+                        yshjy::flush::FlushOutcome::Unsupported => "flush.unsupported",
+                    };
+                    if !quiet {
+                        println!();
+                        println!(
+                            "{}",
+                            语.t(key, &[("secs", &format!("{:.1}", millis as f64 / 1000.0))])
+                        );
+                    }
+                }
+            }
             // 自检 —— 不能"以为成功就完事"
             match yshjy::pack::self_check_at(
                 &out,

@@ -13,6 +13,7 @@
 #   ③ 移动设备 + 开关关  → 不发 FLUSH，但**必须**发 MOVABLE_NOT_VERIFIED 诊断
 #                          （开关关着的人照样会「看到 ✅ 就拔」）
 #   ④ 移动设备 + 开关开  → 发 FLUSH_FINISHED，结局 DONE；解压用时**不含**等待
+#   ⑤⑥ 打包走同一个开关：本机盘不等 / 移动设备等完才报成功（打包往往是备份，丢了更疼）
 #
 # 没有可用的移动设备时：明说「跳过」，退出码 0 —— **不许假装通过**。
 #
@@ -195,6 +196,60 @@ else:
         else:
             print(f"   ✅ 屏幕两个数分开：解压用时 {use} 秒 / 检验 {chk} 秒")
 print(f"   测试目录：{dest}")
+
+# ⑤⑥ 打包：跟解压同一个开关（打包往往是备份，丢了更疼）
+pack_in = work / "打包输入"
+pack_in.mkdir(exist_ok=True)
+for i in range(2):
+    f = pack_in / f"样本{i}.bin"
+    if not f.exists():
+        f.write_bytes(os.urandom(4 * 1024 * 1024))
+
+
+def run_pack(cfg, out_zip):
+    t0 = time.time()
+    p = subprocess.run(
+        [BIN, "--config", str(cfg), "ys", str(pack_in), "-o", str(out_zip), "--json"],
+        capture_output=True, text=True, timeout=900,
+    )
+    evs = []
+    for ln in p.stdout.splitlines():
+        ln = ln.strip()
+        if not ln.startswith("{"):
+            continue
+        try:
+            j = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(j, dict) or len(j) != 1:
+            continue
+        k, v = next(iter(j.items()))
+        if isinstance(v, dict):
+            evs.append((k, v))
+    return p.returncode, evs, time.time() - t0
+
+
+# ⑤ 本机盘打包 + 开关开 → 不许等
+rc, evs, secs = run_pack(cfg_on, work / "本地包.zip")
+n = sum(1 for k, _ in evs if k.startswith("Flush"))
+ran.append("本机盘打包")
+if n:
+    fails.append(f"本机盘打包：不该有 {n} 条 FLUSH 事件")
+else:
+    print(f"✅ 本机盘打包 + 开关开：0 条 FLUSH（{secs:.1f} 秒）")
+
+# ⑥ 移动设备打包 + 开关开 → 必须等完才报成功
+pack_out = Path(mp) / f"yshjy-探针-打包-{stamp}.zip"
+rc, evs, secs = run_pack(cfg_on, pack_out)
+ran.append("移动设备打包")
+fin = [(k, d) for k, d in evs if k == "FlushFinished"]
+if not fin:
+    fails.append("移动设备打包：没有 FlushFinished（打包没接落盘检验？）")
+elif (fin[-1][1].get("outcome") or "").upper() != "DONE":
+    fails.append(f"移动设备打包：结局 {fin[-1][1].get('outcome')}，期望 DONE")
+else:
+    print(f"✅ 移动设备打包：落盘检验通过（{fin[-1][1].get('millis', 0) / 1000:.1f} 秒）")
+print(f"   测试产物：{pack_out}")
 
 print()
 if fails:

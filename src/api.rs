@@ -347,6 +347,9 @@ pub fn 解压(
                 封面目录.as_deref(),
             )
         {
+            // 封面也是写盘产物：文件虽小，同样不该「报完成却还在缓存里」。
+            // 这里不发检验事件 —— 封面通常是解压的附赠品，别为它去抢界面那一屏。
+            let _ = crate::flush::flush_if_needed(&c.path, c.size, &CancelToken::new(), &mut |_p| {});
             结果["cover"] = json!({
                 "path": c.path.display().to_string(),
                 "size": c.size,
@@ -666,6 +669,45 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
     };
     let post_rep = crate::pack_post::postprocess(Path::new(输出), &post).ok();
 
+    // 落盘检验 —— 跟解压**同一个开关、同一份判断**（见 src/flush.rs）
+    //
+    // 为什么打包更需要它：打包往往是备份，丢的是"以为已经备份好的东西"。
+    // 而且打包完会回读自检，**自检读的也是页缓存** ——
+    // 数据还没落盘时自检照样通过，这个"我检查过了"比什么都不查更误导人。
+    let mut flush_out = serde_json::Value::Null;
+    {
+        let cancel = CancelToken::new();
+        let t0 = std::time::Instant::now();
+        let mut began = false;
+        let r = crate::flush::flush_if_needed(Path::new(输出), rep.total_size, &cancel, &mut |pending| {
+            if !began {
+                事件.emit(&crate::event::Event::StageStarted {
+                    job: 0,
+                    stage: crate::event::Stage::Verify,
+                });
+                began = true;
+            }
+            事件.emit(&crate::event::Event::FlushProgress {
+                job: 0,
+                pending,
+                elapsed_ms: t0.elapsed().as_millis() as u64,
+            });
+        });
+        if let Some((结局, millis)) = r {
+            事件.emit(&crate::event::Event::StageFinished {
+                job: 0,
+                stage: crate::event::Stage::Verify,
+                millis,
+            });
+            事件.emit(&crate::event::Event::FlushFinished {
+                job: 0,
+                outcome: 结局,
+                millis,
+            });
+            flush_out = serde_json::json!({ "outcome": 结局.as_str(), "millis": millis });
+        }
+    }
+
     Ok(json!({
         // 真实落地路径：界面必须显示「文件到底在哪」并给「打开所在文件夹」——
         // 以前界面只能拿自己算的建议路径猜，输入换了名字不更新时用户就找不到文件
@@ -691,6 +733,8 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         "volumes": post_rep.as_ref().map(|p| p.volumes.iter().map(|x| x.display().to_string()).collect::<Vec<_>>()).unwrap_or_default(),
         "checksum": post_rep.as_ref().and_then(|p| p.checksum.as_ref()).map(|x| x.display().to_string()),
         "readme": post_rep.as_ref().and_then(|p| p.readme.as_ref()).map(|x| x.display().to_string()),
+        // 落盘检验（没做就是 null）：界面/脚本据此告诉用户"可以安全拔出了"
+        "flush": flush_out,
     }))
 }
 
@@ -1008,6 +1052,40 @@ pub fn 救援(参数: &Value, 事件: &Arc<dyn EventSink>, 取消: &CancelToken)
         ));
     }
 
+    // 落盘检验 —— 救援产出的是"救回来的数据"，更不能让人以为已经安全了
+    let mut flush_out = serde_json::Value::Null;
+    {
+        let t0 = std::time::Instant::now();
+        let mut began = false;
+        let r = crate::flush::flush_if_needed(&dest, 0, 取消, &mut |pending| {
+            if !began {
+                事件.emit(&crate::event::Event::StageStarted {
+                    job: 0,
+                    stage: crate::event::Stage::Verify,
+                });
+                began = true;
+            }
+            事件.emit(&crate::event::Event::FlushProgress {
+                job: 0,
+                pending,
+                elapsed_ms: t0.elapsed().as_millis() as u64,
+            });
+        });
+        if let Some((结局, millis)) = r {
+            事件.emit(&crate::event::Event::StageFinished {
+                job: 0,
+                stage: crate::event::Stage::Verify,
+                millis,
+            });
+            事件.emit(&crate::event::Event::FlushFinished {
+                job: 0,
+                outcome: 结局,
+                millis,
+            });
+            flush_out = serde_json::json!({ "outcome": 结局.as_str(), "millis": millis });
+        }
+    }
+
     Ok(json!({
         "outcome": if rep.cancelled { "Cancelled" } else { "Success" },
         "entries_total": items.len(),
@@ -1025,6 +1103,7 @@ pub fn 救援(参数: &Value, 事件: &Arc<dyn EventSink>, 取消: &CancelToken)
         "warnings": rep.warnings,
         "rebuilt": 清单,
         "cancelled": rep.cancelled,
+        "flush": flush_out,
     }))
 }
 
