@@ -63,7 +63,8 @@ mkdir -p "$STAGE/DEBIAN"
 mkdir -p "$STAGE/usr/bin"
 mkdir -p "$STAGE/usr/lib/yshjy"
 mkdir -p "$STAGE/usr/share/applications"
-mkdir -p "$STAGE/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$STAGE/usr/share/icons/hicolor"
+mkdir -p "$STAGE/usr/share/metainfo"
 mkdir -p "$STAGE/usr/share/man/man1"
 mkdir -p "$STAGE/usr/share/bash-completion/completions"
 mkdir -p "$STAGE/usr/share/zsh/vendor-completions"
@@ -84,7 +85,11 @@ rm -f "$STAGE/usr/lib/yshjy/gui/yshjy"
 sed "s|__EXEC__|/usr/lib/yshjy/gui/yshjy_gui|" gui/linux/yshjy.desktop \
   > "$STAGE/usr/share/applications/yshjy.desktop"
 chmod 644 "$STAGE/usr/share/applications/yshjy.desktop"
-install -m644 gui/linux/yshjy.png "$STAGE/usr/share/icons/hicolor/256x256/apps/yshjy.png"
+# 多尺寸图标（只有一个 256 时，GNOME 缩到 16/24 会糊）
+cp -a gui/linux/icons/hicolor/. "$STAGE/usr/share/icons/hicolor/"
+# AppStream 元数据：软件中心靠它显示名称/简介/版本说明
+install -m644 data/io.github.yangsanhai.yshjy.metainfo.xml \
+  "$STAGE/usr/share/metainfo/io.github.yangsanhai.yshjy.metainfo.xml"
 
 # ── 文件管理器右键菜单（N7）──
 # 在 Nautilus 里选中压缩包 → 右键 →「脚本」→「用杨三海解压」
@@ -240,7 +245,14 @@ for f in \
   usr/lib/yshjy/gui/lib/libapp.so \
   usr/lib/yshjy/gui/data/icudtl.dat \
   usr/share/applications/yshjy.desktop \
+  usr/share/icons/hicolor/16x16/apps/yshjy.png \
+  usr/share/icons/hicolor/24x24/apps/yshjy.png \
+  usr/share/icons/hicolor/32x32/apps/yshjy.png \
+  usr/share/icons/hicolor/48x48/apps/yshjy.png \
+  usr/share/icons/hicolor/64x64/apps/yshjy.png \
+  usr/share/icons/hicolor/128x128/apps/yshjy.png \
   usr/share/icons/hicolor/256x256/apps/yshjy.png \
+  usr/share/metainfo/io.github.yangsanhai.yshjy.metainfo.xml \
   usr/share/man/man1/yshjy.1.gz \
   usr/share/bash-completion/completions/yshjy \
   usr/share/zsh/vendor-completions/_yshjy \

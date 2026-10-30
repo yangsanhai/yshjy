@@ -40,7 +40,7 @@
 | **嵌套包下钻一层** | §17.6 | `tech/xadmaster.md:91,92`（③-09/③-10） | XADMaster 递归解压 | 继承父级密码与编码，只下一层 | `src/drill.rs`（`extract.drill`） | ✅ 21批组C |
 | **解压前内存预检** | §17.6 | `tech/对比-同名技术择优.md:306` | 7-Zip `MemoryRequest` | 按字典×块×线程估峰值，跟可用内存比 | `src/hardware.rs:179`、`src/extract7z.rs:239` | ✅ 0.9.26 · `extract7z.rs:239 内存预检`（字典峰值 + 256 MB 预留 vs 可用内存；仅 7z 需要） |
 | **炸弹限额改成询问** | §17.7 | `tech/7zip-工程层.md:77`（2.9） | 7-Zip 的预算协商 | 抛结构化请求（required/allowed），界面问一句 | `src/ask.rs` + `src/safety.rs` + `serve.rs` 的 answer | ✅ 21批组B |
-| **条目 packSize 校验** | AUDIT §3-12 | `tech/7zip.md:68`（3.5） | 7-Zip 的 dataAfterEnd 判定 | 读满判定，多出/不足都报「拼接错位」 | `src/layout/zip.rs:58` | ❌ 第22批 |
+| **条目 packSize 校验** | AUDIT §3-12 | `tech/7zip.md:68`（3.5） | 7-Zip 的 dataAfterEnd 判定 | 读满判定，多出/不足都报「拼接错位」 | `src/layout/zip.rs:58` | ✅ **已实现**（`src/rescue.rs` 按 `packSize` 逐条校验，29 处） —— 2026-10-30 核实 |
 
 ---
 
@@ -55,7 +55,7 @@
 | 试密码可视化 + 速度/ETA | P4 | `analysis/07` §9.4、`:248`（要超过 Bandizip） | 「正在试第 3/12 个」、速度、剩余时间 | `home_page.dart:198,1017-1078` | ✅ 0.9.26 · `home_page.dart:198` 吃 `PASSWORD_TRY`（「正在试第 i/M 个」+ 速度/ETA） |
 | 输出目录 + 原包处理 | P5 / §17.2 | `analysis/07` §234-238 | Bandizip 路径对话框 + 安全默认三件套 | `home_page.dart:556,617,810` | ✅ 0.9.26 · 输出目录 `dest: _outDir`（`home_page.dart:556,617,810`）+ 原包处理（设置页 keep/trash，`config.rs:155`） |
 | 设置页可写 | P5 | — | 路径可改、语言可选 | `settings_page.dart` | 🟡 |
-| 预览树 + 部分解压 | P7 | `analysis/07` §7（PeaZip 结构树） | 树形结构 + 勾选 + 面包屑 | 预览页平铺 | ❌ 第22批 |
+| 预览树 + 部分解压 | P7 | `analysis/07` §7（PeaZip 结构树） | 树形结构 + 勾选 + 面包屑 | 预览页平铺 | ✅ **已实现**（`gui/lib/entry_tree.dart` 33 处 + `select` 已接线） —— 2026-10-30 核实 |
 | 完成卡分享文案 | P8 | `analysis/07` §952-954、§1.3 | 「复制给对方：这是伪装包，用…打开」 | 完成卡无此按钮 | ✅ 0.9.28 · `home_page.dart:1836`「复制解压方法」 |
 | 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | `theme_mode.dart`（尺寸记忆未做） | 🟡 主题已做（`theme_mode.dart` / `main.dart:69`，设置页可切）；**窗口尺寸/位置记忆未做**（要引 `window_manager`，见 `docs/TODO.md` 第二期） |
 | 新手引导 | P11 | `analysis/07` §5.1（隐写者 ①–⑪ 编号步骤） | 三步浮层 | — | ✅ 0.9.26 · `app_shell.dart:114` 三步引导（只弹一次，标记写在 state 目录） |
@@ -74,7 +74,7 @@
 | 封面嵌入 / 素材 | §14.2 | `tech/README.md:109` | `Steganographier.py:1843-1889` 内置封面 | `src/pack/cover.rs` | ✅ 打包侧 |
 | 说明书 + 校验和 | §14.2 | `analysis/steganographier-hide.md` §Q6 | 输出命名 / 说明书 / 大小-时长校验 | 部分 | 🟡 第20批 |
 | 改 MP4 atom 保证封面可播 | §14.1 | `analysis/steganographier-hide.md` §Q3 | 改 atom 的具体做法 | `src/pack/` | ✅ |
-| 干扰数据 / 假签名 | §14.2 | `analysis/05` §1.3（资源红线）、隐写者 §八 | 垃圾段、伪特征码 | 无 | ❌ 第22批 |
+| 干扰数据 / 假签名 | §14.2 | `analysis/05` §1.3（资源红线）、隐写者 §八 | 垃圾段、伪特征码 | 无 | ✅ **已实现**（`src/pack/decoy.rs` + CLI `--decoy*` + `tests/decoy.sh`） —— 2026-10-30 核实 |
 | **封面分离（解压侧）** | §3 / §17.5 | `tech/README.md:109`（同一套封面知识） | 反着切：`[0, 压缩层起点)` 写成可播文件 | `src/cover_extract.rs` | ✅ 解压侧 + 21批加 `list.cover` 预探 |
 
 ---
@@ -136,7 +136,7 @@
 | **多任务并发进度** | `upstream/indicatif/src/multi.rs`、`examples/multi-tree-ext.rs`、`examples/multi.rs`（截图见 README） | `MultiProgress` 给每个任务一条独立进度行，统一在顶部重绘 —— 我们 `-j 2` 时不再是两行互相覆盖 | `main.rs:1238-1260` | ✅ 0.9.27 · `main.rs:1246` indicatif `MultiProgress`（延迟到真的出现第二个任务才切） |
 | **多选交互（`--pick`）** | `upstream/dialoguer/src/prompts/multi_select.rs:253-302`（键位：`↓/Tab/j` 下移、`↑/BackTab/k` 上移、`←/h` 上页、`→/l` 下页、`空格` 勾选、`a` 全选、`Esc/q` 取消、`Enter` 确认）；`upstream/inquire/KEY_BINDINGS.md`（键位文档写法）、`inquire/inquire/src/terminal/crossterm.rs:338-353`（终端后端抽象） | **别自己写 raw mode 循环**：直接用 `dialoguer::MultiSelect`，上面那套键位是业界共识；文档照 `KEY_BINDINGS.md` 的表格形式写一份中文的 | `src/pick.rs`（0.9.27 已落地） | ✅ 0.9.27 · `src/pick.rs` + `cli_spec.rs:71`（dialoguer `MultiSelect`，键位照抄） |
 | **列表/表格输出** | `upstream/comfy-table/README.md:205,255-283`（宽度来源优先级：显式 `set_width` → `crossterm::terminal::size`；依赖 `unicode-width` 算中文宽度） | 列宽自适应算法；`--list` 的结果按「序号 / 大小 / 加密 / 路径」四列对齐，中文不歪 | `src/main.rs:869-905` | ✅ 0.9.27 · `main.rs:872` comfy-table（中文按显示宽度对齐、窄终端折行） |
-| **解压后删除源压缩包** | `unzip -m`（move 语义，成功即删）；WinRAR 解压对话框「删除压缩文件：永不 / 总是 / 询问」；Bandizip 同功能 + 更安全的「移到回收站」变体；7-Zip 的 `-sdel` 是**压缩**后删源、解压侧没有该功能（p7zip issue #154 里官方建议自己 `rm`） | 「只在**完全成功**后删」「可改成移到回收站」「分卷要整组处理」「删之前说清不可恢复」 | 新增 `--delete-source` / `--trash-source`；界面解压页一个开关（默认关） | ❌ 未做 |
+| **解压后删除源压缩包** | `unzip -m`（move 语义，成功即删）；WinRAR 解压对话框「删除压缩文件：永不 / 总是 / 询问」；Bandizip 同功能 + 更安全的「移到回收站」变体；7-Zip 的 `-sdel` 是**压缩**后删源、解压侧没有该功能（p7zip issue #154 里官方建议自己 `rm`） | 「只在**完全成功**后删」「可改成移到回收站」「分卷要整组处理」「删之前说清不可恢复」 | 新增 `--delete-source` / `--trash-source`；界面解压页一个开关（默认关） | ✅ **已实现**：CLI 两个参数（含二次确认）+ 界面设置页「原包处置」= `output.on_done`（`trash` / 保留）—— 2026-10-30 核实 |
 
 **两条教训（写在这里，免得下次又手搓）**：
 1. 交互式终端界面（raw mode、分页、过滤、非 TTY 降级、退出复原）是**成堆的边界情况**，

@@ -12,11 +12,14 @@ cd "$(dirname "$0")/.."
 
 DEST="$HOME/.local/opt/yshjy"
 APPS="$HOME/.local/share/applications"
-ICONS="$HOME/.local/share/icons/hicolor/256x256/apps"
+ICON_ROOT="$HOME/.local/share/icons/hicolor"
+APPDATA="$HOME/.local/share/metainfo"
 
 if [ "${1:-}" = "--uninstall" ]; then
   rm -rf "$DEST"
-  rm -f "$APPS/yshjy.desktop" "$ICONS/yshjy.png"
+  rm -f "$APPS/yshjy.desktop"
+  for n in 16 24 32 48 64 128 256; do rm -f "$ICON_ROOT/${n}x${n}/apps/yshjy.png"; done
+  rm -f "$APPDATA/io.github.yangsanhai.yshjy.metainfo.xml"
   update-desktop-database "$APPS" 2>/dev/null || true
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
   echo "  已卸载（程序目录、菜单项、图标都清掉了）"
@@ -52,8 +55,9 @@ sed "s|__EXEC__|$DEST/yshjy_gui|" gui/linux/yshjy.desktop > "$APPS/yshjy.desktop
 chmod 644 "$APPS/yshjy.desktop"
 
 echo "==> 图标"
-mkdir -p "$ICONS"
-cp gui/linux/yshjy.png "$ICONS/yshjy.png"
+mkdir -p "$ICON_ROOT" "$APPDATA"
+cp -a gui/linux/icons/hicolor/. "$ICON_ROOT/"
+install -m644 data/io.github.yangsanhai.yshjy.metainfo.xml "$APPDATA/"
 
 update-desktop-database "$APPS" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true

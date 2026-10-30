@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 先看文档（很多问题这里有答案）
+    about: |
+      README 里有「常见问题」；引擎/协议细节在 docs/ 下。
+    url: https://github.com/yangsanhai/yshjy#readme
+  - name: 安全漏洞（不要开公开 issue）
+    about: 用私密漏洞报告，别把可复现的细节贴在公开地方
+    url: https://github.com/yangsanhai/yshjy/security/advisories/new
