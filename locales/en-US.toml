@@ -64,6 +64,8 @@ COMMON OPTIONS:
   --cover <file>                  use your own image/video as the cover
   --password-file <file>          password list (one per line, # comments), this run only
   --no-auto-password              don't look for passwords in notes or the password list
+  --no-auto-password-notes        only skip reading passwords from nearby notes
+  --no-auto-password-book         only skip trying your own password list
   -v, -vv, --verbose              verbose / debug output (-vv is more detailed; use with --log)
   --log <file>                    write a log file (for bug reports)
   --no-color                      disable colors (pipe/log friendly)

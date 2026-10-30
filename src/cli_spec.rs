@@ -66,6 +66,8 @@ pub const OPTS: &[Opt] = &[
     opt("--password", Some("-p"), Some("密码"), false),
     opt("--password-file", None, Some("文件"), false),
     opt("--no-auto-password", None, None, false),
+    opt("--no-auto-password-notes", None, None, false),
+    opt("--no-auto-password-book", None, None, false),
     opt("--encoding", None, Some("编码"), false),          // big5 / sjis / gbk / utf-8
     opt("--select", None, Some("条件"), false),            // 只解一部分
     opt("--pick", None, None, false),                     // 全屏勾选（dialoguer）
@@ -222,10 +224,10 @@ mod tests {
     /// + `--test`（只测不写：完整解码 + 校验，一个字节都不落盘）
     /// + 2026-10-29 第三期 B 的 `--decoy` / `--decoy-size` / `--decoy-signatures`。
     #[test]
-    fn 长选项总数是_46() {
+    fn 长选项总数是_48() {
         assert_eq!(
             OPTS.len(),
-            46,
+            48,  // +2：--no-auto-password-notes / --no-auto-password-book（T8）
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

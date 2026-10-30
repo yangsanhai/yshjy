@@ -130,6 +130,12 @@ pub struct Password {
     pub file: String,
     /// 从同目录的「说明.txt」里自动抓解压码
     pub auto_from_notes: bool,
+    /// 试「密码本」（用户自己维护的常用解压码）
+    ///
+    /// 和 `auto_from_notes` 分成两个开关，因为两者代价与信任度不同：密码本是用户
+    /// **亲手记**的（值得每次先试），说明文件是程序去读包旁边文本现猜（有人就是不想
+    /// 让程序翻旁边的文件）。合成一个开关等于逼人二选一。
+    pub auto_from_book: bool,
     /// 最多试几个候选（试密码是有成本的，别让用户干等；硬上限见 [`候选数硬上限`]）
     pub max_candidates: usize,
 }
@@ -145,6 +151,7 @@ impl Default for Password {
         Self {
             file: "passwords.txt".into(),
             auto_from_notes: true,
+            auto_from_book: true,
             max_candidates: 12,
         }
     }
@@ -261,6 +268,9 @@ impl Config {
             if let Some(x) = t.get("auto_from_notes").and_then(|x| x.as_bool()) {
                 cfg.password.auto_from_notes = x;
             }
+            if let Some(x) = t.get("auto_from_book").and_then(|x| x.as_bool()) {
+                cfg.password.auto_from_book = x;
+            }
             // 注：老配置里可能还写着 `try_common = ...`，这里**故意不认** ——
             // 宽容解析的意义就是"多写一段只影响那一段"，不会因此报错。
             if let Some(x) = t.get("max_candidates").and_then(|x| x.as_integer()) {
@@ -325,6 +335,7 @@ impl Config {
              [password]\n\
              file = \"{}\"\n\
              auto_from_notes = {}\n\
+             auto_from_book = {}\n\
              max_candidates = {}\n\n\
              [output]\n\
              dir = \"{}\"\n\
@@ -338,6 +349,7 @@ impl Config {
             self.general.jobs,
             esc(&self.password.file),
             self.password.auto_from_notes,
+            self.password.auto_from_book,
             self.password.max_candidates,
             esc(&out_dir),
             esc(&self.output.conflict),
@@ -417,8 +429,12 @@ pub fn 额外密码候选() -> &'static [String] {
     额外密码.get().map(|v| v.as_slice()).unwrap_or(&[])
 }
 
-/// `--no-auto-password` 的开关
+/// `--no-auto-password` 的开关（两档一起关）
 static 自动密码关闭: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// `--no-auto-password-notes`：只关「从说明文件抓」
+static 说明文件找关闭: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// `--no-auto-password-book`：只关「试密码本」
+static 密码本找关闭: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// 关闭「自动找密码」（说明文件 + 密码本）；用户显式 `-p` 不受影响
 pub fn 关闭自动密码() {
@@ -428,6 +444,26 @@ pub fn 关闭自动密码() {
 /// 是否已关闭自动找密码
 pub fn 自动密码已关闭() -> bool {
     自动密码关闭.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 只关「从说明文件抓解压码」（`--no-auto-password-notes`）
+pub fn 关闭说明文件找() {
+    说明文件找关闭.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 「从说明文件抓」是否被单独关掉了
+pub fn 说明文件找已关闭() -> bool {
+    说明文件找关闭.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 只关「试密码本」（`--no-auto-password-book`）
+pub fn 关闭密码本找() {
+    密码本找关闭.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 「试密码本」是否被单独关掉了
+pub fn 密码本找已关闭() -> bool {
+    密码本找关闭.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// 读密码本

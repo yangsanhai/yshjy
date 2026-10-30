@@ -23,7 +23,7 @@
 | T5 | S10 多候选：列出候选让用户选 | 界面 | ⬜ | 真机：造多候选样本，能选中并解出 |
 | T6 | `--force` 界面入口（与 T4 同根） | 界面 | ✅ 完成 | 就是 T4 的「继续试试」：`engine.dart` 的 extract 加了 force → 协议 `extract.force`。真机点过（报错卡片上那个按钮） |
 | T7 | 引擎有、界面没入口的其余项（E1 decoy / E2 layout / E4 test / E5 smart-dir / E6 report / E7 jobs·keep） | 界面 | ⬜ | 每项真机点一次，产物用命令行复核 |
-| T8 | S4 密码框两个「自动找」勾选 | 界面 | ⬜ | 勾/不勾各解一次加密包，行为不同 |
+| T8 | S4 密码框两个「自动找」勾选 | 界面 | 🟡 引擎侧完成，界面待接 | 引擎拆成两档：配置 `auto_from_book`（新）+ `auto_from_notes`（原有）、开关 `--no-auto-password-notes` / `--no-auto-password-book`、总开关语义不变。探针 `tests/auto_pw_switch.sh` 8/8 过（两个包分别用两档的码加密，各自只关自己那档时行为不同）。**剩**：设置页两个勾选 + 协议参数 |
 | T9 | 门面：`metainfo.xml` + 多尺寸图标 + README 版本/如实说明 | 门面 | 🟡 **差真截图** | `appstreamcli validate` ✔ 通过；7 尺寸图标已接入 deb 与用户级安装；README 0.9.31→0.9.34、补「界面只有中文」。**剩**：真截图（README 那 3 张是徽章不是截图）+ 元数据里填 screenshots |
 | T10 | 开源规范：SECURITY.md / CODE_OF_CONDUCT.md / issue 模板 | 门面 | ✅ 完成 | 三份都在；issue 表单是 GitHub YAML 格式（bug_report / feature_request / config） |
 | T11 | 无障碍：`Semantics` 语义 + 键盘快捷键 | 界面 | ⬜ | `grep -c 'Semantics('` > 0 且 `flutter test` 全绿 |

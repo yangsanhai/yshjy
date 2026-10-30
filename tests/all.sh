@@ -121,6 +121,8 @@ if [ -n "$BIN" ]; then
   run "重名策略探针（conflict.sh）" bash tests/conflict.sh "$BIN"
   # 原包处置：--trash-source 进回收站 / --delete-source 二次确认（唯一不可逆的一类）
   run "原包处置（trash_source.sh）" bash tests/trash_source.sh "$BIN"
+  # 自动找密码的两档各自只关自己（T8：界面 S4 的两个勾选靠它）
+  run "自动找密码两档（auto_pw_switch.sh）" bash tests/auto_pw_switch.sh "$BIN"
   # 条目声明大小封顶：多写不落盘、少写报截断（libarchive entry_bytes_declared 语义）
   run "packSize 校验（pack_size_cap.sh）" bash tests/pack_size_cap.sh "$BIN"
   # 文件管理器右键脚本：可写→原地解；只读→改投「下载」且通知说明（不许静默失败）

@@ -1136,7 +1136,8 @@ fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String
         });
     }
     let 密码本 = cfg.passwords();
-    if !密码本.is_empty() {
+    // 「试密码本」这一档：配置项 + `--no-auto-password-book`
+    if cfg.password.auto_from_book && !crate::config::密码本找已关闭() && !密码本.is_empty() {
         let src = cfg.passwords_path();
         for pw in 密码本.into_iter().take(cfg.password.max_candidates) {
             hints.push(crate::password_hint::PasswordHint {
@@ -1147,7 +1148,8 @@ fn probe_passwords(job: &Job, target: &Target, ctx: &UnpackCtx) -> Option<String
             });
         }
     }
-    if cfg.password.auto_from_notes {
+    // 「从说明文件抓」这一档：配置项 + `--no-auto-password-notes`
+    if cfg.password.auto_from_notes && !crate::config::说明文件找已关闭() {
         hints.extend(crate::password_hint::find_hints_near(&job.input));
     }
     if hints.is_empty() {

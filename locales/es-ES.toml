@@ -60,6 +60,8 @@ OPCIONES HABITUALES:
   --cover <archivo>               usar tu propia imagen/vídeo como portada
   --password-file <archivo>       lista de contraseñas (una por línea, # comentarios)
   --no-auto-password              no buscar contraseñas en notas ni en la lista
+  --no-auto-password-notes        omitir solo la lectura de notas cercanas
+  --no-auto-password-book         omitir solo probar tu propia lista de contraseñas
   --import-passwords <archivo>    importar una lista de contraseñas (una por línea, # inicia comentario; con tabulador se toma la 1ª columna, sin duplicados)
   -v, -vv, --verbose              salida detallada / depuración (-vv más detalle, con --log)
   --log <archivo>                 escribir un registro en archivo (para reportes)
