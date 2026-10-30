@@ -129,6 +129,9 @@ partial = "⚠ {input} —— 解了一部分（成功 {done} 個，跳過 {skip
 failed = "❌ {input} —— 沒解開：{reason}"
 cancelled = "⏹ {input} —— 已取消（已解出的檔案保留）"
 
+space_shortage = "需要 {need} / 目標磁碟只有 {available} / 還差 {short}"
+
+line_short = "{icon} {input} —— {text}"
 [error]
 head_encrypted = "這個包連檔案清單都加密了（頭加密）—— 必須先給解壓碼，否則連裡面有幾個檔案都看不到"
 not_archive = "這不是壓縮檔（找不到可辨識的壓縮資料）"

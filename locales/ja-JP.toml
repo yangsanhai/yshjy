@@ -129,6 +129,9 @@ partial = "⚠ {input} —— 一部のみ展開（成功 {done} 件、スキッ
 failed = "❌ {input} —— 失敗：{reason}"
 cancelled = "⏹ {input} —— キャンセルしました（展開済みのファイルは保持されます）"
 
+space_shortage = "{need} 必要 / 空き {available} / {short} 不足"
+
+line_short = "{icon} {input} — {text}"
 [error]
 head_encrypted = "このアーカイブはファイル一覧まで暗号化されています（ヘッダー暗号化）—— パスワードがないと中身の一覧すら見えません"
 not_archive = "圧縮ファイルではありません（認識できる圧縮データが見つかりません）"

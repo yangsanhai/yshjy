@@ -72,8 +72,10 @@ version = 1
 
 [general]
 language = "zh-CN"          # 中文优先，预留多语言
-default_mode = "auto"       # auto | extract | pack
 jobs = 1                    # 并行任务数（磁盘友好）
+# 注：原本这里还有个 default_mode = "auto"（auto | extract | pack）—— 2026-10-30 **删掉了**。
+#     默认模式的真机制是**程序名**（`yshjy` 解压 / `yshys` 打包，见 main.rs），
+#     配置项与它重复且全库零读取点，留着只会让人以为改了有用。
 
 [password]
 file = "passwords.txt"

@@ -116,6 +116,12 @@ pub struct JobOutcome {
     pub stats: JobStats,
     /// 中性说明（日志用，不是用户文案）
     pub note: Option<String>,
+    /// 失败时引擎准备的结构化参数（**不是文案**，是键值对）
+    ///
+    /// 现在只有一处用它：空间不足的 `need` / `available`。CLI 靠它拼出
+    /// 「需要 X / 只有 Y / 还差 Z」；以前这条错误只有一句「磁盘空间不够」，
+    /// 用户不知道要清多少（S5 的另一半）。
+    pub error_detail: Vec<(String, String)>,
 }
 
 impl JobOutcome {
@@ -127,6 +133,7 @@ impl JobOutcome {
             outcome,
             stats: JobStats::default(),
             note: None,
+            error_detail: Vec::new(),
         }
     }
 }
@@ -579,6 +586,7 @@ fn skipped(job: &Job, reason: &str) -> JobOutcome {
         outcome: Outcome::Cancelled { done: 0, total: 0 },
         stats: JobStats::default(),
         note: Some(reason.to_string()),
+        error_detail: Vec::new(),
     }
 }
 

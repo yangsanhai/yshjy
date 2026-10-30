@@ -129,6 +129,9 @@ partial = "⚠ {input} —— 일부만 풀림 (성공 {done}개, 건너뜀 {ski
 failed = "❌ {input} —— 실패: {reason}"
 cancelled = "⏹ {input} —— 취소됨 (이미 푼 파일은 유지됩니다)"
 
+space_shortage = "필요 {need} / 여유 {available} / {short} 부족"
+
+line_short = "{icon} {input} — {text}"
 [error]
 head_encrypted = "이 압축 파일은 파일 목록까지 암호화되어 있습니다(헤더 암호화) — 비밀번호가 없으면 안에 무엇이 있는지조차 볼 수 없습니다"
 not_archive = "압축 파일이 아닙니다 (인식할 수 있는 압축 데이터가 없음)"
