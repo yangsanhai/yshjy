@@ -181,6 +181,38 @@ pub fn pending_bytes() -> u64 {
         .unwrap_or(0)
 }
 
+/// 「顺手把产物落盘」的**统一入口**
+///
+/// 解压、打包、救援、封面提取 —— 四条写盘路径都该受同一个开关管。
+/// 2026-10-30 的教训：一开始只有解压那条接了这个开关，
+/// 打包到 U 盘报成功后拔盘照样全灭（而且它的"回读自检"读的是页缓存，
+/// **自检通过 ≠ 数据在盘上**，比没自检更会骗人）。
+///
+/// 返回 `None` 表示**什么都不做**（开关关着 / 目标在本机盘 / 平台不支持）——
+/// 一分钟都不多等。返回 `Some((结局, 毫秒))` 表示真的等了。
+/// `cap`：本次产物一共多少字节。内核读数（[`pending_bytes`]）是**全系统**脏页，
+/// 别的程序也在写盘时会虚高（实测见过"打了个 15 MB 的包，界面显示还剩 472 MB"）。
+/// 传了就按它封顶，用户看到的数字才跟自己的文件对得上；传 0 表示不封顶。
+pub fn flush_if_needed<F: FnMut(u64)>(
+    dest_hint: &Path,
+    cap: u64,
+    cancel: &CancelToken,
+    on_progress: &mut F,
+) -> Option<(FlushOutcome, u64)> {
+    if !crate::config::全局配置().safety.flush_movable {
+        return None;
+    }
+    if !is_removable(dest_hint) {
+        return None;
+    }
+    let t0 = std::time::Instant::now();
+    let r = wait_until_written_at(dest_hint, cancel, TICK, &mut |p| {
+        on_progress(if cap > 0 { p.min(cap) } else { p });
+    });
+    let millis = t0.elapsed().as_millis().min(u64::MAX as u128) as u64;
+    Some((r, millis))
+}
+
 // ───────────────────────── ③ 等它写完 ─────────────────────────
 
 /// 阻塞等目标目录所在文件系统写完，边等边回调「还剩多少」
@@ -366,6 +398,20 @@ mod tests {
         cancel.cancel();
         let r = wait_until_written_at(&dir, &cancel, Duration::from_millis(5), &mut |_p| {});
         assert_eq!(r, FlushOutcome::Cancelled);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 开关关着 → `flush_if_needed` 必须**什么都不做**（一秒都不多等）
+    ///
+    /// 这是整个特性的第一条铁律：默认关就是默认关，不能偷偷等。
+    #[test]
+    fn 开关关着不落盘() {
+        let dir = std::env::temp_dir().join(format!("yshjy-fi-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cancel = CancelToken::new();
+        // 默认配置 = 关（全局配置读不到文件时就是默认值）
+        let r = flush_if_needed(&dir, 0, &cancel, &mut |_p| {});
+        assert!(r.is_none(), "开关关着却做了落盘检验");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
