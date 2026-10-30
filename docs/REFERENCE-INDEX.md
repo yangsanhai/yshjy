@@ -35,7 +35,7 @@
 | **LOCALS 无目录兜底** | §13 武器③ | `tech/7zip.md:113`（5.1）、`:116`（5.4） | `Archive/Zip/ZipIn.cpp:2530,2735-2742` | CD 读出来对不上 → 退回扫 local header 重建 | `src/rescue.rs` | ✅ |
 | **分段虚接（Concat）** | §13 武器② | `tech/7zip.md:10`、`tech/README.md:120` | `7zip/CPP/7zip/Common/StreamBinder.cpp` 思路 | 多段拼成一条可 seek 的逻辑流 | `src/unpack.rs`、`src/extract7z.rs` | 🟡 主路径有，E3 未全覆盖 |
 | **结构校验防假签名** | §13 武器④ | `tech/7zip-工程层.md:50,54`（1.11/1.15） | `CPP/7zip/UI/Common/OpenArchive.cpp` | 1 MiB 头缓冲 → 候选队列 → 实际解析验证 | `src/scan.rs` | ✅ |
-| **7z 头加密 vs 内容加密** | §17.4 | `tech/sevenz-rust+steganographier.md:51`（J-15） | `sevenz-rust/src/reader.rs:381-423` | 内容加密头明文可列表；头加密直接要密码 | `src/preview.rs:322`（现硬编码 `false`） | 🟡 第20批 |
+| **7z 头加密 vs 内容加密** | §17.4 | `tech/sevenz-rust+steganographier.md:51`（J-15） | `sevenz-rust/src/reader.rs:381-423` | 内容加密头明文可列表；头加密直接要密码 | ✅ **已实现**（`HEAD_ENCRYPTED` / `encrypted_names` 18 处 + 密码框入口） —— 2026-10-30 核实 |
 | **双维度识别进度** | §17.6（D1） | `tech/7zip-工程层.md:91`（3.3） | `CPP/7zip/Archive/IArchive.h:177-181` | `SetTotal(files, bytes)` 两个维度 | `src/job.rs:311` | ✅ 0.9.26 · `job.rs:311` emit `ScanProgress{total_bytes,total_files}` |
 | **嵌套包下钻一层** | §17.6 | `tech/xadmaster.md:91,92`（③-09/③-10） | XADMaster 递归解压 | 继承父级密码与编码，只下一层 | `src/drill.rs`（`extract.drill`） | ✅ 21批组C |
 | **解压前内存预检** | §17.6 | `tech/对比-同名技术择优.md:306` | 7-Zip `MemoryRequest` | 按字典×块×线程估峰值，跟可用内存比 | `src/hardware.rs:179`、`src/extract7z.rs:239` | ✅ 0.9.26 · `extract7z.rs:239 内存预检`（字典峰值 + 256 MB 预留 vs 可用内存；仅 7z 需要） |
@@ -51,13 +51,13 @@
 | 智能解压三规则 | §3 补 / P2 | `analysis/07` §3.2 | Bandizip 的三个判断（单目录/单文件/散文件） | `gui/lib/pages/home_page.dart:619-627` 只写了说明 | ✅ 引擎侧 / 🟡 界面可切换 |
 | 批量队列 + 三段式完成卡 | P1 | `analysis/07` §9.1（Sunpack `f08.png`） | 结果标题 / 量化副标题 / 直达按钮 | `home_page.dart:727-811` | ✅ |
 | 失败卡可执行化 | P3 | `analysis/07` §1.3（v2 `print_final_completion`） | 「可能原因清单」升级成按钮 | `home_page.dart:474-503` | ✅ |
-| 密码卡三件套 | P4 | `analysis/07` §4.1（眼睛图标）、§9.2（优先级五档）、§9.4（近期密码/不保存） | 眼睛切换、近期密码 chips、不保存勾选 | `home_page.dart:1260`（裸 obscureText） | 🟡 第20批 |
+| 密码卡三件套 | P4 | `analysis/07` §4.1（眼睛图标）、§9.2（优先级五档）、§9.4（近期密码/不保存） | 眼睛切换、近期密码 chips、不保存勾选 | ✅ **已实现**（眼睛图标 `pack_page.dart:49` + 密码本 chips `settings_page.dart:381`） —— 2026-10-30 核实 |
 | 试密码可视化 + 速度/ETA | P4 | `analysis/07` §9.4、`:248`（要超过 Bandizip） | 「正在试第 3/12 个」、速度、剩余时间 | `home_page.dart:198,1017-1078` | ✅ 0.9.26 · `home_page.dart:198` 吃 `PASSWORD_TRY`（「正在试第 i/M 个」+ 速度/ETA） |
 | 输出目录 + 原包处理 | P5 / §17.2 | `analysis/07` §234-238 | Bandizip 路径对话框 + 安全默认三件套 | `home_page.dart:556,617,810` | ✅ 0.9.26 · 输出目录 `dest: _outDir`（`home_page.dart:556,617,810`）+ 原包处理（设置页 keep/trash，`config.rs:155`） |
 | 设置页可写 | P5 | — | 路径可改、语言可选 | `settings_page.dart` | 🟡 |
 | 预览树 + 部分解压 | P7 | `analysis/07` §7（PeaZip 结构树） | 树形结构 + 勾选 + 面包屑 | 预览页平铺 | ✅ **已实现**（`gui/lib/entry_tree.dart` 33 处 + `select` 已接线） —— 2026-10-30 核实 |
 | 完成卡分享文案 | P8 | `analysis/07` §952-954、§1.3 | 「复制给对方：这是伪装包，用…打开」 | 完成卡无此按钮 | ✅ 0.9.28 · `home_page.dart:1836`「复制解压方法」 |
-| 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | `theme_mode.dart`（尺寸记忆未做） | 🟡 主题已做（`theme_mode.dart` / `main.dart:69`，设置页可切）；**窗口尺寸/位置记忆未做**（要引 `window_manager`，见 `docs/TODO.md` 第二期） |
+| 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | `theme_mode.dart`（尺寸记忆未做） | ✅ 主题可切（`main.dart:69`，设置页可切）；**窗口尺寸记忆已做**（在 GTK runner `gui/linux/runner/my_application.cc` 里，状态文件 `~/.local/state/yshjy/gui-window.txt`，有 `tests/gui_window_state.sh` 守着）；**位置**记忆在 Wayland 下做不到（协议不许客户端给自己定位）—— 2026-10-30 核实 |
 | 新手引导 | P11 | `analysis/07` §5.1（隐写者 ①–⑪ 编号步骤） | 三步浮层 | — | ✅ 0.9.26 · `app_shell.dart:114` 三步引导（只弹一次，标记写在 state 目录） |
 | 历史页可点开文件 | — | `analysis/07` §130-131（别清空历史）、§135 | 条目可打开所在目录 | `history_page.dart:128` | ✅ 0.9.26 · `history_page.dart:128` onTap 定位到输出目录 |
 
@@ -187,8 +187,8 @@
 
 | 设计项 | 参考出处（本地真身） | 抄什么 | 我们的落点 | 状态 |
 |---|---|---|---|---|
-| **工作流怎么拆** | `upstream/localsend/.github/workflows/`：15 个平台文件（`build_linux_deb_x64.yml` …）+ `release.yml` 只做 `uses:` 汇总（文件头注释写明「各平台单独工作流与发版工作流不会漂移」）+ `winget.yml` | 一平台一个 reusable workflow，`release.yml` 只汇总；版本号各工作流自己从 `pubspec.yaml` 取 | 新建 `.github/workflows/` | ❌ 未做 |
-| 单文件骨架 | `upstream/localsend/.github/workflows/build_linux_deb_x64.yml:1-45`（`workflow_call` + `ubuntu-22.04` 老基线 + 装 gtk3/ayatana + `subosito/flutter-action` + rust toolchain） | **出包别用 `ubuntu-latest`**：基线太新正是我们 AppImage 评估翻车的原因（本机 glibc 2.41）；22.04 是 glibc 2.35 | 同上 | ❌ |
+| **工作流怎么拆** | `upstream/localsend/.github/workflows/`：15 个平台文件（`build_linux_deb_x64.yml` …）+ `release.yml` 只做 `uses:` 汇总（文件头注释写明「各平台单独工作流与发版工作流不会漂移」）+ `winget.yml` | 一平台一个 reusable workflow，`release.yml` 只汇总；版本号各工作流自己从 `pubspec.yaml` 取 | 新建 `.github/workflows/` | 🟡 **部分**：`ci.yml` 已有（fmt/clippy/build/test/cargo-deny），但**没有 Flutter 测试与出包流水线**（见 TODO T12） |
+| 单文件骨架 | `upstream/localsend/.github/workflows/build_linux_deb_x64.yml:1-45`（`workflow_call` + `ubuntu-22.04` 老基线 + 装 gtk3/ayatana + `subosito/flutter-action` + rust toolchain） | **出包别用 `ubuntu-latest`**：基线太新正是我们 AppImage 评估翻车的原因（本机 glibc 2.41）；22.04 是 glibc 2.35 | 同上 | 🟡 同上 |
 | 纯 Rust CLI 发版 | `upstream/cargo-dist/dist-workspace.toml:1-20`（`installers = ["shell","powershell","npm","homebrew"]`、`targets = [...目标三元组...]`、`publish-jobs`） | 将来要让终端用户 `brew`/`npm` 一键装时用它，别手写安装脚本 | 暂不做 | ⏸ |
 | 安装包规范 | `upstream/tauri-bundler/crates/tauri-bundler/src/bundle/linux/debian.rs:204-215`（`Depends` 只认配置里给的，**不自动推 ldd**）、`.../linux/appimage/linuxdeploy-plugin-gtk.sh`、`.../windows/nsis/`、`.../macos/dmg/` | 依赖闭包必须自己算（我们 `build-deb.sh` 已经这么做，方向是对的）；AppImage = linuxdeploy + gtk 插件 + 老基线 | `scripts/build-deb.sh` | ✅ 已对 |
 
