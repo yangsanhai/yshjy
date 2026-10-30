@@ -1,6 +1,6 @@
 [package]
 name = "yshjy-ffi"
-version = "0.9.35"
+version = "0.9.36"
 edition = "2024"
 publish = false
 description = "杨三海解压引擎的稳定 C ABI（iOS / Android / 其它外壳用）"
