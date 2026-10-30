@@ -15,7 +15,8 @@
 > off 时「这个包带锁，需要解压码」，on 时「解压码是从旁边的说明里找到的…」并解开）。
 >
 > **回归**：`cargo test` 402 过 / 0 挂、`clippy` 干净、`flutter analyze` 只剩一条既有 info、`flutter test` 102 过 / 0 挂。
-> **仍未发版**（装机版 0.9.34 不含本轮 7 个提交）。
+> **已发版 0.9.35**（2026-10-30 出包，`scripts/release.sh` + `build-deb.sh` + `test-packages.sh` 37 项全绿；
+> 装机待用户在终端确认 sudo）。包里含本轮全部 7 个提交。
 >
 > **★ 新踩的坑**：`testWidgets` 是假时钟，`await File.readAsString()` 这种真 I/O 的 Future **永远不完成** →
 > `_load()` 卡在第一行、界面停在默认值，测试会**假绿**（第一版就这么绿的）。必须把 `pumpWidget` 整段放进
