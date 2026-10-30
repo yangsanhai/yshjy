@@ -361,6 +361,13 @@ fn main() -> ExitCode {
     if has("--no-auto-password") {
         yshjy::config::关闭自动密码();
     }
+    // ③b 只关其中一档（界面 S4 的两个勾选各自对应一条）
+    if has("--no-auto-password-notes") {
+        yshjy::config::关闭说明文件找();
+    }
+    if has("--no-auto-password-book") {
+        yshjy::config::关闭密码本找();
+    }
     // ④ `-v` / `-vv` / `--log` / `--no-color` / `--keep`
     let 日志级别 = if has("-vv") {
         2

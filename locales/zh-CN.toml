@@ -61,6 +61,8 @@ text = """
   --cover <文件>                  用自己的图片/视频当封面（默认用内置素材）
   --password-file <文件>          密码本：每行一个（# 注释），只对这次命令有效
   --no-auto-password              不自动从「说明.txt」和密码本找解压码
+  --no-auto-password-notes        只关「从说明.txt 抓解压码」这一档
+  --no-auto-password-book         只关「试自己的密码本」这一档
   -v, -vv, --verbose              详细 / 调试输出（-vv 更详细；配合 --log 排错）
   --log <文件>                    把日志写进文件（报错时发给开发者）
   --no-color                      不上色（管道 / 日志友好）

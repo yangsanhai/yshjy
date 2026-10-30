@@ -60,6 +60,8 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   --cover <파일>                  직접 만든 이미지/영상을 표지로 사용
   --password-file <파일>          비밀번호 목록 (한 줄에 하나, # 주석)
   --no-auto-password              설명 파일/목록에서 비밀번호를 자동으로 찾지 않음
+  --no-auto-password-notes        「설명.txt에서 찾기」만 끄기
+  --no-auto-password-book         내 비밀번호 목록 시도만 끄기
   --import-passwords <파일>       비밀번호 목록 가져오기 (한 줄에 하나, # 은 주석; Tab 구분 시 첫 열 사용, 중복 자동 제거)
   -v, -vv, --verbose              상세 / 디버그 출력 (-vv 는 더 자세히, --log 와 함께)
   --log <파일>                    로그를 파일로 저장 (버그 신고용)

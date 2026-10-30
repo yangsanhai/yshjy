@@ -17,6 +17,8 @@ for bin in yshjy yshys
     complete -c $bin -s p -l password -x -d '解压码 / 打包密码'
     complete -c $bin -l password-file -r -F -d '密码本：每行一个（# 注释），只对这次命令有效'
     complete -c $bin -l no-auto-password -d '不自动从「说明.txt」和密码本找解压码'
+    complete -c $bin -l no-auto-password-notes -d '只关「从说明.txt 抓解压码」这一档'
+    complete -c $bin -l no-auto-password-book -d '只关「试自己的密码本」这一档'
     complete -c $bin -l encoding -x -a 'utf-8 gbk big5 sjis' -d '手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）'
     complete -c $bin -l select -x -d '只解一部分：'
     complete -c $bin -l pick -d '全屏勾选要解哪些（↑↓ 选 · 空格勾 · a 全选 · Enter 确认）'

@@ -60,6 +60,8 @@ text = """
   --cover <檔案>                  用自己的圖片/影片當封面（預設用內建素材）
   --password-file <檔案>          密碼本：每行一個（# 註解），只對這次指令有效
   --no-auto-password              不自動從「說明.txt」和密碼本找解壓碼
+  --no-auto-password-notes        只關「從說明.txt 抓解壓碼」這一檔
+  --no-auto-password-book         只關「試自己的密碼本」這一檔
   --import-passwords <檔案>       匯入密碼本（每行一個解壓碼，# 開頭是註解；Tab 分隔取第一欄，自動去重）
   -v, -vv, --verbose              詳細 / 偵錯輸出（-vv 更詳細；配合 --log 排錯）
   --log <檔案>                    把日誌寫進檔案（報錯時發給開發者）

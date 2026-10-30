@@ -15,6 +15,8 @@ _yshjy() {
         '(-p --password)'{-p,--password}'[解压码 / 打包密码]:密码:' \
         '--password-file[密码本：每行一个（# 注释），只对这次命令有效]:文件:_files' \
         '--no-auto-password[不自动从「说明.txt」和密码本找解压码]' \
+        '--no-auto-password-notes[只关「从说明.txt 抓解压码」这一档]' \
+        '--no-auto-password-book[只关「试自己的密码本」这一档]' \
         '--encoding[手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）]:编码:(utf-8 gbk big5 sjis)' \
         '--select[只解一部分：]:条件:' \
         '--pick[全屏勾选要解哪些（↑↓ 选 · 空格勾 · a 全选 · Enter 确认）]' \

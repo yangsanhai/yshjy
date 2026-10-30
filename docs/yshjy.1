@@ -41,7 +41,7 @@ yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件�
 .B yshjy --rescue \fI文件\fR
 救援模式：中央目录坏了也按每个文件的头逐个抢救。
 .SH 选项
-以下是全部 43 个选项（按用途分组）。
+以下是全部 45 个选项（按用途分组）。
 .TP
 .B -l, --list
 只列出包里的内容（ZIP / 7z / RAR / TAR / 单流都支持），不解压、不写盘。
@@ -63,6 +63,12 @@ yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件�
 .TP
 .B --no-auto-password
 不自动从「说明.txt」和密码本找解压码
+.TP
+.B --no-auto-password-notes
+只关「从说明.txt 抓解压码」这一档
+.TP
+.B --no-auto-password-book
+只关「试自己的密码本」这一档
 .TP
 .B --encoding \fI编码\fR
 手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）
