@@ -7,7 +7,10 @@
 > 原则是「真人会撞上的概率优先」，不看实现难度。
 > 每次开工只做最上面那一行的「下一项」，出现的新问题不插队，加到表尾。
 
-最后更新：2026-10-30（**0.9.35 已出包** —— 本轮清 `docs/AUDIT-GAP.md` 对账欠账，4 批 9 项）
+最后更新：2026-10-31（**T16 完成、未发版** —— 命令行 `--candidate`；装机版仍是 0.9.36）
+> 上一批：2026-10-30（0.9.35 已出包 —— 清 `docs/AUDIT-GAP.md` 对账欠账，4 批 9 项）
+> 表里还没勾的：**T7**（8 项引擎能力没界面入口，要真机点 8 次）、**T9**（差真截图）、
+> **T11**（无障碍）、**T14**（界面多语言，两天级）、**T15**（覆盖率报告）。
 
 ## 🔨 本轮施工进度（2026-10-30 夜 · 来源 `docs/AUDIT-GAP.md`）
 
@@ -31,7 +34,7 @@
 | T13 | 台账失真 + README 假「规划中」 | 文档 | ✅ 完成（16 处） | REFERENCE-INDEX 9 处（含 decoy 真身其实在 `src/pack/decoy.rs`，审计自己写错了路径）、DESIGN 3 处、GUI-PLAN 4 处；每条都先 grep 核代码再改 |
 | T14 | 界面多语言接线（474 条硬编码） | 界面 | ⬜ | 切 `--lang en` 界面变英文；**本轮不保证做完，见下方说明** |
 | T15 | 覆盖率报告（cargo llvm-cov） | 工程 | ⬜ | `scripts/cov_by_file.py` 出分文件表 |
-| T16 | `--candidate` 的 CLI 入口（T5 带出来的小账） | 工程 | ⬜ | T5 做完了，但「解第 N 处」目前只有协议 + 界面能表达，命令行没法指定。加 `--candidate <字节偏移>`（与协议 `extract.candidate` 同名同义，非法值报 USAGE 不静默忽略），探针补一条；顺手加进 `cli_spec.rs`（帮助/man 页/补全三份都是它生成的） |
+| T16 | `--candidate` 的 CLI 入口（T5 带出来的小账） | 工程 | ✅ **完成（真跑验过）** | T5 做完了，但「解第 N 处」以前只有协议 + 界面能表达，命令行没法指定 —— 用户拿命令行复核时办不到。现在加 `--candidate <字节偏移>`（与协议 `extract.candidate` 同名同义），非数字**报 USAGE(2) 不静默忽略**；落在垃圾里的偏移**报 NOT_ARCHIVE(3) 且零产物**（绝不偷偷解默认那处）；一次给两个文件**直接拒绝**（一个偏移不可能同时对上两个包，提示「它说的是这一个文件里的第几处」）；放进 `cli_spec.rs` 的 `OPTS` 表，帮助 / man 页 / 三份补全全部自动跟上（对外长选项 46、内部 3、共 49，`cli_spec_match.sh` 7/7）。**证据**：新探针 `tests/candidate_cli.py` **6/6**（老行为不变 / 换到另一段 / 非法偏移 / 非数字 / 多文件 / 值不被当文件名），已挂进 `tests/all.sh`；顺手把一直没挂的 `tests/t5_candidates.py`（8/8）也挂上。回归：`cargo test` 404 过 0 挂、`clippy` 干净、`flutter test` 109 过、`bash tests/all.sh` **46 通过 / 0 失败 / 5 跳过 / 210 秒** |
 
 **本轮范围说明**：T1~T13 是本轮目标；**T14（474 条文案 + 6 语种 2844 条翻译）与 T15
 单独排**，做完 T13 再定是否连做 —— 用户口径「全搞完」，但这两项的体量是「两天级」，
@@ -44,12 +47,12 @@
 
 | 块 | 状态 | 证据 |
 |---|---|---|
-| 引擎·解压 | ✅ 完成 | 12 条能力组合（`--caps` 实测）；**53 个 `.rs` / 30,774 行**（顶层 41 个） |
+| 引擎·解压 | ✅ 完成 | 12 条能力组合（`--caps` 实测）；**53 个 `.rs` / 31,209 行**（顶层 41 个） |
 | 引擎·打包与伪装 | ✅ 完成 | MP4 free 原子 + 其他外壳尾部追加 + 自解压 sfx + 分卷 + 干扰数据/假签名 |
 | 引擎·可靠性 | ✅ 完成 | 原子写入（六条落盘路径）/ 断点续传 / 救援 / packSize 封顶 / 路径穿越 / 炸弹双闸；fuzz **只读入口 2.38 亿次 + 写盘路径 7.2 万次，均零崩溃** |
-| 测试与护栏 | ✅ 完成 | `cargo test` **401 通过 / 0 失败 / 1 ignored**（2026-10-30 实跑）；`tests/all.sh` **42 通过 / 0 失败 / 5 跳过 / 200 秒**；**45 个探针脚本** + 12 份契约 golden |
-| 命令行（CLI） | ✅ 完成 | **43 个长选项**（实测 `--help`）；补全三份 + man 页均由 `cli_spec.rs` 自动生成 |
-| 图形界面（Linux） | 🟡 **页面齐、缺口在入口** | 5 页（首页/预览树/打包/历史/设置）+ 托盘；**18 个 dart / 6,186 行**；`flutter test` **89 条**。**缺口**：S5 空间不足、S10 多候选、8 项引擎能力没入口、无多语言/无障碍（见「🔨 本轮施工进度」T4~T8/T11/T14） |
+| 测试与护栏 | ✅ 完成 | `cargo test` **404 通过 / 0 失败 / 1 ignored**（2026-10-31 实跑）；`tests/all.sh` **46 通过 / 0 失败 / 5 跳过 / 210 秒**；**49 个探针脚本** + 12 份契约 golden |
+| 命令行（CLI） | ✅ 完成 | **46 个对外长选项**（另有 3 个内部选项，共 49；实测 `--dump-cli-spec`）；补全三份 + man 页均由 `cli_spec.rs` 自动生成 |
+| 图形界面（Linux） | 🟡 **页面齐、缺口在入口** | 5 页（首页/预览树/打包/历史/设置）+ 托盘；**18 个 dart / 6,661 行**；`flutter test` **109 条**。**缺口**：S5 空间不足、S10 多候选、8 项引擎能力没入口、无多语言/无障碍（见「🔨 本轮施工进度」T4~T8/T11/T14） |
 | 装包与发版 | ✅ 完成 | deb + 两档 tar.gz；菜单认领 **14 种格式**；`test-packages.sh` 37 项；**0.9.34 已装机**；AppStream 元数据 + 7 尺寸图标已接进出包脚本 |
 | 协议面 | ✅ 完成 | **11 个命令 / 30 种事件 / 14 种 MIME**；协议只加不删 |
 | 多平台·Windows CLI | 🟡 **引擎全绿，缺分发包** | 真 Windows 机器上编过、跑过、解过包；W1~W10 十项审计全清（时区/续传/回收站/密码回显/内存闸/波浪号/单测/回归/界面）；`docs/BUILD-Windows.md` 已写。**剩**：Windows 分发包（zip/安装器）要在他自己的 Windows 机上出 |
@@ -83,13 +86,13 @@
 <details><summary>这些数字是怎么来的（复现命令）</summary>
 
 ```bash
-cargo test --quiet          # 388 通过 / 0 失败 / 1 ignored
-bash tests/all.sh           # 41 通过 / 0 失败 / 5 跳过（约 191–203 秒）
+cargo test --quiet          # 404 通过 / 0 失败 / 1 ignored（371 + 31 + 2）
+bash tests/all.sh           # 46 通过 / 0 失败 / 5 跳过（约 210 秒）
 yshjy --caps                # 12 条格式能力组合
-yshjy --help | grep -oE '\--[a-z0-9-]+' | sort -u | wc -l   # 43
-find src -name '*.rs' | wc -l ; find src -name '*.rs' -exec cat {} + | wc -l   # 52 / 29584
-find gui/lib -name '*.dart' | wc -l ; find gui/lib -name '*.dart' -exec cat {} + | wc -l  # 17 / 5732
-ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            # 44 / 12
+yshjy --dump-cli-spec | python3 -c 'import json,sys;d=json.load(sys.stdin)["options"];print(len(d), sum(1 for o in d if not o["internal"]))'   # 49 49·46 对外
+find src -name '*.rs' | wc -l ; find src -name '*.rs' -exec cat {} + | wc -l   # 53 / 31209
+find gui/lib -name '*.dart' | wc -l ; find gui/lib -name '*.dart' -exec cat {} + | wc -l  # 18 / 6661
+ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            # 49 / 12
 ```
 </details>
 
