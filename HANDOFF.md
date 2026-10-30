@@ -25,7 +25,7 @@
 > **防回归**：判断收进 `humanize.dart` 的 `codeNeedsPassword` / `codeCanRescue`，
 > 新增界面测试 **21 条**（humanize 10 + password_box_widget 11），**反向验证过**
 > （改回老写法当场红 4 条）。`flutter test` 67 过 / `cargo test` **390 过** /
-> `bash tests/all.sh` **41 过 / 0 挂**。全文见 `CHANGELOG.md` 的 `[未发布]` 顶部新小节。
+> `bash tests/all.sh` **41 过 / 0 挂**。全文见 `CHANGELOG.md` 的 `[0.9.34]` 顶部小节。
 > **同步方式记一笔**：`git fetch` 直接读移动硬盘仓库会报"所有权可疑"（NTFS ro 挂载 owner=root，
 > 且 `-c safe.directory` 传不进 upload-pack 子进程）→ 在盘上 `git bundle create 增量.bundle e494259..92b71f7`
 > 再本机 `git fetch bundle`，64K 就够，别为此改全局 gitconfig。
@@ -45,7 +45,7 @@
 
 > **2026-10-30 深夜 · Windows 审计清单 W1~W10 全部清账（ZCode 自主夜跑，老板授权直接提交）** ——
 > 审计表（`docs/TODO.md`「2026-10-30 Windows 实测审计」）**十项全 ✅**，每项一个提交、
-> 证据全文在 `CHANGELOG.md` 的「[未发布] 2026-10-30」：
+> 证据全文在 `CHANGELOG.md` 的「[0.9.34] 2026-10-30」：
 > **W1 时区**（6c430f5）→ **W2 续传两层根因**（94dd695，append 权限 + canonicalize 指纹漂移）→
 > **W4 密码回显**（2b15deb，dialoguer::Password）→ **W5 内存闸**（b14d42e，外壳注册探针）→
 > **W6 波浪号**（641a8ca）→ **W8 单测清零**（8474087，挖出 WSL bash 假绿）→
