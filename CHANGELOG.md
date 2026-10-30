@@ -2,6 +2,33 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-30 夜（清 `docs/AUDIT-GAP.md` 对账欠账 · 第 2 批：界面 S5 + 真机撞出的两个协议 bug）
+
+**这一段是"引擎修了、界面还是死路"的收尾。** 第 1 批让引擎真发 `SpaceShortage`
+事件并在错误里带 `need`/`available`；这一批让界面真的把它们显示出来 —— 做完真机点了一次，
+结果真机当场撞出两个只看代码看不出来的 bug，都在这里修掉了。
+
+- **界面（S5 空间不足）**：`home_page.dart` 新增错误卡片，「需要 3.00 GB / 目标盘只有 1.94 GB /
+  还差 1.06 GB」+ 三个按钮：**换个位置**（改输出目录重解）、**只解压部分**（回预览树勾选）、
+  **继续试试**（协议 `extract.force`）。第三个按钮以前根本传不进去 —— `engine.dart` 的
+  `extract()` 一个参数都没给协议，所以 `--force` 在界面上是死设置。
+- **真机 bug ①：协议层把 detail 吞了。** 引擎的 `JobOutcome.error_detail` 已经有了，
+  但 `api.rs` 在失败时**无条件重新 identify 一次**再用结果兜底 —— 而空间不足时 identify 是
+  **成功**的，于是走进兜底分支、`detail` 全丢。界面只能显示「清一点空间再试」，三个数一个都没有。
+  修法：`error_detail` 非空就直接带出去。新增探针 `tests/t2_space_detail.py`（默认跳过，
+  设 `YSHJY_SPACE_PROBE_PKG=<3GB包>` 才跑）卡住这条。
+- **真机 bug ②：错误页误报「这个文件看起来是：认不出的文件」。** 包本身好好的，这句话会把人
+  引去重新下载。修法：空间不足时不给类型提示（和分卷中间块同样的道理）。
+- **界面兜底**：`SPACE_SHORTAGE` 事件先到、错误对象后到，两个数会在事件里再存一份，
+  协议层哪天又漏 detail 也不至于只剩一句空话。
+- **测试**：`gui/test/space_shortage_widget_test.dart` 10 条（三数 / int 与字符串都要认 /
+  缺参数不乱猜 / 按钮齐 / force 代价说明 / 不许说「认不出的文件」/ 别的错误码不许出现这张卡）。
+  反向验证过：把判断改成 `if (false)`，5 条正向用例当场全红。
+
+真机证据：造「解压后 3 GB、压缩后 3 MB」的包放 `/run/user/1000`（tmpfs 2 GB），点开始解压 →
+界面如实显示三个数。截图 `screenshots/space-shortage.jpg`。
+回归：`cargo test` 401 过 / `tests/all.sh` **43 过 0 挂 5 跳** / `flutter test` 99 过。
+
 ## [未发布] · 2026-10-30 夜（清 `docs/AUDIT-GAP.md` 对账欠账 · 第 1 批：引擎两条）
 
 > 由来：`docs/AUDIT-GAP.md` 逐层对账查出「界面是短板、台账失真、一个真死配置」。

@@ -160,6 +160,7 @@ if [ -n "$BIN" ]; then
   run "干扰数据/假签名（decoy.sh）" bash tests/decoy.sh "$BIN"
   # caps 按格式声明：协议 hello.formats 与 CLI --caps 必须同源（手抄第二份真源的老病）
   run "能力表同源（caps_protocol.py）" env YSHJY_BIN="$BIN" python3 tests/caps_protocol.py "$BIN"
+  run "空间不足 detail（t2_space_detail.py）" python3 tests/t2_space_detail.py "$BIN" "${YSHJY_SPACE_PROBE_PKG:-/dev/null}"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
     run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"

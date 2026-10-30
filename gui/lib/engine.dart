@@ -381,6 +381,11 @@ class EngineClient {
     List<int>? select,
     /// 文件名编码（P23-3）：gbk / big5 / sjis / utf-8；null 或 'auto' = 引擎自动链
     String? encoding,
+    /// 跳过磁盘空间预检（协议 `extract.force`，CLI 的 `--force`）
+    ///
+    /// 引擎和协议**早就支持**了，界面以前一个参数都没传 —— 于是「空间差一点」在界面上
+    /// 是死路（S5 的第三个按钮「继续试试」就是它）。
+    bool force = false,
   }) async {
     final r = await _call({
       'cmd': 'extract',
@@ -396,6 +401,8 @@ class EngineClient {
       // 文件名编码（P23-3）：「自动」不传，交给引擎的自动链
       if (encoding != null && encoding.isNotEmpty && encoding != 'auto')
         'encoding': encoding,
+      // 空间不够但用户要硬试（S5「继续试试」）
+      if (force) 'force': true,
       // 声明「我能处理 ASK_USER」—— 不写的话引擎遇到限额直接失败（协议设计如此）
       if (ask) 'ask': true,
     });

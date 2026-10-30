@@ -297,6 +297,21 @@ pub fn 解压(
         // 为什么重新识别一次：`JobOutcome` 只带 `Outcome::Failed(code)`，刻意不背 detail
         // （批量场景传不动）。identify 是纯读文件头，几毫秒，换来界面能说"缺 xxx.7z.003"。
         if let crate::error::Outcome::Failed(code) = &out.outcome {
+            // 引擎在 `JobOutcome.error_detail` 里已经备好了结构化参数（空间不足的
+            // need / available）→ 直接带出去。以前这里无条件再 identify 一次，
+            // 而空间不足时 identify 是成功的，于是走到下面的兜底分支、detail 全丢 ——
+            // 界面拿不到两个数字，只能说一句「清一点空间再试」（2026-10-30 真机撞到）。
+            if !out.error_detail.is_empty() {
+                let mut detail = serde_json::Map::new();
+                for (k, v) in &out.error_detail {
+                    detail.insert(k.clone(), json!(v));
+                }
+                return Err(json!({
+                    "code": code.as_str(),
+                    "note": out.note,
+                    "detail": detail,
+                }));
+            }
             let sink2: Arc<dyn EventSink> = Arc::new(crate::event::NullSink);
             let ctx2 = UnpackCtx::new(1, sink2);
             if let Err(e) = crate::job::identify(Path::new(路径), &ctx2) {
