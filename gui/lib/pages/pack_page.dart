@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../engine.dart';
 import '../humanize.dart';
 import '../notify.dart';
+import '../pack_naming.dart';
 import '../platform_paths.dart';
 
 /// 打包页：把文件/文件夹做成"能播放的伪装包"
@@ -95,7 +96,7 @@ class _PackPageState extends State<PackPage> {
         if (!_inputs.contains(f.path)) _inputs.add(f.path);
       }
       // 名字跟着当前输入走；用户手动挑过输出位置就不再覆盖
-      if (!_outUserPicked) _out = _suggestOut(_inputs.first);
+      if (!_outUserPicked) _out = suggestOut(_inputs.first, _ext);
     });
   }
 
@@ -104,7 +105,7 @@ class _PackPageState extends State<PackPage> {
     if (dir == null) return;
     setState(() {
       if (!_inputs.contains(dir)) _inputs.add(dir);
-      if (!_outUserPicked) _out = _suggestOut(dir);
+      if (!_outUserPicked) _out = suggestOut(dir, _ext);
     });
   }
 
@@ -116,27 +117,6 @@ class _PackPageState extends State<PackPage> {
           ? (_sfxKind == 'linux' ? 'sh' : 'exe')
           : (_coverExt.isEmpty ? 'mp4' : _coverExt));
 
-  /// 从路径里取小写扩展名（没有就空串）
-  String _extOf(String path) {
-    final base = path.split('/').last;
-    final dot = base.lastIndexOf('.');
-    return dot > 0 ? base.substring(dot + 1).toLowerCase() : '';
-  }
-
-  /// 把输出名的扩展名换成 `ext`（保留目录和主名）
-  String _withExt(String path, String ext) {
-    final dot = path.lastIndexOf('.');
-    final slash = path.lastIndexOf('/');
-    final stem = dot > slash ? path.substring(0, dot) : path;
-    return '$stem.$ext';
-  }
-
-  String _suggestOut(String first) {
-    final base = first.split('/').last;
-    final stem = base.contains('.') ? base.substring(0, base.lastIndexOf('.')) : base;
-    final dir = first.substring(0, first.lastIndexOf('/') + 1);
-    return '$dir$stem.$_ext';
-  }
 
   /// 挑伪装文件：任意类型都行（不设白名单）。
   ///
@@ -151,12 +131,12 @@ class _PackPageState extends State<PackPage> {
     setState(() {
       _coverPath = f.path;
       _coverSize = size;
-      final ext = _extOf(f.path);
+      final ext = extOf(f.path);
       _coverExt = ext.isEmpty ? 'bin' : ext;
       if (_out != null) {
-        _out = _withExt(_out!, _coverExt);
+        _out = withExt(_out!, _coverExt);
       } else if (_inputs.isNotEmpty) {
-        _out = _suggestOut(_inputs.first);
+        _out = suggestOut(_inputs.first, _ext);
       }
     });
   }
@@ -169,9 +149,9 @@ class _PackPageState extends State<PackPage> {
       _outUserPicked = true;
       if (_mode == 'plain') {
         // 普通压缩产物就是 ZIP，名字必须对得上（用户手打 .7z 也不让）
-        _out = _withExt(loc.path, 'zip');
+        _out = withExt(loc.path, 'zip');
       } else {
-        _out = _withExt(loc.path, _ext);
+        _out = withExt(loc.path, _ext);
       }
     });
   }
@@ -215,8 +195,8 @@ class _PackPageState extends State<PackPage> {
     try {
       // 普通压缩产物永远是 ZIP；伪装产物扩展名必须和外壳一致
       final out = _mode == 'plain'
-          ? _withExt(_out!, 'zip')
-          : _withExt(_out!, _ext);
+          ? withExt(_out!, 'zip')
+          : withExt(_out!, _ext);
       final r = await _client.pack(
         inputs: _inputs,
         out: out,
@@ -301,7 +281,7 @@ class _PackPageState extends State<PackPage> {
                     setState(() {
                       _mode = s.first;
                       // 输出名跟着换扩展名（普通 = .zip；伪装 = 外壳的扩展名）
-                      if (_out != null) _out = _withExt(_out!, _ext);
+                      if (_out != null) _out = withExt(_out!, _ext);
                     });
                   },
           ),
@@ -316,7 +296,7 @@ class _PackPageState extends State<PackPage> {
                   ? null
                   : (v) => setState(() {
                         _sfx = v;
-                        if (_out != null) _out = _withExt(_out!, _ext);
+                        if (_out != null) _out = withExt(_out!, _ext);
                       }),
               secondary: const Icon(Icons.window_outlined, size: 20),
               title: const Text('生成自解压包（双击就解压）', style: TextStyle(fontSize: 13)),
@@ -344,7 +324,7 @@ class _PackPageState extends State<PackPage> {
                           ? null
                           : (v) => setState(() {
                                 _sfxKind = v ?? 'windows';
-                                if (_out != null) _out = _withExt(_out!, _ext);
+                                if (_out != null) _out = withExt(_out!, _ext);
                               }),
                     ),
                   ],
@@ -691,7 +671,7 @@ class _PackPageState extends State<PackPage> {
               children: [
                 TextButton.icon(
                   key: const ValueKey('open-out-dir'),
-                  onPressed: () => openDirectory(_parentOf(outPath)),
+                  onPressed: () => openDirectory(parentOf(outPath)),
                   icon: const Icon(Icons.folder_open, size: 16),
                   label: const Text('打开所在文件夹', style: TextStyle(fontSize: 12)),
                 ),
@@ -709,12 +689,6 @@ class _PackPageState extends State<PackPage> {
         ],
       ),
     );
-  }
-
-  /// 取父目录（Windows 的 `\` 和 Unix 的 `/` 都要认）
-  String _parentOf(String path) {
-    final i = path.lastIndexOf(RegExp(r'[/\\]'));
-    return i > 0 ? path.substring(0, i) : path;
   }
 
   String _size(int bytes) {
