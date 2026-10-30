@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../humanize.dart';
 import '../notify.dart';
+import '../platform_paths.dart';
 
 /// 打包页：把文件/文件夹做成"能播放的伪装包"
 ///
@@ -26,6 +28,11 @@ class _PackPageState extends State<PackPage> {
 
   final List<String> _inputs = [];
   String? _out;
+  /// 用户自己挑过输出位置？（挑过就不再自动改名字，尊重用户选择）
+  ///
+  /// 以前 `_out` 用 `??=` 赋值，结果是「只建议一次」，换输入文件后输出名还停在上一个，
+  /// 文件按旧名生成 → 用户按界面上的新名去找，当然找不到（2026-10-30 用户报的）。
+  bool _outUserPicked = false;
   /// 打包模式（GUI-PLAN §5.2②）：普通压缩是默认，伪装是特殊功能
   String _mode = 'plain';
   /// 用户挑的伪装文件（外壳）：任意类型，用户选什么就是什么
@@ -87,7 +94,8 @@ class _PackPageState extends State<PackPage> {
       for (final f in files) {
         if (!_inputs.contains(f.path)) _inputs.add(f.path);
       }
-      _out ??= _suggestOut(_inputs.first);
+      // 名字跟着当前输入走；用户手动挑过输出位置就不再覆盖
+      if (!_outUserPicked) _out = _suggestOut(_inputs.first);
     });
   }
 
@@ -96,7 +104,7 @@ class _PackPageState extends State<PackPage> {
     if (dir == null) return;
     setState(() {
       if (!_inputs.contains(dir)) _inputs.add(dir);
-      _out ??= _suggestOut(dir);
+      if (!_outUserPicked) _out = _suggestOut(dir);
     });
   }
 
@@ -158,6 +166,7 @@ class _PackPageState extends State<PackPage> {
         suggestedName: _out?.split('/').last ?? 'packed.$_ext');
     if (loc == null) return;
     setState(() {
+      _outUserPicked = true;
       if (_mode == 'plain') {
         // 普通压缩产物就是 ZIP，名字必须对得上（用户手打 .7z 也不让）
         _out = _withExt(loc.path, 'zip');
@@ -643,6 +652,8 @@ class _PackPageState extends State<PackPage> {
     final cover = r['cover']?.toString();
     final coverName = cover?.split('/').last;
     final sfx = r['sfx'] == true;
+    // 引擎返回的**真实落地路径**（2026-10-30 起 pack 命令带 out 字段）
+    final outPath = r['out']?.toString();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       margin: const EdgeInsets.only(bottom: 8),
@@ -650,7 +661,10 @@ class _PackPageState extends State<PackPage> {
         color: cs.primaryContainer.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
         sfx
             ? '✅ 自解压包完成：${_size(size)}，$entries 个条目\n'
                 '把这个 exe 发给别人（Windows），双击就会解压到它旁边的新文件夹，不用装任何软件。'
@@ -661,9 +675,46 @@ class _PackPageState extends State<PackPage> {
                     '${layout == 'FreeAtom' ? 'free 原子布局（推荐）' : '尾部追加布局'}\n'
                     '${coverName == null ? '' : '外壳：$coverName\n'}'
                     '外壳文件原样保留，双击打开的还是它；压缩数据藏在尾部，拖进杨三海解压就能还原。',
-        style: const TextStyle(fontSize: 12, height: 1.5),
+            style: const TextStyle(fontSize: 12, height: 1.5),
+          ),
+          // 用户 2026-10-30 报「显示输出位置但打开没看到文件」：
+          // 之前卡片只说「完成」，不告诉人文件在哪，也没有一键打开 —— 补上。
+          if (outPath != null && outPath.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SelectableText(
+              '文件在这儿：$outPath',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 4,
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('open-out-dir'),
+                  onPressed: () => openDirectory(_parentOf(outPath)),
+                  icon: const Icon(Icons.folder_open, size: 16),
+                  label: const Text('打开所在文件夹', style: TextStyle(fontSize: 12)),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: outPath));
+                    Notifier.send('已复制', '输出文件的完整路径已复制到剪贴板');
+                  },
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('复制路径', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
+  }
+
+  /// 取父目录（Windows 的 `\` 和 Unix 的 `/` 都要认）
+  String _parentOf(String path) {
+    final i = path.lastIndexOf(RegExp(r'[/\\]'));
+    return i > 0 ? path.substring(0, i) : path;
   }
 
   String _size(int bytes) {

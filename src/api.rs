@@ -667,6 +667,10 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
     let post_rep = crate::pack_post::postprocess(Path::new(输出), &post).ok();
 
     Ok(json!({
+        // 真实落地路径：界面必须显示「文件到底在哪」并给「打开所在文件夹」——
+        // 以前界面只能拿自己算的建议路径猜，输入换了名字不更新时用户就找不到文件
+        // （2026-10-30 用户报的「显示输出位置但打开没看到文件」）
+        "out": 输出,
         "mode": if 普通压缩 { "plain" } else { "disguise" },
         "sfx": 自解压.is_some(),
         "sfx_kind": 自解压,
