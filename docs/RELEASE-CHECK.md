@@ -1,6 +1,39 @@
 # 发布检查（T5）—— 逐项核对
 
-## 0.9.31 发布记录（2026-10-29，最新一次）
+## 0.9.32 发布记录（2026-10-30，最新一次）
+
+> 内容：GUI「加密包是死路」修复（含预览页直接给解压码输入框）+ 从移动硬盘拉回的
+> Windows 战役 W1~W9。**这一轮界面 Dart 改了两次**，所以界面重编了两遍、包也重出了一遍
+> ——`release.sh` / `build-deb.sh` 遇到已存在的产物会**直接报错不覆盖**，
+> 必须先把旧产物挪走再跑，否则会打出「tar.gz 是新的、deb 是旧的」这种不一致组合。
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| 五处版本号同步 | `Cargo.toml` / `ffi/Cargo.toml` / `gui/pubspec.yaml` / `docs/PROTOCOL.md`（2 处）/ `CHANGELOG.md` 段落标题；`docs/yshjy.1` 由打包脚本带出 | 5/5 |
+| 引擎 release 构建 | `cargo build --release` | 成功（22 秒，9.0M） |
+| 界面 release 构建 | `cd gui && ~/flutter/bin/flutter build linux --release` | 成功（第二次含预览页输入框） |
+| 出两档 tar.gz | `bash scripts/release.sh` | 各 3.7M |
+| 出 deb | `bash scripts/build-deb.sh` | `dist/yshjy_0.9.32_amd64.deb` 9.9M，自查 14 种格式通过 |
+| 验包 | `bash scripts/test-packages.sh` | **37 项全绿** |
+| 装机 | `sudo apt install ./dist/yshjy_0.9.32_amd64.deb` | 0.9.31 → 0.9.32 |
+
+**装机后实测**（用 `/usr/bin/yshjy` + `/usr/lib/yshjy/gui` 本身）：
+
+- `dpkg -l yshjy` = **0.9.32**、`--version` = 0.9.32
+- 桌面菜单认领 **14 种格式**（按 `build-deb.sh` 算法数 MIME 总数，别用手数 `x-` 开头那种）
+- `bash tests/pick.sh /usr/bin/yshjy` **11 项全绿**
+- 装机版界面 `libapp.so` 核对：老废码 `PASSWORD_REQUIRED` **0 次**、`NEED_PASSWORD` 在、
+  预览页新文案「这个包有」「留空也行」在
+  （**坑**：Dart AOT 里中文按 **UTF-16LE** 存，`strings`/UTF-8 搜中文一律 0 次，会误判成"没编进去"）
+- 真打包 `ys 目录 -o 伪装视频.mp4` → `file` 认成 `ISO Media, MP4`；带码解压 AES 包 →
+  **5 个文件 sha256 与源完全一致**
+- 引擎回归 `cargo test` **390 过 / 0 挂 / 1 ignored**；`bash tests/all.sh` **41 过 / 0 挂 / 5 跳过**
+
+**本机环境坑**：`flutter test` 必须带 `XDG_CONFIG_HOME=<临时目录>`（`tests/all.sh` 就是这么跑的），
+否则 `app_settings_test.dart` 的安全闸会 `fail`「拒绝动用户真实配置」，七条全红——
+**那不是代码问题**。
+
+## 0.9.31 发布记录（2026-10-29）
 
 > 只改了一处：`--pick` 被 Ctrl-C 打断后的光标复原（引擎 + 探针，界面逻辑一行没动）。
 > 但版本号会进界面状态栏，所以界面也重编了一遍。

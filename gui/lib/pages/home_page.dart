@@ -574,6 +574,10 @@ class _HomePageState extends State<HomePage> {
       _progress = null;
       _notes.clear();
       _errorCode = null;
+      // 换包必须清掉上一个包的解压码 —— 否则旧码会静默套到新包上，
+      // 表现成「明明没输密码却报解压码不对」（2026-10-30 顺手补）
+      _password = null;
+      _pwCtrl.clear();
     });
     try {
       final pv = await _client.list(path);
@@ -1478,6 +1482,57 @@ class _HomePageState extends State<HomePage> {
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ),
+        // 预览阶段就把「解压码」摆出来（2026-10-30 用户真机反馈）：
+        // 以前加密包非得点「开始解压」、失败一次，才在错误页见到输入框；
+        // 可引擎在预览里早就给了 encryptedCount + enc_kind，没理由不提前问。
+        if (pv.encryptedCount > 0) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _pwCtrl,
+            obscureText: !_showPw,
+            onChanged: (v) {
+              final t = v.trim();
+              // 不用 setState：这个字段不影响本帧画面
+              _password = t.isEmpty ? null : t;
+            },
+            decoration: InputDecoration(
+              labelText: '解压码（这个包有 ${pv.encryptedCount} 个文件加密）',
+              hintText: '留空也行，点「开始解压」我会再问你一次',
+              isDense: true,
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.key, size: 18),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _showPw ? Icons.visibility_off : Icons.visibility,
+                  size: 18,
+                ),
+                tooltip: _showPw ? '隐藏解压码' : '显示解压码',
+                onPressed: () => setState(() => _showPw = !_showPw),
+              ),
+            ),
+          ),
+          if (_recentPw.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final pw in _recentPw)
+                    ActionChip(
+                      avatar: const Icon(Icons.history, size: 14),
+                      label: Text(pw, style: const TextStyle(fontSize: 12)),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        _pwCtrl.text = pw;
+                        _password = pw;
+                        setState(() {});
+                      },
+                    ),
+                ],
+              ),
+            ),
+        ],
         if (_notes.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),

@@ -10,7 +10,45 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yshjy_gui/engine.dart';
 import 'package:yshjy_gui/pages/home_page.dart';
+
+/// 造一份预览结果（加密包：3 个文件加密、AES-256）
+Preview encPreview({int encryptedCount = 3}) => Preview(
+      format: 'zip',
+      complete: true,
+      totalSize: 100,
+      encryptedCount: encryptedCount,
+      encKind: encryptedCount > 0 ? 'aes256' : null,
+      entries: [
+        EntryItem(
+          index: 1,
+          path: '说明.txt',
+          size: 100,
+          packed: 90,
+          isDir: false,
+          encrypted: encryptedCount > 0,
+          risky: false,
+        ),
+      ],
+      hints: const [],
+    );
+
+/// 进「预览页」（不是失败页）
+Future<void> pumpPreview(WidgetTester tester, {int encryptedCount = 3}) async {
+  tester.view.physicalSize = const Size(1200, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    home: Scaffold(
+      body: HomePage(
+        autoStart: false,
+        debugPreview: encPreview(encryptedCount: encryptedCount),
+      ),
+    ),
+  ));
+  await tester.pump();
+}
 
 /// 直接灌一个失败态（生产代码永远不传，见 HomePage.debugErrorCode）
 Future<void> pumpError(WidgetTester tester, String code, {String note = ''}) async {
@@ -76,6 +114,20 @@ void main() {
     testWidgets('NEED_PASSWORD 不给救援按钮', (tester) async {
       await pumpError(tester, 'NEED_PASSWORD');
       expect(find.text('试着救出来（索引坏了也能抢救）'), findsNothing);
+    });
+  });
+
+  group('预览页就该给解压码入口（用户 2026-10-30 真机反馈）', () {
+    testWidgets('加密包一预览就能输密码，不用等解压失败', (tester) async {
+      await pumpPreview(tester);
+      expect(find.textContaining('解压码（这个包有 3 个文件加密）'), findsOneWidget,
+          reason: '引擎预览里已经给了 encryptedCount，没理由拖到失败才问');
+      expect(find.byType(TextField), findsWidgets);
+    });
+
+    testWidgets('没加密的包不乱出现解压码框', (tester) async {
+      await pumpPreview(tester, encryptedCount: 0);
+      expect(find.textContaining('解压码（这个包有'), findsNothing);
     });
   });
 }

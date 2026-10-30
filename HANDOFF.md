@@ -16,9 +16,13 @@
 > **同步方式记一笔**：`git fetch` 直接读移动硬盘仓库会报"所有权可疑"（NTFS ro 挂载 owner=root，
 > 且 `-c safe.directory` 传不进 upload-pack 子进程）→ 在盘上 `git bundle create 增量.bundle e494259..92b71f7`
 > 再本机 `git fetch bundle`，64K 就够，别为此改全局 gitconfig。
-> **下一步**：① 出包 0.9.32 装机（要不要出等用户发话，测试已全绿）；
-> ② 真机 GUI 肉眼验一次加密包（`flutter build linux --release` 后拖包）；
-> ③ fsync 那笔账（表尾 🔴 那条）仍未动。
+> **已发版**：**0.9.32 已装机**（2026-10-30，含「预览页直接给解压码输入框」那一版）。
+> 装机后四项全过：`dpkg`/`--version` = 0.9.32、菜单 14 种格式、`tests/pick.sh` 11 项全绿、
+> 装机版真打包（`file` 认成 MP4）＋带码解压 AES 包 **5 个文件 sha256 与源完全一致**。
+> 发版记录见 `docs/RELEASE-CHECK.md` 顶部；`test-packages.sh` 37 项全绿。
+> **下一步**：① **fsync 那笔账**（`docs/TODO.md` 表尾 🔴 那条）仍未动 —— Linux 侧最后一个
+> 真会让用户丢数据的坑（报 ✅ 时数据还在内存里，立刻拔盘会全灭）；
+> ② Android / macOS / iOS 三平台未开始；③ 界面只有中文（架构决定，非缺陷）。
 
 > **2026-10-30 深夜 · Windows 审计清单 W1~W10 全部清账（ZCode 自主夜跑，老板授权直接提交）** ——
 > 审计表（`docs/TODO.md`「2026-10-30 Windows 实测审计」）**十项全 ✅**，每项一个提交、
