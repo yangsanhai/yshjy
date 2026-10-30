@@ -284,8 +284,18 @@ JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryPar
 
 ## 错误码
 
-见 `src/error.rs` 的 `ErrorCode`（稳定字符串：`NOT_ARCHIVE` / `PASSWORD_REQUIRED` /
-`PASSWORD_WRONG` / `IO` / `PERMISSION_DENIED` / `CANCELLED` / `INTERNAL` …）。
+见 `src/error.rs` 的 `ErrorCode`（稳定字符串，**17 个，全表以那里为准**）：
+`PATH_NOT_FOUND` / `INVALID_ARGUMENT` / `NOT_ENOUGH_SPACE` / `PERMISSION_DENIED` /
+`PATH_TOO_LONG` / `DEST_IS_FILE` / `NEED_PASSWORD` / `WRONG_PASSWORD` / `HEAD_ENCRYPTED` /
+`NOT_ARCHIVE` / `TRUNCATED` / `MISSING_VOLUME` / `DATA_LOST` / `ENCRYPTED_UNBREAKABLE` /
+`VIDEO_UNPLAYABLE` / `CANCELLED` / `INTERNAL`。
+
+> ⚠ **这份表以前写错过，别再凭印象补**：老版本节写的是 `PASSWORD_REQUIRED` /
+> `PASSWORD_WRONG` / `IO` —— **三个码引擎里都不存在**。界面照着它写判断条件，
+> 结果加密包在界面上永远不出现解压码输入框（2026-10-30 真机撞上并修掉）。
+> 改码表一律对照 `ErrorCode::as_str()`；界面侧判断别手写码名，
+> 走 `gui/lib/humanize.dart` 的 `codeNeedsPassword` / `codeCanRescue`（有单测）。
+
 新增错误码是**兼容变更**；前端遇到不认识的码，用一句通用文案 + `note` 兜底显示即可。
 
 ## 一次完整会话长什么样
