@@ -225,6 +225,7 @@ risky_entry = "executable files were extracted — check the source before runni
 slow_path = "took the slow path (full-file scan)"
 password_from_notes = "the password was found in the notes beside it"
 partial_data = "data is incomplete"
+movable_not_verified = "Target is a removable device: use Eject (Safely Remove) before unplugging, or data may still be unwritten"
 hidden_at = "the archive sits inside the file; located at its real position"
 rebuilt_index = "the index was damaged; the listing was rebuilt from headers"
 offset_corrected = "the offsets were wrong; corrected automatically"
@@ -236,6 +237,7 @@ jobs = "Parallel jobs"
 out_dir = "Default output dir"
 conflict = "Name conflict"
 ratio = "Max compression ratio"
+flush_movable = "Flush check on removable devices (off by default)"
 passwords = "Password list"
 follow_system = "(follow system)"
 beside_package = "(next to the archive)"
@@ -253,3 +255,15 @@ report_hint = "   To report: run `yshjy --report` (it bundles this crash log aut
 not_your_fault = "   Note: this is not your mistake — your files were not modified."
 save_failed = "💥 The program crashed, and the details could not be saved ({err})"
 task_saved = "   ⚠ This file failed and was skipped (details: {path})"
+
+[result.hint]
+movable_eject = "   Tip: target is a removable device — use Eject (Safely Remove) before unplugging, otherwise data still in the write cache is lost"
+movable_flushed = "   ✅ Data confirmed written to the device ({secs}s) — safe to unplug"
+movable_cancelled = "   ⚠️ Flush check cancelled: data may still be unwritten — use Eject first"
+movable_unsupported = "   ⚠️ Cannot verify flushing on this machine — use Eject before unplugging"
+
+[flush]
+progress = "Waiting for the device to finish writing: about {mb} MB pending ({secs}s) — do not unplug"
+done = "✅ Flush verified ({secs}s): data is on the device, safe to unplug"
+cancelled = "⚠️ Flush check cancelled ({secs}s): data may still be unwritten"
+unsupported = "⚠️ Flush check unavailable on this machine (no sync command)"

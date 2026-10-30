@@ -48,6 +48,8 @@ const engineDiagCodes = <String>[
   'SLOW_PATH',
   'PASSWORD_FROM_NOTES',
   'PARTIAL_DATA',
+  // 2026-10-30 新增：目标是移动设备但没开落盘检验（开关关着也要提醒先安全弹出）
+  'MOVABLE_NOT_VERIFIED',
 ];
 
 void main() {
@@ -61,7 +63,7 @@ void main() {
       expect(missing, isEmpty, reason: '这些码没有文案，用户会看到"原因不明"：$missing');
     });
 
-    test('诊断码 10 个都有专属人话', () {
+    test('诊断码 11 个都有专属人话', () {
       const fallback = '有提示（不影响使用）';
       final missing = <String>[];
       for (final code in engineDiagCodes) {

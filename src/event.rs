@@ -77,6 +77,11 @@ pub enum DiagnosticCode {
     PasswordFromNotes,
     /// 数据只有一部分（残包，只能救多少算多少）
     PartialData,
+    /// 目标在移动设备上，但没做落盘检验（提示：拔盘前先「安全弹出」）
+    ///
+    /// 开关关着时也发 —— 没开检验的人照样会「看到 ✅ 就拔」，
+    /// 不提这一句，等于这个功能什么都没做。
+    MovableNotVerified,
 }
 
 impl DiagnosticCode {
@@ -93,6 +98,7 @@ impl DiagnosticCode {
             DiagnosticCode::SlowPath => "SLOW_PATH",
             DiagnosticCode::PasswordFromNotes => "PASSWORD_FROM_NOTES",
             DiagnosticCode::PartialData => "PARTIAL_DATA",
+            DiagnosticCode::MovableNotVerified => "MOVABLE_NOT_VERIFIED",
         }
     }
 }
@@ -300,6 +306,29 @@ pub enum Event {
         /// 给开发者的备注（进日志，不进用户文案）
         note: String,
     },
+    /// 移动设备落盘检验的进度
+    ///
+    /// 只有三个条件同时成立才会出现（见 [`crate::config::Safety::flush_movable`]、
+    /// [`crate::flush::is_removable`]）：用户开了开关 + 解压出了东西 + 目标在移动设备上。
+    /// 外壳收到后必须**同时**显示「正在检验…请勿拔出设备」和读数 ——
+    /// 等待期间硬拔照样会丢，这一点引擎管不了。
+    FlushProgress {
+        /// 任务号
+        job: u64,
+        /// 还没真写进设备的字节数（全系统脏页，一路往下降）
+        pending: u64,
+        /// 已经等了多久（毫秒）—— 让用户看出「在动」，不是卡死
+        elapsed_ms: u64,
+    },
+    /// 落盘检验结束（结论类事件，永不丢弃）
+    FlushFinished {
+        /// 任务号
+        job: u64,
+        /// 结局：已确认写进设备 / 用户取消 / 本机没法等
+        outcome: crate::flush::FlushOutcome,
+        /// 本次等待耗时（毫秒）—— **单独算，不混进解压用时**
+        millis: u64,
+    },
 }
 
 impl Event {
@@ -320,7 +349,9 @@ impl Event {
             | Event::SpaceShortage { job, .. }
             | Event::AskUser { job, .. }
             | Event::Resumed { job, .. }
-            | Event::Diagnostic { job, .. } => *job,
+            | Event::Diagnostic { job, .. }
+            | Event::FlushProgress { job, .. }
+            | Event::FlushFinished { job, .. } => *job,
         }
     }
 
@@ -333,6 +364,7 @@ impl Event {
             Event::ScanProgress { .. }
                 | Event::ExtractProgress { .. }
                 | Event::PackProgress { .. }
+                | Event::FlushProgress { .. }
         )
     }
 
@@ -354,6 +386,8 @@ impl Event {
             Event::AskUser { .. } => "ASK_USER",
             Event::Resumed { .. } => "RESUMED",
             Event::Diagnostic { .. } => "DIAGNOSTIC",
+            Event::FlushProgress { .. } => "FLUSH_PROGRESS",
+            Event::FlushFinished { .. } => "FLUSH_FINISHED",
         }
     }
 }

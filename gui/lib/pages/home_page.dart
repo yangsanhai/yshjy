@@ -95,6 +95,13 @@ class _HomePageState extends State<HomePage> {
   Progress? _progress;
   String? _current;
   String _stage = '';
+  // ── 移动设备落盘检验（引擎的 FLUSH_PROGRESS / FLUSH_FINISHED）──
+  // 用户 2026-10-30 拍板：只有主动开了开关的人才会看到这一段，
+  // 而且必须给他「有东西在动」—— 关键技术上写 300 MB 要好几分钟，一动不动就是卡死。
+  bool _flushing = false;
+  int _flushPending = 0; // 还没真写进设备的字节数（内核读数，会一路往下降）
+  int _flushSecs = 0; // 已经等了多少秒
+  int _flushPeak = 0; // 见过的最大待写入量：用来算进度条，保证只前进不回退
   ExtractResult? _result;
   String? _errorCode;
 
@@ -248,6 +255,29 @@ class _HomePageState extends State<HomePage> {
           _current = e.current;
           _stage = 'EXTRACT';
           if (p != null) _tickSpeed(p.doneBytes);
+        });
+      case 'FLUSH_PROGRESS':
+        final pending = (e.data['pending'] as num?)?.toInt() ?? 0;
+        final ms = (e.data['elapsed_ms'] as num?)?.toInt() ?? 0;
+        setState(() {
+          _flushing = true;
+          _flushPending = pending;
+          _flushSecs = ms ~/ 1000;
+          if (pending > _flushPeak) _flushPeak = pending;
+        });
+      case 'FLUSH_FINISHED':
+        final outcome = e.data['outcome']?.toString() ?? '';
+        final ms = (e.data['millis'] as num?)?.toInt() ?? 0;
+        final secs = (ms / 1000).toStringAsFixed(1);
+        final text = switch (outcome) {
+          'DONE' => '✅ 落盘检验通过（$secs 秒）：数据已写入设备，可以安全拔出',
+          'CANCELLED' => '⚠️ 落盘检验被取消（$secs 秒）：数据可能还没写完，拔盘前请先「安全弹出」',
+          _ => '⚠️ 本机没法做落盘检验，拔盘前请先「安全弹出」',
+        };
+        setState(() {
+          _flushing = false;
+          _flushPeak = 0;
+          if (!_notes.contains(text)) _notes.add(text);
         });
       case 'DIAGNOSTIC':
         final code = e.data['code']?.toString() ?? '';
@@ -1913,6 +1943,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _progressView() {
+    // 检验落盘阶段单独一屏：这里最要紧的一句话是「请勿拔出设备」
+    if (_flushing) return _flushView();
     final p = _progress;
     final cs = Theme.of(context).colorScheme;
     // 扫描阶段没有 _progress：用 SCAN_PROGRESS 的两个数字画进度条（D1）
@@ -1995,6 +2027,73 @@ class _HomePageState extends State<HomePage> {
                   onPressed: _cancel,
                   icon: const Icon(Icons.stop_circle_outlined),
                   label: Text(_batchOrder.length > 1 ? '取消整批' : '取消'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 落盘检验视图
+  ///
+  /// 用户原话：「只有打开了的人给他一个检验的进度条，这样有个东西就不会让他等待了」。
+  /// 所以这里的进度条是**真读数**（内核还剩多少没写进盘），不是假转圈；
+  /// 数字在降、秒数在涨，用户就能看出「它在干活，不是卡死」。
+  Widget _flushView() {
+    final cs = Theme.of(context).colorScheme;
+    final frac = _flushPeak <= 0
+        ? null
+        : (1 - (_flushPending / _flushPeak)).clamp(0.0, 1.0);
+    return Center(
+      key: const ValueKey('flush'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('正在检验落盘…', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              '文件已经解出来了，现在在等它们真正写进设备。⚠️ 请勿拔出设备。',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(value: frac, minHeight: 10),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '还剩约 ${_size(_flushPending)} 待写入',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                Text(
+                  '已等 $_flushSecs 秒',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '慢速U盘上这一步可能要几分钟（这块盘持续写速约 1-2 MB/s）。'
+              '想停就点「停止等待」——停下来的话，文件还在，但可能有数据没写完。',
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _cancel,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: const Text('停止等待'),
                 ),
               ],
             ),

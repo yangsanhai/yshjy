@@ -182,6 +182,10 @@ if [ -n "$BIN" ]; then
   else
     skip "多任务进度（progress_multi.sh）" "本机 python 没有 pty（Windows），pty 交互只在 Unix 验"
   fi
+  # 移动设备落盘检验（2026-10-30 用户拍板的方案）：
+  #   本机盘不管开关都不等 / 移动设备+关→只提醒不等 / 移动设备+开→等完才报成功
+  #   没有可写移动设备时探针自己明说跳过（退出码 0），不算通过也不算失败
+  run "移动设备落盘检验（flush_movable.sh）" bash tests/flush_movable.sh "$BIN"
 else
   skip "协议探针" "没有可执行文件"
 fi

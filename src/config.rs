@@ -181,6 +181,14 @@ pub struct Safety {
     pub zip_bomb_ratio: u64,
     /// 解出可执行文件时提醒
     pub warn_executables: bool,
+    /// 解压后检验「移动设备是否真落盘」（**默认关**，用户 2026-10-30 拍板）
+    ///
+    /// 打开后：目标在 U 盘 / USB 移动硬盘上时，解压完会等数据真写进设备才报成功，
+    /// 界面显示进度与「请勿拔出设备」。本机硬盘一律不等。
+    /// **为什么默认关**：慢盘上等 300 MB 要几分钟，没开这个开关的人只会以为程序卡死
+    /// （用户原话：「不然别人使用看到这么慢肯定不行」）。
+    /// 判定与等待见 [`crate::flush`]。
+    pub flush_movable: bool,
 }
 
 impl Default for Safety {
@@ -188,7 +196,26 @@ impl Default for Safety {
         Self {
             zip_bomb_ratio: 100,
             warn_executables: true,
+            flush_movable: false,
         }
+    }
+}
+
+/// 读一个「开关」：既认 TOML 布尔（`true`），也认界面存的字符串（`"on"` / `"off"`）
+///
+/// 为什么要兼容两种：设置页的 `_upsertSection` 一律写带引号的字符串，
+/// 而手改 `config.toml` 的人更可能写 `true`。只认一种就会出现
+/// 「在界面开了、引擎不认」这种最难查的错。
+fn 取开关(v: Option<&toml::Value>) -> Option<bool> {
+    let v = v?;
+    if let Some(b) = v.as_bool() {
+        return Some(b);
+    }
+    let s = v.as_str()?.trim().to_ascii_lowercase();
+    match s.as_str() {
+        "on" | "true" | "yes" | "1" => Some(true),
+        "off" | "false" | "no" | "0" => Some(false),
+        _ => None,
     }
 }
 
@@ -268,6 +295,11 @@ impl Config {
             if let Some(x) = t.get("warn_executables").and_then(|x| x.as_bool()) {
                 cfg.safety.warn_executables = x;
             }
+            // 开关既认 TOML 布尔（手写 `true`），也认界面存的字符串（`"on"`/`"off"`）——
+            // 设置页的 _upsertSection 一律写带引号的字符串，两种写法都得吃
+            if let Some(x) = 取开关(t.get("flush_movable")) {
+                cfg.safety.flush_movable = x;
+            }
         }
         cfg
     }
@@ -307,7 +339,8 @@ impl Config {
              on_done = \"{}\"\n\n\
              [safety]\n\
              zip_bomb_ratio = {}\n\
-             warn_executables = {}\n",
+             warn_executables = {}\n\
+             flush_movable = {}\n",
             esc(&lang),
             esc(&self.general.default_mode),
             self.general.jobs,
@@ -318,7 +351,8 @@ impl Config {
             esc(&self.output.conflict),
             esc(&self.output.on_done),
             self.safety.zip_bomb_ratio,
-            self.safety.warn_executables
+            self.safety.warn_executables,
+            self.safety.flush_movable
         );
         std::fs::write(&path, text).map_err(|e| {
             Error::new(ErrorCode::PermissionDenied).context(format!("写配置失败: {e}"))
@@ -494,6 +528,7 @@ pub fn 配置摘要(cfg: &Config) -> Vec<(&'static str, String)> {
         ),
         ("conflict", cfg.output.conflict.clone()),
         ("ratio", cfg.safety.zip_bomb_ratio.to_string()),
+        ("flush_movable", cfg.safety.flush_movable.to_string()),
         (
             "passwords",
             format!("{}|{}", cfg.passwords_path().display(), cfg.passwords().len()),
@@ -519,6 +554,34 @@ mod tests {
         assert_eq!(cfg.safety.zip_bomb_ratio, 100);
         assert!(cfg.general.language.is_none());
         assert!(cfg.output_dir().is_none());
+    }
+
+    // 移动设备落盘检验开关（默认关；布尔与 "on"/"off" 两种写法都认）
+    #[test]
+    fn flush_movable_两种写法都认() {
+        let dir = 临时目录("flushmov");
+        let f = dir.join("config.toml");
+
+        // 默认关 —— 别人装上去不该莫名其妙变慢
+        assert!(!Config::default().safety.flush_movable);
+
+        // 界面写的字符串形式
+        std::fs::write(&f, "[safety]\nflush_movable = \"on\"\n").unwrap();
+        assert!(Config::load_from(&f).safety.flush_movable);
+        std::fs::write(&f, "[safety]\nflush_movable = \"off\"\n").unwrap();
+        assert!(!Config::load_from(&f).safety.flush_movable);
+
+        // 手写的布尔形式
+        std::fs::write(&f, "[safety]\nflush_movable = true\n").unwrap();
+        assert!(Config::load_from(&f).safety.flush_movable);
+
+        // 写错当没写（保持默认关），不许整份配置作废
+        std::fs::write(&f, "[safety]\nflush_movable = \"随便写\"\nzip_bomb_ratio = 50\n").unwrap();
+        let c = Config::load_from(&f);
+        assert!(!c.safety.flush_movable);
+        assert_eq!(c.safety.zip_bomb_ratio, 50, "别的字段不该被连累");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // 关窗口动作（W9）：合法值收编、非法值丢弃（界面按平台默认走）
