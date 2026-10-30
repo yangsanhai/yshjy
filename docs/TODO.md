@@ -781,6 +781,20 @@ Windows 代码签名证书（几百到几千/年，用户点「仍要运行」�
     会被当成「没有目录」，建议输出名直接算错 —— 与 W9 修的「界面三处写死 Unix 路径」同源。
   - `flutter test` **89 过 / 0 挂**（69 + 20）。
 
+## 未发版的改动（发下一版时必须带上，别漏）
+
+- 🟡 **Windows 路径算错的修复**（提交 `82d3088`，2026-10-30）
+  - 内容：`gui/lib/pack_naming.dart` 新增 + `pack_page.dart` 改用纯函数，把写死的 `/`
+    换成 `[/\\]`；补 `gui/test/pack_naming_test.dart` 20 条。
+  - **现状：代码在仓库里、测试全绿，但 0.9.33 安装包不含这个修复**
+    （0.9.33 是修「输出名不跟着换 / 找不到文件」那轮出的）。
+  - 后果：在 **Windows** 上打包时，"输出文件"的默认名字会算错
+    （选 `C:\a\b.zip` 被当成没有目录）。Linux 上不受影响。
+  - 发版时要做的：跟平常规矩一样 —— 五处版本号 → `cargo build --release` →
+    `flutter build linux --release` → `release.sh` → `build-deb.sh` → `test-packages.sh` → 装机四验。
+  - Windows 侧同步：从本机拉 `82d3088` 之后**必须重编 `yshjy.exe`**，
+    否则 Windows 上的界面还是老逻辑（Windows 的界面是 Flutter 编的，不重编等于没修）。
+
 ## 用法（给自己看的三句话）
 
 1. 开工：读 `HANDOFF.md` 顶部 → 回这个文件看梯队一第 1 行 → 只做那一项
