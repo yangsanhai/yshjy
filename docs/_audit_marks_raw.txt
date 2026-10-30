@@ -1,0 +1,261 @@
+DESIGN.md:125	| ZIP/ZIP64 | `zip` (zip-rs) | MIT | ✅ |
+DESIGN.md:126	| deflate | `flate2` / `miniz_oxide` | MIT/Apache-2.0 | ✅ |
+DESIGN.md:127	| 7z / LZMA | `sevenz-rust` | Apache-2.0 | ✅ 支持密码 |
+DESIGN.md:128	| XZ | `xz2` / `liblzma-rs` | MIT / 公有领域 | ✅ |
+DESIGN.md:129	| BZ2 | `bzip2-rs` | MIT/Apache | ✅ |
+DESIGN.md:130	| ZSTD | `zstd` | MIT/BSD | ✅ |
+DESIGN.md:131	| TAR / GZ | `tar` / `flate2` | MIT/Apache | ✅ |
+DESIGN.md:133	| ACE / ARJ | — | 专有 / 已过时 | ❌ 建议不支持 |
+DESIGN.md:134	| MP4/MKV 解析 | `mp4` / `matroska` | MIT | ✅ |
+DESIGN.md:135	| 音视频 remux | ffmpeg（外部可选依赖） | LGPL/GPL | ✅ |
+DESIGN.md:257	| 中文名 | **杨三海解压** | ✅ |
+DESIGN.md:258	| 命令名 | **`yshjy`** | ✅ crates.io 可用 |
+DESIGN.md:259	| 解压子命令 | `yshjy jy <文件>` | ✅ |
+DESIGN.md:260	| 压缩子命令 | `yshjy ys <文件>` | ✅ |
+DESIGN.md:261	| crates.io 包名 | `yshjy` | ✅ 可用（`unbox` 已被占用） |
+DESIGN.md:262	| GitHub 仓库 | `yshjy` | ✅ 无冲突 |
+DESIGN.md:263	| 项目目录 | `~/hermes/yshjy/`（✅ 已统一，全文档路径同步更新） | ✅ |
+DESIGN.md:293	| E1 | 前后超长垃圾 | `[垃圾][包][垃圾]` | ✅ 必须能解 |
+DESIGN.md:294	| E2 | 包插在视频中间 | `[视频前半][包][视频后半]` | ✅ 必须能解 |
+DESIGN.md:295	| E3 | 包被视频隔开（两段都在） | `[包前半][视频][包后半]` | ✅ 用「虚接」还原 |
+DESIGN.md:298	| E6 | 一个文件藏多个包 | `[包A][包B]` | ✅ 必须全找出来 |
+DESIGN.md:390	| **L1** 尾部追加 | ✅ | ✅ | ✅(仅警告) | ✅ | ✅ | **默认候选** |
+DESIGN.md:391	| **L2** 尾部 free 原子 | ✅ | ✅ | ✅ | ✅ | ✅ | **推荐默认**（更隐蔽，8 种工具全通） |
+DESIGN.md:392	| **L3** ftyp 后 free | ✅ | ✅ | ❌ 找不到 | ✅ | ✅ | 高级选项 + 警告（需 7-Zip） |
+DESIGN.md:393	| **L4** 插在视频中间 | ✅ | ✅ | ✅ | ✅ | ✅ | ✨ 技术亮点（须改 mdat size + stco，插入点要在 chunk 边界） |
+DESIGN.md:394	| **L5** 分散多段 | ✅ | ✅ | ❌ zip bomb | ❌ 只解出 1/4 | — | 💀 **不提供**（列表正常但残废，最阴险） |
+DESIGN.md:395	| **L6** 前后加垃圾 | ❌ rc=183 | ✅ | ❌ | ✅ | — | 💀 **不提供**（视频播不了） |
+DESIGN.md:396	| **L7** 两个包 | ✅ | ✅ 两个全对 | ⚠️ 只见最后一个 | ⚠️ 只见第一个 | — | 高级 + 警告 |
+DESIGN.md:397	| **L8** MKV 附件 | ✅ | ✅ | ❌ 家族全废 | ✅ | — | 可选 + 警告 |
+DESIGN.md:460	| 不看后缀识别 | ✗ | 部分 | 部分 | ✓ | ✅ |
+DESIGN.md:461	| 中文后缀/改名文件 | ✗ | 部分 | ✗ | ✓ | ✅ |
+DESIGN.md:462	| 中文密码免配置 | ✗（吞掉） | ✗（要设置） | ✗ | ✗ | ✅ |
+DESIGN.md:463	| 自动读说明取密码 | ✗ | ✗ | ✗ | ✗ | ✅ |
+DESIGN.md:464	| 一个文件多包 | ✗ | ✗ | ✗ | ✗ | ✅ |
+DESIGN.md:465	| 救援模式 | ✗ | ✗ | ✗ | ✗ | ✅ |
+DESIGN.md:561	| 外壳选择（视频/图片/PDF/任意） | 视频 | 🟡 视频 / 图片 / 文本 |
+DESIGN.md:562	| 数据位置（尾部/free 原子/中间/多段） | 尾部拼接 | 🟡 尾部 + free 原子 |
+DESIGN.md:563	| 干扰数据（防网盘扫描） | 关 | ❌ |
+DESIGN.md:564	| 假签名（坑其他工具） | 关（⚠️ 需提示） | ❌ |
+DESIGN.md:565	| 分卷（>4GB 建议开） | 关 | ❌ CLI 的 `--split` 也没实现 |
+DESIGN.md:566	| 密码 | 关 | ✅ |
+DESIGN.md:567	| 自动说明书 | 开 | 🟡 部分 |
+DESIGN.md:568	| 校验和 SHA-256 | 开 | 🟡 部分 |
+DESIGN.md:569	| 改时间戳/哈希（防炸链） | 关 | ❌ |
+DESIGN.md:570	| 自定义显示名 | 用户填 | ✅ |
+DESIGN.md:653	| **Rust 引擎 + Flutter GUI** ✅ **已选** | ✅ 单文件二进制 | ✅ FFI 进 Flutter | 🚀 最快 | 中 | 三平台最优，无重写 |
+DESIGN.md:655	| 全 Flutter/Dart | ✅ | ✅ | 中 | 中 | 7z 支持弱，要自研 |
+DESIGN.md:656	| Go 引擎 + Flutter GUI | ✅ | ⚠️ gomobile 麻烦 | 🚀 | 中 | 生态不如 Rust |
+DESIGN.md:711	| WinRAR6 | Win | ✅ | ✅ | ✅ | ✗ | ✗ |
+DESIGN.md:713	| Bandizip 7.36+ | Win | ✅ | ✅ | ⚠️ 要改设置 | ✗ | ✗ |
+DESIGN.md:714	| 隐写者（原工具） | Win | ✅ | ✗ | ✅ | ✗ | ✗ |
+DESIGN.md:715	| **Unbox（我们）** | **全平台** | **✅** | **✅** | **✅** | **✅** | **✅** |
+README.md:96	| 不看后缀，自动认格式 | 部分支持 | ✅ |
+README.md:97	| **中文文件名不乱码** | ✗（GBK 包必乱码） | ✅ 四级回退（UTF-8 标志 → UTF-8 → GB18030 → 兜底） |
+README.md:98	| **中文解压密码免配置** | ✗（要手动改编码） | ✅ |
+README.md:99	| **索引坏了能自动修** | ✗ | ✅ 只改内存，不动你的源文件 |
+README.md:100	| 一个文件里藏了两个包 | ✗（只看到一个） | ✅ 全部找出 |
+README.md:101	| **救援模式**（扫不出目录表也救） | ✗ | ✅ 按每个文件的头重建清单 |
+README.md:102	| 打包时自动检查产物能不能用 | ✗ | ✅ 回读自检，不合格就报警 |
+README.md:103	| 有图形界面 | ✗（同类工具几乎都是命令行） | ✅ 已装（5 页 + 托盘，Linux） |
+README.md:104	| 跨平台 | ✗ | 🟡 Linux 发布级；Windows 命令行已能编（时区待补）；Android / macOS / iOS 未开始 |
+docs/GUI-PLAN.md:16	| 应用外壳：左侧导航（解压/打包/历史/设置/关于）+ 底部状态栏 | ✅ |
+docs/GUI-PLAN.md:17	| 解压主流程：拖放/选择 → 预览 → 进度 → 完成/失败 → 密码重试 | ✅（单文件） |
+docs/GUI-PLAN.md:18	| 打包页：文件夹/文件 → 伪装 mp4/png/txt → 可选密码 | ✅ |
+docs/GUI-PLAN.md:19	| 历史页（本机 JSON，上限 200） | ✅ |
+docs/GUI-PLAN.md:20	| 设置页（路径可看可开，**不能改**） | 🟡 半成品 |
+docs/GUI-PLAN.md:21	| 关于页（版本/边界/一键诊断包） | ✅ |
+docs/GUI-PLAN.md:22	| 应用菜单 + 图标 + 右键打开 + 命令行参数 | ✅ |
+docs/GUI-PLAN.md:23	| 自动抓解压码（从旁边说明文件） | ✅ |
+docs/GUI-PLAN.md:24	| 批量 / 分卷 / 改名分卷 | ✅ 第18批已上界面（队列 + 三段式汇总卡） |
+docs/GUI-PLAN.md:25	| 界面多语言 / 主题切换 / 快捷键 / 预览树 / 部分解压 | ❌ |
+docs/GUI-PLAN.md:207	| S1 空状态 | 拖放引导 | ✅ | P6 增强（菜单/快捷键）、P11 引导 |
+docs/GUI-PLAN.md:208	| S2 识别中（小文件） | 转圈 | ✅ | — |
+docs/GUI-PLAN.md:209	| S2b 识别中（大文件，必须给进度） | 进度 | ❌ | **P1 一起做**（`list` 目前无进度事件） |
+docs/GUI-PLAN.md:210	| S3 识别完成·预览 | 列表 | ✅ 平铺 | P7 树 + 部分解压 |
+docs/GUI-PLAN.md:211	| S4 需要密码 | 密码框 | 🟡 有输入框 | P4 密码本/眼睛/不保存 |
+docs/GUI-PLAN.md:212	| S5 空间不足 | 提前警告 | ✅ 引擎侧 | P9 界面提示强化 |
+docs/GUI-PLAN.md:213	| S6 处理中 | 进度/取消 | ✅ | P1 队列内每项进度 |
+docs/GUI-PLAN.md:214	| S7 完成 | 结果 | ✅ | P8 三段式 + 分享文案 |
+docs/GUI-PLAN.md:215	| S8 部分成功（救援） | 差异化 | 🟡 有清单 | P3 失败卡 + P8 |
+docs/GUI-PLAN.md:216	| S9 失败（按原因分支） | 分支文案 | 🟡 单一 | P3 |
+docs/GUI-PLAN.md:217	| S10 多候选 | 让用户选 | ❌ | **P1 一起做**（`scan` 返回多候选时列出来） |
+docs/GUI-PLAN.md:218	| S11 已取消 | 取消态 | ✅ | P1 队列取消 |
+docs/GUI-PLAN.md:219	| S12 后台运行中 | 手机端 | ❌ | P12 |
+docs/GUI-PLAN.md:220	| S13 批量队列 | 队列 | ❌ | **P1** |
+docs/GUI-PLAN.md:221	| S14 已完成文件列表 | 常态列表 | ❌ | P1 队列保留已完成项 |
+docs/GUI-PLAN.md:229	| 第 18 批 ✅ | P1 批量队列（协议 `scan` + `batch` + 队列 UI + 完成卡三 段式）+ S2b/S10 | 大 |
+docs/GUI-PLAN.md:230	| 第 19 批 ✅ | P2 智能解压 + P3 失败卡（缺分卷说清"缺哪一块"） | 中 |
+docs/GUI-PLAN.md:513	| P22-1 | **伪装文件自选**：删掉「视频/图片/文本」三个内置素材选项，改成「选择伪装文件（任意类型）」；选完显示文件名/大小/类型，下方常驻提示「外壳是什么，产物就是什么」 | `src/api.rs` 的 `pack.cover`、`gui/lib/pages/pack_page.dart` | ✅ |
+docs/GUI-PLAN.md:514	| P22-2 | **解压页选文件去白名单**：原来只认 mp4/zip/png/txt 等 20 个扩展名，`.pdf/.docx/.mp3/.exe` 外壳的包在对话框里看不见（拖拽却能进） | `gui/lib/pages/home_page.dart` | ✅ |
+docs/GUI-PLAN.md:515	| P22-3 | **分卷大小填错不再静默**：以前看不懂就悄悄「不分卷」，现在红字报错（D20 同类教训） | `pack_page.dart` `_splitSizeError` | ✅ |
+docs/GUI-PLAN.md:516	| P22-4 | **普通压缩输出强制 .zip**：手打 `.7z` 后缀也不会再名不符实 | `pack_page.dart` `_pickOut` / `_pack` | ✅ |
+docs/GUI-PLAN.md:517	| P22-5 | 输出框不再每帧 `new TextEditingController`（丢状态/泄漏） | `pack_page.dart` `InputDecorator` | ✅ |
+docs/GUI-PLAN.md:518	| P22-6 | **输出文件不能覆盖源文件/外壳**（引擎防呆，避免一次误操作毁掉用户原文件） | `src/api.rs` `规范路径()` | ✅ |
+docs/GUI-PLAN.md:519	| P22-7 | **自解压 exe（Windows）**：自己写的 Rust 存根（不借 7-Zip 壳），产物 `[存根][ZIP][尾标]`；双击 → 解到同名文件夹 → 打开目录；中文路径/路径穿越防护/截断校验/重名加序号；暂不支持解压码与分卷（明确报错） | `sfx/` 独立 crate、`src/pack/mod.rs` `build_sfx`、`main.rs --sfx`、`scripts/build-sfx-stub.sh`、`pack_page.dart` 开关 | ✅ 逻辑已验收；**Windows PE 存根待 sudo 装 mingw 后重编替换** |
+docs/GUI-PLAN.md:533	| P23.5-1 | **deb 带图形界面**：GUI bundle + 应用菜单项 + 图标 + postinst/postrm | `scripts/build-deb.sh` | ✅ |
+docs/GUI-PLAN.md:534	| P23.5-2 | **桌面通知**：解压完成/部分完成/失败/打包完成；缺 `notify-send` 静默；设置开关 | `gui/lib/notify.dart`、`home_page.dart`、`pack_page.dart`、`settings_page.dart` | ✅ |
+docs/GUI-PLAN.md:535	| P23.5-3 | **版本一致性校验 + 出包自查**：不一致拒打包；出包后查 5 个关键文件 | `scripts/build-deb.sh`、`scripts/release.sh` | ✅ |
+docs/GUI-PLAN.md:536	| P23.5-4 | GUI bundle 不带引擎副本（统一用 `/usr/bin/yshjy`，避免 D11 双版本） | `scripts/build-deb.sh` | ✅ |
+docs/GUI-PLAN.md:537	| P23.5-5 | 版本号递进到 `0.9.23-c` | `Cargo.toml` + `gui/pubspec.yaml` + `CHANGELOG.md` | ✅ |
+docs/GUI-PLAN.md:543	| P23-1 | **文件级挑选**：协议 `select`（表达式 / 序号数组）+ 解压页逐条勾选 + 全选/全不选 | D5 / GUI-PLAN P4 尾巴 | ✅ |
+docs/GUI-PLAN.md:544	| P23-2 | **单任务输出目录**：解压页高级选项里选，默认仍是包旁边 | 用户调研 07 | ✅ |
+docs/GUI-PLAN.md:545	| P23-3 | **文件名编码手动切换**：自动 / GBK / Big5 / Shift-JIS / UTF-8 | 组6b-4 | ✅ |
+docs/GUI-PLAN.md:546	| P23-4 | **压缩速度/体积档**：协议 `level` + CLI `--level` + 界面下拉 | 本批审计 | ✅ |
+docs/GUI-PLAN.md:547	| P23-5 | 自解压增强：解压码 ✅、进度显示 ✅、Linux `.sh` ✅、macOS（需 mac 构建机，排最后） | 本批 | ✅ 3/4 |
+docs/GUI-PLAN.md:549	| P23-7 | `--serve` 一次性喂多条命令丢结果（stdin 断开后等任务收尾再退） | D16 | ✅ |
+docs/UI-SPEC.md:535	| 1 | **明文打印密码** 🔴 | Complex-unzip-tool-v2 会打印 `Trying password: 123456` 甚至成功后的密码 | **永远打码**（`1234**` / `●●●●●●`）。终端会被录屏分享，这是真实泄露 |
+docs/CLI-GUI-PLAN.md:102	| Linux deb + tar.gz | ✅ 现成 | `scripts/build-deb.sh` | `scripts/test-packages.sh` 33 项 |
+docs/CLI-GUI-PLAN.md:103	| Windows **命令行** exe | ✅ 能 | `cargo build --release --target x86_64-pc-windows-gnu`（目标 + mingw 已装）→ 打 zip | wine 里实测解压 + 打包各一次 |
+docs/CLI-GUI-PLAN.md:104	| 安卓 APK | ✅ 能，但要先装 SDK/NDK（8–10 G，**需用户点头**） | `cargo-ndk` 出 arm64-v8a / armeabi-v7a 的 `libyshjy_ffi.so`（`ffi/Cargo.toml:10` 已 cdylib+staticlib）→ `ffigen` 生成 Dart 绑定 → `flutter build apk` | 真机装了能开、能解压 |
+docs/CLI-GUI-PLAN.md:105	| Windows **图形界面**版 | ❌ 不能 | Flutter 的 Windows 桌面只能在 Windows 上编 | 借机器 |
+docs/CLI-GUI-PLAN.md:106	| macOS / iOS | ❌ 不能 | 必须在 macOS 上编 | 借机器或以后上 CI |
+docs/LINUX-FULL-PLAN.md:15	| **X1** | **RAR 分卷完全不支持** | RSA 标准样本 `spike/testdata/rar_fixtures/golden/stored_volume_0.rar`（unrar 认作 RAR5 volume 1，4 卷拼 5000 B）：`--list` 识别成功；解压报「这不是压缩包（没找到可识别的压缩数据）」，同一屏又写「这个文件看起来是：RAR 压缩包」。`src/extract_rar.rs` 全文无「分卷/volume」字样 | 网盘动漫/游戏/小说合集的 `.part1.rar`、`.r00` 全部解不开，还提示自相矛盾 | 功能缺失 | **✅ 0.9.25-c 已修** |
+docs/LINUX-FULL-PLAN.md:16	| **X2** | **RAR 单包硬上限 256 MiB** | `src/extract_rar.rs:31 pub const MAX_SIZE: u64 = 256 * 1024 * 1024`，超了直接拒绝。原因：老代码走全量读内存 | 网盘 RAR 多为 1–4 GB，等于全废（提示老实但没用） | 实现过时（rars 0.11 已有流式 API） | **✅ 0.9.25-c 已修** |
+docs/LINUX-FULL-PLAN.md:17	| **X3** | **tar / tar.gz 里的符号链接全部丢失** | 造标准 Linux 软件包结构（`libfoo.so.1.2` + 2 个符号链接 + 具名脚本），实测 `解开 2/5 个`，3 个符号链接全报 `DATA_ERROR`，产物缺链接 | 解 Linux 软件包/源码包后程序跑不起来（缺 .so 链接） | 功能缺失 + 文案 | **✅ 0.9.25-c 已修** |
+docs/LINUX-FULL-PLAN.md:18	| **X4** | **安全检查被报成「数据丢了」** | 单个 `../逃出来.txt` 条目 → 报「中间有一段数据丢了（0 B）」；实际是路径安全拒绝，不是数据损坏 | 用户以为文件坏了，去重下（白费流量） | 文案错误（D21 同类） | **✅ 0.9.25-c 已修** |
+docs/LINUX-FULL-PLAN.md:19	| **X5** | **界面/CLI 直露引擎原始码** | 300 字节超长文件名、符号链接、恶意条目都直接显示 `DATA_ERROR`，还堆一长串文件名 | 看不懂，以为软件坏了（D21 已记，未修） | 文案（D21） | **✅ 0.9.25-c 已修（CLI 侧；GUI 侧待做）** |
+docs/ROADMAP.md:25	| 分期 | 一期对齐止血 ✅ → 二期补缺口 ✅ → 三期结构优化 ✅ → **四期全平台（进行中：1/5 平台完成）** |
+docs/ROADMAP.md:39	| A1 | bash 补全在**没装 bash-completion** 的机器上，把带空格的文件名劈成两个候选 | 目录只有 `有 空格.zip` 时：我们 fallback 吐 `有` + `空格.zip`（**2 条 ❌**）；装 bash-completion 走 `_filedir` 是 1 条（✓）；clap 的 `IFS=$'\n'` 写法也是 1 条（✓） |
+docs/ROADMAP.md:87	| D1 | **Windows 编不过**：5 处 unix-only 调用没 cfg 隔离（实测 `E0433`） | 🔴 硬阻塞 |
+docs/ROADMAP.md:213	| Linux 终端 + 桌面 | ✅ 完成并装机 | `dpkg -l yshjy` = **0.9.31**；`tests/all.sh` **41 通过 / 0 失败**（2026-10-29） |
+docs/ROADMAP.md:214	| Windows 交叉目标 | ✅ 已装 | `x86_64-pc-windows-gnu` / `gnullvm` |
+docs/ROADMAP.md:215	| mingw 链接器 | ✅ | `/usr/bin/x86_64-w64-mingw32-gcc` |
+docs/ROADMAP.md:216	| wine（本机验证） | ✅ 10.0 | `wine-10.0 (Debian)` |
+docs/ROADMAP.md:217	| **Windows 实际编译** | ❌ 失败 | `E0433 cannot find unix in os` @ `extract.rs:499`（共 5 处） |
+docs/ROADMAP.md:218	| Flutter | ✅ 3.44.9 stable | `~/flutter/bin/flutter`（不在 PATH，脚本用绝对路径） |
+docs/ROADMAP.md:219	| 五个平台脚手架 | ✅ 都在 | `gui/{android,ios,linux,macos,windows}` |
+docs/ROADMAP.md:221	| Android SDK / NDK / cargo-ndk | ❌ 都没有 | 无 `ANDROID_HOME` |
+docs/REFERENCE-INDEX.md:31	| **密码多编码重试** | DESIGN §17.1 | `tech/对比-测试构建与编码.md:68`（2.1.13） | `sevenz-rust/src/encryption/password.rs:52-61` | 密码转 UTF-16LE；候选按编码展开逐个试 | `src/extract.rs:190`、`src/extract_rar.rs` | ✅ 0.9.26 · `extract.rs:190 密码候选`（ASCII 短路；非 ASCII 展开 UTF-8→GBK→UTF-16LE） |
+docs/REFERENCE-INDEX.md:32	| **Unicode Path 0x7075** | §17.3 | `tech/对比-测试构建与编码.md:64`（2.1.9） | `zip2/src/extra_fields/zipinfo_utf8.rs:1-96` | `UnicodeExtraField` + `unwrap_valid`（CRC 校验后采用） | `src/layout/zip.rs:436` `decode_name` | ✅ 0.9.26 · `zip.rs:375-388`（读 extra，先验 CRC32 再采用） |
+docs/REFERENCE-INDEX.md:33	| **EOCD 分块倒扫** | §17.6 / AUDIT | `tech/xadmaster.md:28`（①-02） | `XADZipParser.m:118-191`（图解 :176-183） | 64 KiB 一块从尾往前，每块留 20 字节重叠 | `src/layout/zip.rs:41,131` | ✅ 0.9.26 · `zip.rs:149`（64 KiB 一块 + 20 B 重叠，按位置推进） |
+docs/REFERENCE-INDEX.md:34	| **全文件签名扫描** | §13 武器① | `tech/7zip.md:45`（2.6） | `Archive/Zip/ZipIn.cpp:618,723-756` | `FindPK_4` + 内容校验（强判定） | `src/job.rs`、`src/scan.rs` | ✅ |
+docs/REFERENCE-INDEX.md:35	| **LOCALS 无目录兜底** | §13 武器③ | `tech/7zip.md:113`（5.1）、`:116`（5.4） | `Archive/Zip/ZipIn.cpp:2530,2735-2742` | CD 读出来对不上 → 退回扫 local header 重建 | `src/rescue.rs` | ✅ |
+docs/REFERENCE-INDEX.md:36	| **分段虚接（Concat）** | §13 武器② | `tech/7zip.md:10`、`tech/README.md:120` | `7zip/CPP/7zip/Common/StreamBinder.cpp` 思路 | 多段拼成一条可 seek 的逻辑流 | `src/unpack.rs`、`src/extract7z.rs` | 🟡 主路径有，E3 未全覆盖 |
+docs/REFERENCE-INDEX.md:37	| **结构校验防假签名** | §13 武器④ | `tech/7zip-工程层.md:50,54`（1.11/1.15） | `CPP/7zip/UI/Common/OpenArchive.cpp` | 1 MiB 头缓冲 → 候选队列 → 实际解析验证 | `src/scan.rs` | ✅ |
+docs/REFERENCE-INDEX.md:38	| **7z 头加密 vs 内容加密** | §17.4 | `tech/sevenz-rust+steganographier.md:51`（J-15） | `sevenz-rust/src/reader.rs:381-423` | 内容加密头明文可列表；头加密直接要密码 | `src/preview.rs:322`（现硬编码 `false`） | 🟡 第20批 |
+docs/REFERENCE-INDEX.md:39	| **双维度识别进度** | §17.6（D1） | `tech/7zip-工程层.md:91`（3.3） | `CPP/7zip/Archive/IArchive.h:177-181` | `SetTotal(files, bytes)` 两个维度 | `src/job.rs:311` | ✅ 0.9.26 · `job.rs:311` emit `ScanProgress{total_bytes,total_files}` |
+docs/REFERENCE-INDEX.md:40	| **嵌套包下钻一层** | §17.6 | `tech/xadmaster.md:91,92`（③-09/③-10） | XADMaster 递归解压 | 继承父级密码与编码，只下一层 | `src/drill.rs`（`extract.drill`） | ✅ 21批组C |
+docs/REFERENCE-INDEX.md:41	| **解压前内存预检** | §17.6 | `tech/对比-同名技术择优.md:306` | 7-Zip `MemoryRequest` | 按字典×块×线程估峰值，跟可用内存比 | `src/hardware.rs:179`、`src/extract7z.rs:239` | ✅ 0.9.26 · `extract7z.rs:239 内存预检`（字典峰值 + 256 MB 预留 vs 可用内存；仅 7z 需要） |
+docs/REFERENCE-INDEX.md:42	| **炸弹限额改成询问** | §17.7 | `tech/7zip-工程层.md:77`（2.9） | 7-Zip 的预算协商 | 抛结构化请求（required/allowed），界面问一句 | `src/ask.rs` + `src/safety.rs` + `serve.rs` 的 answer | ✅ 21批组B |
+docs/REFERENCE-INDEX.md:43	| **条目 packSize 校验** | AUDIT §3-12 | `tech/7zip.md:68`（3.5） | 7-Zip 的 dataAfterEnd 判定 | 读满判定，多出/不足都报「拼接错位」 | `src/layout/zip.rs:58` | ❌ 第22批 |
+docs/REFERENCE-INDEX.md:51	| 智能解压三规则 | §3 补 / P2 | `analysis/07` §3.2 | Bandizip 的三个判断（单目录/单文件/散文件） | `gui/lib/pages/home_page.dart:619-627` 只写了说明 | ✅ 引擎侧 / 🟡 界面可切换 |
+docs/REFERENCE-INDEX.md:52	| 批量队列 + 三段式完成卡 | P1 | `analysis/07` §9.1（Sunpack `f08.png`） | 结果标题 / 量化副标题 / 直达按钮 | `home_page.dart:727-811` | ✅ |
+docs/REFERENCE-INDEX.md:53	| 失败卡可执行化 | P3 | `analysis/07` §1.3（v2 `print_final_completion`） | 「可能原因清单」升级成按钮 | `home_page.dart:474-503` | ✅ |
+docs/REFERENCE-INDEX.md:54	| 密码卡三件套 | P4 | `analysis/07` §4.1（眼睛图标）、§9.2（优先级五档）、§9.4（近期密码/不保存） | 眼睛切换、近期密码 chips、不保存勾选 | `home_page.dart:1260`（裸 obscureText） | 🟡 第20批 |
+docs/REFERENCE-INDEX.md:55	| 试密码可视化 + 速度/ETA | P4 | `analysis/07` §9.4、`:248`（要超过 Bandizip） | 「正在试第 3/12 个」、速度、剩余时间 | `home_page.dart:198,1017-1078` | ✅ 0.9.26 · `home_page.dart:198` 吃 `PASSWORD_TRY`（「正在试第 i/M 个」+ 速度/ETA） |
+docs/REFERENCE-INDEX.md:56	| 输出目录 + 原包处理 | P5 / §17.2 | `analysis/07` §234-238 | Bandizip 路径对话框 + 安全默认三件套 | `home_page.dart:556,617,810` | ✅ 0.9.26 · 输出目录 `dest: _outDir`（`home_page.dart:556,617,810`）+ 原包处理（设置页 keep/trash，`config.rs:155`） |
+docs/REFERENCE-INDEX.md:57	| 设置页可写 | P5 | — | 路径可改、语言可选 | `settings_page.dart` | 🟡 |
+docs/REFERENCE-INDEX.md:58	| 预览树 + 部分解压 | P7 | `analysis/07` §7（PeaZip 结构树） | 树形结构 + 勾选 + 面包屑 | 预览页平铺 | ❌ 第22批 |
+docs/REFERENCE-INDEX.md:59	| 完成卡分享文案 | P8 | `analysis/07` §952-954、§1.3 | 「复制给对方：这是伪装包，用…打开」 | 完成卡无此按钮 | ✅ 0.9.28 · `home_page.dart:1836`「复制解压方法」 |
+docs/REFERENCE-INDEX.md:60	| 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | `theme_mode.dart`（尺寸记忆未做） | 🟡 主题已做（`theme_mode.dart` / `main.dart:69`，设置页可切）；**窗口尺寸/位置记忆未做**（要引 `window_manager`，见 `docs/TODO.md` 第二期） |
+docs/REFERENCE-INDEX.md:61	| 新手引导 | P11 | `analysis/07` §5.1（隐写者 ①–⑪ 编号步骤） | 三步浮层 | — | ✅ 0.9.26 · `app_shell.dart:114` 三步引导（只弹一次，标记写在 state 目录） |
+docs/REFERENCE-INDEX.md:62	| 历史页可点开文件 | — | `analysis/07` §130-131（别清空历史）、§135 | 条目可打开所在目录 | `history_page.dart:128` | ✅ 0.9.26 · `history_page.dart:128` onTap 定位到输出目录 |
+docs/REFERENCE-INDEX.md:70	| 尾部拼接 / free 原子布局 | §14.1 / §15 | `analysis/steganographier-hide.md` §2.1、§2.2 | 字节级布局图（普通模式 vs ZArchiver 模式） | `src/pack/` | ✅ |
+docs/REFERENCE-INDEX.md:71	| 布局兼容性矩阵 | §15 | `analysis/05-压缩布局验证.md` §2.1/§2.2/§2.3 | 16 个样本的实测矩阵（含最意外的 L5 分散多段） | `src/pack/` | ✅ 尾部 + free 原子 |
+docs/REFERENCE-INDEX.md:72	| 分卷生成 | §14.2 | `analysis/steganographier-hide.md` §Q4（分卷怎么处理） | `.001/.002` 命名与切分 | `src/pack_post.rs:83`、`--split` | ✅ 0.9.26 · `pack_post.rs:83 split_file` + CLI `--split`（`cli_spec.rs:77`） |
+docs/REFERENCE-INDEX.md:73	| 密码内嵌（自动带码） | §14.3 | `analysis/steganographier-hide.md` §Q5（密码怎么设） | 打包时写进说明书，解压端自动抓 | `src/pack/`、`src/password_hint.rs` | ✅ |
+docs/REFERENCE-INDEX.md:74	| 封面嵌入 / 素材 | §14.2 | `tech/README.md:109` | `Steganographier.py:1843-1889` 内置封面 | `src/pack/cover.rs` | ✅ 打包侧 |
+docs/REFERENCE-INDEX.md:75	| 说明书 + 校验和 | §14.2 | `analysis/steganographier-hide.md` §Q6 | 输出命名 / 说明书 / 大小-时长校验 | 部分 | 🟡 第20批 |
+docs/REFERENCE-INDEX.md:76	| 改 MP4 atom 保证封面可播 | §14.1 | `analysis/steganographier-hide.md` §Q3 | 改 atom 的具体做法 | `src/pack/` | ✅ |
+docs/REFERENCE-INDEX.md:77	| 干扰数据 / 假签名 | §14.2 | `analysis/05` §1.3（资源红线）、隐写者 §八 | 垃圾段、伪特征码 | 无 | ❌ 第22批 |
+docs/REFERENCE-INDEX.md:78	| **封面分离（解压侧）** | §3 / §17.5 | `tech/README.md:109`（同一套封面知识） | 反着切：`[0, 压缩层起点)` 写成可播文件 | `src/cover_extract.rs` | ✅ 解压侧 + 21批加 `list.cover` 预探 |
+docs/REFERENCE-INDEX.md:86	| E1 前后超长垃圾 | `[垃圾][包][垃圾]` | 全文件签名扫描 | `tech/7zip.md:45` | ✅ |
+docs/REFERENCE-INDEX.md:87	| E2 包插在视频中间 | `[视频前][包][视频后]` | 全文件扫描 + 虚接 | `tech/7zip.md:45`、`:10` | ✅ |
+docs/REFERENCE-INDEX.md:88	| E3 包被视频隔开 | `[包前][视频][包后]` | 分段虚接 | `tech/7zip.md:10` | 🟡 需补测试 |
+docs/REFERENCE-INDEX.md:89	| E4 中间段真丢 | 数据缺失 | 救援模式 | `tech/7zip.md:113`（LOCALS） | ✅ 救援 |
+docs/REFERENCE-INDEX.md:90	| E5 头尾被切 | 截断 | 救援模式 | 同上 | ✅ 救援 |
+docs/REFERENCE-INDEX.md:91	| E6 一个文件多个包 | `[包A][包B]` | 全文件扫描 + 逐候选验证 | `tech/7zip-工程层.md:50,54` | ✅ |
+docs/REFERENCE-INDEX.md:99	| 三层暴露（core/ffi/json） | `docs/BACKEND-SPEC.md` §1.2 | 结构分层 | core/json ✅ + ffi ✅（`ffi/`） | ✅ |
+docs/REFERENCE-INDEX.md:100	| FFI 约束（简单类型/事件流/TaskHandle） | `docs/BACKEND-SPEC.md` §1.3 | 接口草案 | `ffi/src/lib.rs` + `include/yshjy.h`（JSON 进出、事件回调、Job 句柄） | ✅ 21批组D |
+docs/REFERENCE-INDEX.md:101	| Android 桥接 | `BACKEND-SPEC:29`（flutter_rust_bridge） | 编译 `.so` | `libyshjy_ffi.so` 可出；桥接层待接 | 🟡 地基已就绪 |
+docs/REFERENCE-INDEX.md:102	| iOS 桥接 | `BACKEND-SPEC:30`（静态库） | 静态库进 Xcode | `libyshjy_ffi.a` 可出；`FfiTransport` 待写 | 🟡 地基已就绪 |
+docs/REFERENCE-INDEX.md:103	| 移动端 seek 三档 | `docs/ARCHITECTURE.md` F1 | 直接 fd / 块缓存 / 先复制 | 待做 | ❌ |
+docs/REFERENCE-INDEX.md:104	| 传输层抽象 | DESIGN §18.1 | `EngineTransport` 接口 | `gui/lib/transport/engine_transport.dart`（ProcessTransport 已实现） | ✅ 21批组D |
+docs/REFERENCE-INDEX.md:135	| **进度条模板** | `upstream/indicatif/src/style.rs:270-350`（模板变量：`{percent} {bytes} {total_bytes} {elapsed} {eta} {bytes_per_sec} {wide_msg}`）、`examples/download-speed.rs:10-12` | 模板变量集；`{wide_bar}` 自动铺满终端宽度；`progress_chars("#>-")` 指定填充字符；`{eta}` 由库自己算 | `src/main.rs` 的 `画进度行` | 🟡 手搓版已通（条/速度/剩余/项号），**缺 `{elapsed}` 已用时** |
+docs/REFERENCE-INDEX.md:136	| **多任务并发进度** | `upstream/indicatif/src/multi.rs`、`examples/multi-tree-ext.rs`、`examples/multi.rs`（截图见 README） | `MultiProgress` 给每个任务一条独立进度行，统一在顶部重绘 —— 我们 `-j 2` 时不再是两行互相覆盖 | `main.rs:1238-1260` | ✅ 0.9.27 · `main.rs:1246` indicatif `MultiProgress`（延迟到真的出现第二个任务才切） |
+docs/REFERENCE-INDEX.md:137	| **多选交互（`--pick`）** | `upstream/dialoguer/src/prompts/multi_select.rs:253-302`（键位：`↓/Tab/j` 下移、`↑/BackTab/k` 上移、`←/h` 上页、`→/l` 下页、`空格` 勾选、`a` 全选、`Esc/q` 取消、`Enter` 确认）；`upstream/inquire/KEY_BINDINGS.md`（键位文档写法）、`inquire/inquire/src/terminal/crossterm.rs:338-353`（终端后端抽象） | **别自己写 raw mode 循环**：直接用 `dialoguer::MultiSelect`，上面那套键位是业界共识；文档照 `KEY_BINDINGS.md` 的表格形式写一份中文的 | `src/pick.rs`（0.9.27 已落地） | ✅ 0.9.27 · `src/pick.rs` + `cli_spec.rs:71`（dialoguer `MultiSelect`，键位照抄） |
+docs/REFERENCE-INDEX.md:138	| **列表/表格输出** | `upstream/comfy-table/README.md:205,255-283`（宽度来源优先级：显式 `set_width` → `crossterm::terminal::size`；依赖 `unicode-width` 算中文宽度） | 列宽自适应算法；`--list` 的结果按「序号 / 大小 / 加密 / 路径」四列对齐，中文不歪 | `src/main.rs:869-905` | ✅ 0.9.27 · `main.rs:872` comfy-table（中文按显示宽度对齐、窄终端折行） |
+docs/REFERENCE-INDEX.md:139	| **解压后删除源压缩包** | `unzip -m`（move 语义，成功即删）；WinRAR 解压对话框「删除压缩文件：永不 / 总是 / 询问」；Bandizip 同功能 + 更安全的「移到回收站」变体；7-Zip 的 `-sdel` 是**压缩**后删源、解压侧没有该功能（p7zip issue #154 里官方建议自己 `rm`） | 「只在**完全成功**后删」「可改成移到回收站」「分卷要整组处理」「删之前说清不可恢复」 | 新增 `--delete-source` / `--trash-source`；界面解压页一个开关（默认关） | ❌ 未做 |
+docs/REFERENCE-INDEX.md:172	| **补全与 man 页不手写** | `upstream/ouch/build.rs:20-39`（`include!("src/cli/args.rs")` 拿到同一份 clap 定义，`clap_mangen::generate_to` + `clap_complete::generate_to` 写进 `OUCH_ARTIFACTS_FOLDER`）、`upstream/ouch/Cargo.toml:77-79`（`clap_complete` / `clap_complete_nushell` / `clap_mangen`） | 补全和 man **由 clap 定义在构建期生成**，打包时塞进 deb；`scripts/completions/` 手写副本整个退休 | `scripts/gen-cli-assets.py` + `src/cli_spec.rs` | ✅ 0.9.27/0.9.28 · `scripts/gen-cli-assets.py` 从 `src/cli_spec.rs` 生成（自研生成脚本，不是 clap 构建期；同样达到「不手写、不漂移」） |
+docs/REFERENCE-INDEX.md:173	| 表格输出 | comfy-table（§8 已有） | 列宽自适应 | `--list` | ✅ 0.9.27（见 §8「列表/表格输出」） |
+docs/REFERENCE-INDEX.md:174	| 多任务进度 | indicatif（§8 已有） | `MultiProgress` | `-j 2` | ✅ 0.9.27（见 §8「多任务并发进度」） |
+docs/REFERENCE-INDEX.md:175	| 交互多选 | dialoguer（§8 已有） | `MultiSelect` 键位 | `--pick` | ✅ 0.9.27（见 §8「多选交互」） |
+docs/REFERENCE-INDEX.md:181	| **移动端桥接走哪条路** | `upstream/hiddify-app/pubspec.yaml:197-203`（`ffigen:` 配置：`entry-points: hiddify-core/bin/desktop.h` → 输出 `lib/gen/hiddify_core_generated_bindings.dart`）、`:43`（`ffi: ^2.1.2`）、`:139`（`ffigen: ^19.1.0`）；对照 `upstream/rustdesk/build.py:200`（走 `flutter_rust_bridge_codegen` 从 Rust 侧生成 bridge） | **走 ffigen，直打我们已有的 `include/yshjy.h`**，不引 flutter_rust_bridge —— 我们 C ABI 已经是 JSON 进 / 事件出，桥就在 Dart 侧生成，引擎一行不用改 | 新增 `gui/lib/gen/yshjy_bindings.dart` + `FfiTransport` | ❌ 未做，**计划改了**（`docs/BACKEND-SPEC.md:29` 原写 flutter_rust_bridge） |
+docs/REFERENCE-INDEX.md:182	| Android 分区存储 | `upstream/localsend/app/lib/util/native/channel/android_channel.dart:10-11`（「Android 10+ 必须用 SAF 访问文件」）+ 全仓 SAF 用法 | 一律「App 私有目录直接写 / 外部目录走 SAF 授权后写」，**不做静默失败** | 移动端「解压到哪」的设计前提 | ❌ 待定设计（先定政策再写码） |
+docs/REFERENCE-INDEX.md:183	| 仓库布局 | `upstream/localsend/`（`app/` + `packages/…/rust_builder` + `server/`）、`upstream/hiddify-app/`（`android/ ios/ linux/ macos/ windows/` + `hiddify-core/`） | Rust 核心独立 crate + Flutter app 一层 + 每平台目录 | 我们 `src/` + `ffi/` + `gui/` 已经同构 | ✅ 已同构 |
+docs/REFERENCE-INDEX.md:184	| 桌面打包脚本 | `upstream/rustdesk/build.py:737`（deb）/`:849`（从已有二进制组 deb）/`:934`（dmg）/`:958`（Manjaro）/`:969`（Windows）；`upstream/rustdesk/res/DEBIAN/{preinst,postinst,prerm,postrm}` 四件套 | `postinst` 用 `$1 = configure` 分派、`preinst` 里先停服务、`postrm purge` 才删用户配置 —— **按参数分派**正是我们那个「postinst 写错 HOME」事故的根本教训 | `scripts/build-deb.sh`（补 prerm/postrm + 参数分派） | 🟡 部分 |
+docs/REFERENCE-INDEX.md:190	| **工作流怎么拆** | `upstream/localsend/.github/workflows/`：15 个平台文件（`build_linux_deb_x64.yml` …）+ `release.yml` 只做 `uses:` 汇总（文件头注释写明「各平台单独工作流与发版工作流不会漂移」）+ `winget.yml` | 一平台一个 reusable workflow，`release.yml` 只汇总；版本号各工作流自己从 `pubspec.yaml` 取 | 新建 `.github/workflows/` | ❌ 未做 |
+docs/REFERENCE-INDEX.md:191	| 单文件骨架 | `upstream/localsend/.github/workflows/build_linux_deb_x64.yml:1-45`（`workflow_call` + `ubuntu-22.04` 老基线 + 装 gtk3/ayatana + `subosito/flutter-action` + rust toolchain） | **出包别用 `ubuntu-latest`**：基线太新正是我们 AppImage 评估翻车的原因（本机 glibc 2.41）；22.04 是 glibc 2.35 | 同上 | ❌ |
+docs/REFERENCE-INDEX.md:192	| 纯 Rust CLI 发版 | `upstream/cargo-dist/dist-workspace.toml:1-20`（`installers = ["shell","powershell","npm","homebrew"]`、`targets = [...目标三元组...]`、`publish-jobs`） | 将来要让终端用户 `brew`/`npm` 一键装时用它，别手写安装脚本 | 暂不做 | ⏸ |
+docs/REFERENCE-INDEX.md:193	| 安装包规范 | `upstream/tauri-bundler/crates/tauri-bundler/src/bundle/linux/debian.rs:204-215`（`Depends` 只认配置里给的，**不自动推 ldd**）、`.../linux/appimage/linuxdeploy-plugin-gtk.sh`、`.../windows/nsis/`、`.../macos/dmg/` | 依赖闭包必须自己算（我们 `build-deb.sh` 已经这么做，方向是对的）；AppImage = linuxdeploy + gtk 插件 + 老基线 | `scripts/build-deb.sh` | ✅ 已对 |
+docs/REFERENCE-INDEX.md:229	| 1 | **clap_complete + clap_mangen** | `tech/clap-complete-mangen.md` | 🔴 **我们 bash 补全的真 bug**：没有 bash-completion 包时，带空格的文件名被劈成两个候选（实测 2 个 vs 期望 1 个）；修法 `IFS=$'\n'` 包 `compgen -f` |
+docs/REFERENCE-INDEX.md:233	| 5 | **Keka** | 同上文档 §1 | ❌ **无法拆：上游闭源**。仓库只有 `Bin/`（unar/lbzip2/lzip/plzip 四个外部 CLI）+ 34 种翻译，零源码 |
+docs/REFERENCE-INDEX.md:235	| 7 | **inquire** | 同上 §3 | 🔴 **`--pick` 被 Ctrl-C 后光标不恢复的根因确认**：dialoguer 用 `console` 后端 → Ctrl+C 走 SIGINT；crossterm 后端会当普通按键读进来。多出「解法 B」 |
+docs/TODO.md:19	| 引擎·解压 | ✅ 完成 | 10 类格式 / 12 条能力组合（`--caps` 实测）；**52 个 `.rs` / 29,584 行**（顶层 40 个） |
+docs/TODO.md:20	| 引擎·打包与伪装 | ✅ 完成 | MP4 free 原子 + 其他外壳尾部追加 + 自解压 sfx + 分卷 + 干扰数据/假签名 |
+docs/TODO.md:21	| 引擎·可靠性 | ✅ 完成 | 原子写入（六条落盘路径）/ 断点续传 / 救援 / packSize 封顶 / 路径穿越 / 炸弹双闸；fuzz **只读入口 2.38 亿次 + 写盘路径 7.2 万次，均零崩溃** |
+docs/TODO.md:22	| 测试与护栏 | ✅ 完成 | `cargo test` **388 通过 / 0 失败**（357+29+2，1 ignored，2026-10-29 实跑）；`tests/all.sh` **41 通过 / 0 失败 / 5 跳过**；44 个探针脚本 + 12 份契约 golden |
+docs/TODO.md:23	| 命令行（CLI） | ✅ 完成 | **43 个长选项**（实测 `--help`）；补全三份 + man 页均由 `cli_spec.rs` 自动生成 |
+docs/TODO.md:24	| 图形界面（Linux） | ✅ 完成 | 5 页（首页/预览树/打包/历史/设置）+ 托盘；**17 个 dart / 5,732 行**；`flutter test` 46 条 |
+docs/TODO.md:25	| 装包与发版 | ✅ 完成 | deb + 两档 tar.gz；菜单认领 **14 种格式**；`test-packages.sh` 37 项；0.9.31 已装机 |
+docs/TODO.md:26	| 协议面 | ✅ 完成 | **11 个命令 / 30 种事件 / 14 种 MIME**；协议只加不删 |
+docs/TODO.md:27	| 多平台·Windows CLI | 🟡 差最后两步 | 引擎已交叉编出 13 MB `yshjy.exe`、wine 验过；**剩**：`crash.rs` 非 unix 时区还是 `return 0` 占位（时间差 8 小时）+ 出 zip 包 + `BUILD-Windows.md` |
+docs/TODO.md:28	| 多平台·Windows 界面 | ⛔ 本机做不了 | 必须在 Windows 上编（用户自己的 Win 机器） |
+docs/TODO.md:29	| 多平台·Android | ⛔ 未开始 | SDK/NDK 未装（约 8–10 G）；代码侧 seek 三档已就位，落地 5 条待验清单见下 |
+docs/TODO.md:30	| 多平台·macOS / iOS | ⛔ 未开始 | 靠 GitHub 免费 CI；零成本口径（不上架/不公证/不买账号）已定 |
+docs/TODO.md:31	| FFI（iOS 唯一通道） | 🟡 引擎侧已通 | `ffi/` 9 个 C 导出 + 头文件对账探针；**缺** Dart 侧 `FfiTransport` 与 ffigen 绑定 |
+docs/TODO.md:32	| `--reclaim` 边解压边删源 | ⏸ 延后 | 用户 2026-10-28 口径「以后更新做」，方案在 `docs/INPLACE-EXTRACT.md`，**不是否决** |
+docs/TODO.md:44	| 3 | 真实磁盘满 / 中途拔盘 | 🟡 **已实测一半（2026-10-29）** | ① **磁盘满**：预检 3 次全命中（剩 110M 想解 300M → 直接拒、0 字节落地、退出码 1）；「写到一半才满」本机造不出（预检准 + 页缓存秒回，要造得写超过脏页上限 ≈3.9G）② **拔盘**：**屏幕报 ✅ 后立刻拔 → 300MB 全灭**（重插后 `fsck.exfat`: `clean. directories 1, files 0`，解压目录都不存在）；真正落盘要约 200 秒，与提示差 660 倍 —— 见 `CHANGELOG.md` 未发布节与表尾新条目 ③ **仍欠**：需要「写超过脏页上限」的长时写入，才能测真 I/O 错误下 `.yshjy-part` 的表现 |
+docs/TODO.md:45	| 4 | 「下载 → 装 → 出错」完整首用链路 | **未走完**（T6 ◐ 半勾） | 用户实机试过 0.9.25-c「都正常」，但没按新用户视角从零走一遍（下载页 → 安装 → 遇到错误 → 报障） |
+docs/TODO.md:113	| Linux 终端 + 桌面 | ✅ 已完成 | 本机 | 0.9.26 已装机，`tests/all.sh` 24 通过 0 失败 |
+docs/TODO.md:144	| T1 | 依赖安全 | ✅ 1 漏洞 + 1 yanked + 1 许可证缺口，已修并验证 |
+docs/TODO.md:145	| T2 | 测试覆盖 | ✅ 66.3%；协议层是真空洞（serve.rs 26.2% / api.rs 8.1%） |
+docs/TODO.md:146	| T3 | 性能压测 | ✅ 2 GB 单文件内存只 7 MB；10 万碎文件 8.6 秒 |
+docs/TODO.md:147	| T4 | 模糊测试 | ✅ 2.38 亿次零崩溃；写盘路径无 target（并入梯队三第 7 项） |
+docs/TODO.md:148	| T7 | 多语言 | ✅ 引擎 7 语全齐；界面未接多语言（架构决定，非缺陷） |
+docs/TODO.md:149	| T8 | 异常场景 | ✅ 路径穿越守住；中断留半截（见梯队一第 1 项）。**2026-10-29 已实测**：磁盘满预检 3 次全命中 / 报成功后立刻拔盘 300MB 全灭（见「Linux 还剩什么」#3、`CHANGELOG.md` 未发布节）；仍欠长时写入下的真 I/O 错误 |
+docs/TODO.md:150	| T9 | 数据安全 | ✅ 不弄坏原有文件；假开关与文案问题已入梯队一、二 |
+docs/TODO.md:151	| T6 | 新手走一遍 | ◐ 用户已实机体验 0.9.25-c「都正常」；缺「下载 → 装 → 出错」完整首用链路 |
+docs/TODO.md:152	| T5 | 装包与发布检查 | ✅ **0.9.26 完成**：对外号去 `-c` 并五处同步 / deb 逐项核对 33 项全绿 / AppImage 评估＝本轮不做（配方见 `docs/RELEASE-CHECK.md`） |
+docs/TODO.md:406	- [x] ✅ **已完成（2026-10-29）**：prerm 只在 `remove|purge` 时动手 —— ① TERM 停掉还在跑的界面
+docs/TODO.md:677	| W1 | ✅ 时区（**2026-10-30 已修**，证据见 CHANGELOG） | 🔴 用户一眼看得见 | ~~解出来的文件时间 +8 小时~~ 实测解出 mtime 与源一致 |
+docs/TODO.md:678	| W2 | ✅ 续传（**2026-10-30 已修，两层根因**，证据见 CHANGELOG） | 🔴 功能假死 | ~~append 下 set_len 被拒~~ 之外还有 **canonicalize 存在与否指纹漂移**（验收时实测挖出） |
+docs/TODO.md:679	| W3 | ✅ 回收站（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~只认 XDG~~ Windows 引 trash 5.2 走系统回收站（COM），Unix XDG 实现保留 |
+docs/TODO.md:680	| W4 | ✅ 密码明文（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~关回显只有 Unix 分支~~ 换 dialoguer::Password，顺手删手写 termios |
+docs/TODO.md:681	| W5 | ✅ 内存预检（**2026-10-30 已修**，证据见 CHANGELOG） | 🟠 | ~~读 /proc，Windows 永远「内存未知」~~ 外壳注册 GlobalMemoryStatusEx 探针，预检实时取数 |
+docs/TODO.md:682	| W6 | ✅ 配置 `~`（**2026-10-30 已修**，证据见 CHANGELOG） | 🟡 | ~~展开只认 HOME~~ 走 paths::home（USERPROFILE 优先） |
+docs/TODO.md:683	| W7 | ✅ 回归套件（**2026-10-30 全绿：35 过/0 挂/9 明说跳过**，四个深坑见 CHANGELOG） | 🟡 | ~~缺 zip/rar/unrar~~ 7z 造夹具 + MSYS .exe 兜底/星平面 grep/GBK 输出/kill -INT 四坑修平 |
+docs/TODO.md:684	| W8 | ✅ 单测 14 挂（**2026-10-30 清零：355 过 0 挂**） | 🟡 | 10 条随 W2、1 条随 W6；paths 加 cfg(unix)；tar/make_with 系挖出 **WSL bash 假绿**（直起工具修复） |
+docs/TODO.md:685	| W9 | ✅ 图形界面（**2026-10-30 落地**，证据见 CHANGELOG） | ⛔ 用户点名要 | ~~Flutter 没装、3 处 Unix 路径~~ 出包实测通过 + Windows 托盘 + 关窗口设置（默认分平台） |
+docs/TODO.md:824	| ① | 打包（pack） | ✅ 已接（CLI + 界面），且**排在自检之前**：自检读的是页缓存，通过≠落盘 |
+docs/TODO.md:825	| ② | 救援（rescue） | ✅ 已接（产出是"救回来的数据"，最不该让人以为安全） |
+docs/TODO.md:826	| ③ | 封面提取 | ✅ 已接（只落盘、不发事件） |
+docs/TODO.md:827	| ④ | 断点续传记录 | ⏸ **故意不改**：断电最多丢最后几条，后果只是重解，不产生坏文件 |
+docs/TODO.md:828	| ⑤ | 空间不足文案 `0 B` | 🔴 **未修**：应改成「需要 X / 只有 Y / 还差 Z」 |
+docs/BACKEND-SPEC.md:406	| 1 | 手机端/GUI 对接方案 | ✅ 三层暴露 + FRB + FFI 草案 |
+docs/BACKEND-SPEC.md:407	| 2 | 配置与密码本存储 | ✅ XDG 路径 + TOML 字段 + 密码本格式（并不做 ascii 过滤） |
+docs/BACKEND-SPEC.md:408	| 3 | 打包布局规则化 | ✅ `LayoutSpec` 结构 + L1~L8 数据表（实测结论已写入） |
+docs/BACKEND-SPEC.md:409	| 4 | 诊断包格式 | ✅ 内容清单 + 隐私红线 |
+docs/BACKEND-SPEC.md:410	| 5 | 解压器统一接口 | ✅ trait + 配套类型 + 各格式实现要点 |
+docs/BACKEND-SPEC.md:411	| 6 | 日志分级与内容 | ✅ 四级 + 退出码约定 + 用户文案/工程日志分离 |
+docs/OPTIMIZE-2026-10-28.md:57	| 1 | **三个补全脚本补齐** | 现在敲 `yshjy --<TAB>` 只出来 18 个选项，实际有 34 个（刚补的 `--level`/`--sfx`/`--caps` 也没进去） | 半小时 | 零 | ✅ 先做 |
+docs/OPTIMIZE-2026-10-28.md:58	| 2 | **`--pick` 全屏勾选** | 现在只能 `--select "*.exe"` / `"1,3,5"` 这种写法，要先 `--list` 看编号。有了它就能 ↑↓ 移动、空格打勾、回车解压 | 半天 | 低（用 `dialoguer`，不手搓） | ✅ 做（你最早点名要的） |
+docs/OPTIMIZE-2026-10-28.md:59	| 3 | **界面「只取封面」入口** | 引擎早就有这能力（只要伪装包里的原版视频/图片，不解压），界面没按钮 | 半天 | 低（协议现成） | ✅ 做 |
+docs/OPTIMIZE-2026-10-28.md:60	| 4 | **界面「救援模式」入口** | 包索引坏了的抢救功能，CLI 有、界面没有 | 一天 | 中（协议要加 `rescue` 命令） | 🟡 排后面 |
+docs/OPTIMIZE-2026-10-28.md:61	| 5 | **进度条换 indicatif** | `-j 2` 同时解两个包时，现在两行进度会互相覆盖 | 半天 | 中（会动到刚写好的代码） | 🟡 你若常用 `-j` 就提前 |
+docs/OPTIMIZE-2026-10-28.md:62	| 6 | **`--list` 输出改表格** | 现在列内容是一行一条，大小和名称对不齐 | 半天 | 低 | 🟡 锦上添花 |
+docs/OPTIMIZE-2026-10-28.md:63	| 7 | **边解压边删源** | 省峰值磁盘（8.7 GB 的包不用 17 GB 才解得开） | 见下 | **高（会删你的源文件）** | ⏸ 暂缓（你定的） |
+docs/AI-验收方案.md:41	| **Maestro** | ❌ 官方文档明写「Flutter Desktop 还不支持」（`docs.maestro.dev`），别白折腾 |
+docs/AI-验收方案.md:44	| **Computer Use Agent（CUA）** | ✅ 像人一样"看截图 → 点鼠标 → 再看"，天然覆盖整个界面。ML6 的 `cua-uat` 实测：**28 个功能 bug 抓到 27 个**、8 个视觉 bug 抓到 6 个 |
+docs/AI-验收方案.md:54	| 截屏 | ✅ | xdg-desktop-portal RemoteDesktop |
+docs/AI-验收方案.md:55	| 鼠标点击 | ✅ | 同上（会真移动光标，Wayland 限制） |
+docs/AI-验收方案.md:56	| 键盘输入 / 组合键 | ✅ | ydotool + `/dev/uinput`（权限已配好） |
+docs/AI-验收方案.md:57	| 窗口列表 / 切窗口 | ✅ | GNOME Shell 扩展 |
+docs/AI-验收方案.md:82	| ① 引擎 | `cargo test` | 打包/解压/加密/分卷/命名真算得对 | 我 | ✅ 390 过 |
+docs/AI-验收方案.md:83	| ② 界面逻辑 | `flutter test`（带 `XDG_CONFIG_HOME` 临时目录） | 按钮背后的判断逻辑、错误码文案 | 我 | ✅ 89 过 |
+docs/AI-验收方案.md:84	| ③ **真界面** | **computer-use 开应用、真点、截图** | **用户手指点到的那条路** | 我 | ⛔ **从没做过（本次补）** |
+docs/AI-验收方案.md:85	| ④ 装机 | `dpkg`/`--version`、菜单 14 格式、`tests/pick.sh`、装机版真打包解压 sha256 | 包装得对不对、装完能不能用 | 我 | ✅ 每版都做 |
+docs/INPLACE-EXTRACT.md:75	| **C. 分卷读完删卷** | ✅ 高 —— 我们分卷归组、卷名推导都现成 | 分卷场景峰值省 (N-1)/N | 低。失败要能从剩下卷续（已有续传） |
+docs/INPLACE-EXTRACT.md:76	| **B. 打洞（punch hole）** | 🟡 中 —— 需要 `rustix`，且**必须每批 fsync 后才打洞** | 单文件大包峰值几乎减半 | 中。fsync 会降速；断电前落盘必须保证；FAT/exFAT 要退回 |
+docs/INPLACE-EXTRACT.md:77	| **A. 倒着解（hatchzip 全套）** | ❌ 低 —— 要重写解压驱动层（逆序遍历 + 虚拟 Reader + tail 转存 + journal v3） | 全格式通用 | 高。`zip`/`sevenz-rust2` 都没有「逆序读」入口，等于自己写一层 |
