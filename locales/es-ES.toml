@@ -45,6 +45,7 @@ OPCIONES HABITUALES:
                                     --select "data/**"   solo esa carpeta
                                     --select "1,3,5"     solo las entradas 1, 3 y 5
                                     --select required    omitir basura como .DS_Store
+  --candidate <desplazamiento>    un archivo con varios ocultos: elegir cuál extraer (el número del escaneo)
   --pick <archivo>                elegir entradas en una lista a pantalla completa (espacio · a · Enter)
   --json                          emitir eventos y resultados como líneas JSON (para scripts)
   --no-smart-dir                  desactivar la «extracción inteligente»: por defecto, si hay una sola
@@ -172,6 +173,8 @@ report_failed = "❌ No se pudo crear el paquete de diagnóstico: {err}"
 no_target = "❌ No indicaste ningún archivo.\n\n   Uso: yshjy <archivo>\n   Más: yshjy --help"
 bad_jobs = "❌ --jobs necesita un número, p. ej. --jobs 2 (recibido {value})"
 bad_select = "❌ No se puede interpretar --select: {expr}\n   ({reason})"
+bad_candidate = "❌ --candidate necesita un desplazamiento en bytes (un número), p. ej. --candidate 3145728 (recibido {value})"
+candidate_one_file = "❌ --candidate solo funciona con un único archivo — significa \"qué sitio dentro de ESTE archivo\""
 select_examples = "   Ejemplos: --select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
 interrupted = "⏹  Ctrl-C recibido — terminando (los archivos ya extraídos se conservan; pulsa otra vez para forzar salida)"
 interrupted_again = "⏹  Pulsa otra vez para forzar la salida"

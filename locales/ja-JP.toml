@@ -45,6 +45,7 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
                                     --select "data/**"     そのフォルダ以下だけ
                                     --select "1,3,5"       1・3・5 番目だけ
                                     --select required      .DS_Store などを除外
+  --candidate <位置>              1 ファイルに複数のアーカイブが隠れているとき、どれを展開するか指定（位置＝スキャン結果のバイト数）
   --pick <ファイル>               展開する項目を全画面で選ぶ（スペース · a · Enter）
   --json                           イベント／結果を JSON 行で出力（スクリプト向け）
   --no-smart-dir                   「スマート展開」を無効化：既定では最上位フォルダが 1 つだけなら
@@ -172,6 +173,8 @@ report_failed = "❌ 診断パッケージの作成に失敗しました：{err}
 no_target = "❌ 処理するファイルが指定されていません。\n\n   使い方：yshjy <ファイル>\n   詳細：yshjy --help"
 bad_jobs = "❌ --jobs には数値が必要です（例：--jobs 2）。受け取った値：{value}"
 bad_select = "❌ --select を解釈できません：{expr}\n   （{reason}）"
+bad_candidate = "❌ --candidate にはバイト位置（数値）が必要です（例：--candidate 3145728）。受け取った値：{value}"
+candidate_one_file = "❌ --candidate は 1 ファイル専用です ——「このファイルの何番目か」を指す指定です"
 select_examples = "   例：--select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
 interrupted = "⏹  Ctrl-C を受信 —— 終了処理中（展開済みファイルは保持。もう一度押すと強制終了）"
 interrupted_again = "⏹  もう一度押すと強制終了します"

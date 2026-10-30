@@ -45,6 +45,7 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
                                     --select "data/**"    해당 폴더 아래만
                                     --select "1,3,5"      1·3·5번째만
                                     --select required      .DS_Store 같은 쓰레기 제외
+  --candidate <오프셋>            한 파일에 여러 아카이브가 숨어 있을 때 어느 것을 풀지 지정 (오프셋 = 스캔 결과의 바이트 수)
   --pick <파일>                   풀 항목을 전체 화면에서 선택 (스페이스 · a · Enter)
   --json                          이벤트/결과를 JSON 줄로 출력 (스크립트용)
   --no-smart-dir                  '스마트 압축 풀기' 해제: 기본값은 최상위 폴더가 하나뿐이면
@@ -172,6 +173,8 @@ report_failed = "❌ 진단 패키지 생성 실패: {err}"
 no_target = "❌ 처리할 파일을 지정하지 않았습니다.\n\n   사용법: yshjy <파일>\n   자세히: yshjy --help"
 bad_jobs = "❌ --jobs 에는 숫자가 필요합니다 (예: --jobs 2). 받은 값: {value}"
 bad_select = "❌ --select 를 해석할 수 없습니다: {expr}\n   ({reason})"
+bad_candidate = "❌ --candidate 에는 바이트 오프셋(숫자)이 필요합니다 (예: --candidate 3145728). 받은 값: {value}"
+candidate_one_file = "❌ --candidate 는 파일 하나에만 쓸 수 있습니다 — \"이 파일 안의 몇 번째\"를 뜻합니다"
 select_examples = "   예: --select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
 interrupted = "⏹  Ctrl-C 수신 —— 마무리 중 (이미 푼 파일은 유지되며, 한 번 더 누르면 강제 종료)"
 interrupted_again = "⏹  한 번 더 누르면 강제 종료합니다"
