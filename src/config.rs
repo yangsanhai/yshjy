@@ -265,10 +265,14 @@ impl Config {
             if let Some(x) = t.get("file").and_then(|x| x.as_str()) {
                 cfg.password.file = x.to_string();
             }
-            if let Some(x) = t.get("auto_from_notes").and_then(|x| x.as_bool()) {
+            // 开关既认 TOML 布尔（手写 `auto_from_notes = true`），也认界面存的字符串
+            // （设置页 `_upsertSection` 一律写带引号的 `"on"` / `"off"`）。
+            // 只认 `as_bool()` 会造成「在界面关了、引擎还在读旁边的说明文件」这种
+            // 最难查的错：界面看着关，行为没变。这一条必须和 [safety] 段同一套读法。
+            if let Some(x) = 取开关(t.get("auto_from_notes")) {
                 cfg.password.auto_from_notes = x;
             }
-            if let Some(x) = t.get("auto_from_book").and_then(|x| x.as_bool()) {
+            if let Some(x) = 取开关(t.get("auto_from_book")) {
                 cfg.password.auto_from_book = x;
             }
             // 注：老配置里可能还写着 `try_common = ...`，这里**故意不认** ——
@@ -296,7 +300,7 @@ impl Config {
             if let Some(x) = t.get("zip_bomb_ratio").and_then(|x| x.as_integer()) {
                 cfg.safety.zip_bomb_ratio = x.max(1) as u64;
             }
-            if let Some(x) = t.get("warn_executables").and_then(|x| x.as_bool()) {
+            if let Some(x) = 取开关(t.get("warn_executables")) {
                 cfg.safety.warn_executables = x;
             }
             // 开关既认 TOML 布尔（手写 `true`），也认界面存的字符串（`"on"`/`"off"`）——
@@ -701,6 +705,39 @@ zip_bomb_ratio = 50
         // 下限也要夹住（写 0 = 一个候选都不试，那等于把功能写没了，不是合法配置）
         std::fs::write(&f, "[password]\nmax_candidates = 0\n").unwrap();
         assert_eq!(Config::load_from(&f).password.max_candidates, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 设置页写的字符串开关引擎也认() {
+        // ★ 这条盯的是「界面看着关了、引擎还在做」这类最难查的错。
+        // 设置页 `_upsertSection` 一律写带引号的字符串（`auto_from_notes = "off"`），
+        // 而 `as_bool()` 对字符串返回 None → 该字段被静默忽略 → 保持默认 true。
+        // 用户勾掉「自动抓解压码」、程序照旧去翻旁边的说明文件，界面永远不会报错。
+        // 所以这三个开关必须走同一套「布尔和 on/off 都认」的读法。
+        let dir = 临时目录("switchstr");
+        let f = dir.join("config.toml");
+        std::fs::write(
+            &f,
+            "[password]\nauto_from_notes = \"off\"\nauto_from_book = \"off\"\n\
+             [safety]\nwarn_executables = \"off\"\nflush_movable = \"on\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load_from(&f);
+        assert!(!cfg.password.auto_from_notes, "字符串 off 必须真的关掉");
+        assert!(!cfg.password.auto_from_book);
+        assert!(!cfg.safety.warn_executables);
+        assert!(cfg.safety.flush_movable, "字符串 on 必须真的打开");
+
+        // 反过来：手写 TOML 布尔也得认（两种写法同一个结果）
+        std::fs::write(
+            &f,
+            "[password]\nauto_from_notes = true\nauto_from_book = false\n",
+        )
+        .unwrap();
+        let cfg = Config::load_from(&f);
+        assert!(cfg.password.auto_from_notes);
+        assert!(!cfg.password.auto_from_book);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

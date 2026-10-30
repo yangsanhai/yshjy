@@ -38,6 +38,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _openAfter = false;
   // 解压后检验「移动设备是否真落盘」（默认关，见 docs/TODO.md 与 src/flush.rs）
   bool _flushMovable = false;
+  // 自动找解压码的两个开关（T8 界面半）：默认都开，与引擎 `config.rs` 的默认值一致。
+  // 分两档是因为代价不同：密码本是用户亲手记的，说明文件是程序去翻包旁边的文本。
+  bool _autoFromNotes = true;
+  bool _autoFromBook = true;
   // 关窗口时：tray（缩到托盘）| exit（直接退出），默认分平台（见 app_settings.dart）
   String _closeAction = Platform.isWindows ? 'exit' : 'tray';
   bool _loaded = false;
@@ -62,6 +66,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final out = _parseSection(text, 'output');
       final gen = _parseSection(text, 'general');
       final saf = _parseSection(text, 'safety');
+      final pwd = _parseSection(text, 'password');
       if (!mounted) return;
       setState(() {
         _outDirCtrl.text = out['dir'] ?? '';
@@ -70,6 +75,10 @@ class _SettingsPageState extends State<SettingsPage> {
         _theme = gen['theme'] ?? 'auto';
         _notify = (gen['notify'] ?? 'on') != 'off';
         _openAfter = (gen['open_after'] ?? 'off') == 'on';
+        // 默认开（引擎默认也是 true）；只有明确写 off/false 才算关。
+        // 文件里可能写成 TOML 布尔 true/false（用户手改）或 "on"/"off"（本页保存的写法）。
+        _autoFromNotes = _readSwitch(pwd['auto_from_notes'], dflt: true);
+        _autoFromBook = _readSwitch(pwd['auto_from_book'], dflt: true);
         // 默认关；只有明确写 on/true 才算开
         _flushMovable = const ['on', 'true'].contains(saf['flush_movable'] ?? 'off');
         final ca = gen['close_action'];
@@ -104,6 +113,15 @@ class _SettingsPageState extends State<SettingsPage> {
       out[k] = v;
     }
     return out;
+  }
+
+  /// 读一个开关：认得 TOML 布尔（`true`/`false`，用户手改的）和字符串（`"on"`/`"off"`，
+  /// 本页 `_upsertSection` 保存的写法）。认不出就用默认值 —— 绝不让配置异常炸界面。
+  bool _readSwitch(String? v, {required bool dflt}) {
+    final s = (v ?? '').trim().toLowerCase();
+    if (const ['on', 'true', 'yes', '1'].contains(s)) return true;
+    if (const ['off', 'false', 'no', '0'].contains(s)) return false;
+    return dflt;
   }
 
   /// 在原文里逐行更新 `[output]` 的三个键；段不存在就追加
@@ -173,6 +191,13 @@ class _SettingsPageState extends State<SettingsPage> {
       // 落盘检验开关：引擎读 [safety] 这一段（config.rs 的 flush_movable）
       updated = _upsertSection(updated, 'safety', {
         'flush_movable': _flushMovable ? 'on' : 'off',
+      });
+      // 自动找解压码的两个开关：引擎读 [password] 这一段（config.rs 的 auto_from_notes
+      // / auto_from_book）。只写这两行，`file` 和 `max_candidates` 由 _upsertSection
+      // 原样保留 —— 用户手写的值不会被本页冲掉。
+      updated = _upsertSection(updated, 'password', {
+        'auto_from_notes': _autoFromNotes ? 'on' : 'off',
+        'auto_from_book': _autoFromBook ? 'on' : 'off',
       });
       Notifier.enabled = _notify; // 立刻生效，不用重启
       await f.parent.create(recursive: true);
@@ -331,6 +356,30 @@ class _SettingsPageState extends State<SettingsPage> {
           value: _flushMovable,
           onChanged: (v) => setState(() => _flushMovable = v),
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('自动从「说明.txt」里找解压码'),
+          subtitle: Text(
+            '默认打开。带解压码的包旁边常有作者写的说明文件，打开后程序会去里面找现成的码。'
+            '不想让程序翻包旁边的文本，就关掉。',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: _autoFromNotes,
+          onChanged: (v) => setState(() => _autoFromNotes = v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('自动试「密码本」里的解压码'),
+          subtitle: Text(
+            '默认打开。密码本是你在设置页「密码本」那个文件里亲手记的常用码。'
+            '本工具只试你记过的和说明文件里写明的，不做字典、不做爆破。',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: _autoFromBook,
+          onChanged: (v) => setState(() => _autoFromBook = v),
+        ),
         const SizedBox(height: 6),
         Text(
           '关着的时候也会提醒「拔盘前请先安全弹出」——提醒不花时间，但能救命。',
@@ -405,7 +454,6 @@ class _SettingsPageState extends State<SettingsPage> {
         _kv('并行任务数', 'jobs = 1（机械盘建议 1）'),
         _kv('压缩比上限', 'zip_bomb_ratio = 100（防炸弹）'),
         _kv('可执行提醒', 'warn_executables = true'),
-        _kv('自动抓解压码', 'auto_from_notes = true（从旁边的说明文件里找）'),
         const SizedBox(height: 18),
         _section('还没做的（我不装样子）', cs),
         Container(

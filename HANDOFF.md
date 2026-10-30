@@ -1,5 +1,30 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-30 更深夜 · T8 界面半：设置页两个「自动找解压码」开关接成真勾选（第 7 个提交，未发版）**
+>
+> 两行假开关（硬编码字符串）换成了真 SwitchListTile，保存写回 `[password]` 段，**不需要新协议命令**
+> —— 设置页本来就能逐行读写 `config.toml`（`flush_movable` 一直这么干），之前那句「得先加读/写配置的
+> 协议命令」是保守误判，已在 TODO/CHANGELOG 里纠正。
+>
+> **★ 顺藤查出的真 bug**：`config.rs` 三个开关（`auto_from_notes` / `auto_from_book` /
+> `warn_executables`）用的是 `as_bool()`，对界面写的字符串 `"off"` 返回 `None` → 字段被静默忽略 →
+> 保持默认 `true`。用户勾掉了「自动抓解压码」，程序照样翻说明文件且永不报错。已统一走 `取开关()`。
+>
+> **证据三层**：① 单元/组件测试（Rust 1 条 + Dart 3 条）② 真机点（截图 `screenshots/settings-auto-password-off.jpg`、
+> `settings-save-button.jpg`，保存后 `config.toml` 真是 `"off"`）③ 端到端（同一个加密 zip 旁边放 `说明.txt`：
+> off 时「这个包带锁，需要解压码」，on 时「解压码是从旁边的说明里找到的…」并解开）。
+>
+> **回归**：`cargo test` 402 过 / 0 挂、`clippy` 干净、`flutter analyze` 只剩一条既有 info、`flutter test` 102 过 / 0 挂。
+> **仍未发版**（装机版 0.9.34 不含本轮 7 个提交）。
+>
+> **★ 新踩的坑**：`testWidgets` 是假时钟，`await File.readAsString()` 这种真 I/O 的 Future **永远不完成** →
+> `_load()` 卡在第一行、界面停在默认值，测试会**假绿**（第一版就这么绿的）。必须把 `pumpWidget` 整段放进
+> `tester.runAsync()`。
+>
+> **★ 交互坑（真机验时踩的）**：这个 Flutter 窗口**吃不到 uinput 的滚轮事件**（`ydotool click 5` /
+> computer-use 的 `scroll` 都不动，拖动也不行）。要滚到下面的控件，可靠办法是发 **Tab** 让焦点走
+> （`ydotool key 15:1 15:0`），ListView 会自动把焦点控件滚进视野。
+
 > **2026-10-30 深夜 · 清 `docs/AUDIT-GAP.md` 对账欠账 · 6 个提交 · 未发版**
 >
 > 用户的原话是「写个进度清单，做一个验证一个再写下一个清单，全搞完」。清完的样子见
@@ -29,8 +54,7 @@
 > - **T5 多候选**：引擎只给**单个** `looks_like`，没有"N 个候选带可信度"。要做得改探测层；
 >   且对新手反直觉（让他从 6 个候选里挑）。**替代方案（说清最可能的那个 + 一键强试）待用户点头。**
 > - **T7 八项入口**（decoy / 布局 / `--test` / smart-dir / report 目录 / jobs…）：八次真机验收，慢。
-> - **T8 界面半**：设置页那几行「自动抓解压码 = true」是**硬编码字符串**，页面自己标了
->   「其它（改 config.toml）」。要变真勾选，得先加「读配置 / 写配置」的协议命令（现在只有 `--show-config` 打终端）。
+> - ~~**T8 界面半**：设置页那几行「自动抓解压码 = true」是硬编码字符串~~ → **已完成，见本文件最上面那段**（2026-10-30 更深夜，第 7 个提交；并且证明「必须先加读/写配置的协议命令」这个判断是错的）。
 > - **T9 差主界面截图**（已有 `screenshots/space-shortage.jpg`）、**T11 无障碍**（`Semantics` 零处）、
 >   **T14 界面多语言**（474 条硬编码，两天级）、**T15 覆盖率**（要装 `cargo-llvm-cov`）。
 >
