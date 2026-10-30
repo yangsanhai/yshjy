@@ -27,7 +27,7 @@
 | T9 | 门面：`metainfo.xml` + 多尺寸图标 + README 版本/如实说明 | 门面 | 🟡 **差真截图** | `appstreamcli validate` ✔ 通过；7 尺寸图标已接入 deb 与用户级安装；README 0.9.31→0.9.34、补「界面只有中文」。**剩**：真截图（README 那 3 张是徽章不是截图）+ 元数据里填 screenshots |
 | T10 | 开源规范：SECURITY.md / CODE_OF_CONDUCT.md / issue 模板 | 门面 | ✅ 完成 | 三份都在；issue 表单是 GitHub YAML 格式（bug_report / feature_request / config） |
 | T11 | 无障碍：`Semantics` 语义 + 键盘快捷键 | 界面 | ⬜ | `grep -c 'Semantics('` > 0 且 `flutter test` 全绿 |
-| T12 | CI 加 Flutter 测试 | 工程 | ⬜ | workflow 里有 flutter test 步骤 |
+| T12 | CI 加 Flutter 测试 | 工程 | ✅ 完成（**本地只能验 YAML，跑绿要到 GitHub 上才算真验**） | `.github/workflows/ci.yml` 新增 `gui` job：装 Flutter stable → `pub get` → `analyze` → `test`（`XDG_CONFIG_HOME` 指临时目录）。YAML 已用 `yaml.safe_load` 解析通过，jobs = check / licenses / gui。**没加** `--fatal-infos`：项目里那条既有 info 不在本轮范围，加上来只会一上来就红。出包流水线（deb + tag 发布）仍未做 |
 | T13 | 台账失真 + README 假「规划中」 | 文档 | ✅ 完成（16 处） | REFERENCE-INDEX 9 处（含 decoy 真身其实在 `src/pack/decoy.rs`，审计自己写错了路径）、DESIGN 3 处、GUI-PLAN 4 处；每条都先 grep 核代码再改 |
 | T14 | 界面多语言接线（474 条硬编码） | 界面 | ⬜ | 切 `--lang en` 界面变英文；**本轮不保证做完，见下方说明** |
 | T15 | 覆盖率报告（cargo llvm-cov） | 工程 | ⬜ | `scripts/cov_by_file.py` 出分文件表 |

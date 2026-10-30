@@ -45,3 +45,39 @@ jobs:
         uses: taiki-e/install-action@cargo-deny
       - name: 检查许可证
         run: cargo deny check licenses
+
+  gui:
+    # 界面以前完全不在 CI 里：Rust 侧挂了会红，dart 侧挂了没人知道。
+    # 这里只跑 analyze + test（两者都不需要 GTK/显示服务），
+    # 出包流水线（deb/AppImage + tag 发布）另算，见 TODO T12。
+    name: 界面（flutter analyze + test）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 版本
+        run: flutter --version
+
+      - name: 依赖
+        working-directory: gui
+        run: flutter pub get
+
+      - name: 静态检查
+        # 注意：项目里还有 1 条既有 info（不在本轮范围内），
+        # 所以这里**不加** --fatal-infos，否则一上来就红、没人会去修。
+        working-directory: gui
+        run: flutter analyze
+
+      - name: 测试
+        working-directory: gui
+        # XDG_CONFIG_HOME 指到临时目录：flutter test 会去 config 目录写缓存，
+        # 有时候在有 $HOME 只读的 runner 上直接挂
+        env:
+          XDG_CONFIG_HOME: /tmp/yshjy-ci-config
+        run: mkdir -p /tmp/yshjy-ci-config && flutter test
