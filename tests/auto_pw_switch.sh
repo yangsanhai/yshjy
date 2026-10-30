@@ -23,6 +23,15 @@ export XDG_CONFIG_HOME="$T/cfg"
 mkdir -p "$T/cfg/yshjy"
 printf 'bookPW\n' > "$T/cfg/yshjy/passwords.txt"
 
+# ★ 2026-10-31 起「自动找解压码」**默认关**（用户口径：程序不许默认翻他的东西）。
+# 所以这条探针要验“两档各自只关自己”时，必须先把两档显式打开 —— 否则
+# “default: should extract” 验的就不再是默认开，而是默认关（会误判成功能坏了）。
+cat > "$T/cfg/yshjy/config.toml" <<'TOMLEOF'
+[password]
+auto_from_notes = true
+auto_from_book = true
+TOMLEOF
+
 printf 'hello\n' > "$T/a.txt"
 ( cd "$T" && zip -q -P notePW note.zip a.txt && zip -q -P bookPW book.zip a.txt ) || {
   echo "FAIL: cannot build test zips"; exit 1; }
@@ -56,7 +65,20 @@ try fail "notes off only: must fail"                     "$T/note.zip" --no-auto
 try ok   "book off only: notes remain, should extract"   "$T/note.zip" --no-auto-password-book
 
 echo "-- master switch still turns both off --"
+# ★ 2026-10-31 修：这两行以前只在**描述里**写了 `--no-auto-password`，参数根本没传
+#   （默认开着的时候"不加开关能解开"= ok，被当成 fail 报出来才发现）。参数漏写 = 假测试。
 try fail "note.zip + --no-auto-password"                 "$T/note.zip" --no-auto-password
 try fail "book.zip + --no-auto-password"                 "$T/book.zip" --no-auto-password
+
+# ★ 默认必须是关（用户 2026-10-31 口径）：什么都不配的时候，程序不许替用户
+#   翻说明文件、也不许拿他的密码本去试 —— 只报「这个包带锁，需要解压码」。
+#   这条**反向断言**才是这个功能真正的要求，别只验“打开后能用”。
+echo "-- default is OFF: no config at all -> must ask, not auto-find --"
+export XDG_CONFIG_HOME="$T/cfg_default"
+mkdir -p "$T/cfg_default/yshjy"
+printf 'notePW\nbookPW\n' > "$T/cfg_default/yshjy/passwords.txt"   # 现成的码也不许自动试
+printf '解压码：notePW\n' > "$T/说明.txt"
+try fail "default off: note.zip must NOT auto-find from notes"  "$T/note.zip"
+try fail "default off: book.zip must NOT auto-try password book" "$T/book.zip"
 
 exit $bad
