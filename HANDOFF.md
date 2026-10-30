@@ -9,7 +9,7 @@
 > 代码：`src/flush.rs` + `[safety] flush_movable`；事件 `FlushProgress` / `FlushFinished`；
 > 诊断码 `MovableNotVerified`；探针 `tests/flush_movable.sh`（已挂 `tests/all.sh`）4/4。
 > 回归：`cargo test` 367 过 / clippy 干净 / `flutter test` 89 过。
-> **未发版** —— 跟 `82d3088` 一起攒批。全文见 `CHANGELOG.md` 的 `[未发布]` 节。
+> **已发版：0.9.34**（2026-10-30，已装机验过）。全文见 `CHANGELOG.md` 的 `[0.9.34]` 节。
 > ⚠️ 验证时踩的两个坑：`--json` 是 `{"事件名":{...}}` 而 `--serve` 是 `{"kind":..,"data":..}`；
 > 界面输出目录默认「包旁边」且**不读** config 的 `[output] dir`（要验U盘就把包放U盘上）。
 
@@ -34,9 +34,8 @@
 > → **0.9.33（打包页：输出名跟着输入变 / 完成后显示真实路径 + 打开所在文件夹）**。
 > 装机后每轮都验四项：`dpkg`/`--version`、菜单 14 种格式、`tests/pick.sh` 11 项、
 > 装机版真打包解压 sha256。发版记录见 `docs/RELEASE-CHECK.md` 顶部。
-> **⚠ 有未发版的改动**：提交 `82d3088`（打包页命名/路径抽纯函数 + 修 Windows 写死 `/` 的 bug
-> + 20 条单测，`flutter test` 89 绿）**还没进安装包** —— 0.9.33 不含它。
-> 详情见 `docs/TODO.md` 的「未发版的改动」一节。下次发版必须带上，Windows 侧拉完还得重编 `yshjy.exe`。
+> **✅ 已随 0.9.34 发出去**：提交 `82d3088`（打包页命名/路径抽纯函数 + 修 Windows 写死 `/` 的 bug
+> + 20 条单测）现在**在安装包里**了。Windows 侧拉完仍需重编 `yshjy.exe`（那只在用户自己的 Windows 机上做）。
 > **📋 验收方案已定**：见 `docs/AI-验收方案.md`（2026-10-30 起草）。
 > 发版必须过「验收四层」，其中第三层是**AI 用 computer-use 真开界面点 + 截图**——
 > 今天的四个 bug 全在这一层，而它此前完全空白。晚上按该文档第 7 节 S1~S5 干。
