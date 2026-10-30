@@ -40,8 +40,9 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _flushMovable = false;
   // 自动找解压码的两个开关（T8 界面半）：默认都开，与引擎 `config.rs` 的默认值一致。
   // 分两档是因为代价不同：密码本是用户亲手记的，说明文件是程序去翻包旁边的文本。
-  bool _autoFromNotes = true;
-  bool _autoFromBook = true;
+  // 默认关：引擎侧 config.rs 的默认值也是 false，两边必须一致
+  bool _autoFromNotes = false;
+  bool _autoFromBook = false;
   // 关窗口时：tray（缩到托盘）| exit（直接退出），默认分平台（见 app_settings.dart）
   String _closeAction = Platform.isWindows ? 'exit' : 'tray';
   bool _loaded = false;
@@ -77,8 +78,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _openAfter = (gen['open_after'] ?? 'off') == 'on';
         // 默认开（引擎默认也是 true）；只有明确写 off/false 才算关。
         // 文件里可能写成 TOML 布尔 true/false（用户手改）或 "on"/"off"（本页保存的写法）。
-        _autoFromNotes = _readSwitch(pwd['auto_from_notes'], dflt: true);
-        _autoFromBook = _readSwitch(pwd['auto_from_book'], dflt: true);
+        _autoFromNotes = _readSwitch(pwd['auto_from_notes'], dflt: false);
+        _autoFromBook = _readSwitch(pwd['auto_from_book'], dflt: false);
         // 默认关；只有明确写 on/true 才算开
         _flushMovable = const ['on', 'true'].contains(saf['flush_movable'] ?? 'off');
         final ca = gen['close_action'];
@@ -361,8 +362,8 @@ class _SettingsPageState extends State<SettingsPage> {
           dense: true,
           title: const Text('自动从「说明.txt」里找解压码'),
           subtitle: Text(
-            '默认打开。带解压码的包旁边常有作者写的说明文件，打开后程序会去里面找现成的码。'
-            '不想让程序翻包旁边的文本，就关掉。',
+            '默认关闭。打开后，程序才会去包旁边的说明文件里找现成的码（只读文本，不联网）。'
+            '不想让程序翻包旁边的文本，就一直关着。',
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _autoFromNotes,
@@ -373,7 +374,7 @@ class _SettingsPageState extends State<SettingsPage> {
           dense: true,
           title: const Text('自动试「密码本」里的解压码'),
           subtitle: Text(
-            '默认打开。密码本是你在设置页「密码本」那个文件里亲手记的常用码。'
+            '默认关闭。打开后，程序才会用你在「密码本」里亲手记的常用码去试。'
             '本工具只试你记过的和说明文件里写明的，不做字典、不做爆破。',
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),

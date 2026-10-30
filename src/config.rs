@@ -150,8 +150,11 @@ impl Default for Password {
     fn default() -> Self {
         Self {
             file: "passwords.txt".into(),
-            auto_from_notes: true,
-            auto_from_book: true,
+            // 默认**关**（用户 2026-10-31 口径）：这是「程序主动去翻包旁边的文本 /
+            // 试你记过的密码」，属于替用户做决定的事，必须他自己在设置里打开。
+            // 关着的时候只做一件事：报「这个包带锁，需要解压码」，把判断权还给他。
+            auto_from_notes: false,
+            auto_from_book: false,
             max_candidates: 12,
         }
     }
