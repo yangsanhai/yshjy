@@ -29,6 +29,8 @@
 - ⚠ **打包页这两处还没有专门的回归测试**（要触发系统文件选择器）。
   下一步：把命名逻辑（`_suggestOut` / `_withExt` / `_parentOf`）抽成顶层纯函数再补单测
   ——**已记进 `docs/TODO.md` 表尾**，别再拖成下一个「46 条全绿却漏着」的坑。
+  > **同日已补齐**：抽成 `gui/lib/pack_naming.dart` + `gui/test/pack_naming_test.dart` 20 条，
+  > 并顺带修出「写死 `/` 导致 Windows 路径算错」的真 bug。`flutter test` 89 过。
 
 
 
