@@ -70,6 +70,7 @@ pub const OPTS: &[Opt] = &[
     opt("--no-auto-password-book", None, None, false),
     opt("--encoding", None, Some("编码"), false),          // big5 / sjis / gbk / utf-8
     opt("--select", None, Some("条件"), false),            // 只解一部分
+    opt("--candidate", None, Some("偏移"), false),          // 解「第 N 处」（一个文件里藏着多处归档时）
     opt("--pick", None, None, false),                     // 全屏勾选（dialoguer）
     opt("--jobs", Some("-j"), Some("N"), false),
     opt("--force", Some("-f"), None, false),              // 跳过磁盘空间预检
@@ -219,15 +220,16 @@ mod tests {
 
     /// 长选项总数钉桩 —— 加选项时**必须**同步改这里（故意的：逼你确认补全/man 也跟着更新）
     ///
-    /// 43 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的 `--dump-cli-spec`
+    /// 49 = 原有 37 + 2026-10-28 补登记的 `--import-passwords` + 生成器用的 `--dump-cli-spec`
     /// + `--pick`（全屏勾选）+ 2026-10-29 的 `--trash-source` / `--delete-source`
     /// + `--test`（只测不写：完整解码 + 校验，一个字节都不落盘）
-    /// + 2026-10-29 第三期 B 的 `--decoy` / `--decoy-size` / `--decoy-signatures`。
+    /// + 2026-10-29 第三期 B 的 `--decoy` / `--decoy-size` / `--decoy-signatures`
+    /// + 2026-10-31 的 `--candidate <字节偏移>`（S10 多候选的命令行入口，T16）。
     #[test]
-    fn 长选项总数是_48() {
+    fn 长选项总数是_49() {
         assert_eq!(
             OPTS.len(),
-            48,  // +2：--no-auto-password-notes / --no-auto-password-book（T8）
+            49,  // +2：--no-auto-password-notes / --no-auto-password-book（T8）
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

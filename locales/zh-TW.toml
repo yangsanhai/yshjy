@@ -45,6 +45,7 @@ text = """
                                     --select "遊戲資料/**" 只要某個目錄
                                     --select "1,3,5"      只要第 1、3、5 個
                                     --select required     跳過 .DS_Store 之類的垃圾
+  --candidate <偏移>              一個檔案裡藏了好幾處時，指定解哪一處（偏移＝掃描結果裡那個數字）
   --pick <檔案>                   全螢幕勾選要解哪些（↑↓ 選 · 空格勾 · a 全選 · Enter 確認）
   --json                          逐行輸出事件流/結果（給腳本用）
   --no-smart-dir                  關掉「智慧解壓縮」：預設會看壓縮檔裡有沒有單一頂層目錄來決定
@@ -172,6 +173,8 @@ report_failed = "❌ 產生診斷包失敗：{err}"
 no_target = "❌ 沒告訴我要處理哪個檔案。\n\n   用法：yshjy <檔案>\n   更多：yshjy --help"
 bad_jobs = "❌ --jobs 要寫個數字，例如 --jobs 2（收到 {value}）"
 bad_select = "❌ --select 看不懂：{expr}\n   （{reason}）"
+bad_candidate = "❌ --candidate 要寫個位元組偏移（數字），例如 --candidate 3145728（收到 {value}）"
+candidate_one_file = "❌ --candidate 只能配一個檔案 —— 它指的是「這一個檔案裡的第幾處」"
 select_examples = "   範例：--select \"*.exe\" / --select \"遊戲資料/**\" / --select 1,3 / --select required"
 interrupted = "⏹  收到 Ctrl-C —— 正在收尾（已解出的檔案會保留，再按一次強制結束）"
 interrupted_again = "⏹  再按一次就強制結束"

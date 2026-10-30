@@ -13,7 +13,7 @@ _yshjy_complete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --no-auto-password-notes --no-auto-password-book --encoding --select --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --level --layout --decoy --decoy-size --decoy-signatures --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
+    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --no-auto-password-notes --no-auto-password-book --encoding --select --candidate --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --level --layout --decoy --decoy-size --decoy-signatures --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
 
     case "$prev" in
         -o|--dest)
@@ -44,7 +44,7 @@ _yshjy_complete() {
             COMPREPLY=($(compgen -W "zh-CN zh-TW en-US ja-JP ko-KR ru-RU es-ES" -- "$cur"))
             return 0
             ;;
-        --password-file|--cover|--log|--config|--import-passwords)
+        --password-file|--candidate|--cover|--log|--config|--import-passwords)
             if declare -F _filedir >/dev/null; then _filedir; else mapfile -t COMPREPLY < <(compgen -f -- "$cur"); fi
             return 0
             ;;

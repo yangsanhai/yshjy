@@ -21,6 +21,7 @@ for bin in yshjy yshys
     complete -c $bin -l no-auto-password-book -d '只关「试自己的密码本」这一档'
     complete -c $bin -l encoding -x -a 'utf-8 gbk big5 sjis' -d '手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）'
     complete -c $bin -l select -x -d '只解一部分：'
+    complete -c $bin -l candidate -r -F -d '一个文件里藏着好几处时，指定解哪一处（偏移＝扫描结果里那个数字）'
     complete -c $bin -l pick -d '全屏勾选要解哪些（↑↓ 选 · 空格勾 · a 全选 · Enter 确认）'
     complete -c $bin -s j -l jobs -x -a '1 2 4 8' -d '同时跑几个'
     complete -c $bin -s f -l force -d '跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）'

@@ -41,6 +41,7 @@ COMMON OPTIONS:
                                     --select "data/**"   only that subtree
                                     --select "1,3,5"     only entries #1, #3 and #5
                                     --select required    skip junk like .DS_Store
+  --candidate <offset>            a file hiding several archives: which one to extract (offset = the byte number from the scan)
   --pick <file>                   pick entries in a full-screen list (space · a · Enter)
   --json                          print the event stream / results as JSON lines (for scripts)
   --no-smart-dir                  turn off "smart extract": by default, when the archive has a single
@@ -175,6 +176,8 @@ report_failed = "❌ Failed to create the diagnostic package: {err}"
 no_target = "❌ No file given.\n\n   Usage: yshjy <file>\n   More:  yshjy --help"
 bad_jobs = "❌ --jobs needs a number, e.g. --jobs 2 (got {value})"
 bad_select = "❌ --select can't parse: {expr}\n   ({reason})"
+bad_candidate = "❌ --candidate needs a byte offset (a number), e.g. --candidate 3145728 (got {value})"
+candidate_one_file = "❌ --candidate works with a single file only — it means \"which spot inside THIS file\""
 select_examples = "   Examples: --select \"*.exe\" / --select \"data/**\" / --select 1,3 / --select required"
 interrupted = "⏹  Ctrl-C received — wrapping up (already extracted files are kept; press again to force quit)"
 interrupted_again = "⏹  Press again to force quit"

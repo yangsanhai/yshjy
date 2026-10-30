@@ -725,6 +725,20 @@ fn main() -> ExitCode {
         },
         None => cfg.general.jobs, // 配置文件里可以定默认并行数
     };
+    // `--candidate <字节偏移>`：解「第 N 处」（S10 多候选在命令行上的入口）
+    //
+    // 值必须是数字 —— 写错了直接报 USAGE，绝不「当成没给」静默跑默认那处：
+    // 用户点名要第 3 段，程序偷偷解第 1 段，比报错更糟。
+    let candidate: Option<u64> = match val_of("--candidate") {
+        None => None,
+        Some(v) => match v.trim().parse::<u64>() {
+            Ok(n) => Some(n),
+            Err(_) => {
+                eprintln!("{}", 文案().t("cli.bad_candidate", &[("value", &v)]));
+                return ExitCode::from(code::USAGE);
+            }
+        },
+    };
     let selection = if has("--pick") {
         // ── --pick：全屏勾选（2026-10-28）──
         // 非交互终端（管道 / 脚本 / cron）直接拒绝，并告诉用户改用 --select ——
@@ -785,6 +799,7 @@ fn main() -> ExitCode {
         // 原包处置：命令行是「这一次」的口子。两个都写以 --delete-source 为准
         // （更狠的那个），二次确认里会说清楚到底哪个生效。
         verify_only: has("--test"),
+        candidate,
         source_action: if has("--delete-source") {
             源包处置::永久删除
         } else if has("--trash-source") {
@@ -1171,6 +1186,8 @@ struct 解压参数 {
     source_action: 源包处置,
     /// 只测不写（--test）：完整解码 + 校验，一个字节都不落盘
     verify_only: bool,
+    /// 解「第 N 处」（--candidate）：一个文件里藏着多处归档时，按字节偏移精确挑一处
+    candidate: Option<u64>,
 }
 
 fn do_extract(a: 解压参数) -> ExitCode {
@@ -1188,6 +1205,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
         encoding,
         source_action,
         verify_only,
+        candidate,
     } = a;
     use std::sync::Arc;
     use yshjy::batch;
@@ -1224,6 +1242,14 @@ fn do_extract(a: 解压参数) -> ExitCode {
                 eprintln!("   ℹ {提示}");
             }
         }
+        return ExitCode::from(code::USAGE);
+    }
+    // `--candidate` 说的是「**这一个**文件里的第几处」。批量时它没有意义 ——
+    // 同一次运行里几个包各自藏着东西，一个偏移不可能同时对得上。
+    // 与其猜（比如只对第一个生效、其余的静默走默认），不如直接拒绝。
+    // 放在「排好 N 个任务」之前：先拒绝，再谈排队，免得用户以为跑起来了。
+    if candidate.is_some() && expanded.len() > 1 {
+        eprintln!("{}", 文案().t("cli.candidate_one_file", &[]));
         return ExitCode::from(code::USAGE);
     }
     if !quiet && !json && expanded.len() > 1 {
@@ -1298,10 +1324,9 @@ fn do_extract(a: 解压参数) -> ExitCode {
             warn_executables: cfg.safety.warn_executables,
             ..Default::default()
         },
-        // S10「都试试」目前只走协议（界面逐个候选调 `extract` + `candidate`）。
-        // CLI 入口（`--candidate <偏移>`）记在 `docs/TODO.md` 表尾，本轮不做 ——
-        // 命令行复核用 `tests/t5_candidates.py`（走 --serve，验的是同一段引擎代码）。
-        candidate_offset: None,
+        // S10「都试试」：界面逐个候选调 `extract` + `candidate`；命令行同一件事走
+        // `--candidate <字节偏移>`（非法值在参数解析那里就报 USAGE，绝不静默忽略）。
+        candidate_offset: candidate,
     };
 
     let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));

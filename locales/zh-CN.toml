@@ -40,6 +40,7 @@ text = """
                                     --select "游戏数据/**" 只要某个目录
                                     --select "1,3,5"      只要第 1、3、5 个
                                     --select required     跳过 .DS_Store 之类的垃圾
+  --candidate <偏移>              一个文件里藏着好几处时，指定解哪一处（偏移＝扫描结果里那个数字）
   --pick <文件>                   全屏勾选要解哪些（↑↓ 选 · 空格勾 · a 全选 · Enter 确认）
   --json                          按行输出事件流/结果（给脚本用）
   --no-smart-dir                  关掉「智能解压」：默认会看包里有没有单一顶层目录来决定
@@ -172,6 +173,8 @@ report_failed = "❌ 生成诊断包失败：{err}"
 no_target = "❌ 没告诉我要处理哪个文件。\n\n   用法：yshjy <文件>\n   更多：yshjy --help"
 bad_jobs = "❌ --jobs 要写个数，比如 --jobs 2（收到 {value}）"
 bad_select = "❌ --select 看不懂：{expr}\n   （{reason}）"
+bad_candidate = "❌ --candidate 要写个字节偏移（数字），比如 --candidate 3145728（收到 {value}）"
+candidate_one_file = "❌ --candidate 只能配一个文件用 —— 它说的是「这一个文件里的第几处」"
 select_examples = "   例子：--select \"*.exe\" / --select \"游戏数据/**\" / --select 1,3 / --select required"
 interrupted = "⏹  收到 Ctrl-C —— 正在收尾（已解出的文件会保留，再按一次强制退出）"
 interrupted_again = "⏹  再按一次就强制退出"

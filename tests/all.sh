@@ -163,6 +163,10 @@ if [ -n "$BIN" ]; then
   # caps 按格式声明：协议 hello.formats 与 CLI --caps 必须同源（手抄第二份真源的老病）
   run "能力表同源（caps_protocol.py）" env YSHJY_BIN="$BIN" python3 tests/caps_protocol.py "$BIN"
   run "空间不足 detail（t2_space_detail.py）" python3 tests/t2_space_detail.py "$BIN" "${YSHJY_SPACE_PROBE_PKG:-/dev/null}"
+  # S10 多候选：引擎把「一个文件里几处藏着归档」都报出来（t5），
+  # 命令行能指定解第几处（candidate_cli，T16 —— 界面走协议，命令行走 --candidate）
+  run "多候选扫描（t5_candidates.py）" env YSHJY_BIN="$BIN" python3 tests/t5_candidates.py
+  run "命令行指定候选（candidate_cli.py）" python3 tests/candidate_cli.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
     run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"
