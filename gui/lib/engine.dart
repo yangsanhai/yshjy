@@ -71,6 +71,11 @@ class Preview {
   final List<EntryItem> entries;
   final List<String> hints;
 
+  /// S10 多候选：这个文件里像是有几处藏着东西（`list` 里 `candidates`；正常包为空）
+  ///
+  /// 预览页看到的是「引擎默认那处」的内容 —— 用户发现解错了，就让他在这些候选中换一处。
+  final List<ArchiveCandidate> candidates;
+
   /// 伪装封面（`list` 结果里的 `cover`）：`{size, kind, ext}`；普通压缩包为 null
   ///
   /// 用户在验收里要求「封面和压缩包内容上下并列、各自带勾选」（GUI-PLAN §5.2①），
@@ -86,7 +91,11 @@ class Preview {
     required this.entries,
     required this.hints,
     this.cover,
+    this.candidates = const [],
   });
+
+  /// 一处文件里有好几处藏着东西（才值得给用户看选择入口）
+  bool get hasManyCandidates => candidates.length >= 2;
 
   /// 有封面区（= 这是个伪装包）
   bool get hasCover => cover != null;
@@ -102,6 +111,12 @@ class Preview {
             .toList(),
         hints: (j['hints'] as List? ?? []).map((e) => e.toString()).toList(),
         cover: (j['cover'] as Map?)?.cast<String, dynamic>(),
+        candidates: (j['candidates'] is List)
+            ? (j['candidates'] as List)
+                .whereType<Map>()
+                .map((m) => ArchiveCandidate.fromJson(m.cast<String, dynamic>()))
+                .toList()
+            : const [],
       );
 
   int get fileCount => entries.where((e) => !e.isDir).length;
@@ -369,6 +384,18 @@ class EngineClient {
     return Preview.fromJson(_unwrap(r));
   }
 
+  /// S10 多候选：一个文件里「像归档」的一处（`scan` 的 `candidates[]`）
+  ///
+  /// 只有 `length >= 2` 时界面才该显示选择界面；正常包永远只有一条（`chosen`）。
+  static List<ArchiveCandidate> candidatesOf(Map<String, dynamic> item) {
+    final raw = item['candidates'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => ArchiveCandidate.fromJson(m.cast<String, dynamic>()))
+        .toList();
+  }
+
   Future<ExtractResult> extract(
     String path, {
     String? dest,
@@ -386,6 +413,11 @@ class EngineClient {
     /// 引擎和协议**早就支持**了，界面以前一个参数都没传 —— 于是「空间差一点」在界面上
     /// 是死路（S5 的第三个按钮「继续试试」就是它）。
     bool force = false,
+    /// S10 多候选：只解**这段偏移**处的那一份（值来自 `scan` 的 `candidates[].offset`）
+    ///
+    /// 用户点「换个地方试」时才会传。引擎侧 `locate_at_base` 精确切那一段；
+    /// 传了但那段解不开，引擎报 `NOT_ARCHIVE`（不会偷偷回头解默认那处）。
+    int? candidate,
   }) async {
     final r = await _call({
       'cmd': 'extract',
@@ -403,6 +435,8 @@ class EngineClient {
         'encoding': encoding,
       // 空间不够但用户要硬试（S5「继续试试」）
       if (force) 'force': true,
+      // 指定候选那一段（S10「换个地方试」）
+      if (candidate != null) 'candidate': candidate,
       // 声明「我能处理 ASK_USER」—— 不写的话引擎遇到限额直接失败（协议设计如此）
       if (ask) 'ask': true,
     });
@@ -539,5 +573,52 @@ class EngineClient {
     _proc?.closeInput();
     _proc?.kill();
     _events.close();
+  }
+}
+
+/// S10 多候选：一个文件里「像归档」的一处
+///
+/// 字段全是引擎给的**机器标识**，句子由界面查文案渲染（与错误码同一条原则）。
+class ArchiveCandidate {
+  /// 格式标识（`zip` / `7z` / `rar` …）
+  final String format;
+
+  /// 归档数据的起点（字节偏移）
+  final int offset;
+
+  /// 置信度：`high` / `medium` / `low`
+  final String confidence;
+
+  /// 是不是引擎默认会用的那一处（永远恰有一条）
+  final bool chosen;
+
+  const ArchiveCandidate({
+    required this.format,
+    required this.offset,
+    required this.confidence,
+    required this.chosen,
+  });
+
+  factory ArchiveCandidate.fromJson(Map<String, dynamic> j) => ArchiveCandidate(
+        format: (j['format'] as String?) ?? 'unknown',
+        offset: (j['offset'] as num?)?.toInt() ?? 0,
+        confidence: (j['confidence'] as String?) ?? 'low',
+        chosen: j['chosen'] == true,
+      );
+
+  /// 可信度的人话（S10 稿：「可信度高」/「可能是误报」）
+  String get confidenceText => switch (confidence) {
+        'high' => '可信度高',
+        'medium' => '还算靠得住',
+        _ => '可能是误报',
+      };
+
+  /// 位置的人话：字节偏移对新手没意义，换成「从文件开头算第 X MB 处」
+  String get offsetText {
+    if (offset <= 0) return '文件开头';
+    const mb = 1024 * 1024;
+    if (offset >= mb) return '从开头算 ${(offset / mb).toStringAsFixed(1)} MB 处';
+    final kb = offset / 1024;
+    return '从开头算 ${kb.toStringAsFixed(0)} KB 处';
   }
 }

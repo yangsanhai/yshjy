@@ -91,6 +91,7 @@ pub fn drill_once(
             force: false,
             verify_only: false,
             limits: crate::safety::Limits::default(),
+            candidate_offset: None,
         };
         let out = crate::job::run_job(&job, &opts, sink, 取消);
         let outcome = match &out.outcome {
@@ -165,6 +166,7 @@ mod tests {
             force: false,
             verify_only: false,
             limits: crate::safety::Limits::default(),
+            candidate_offset: None,
         };
         let mut job = Job::new(1, outer.clone(), std::fs::metadata(&outer).unwrap().len());
         job.dest = Some(解压区.clone());

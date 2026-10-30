@@ -20,7 +20,7 @@
 | T2 | 空间不足：三个数 + 事件真发 + 去掉「0 B」 | 引擎 | ✅ 完成 | 真机实测：3 GB 包 → `/run/user/1000`(2 GB) 拦下，输出「需要 3.00 GB / 只有 1.94 GB / 还差 1.06 GB」；`--json` 有 `SpaceShortage` 事件；`--lang en` 英文正常；正常小包不受影响 |
 | T3 | `default_mode` 死配置 | 引擎 | ✅ 完成（**按「删」处理**） | 真机制是程序名（yshjy/yshys），配置项重复且零读取 → 5 处全删；`--show-config` 无该项；BACKEND-SPEC 改口径 |
 | T4 | S5 界面：三个数 + [换个位置][只解压部分][继续试试] | 界面 | ✅ 完成（真机截图验过） | 造 3 GB 包撞 2 GB 盘：界面显示「需要 3.00 GB / 目标盘只有 1.94 GB / 还差 1.06 GB」+ 三个按钮都在。真机撞出并修掉两处：协议层把 detail 吞了、错误页误报「认不出的文件」 |
-| T5 | S10 多候选：列出候选让用户选 | 界面 | 🟡 **方案已定，待开工** | 真机：造多候选样本，能选中并解出。**方案（用户 2026-10-30「行」点头）**：不逼新手从 N 个候选里挑，界面只说最可能的那个 + 一个「都不是？挨个试一遍」。**查码发现引擎已算好 90%**：`src/scan.rs::scan_whole_file` 本来就返回 `Vec<ScanHit>`（`format` / `offset` / `sig_at` / `confidence` Low·Medium·High / `note`），是 `job.rs::locate_zip` 只取了单个结果、把其余 hit 丢掉了（只拿去判 `Truncated` vs `NotArchive`）——所以**不必重写探测层**，只需把已有的 hits 透出来。四步：① 引擎候选出口（成功路径也带 hits，`identify` 保持取第一个以兼容）② 协议 `scan` 加 `candidates` 数组（`--json` 与 `--serve` 两种形状各自验，别照抄）③ 界面识别卡「找到 N 处可能藏着文件的地方 / 都试试 / 只解第 1 处」（按 `docs/UI-SPEC.md` S10 稿），只有 1 个候选时**不显示**，别打扰 ④ 造多候选样本（视频中间塞两个 zip）+ Rust 单测 + widget 测试 + 真机截图 |
+| T5 | S10 多候选：列出候选让用户选 | 界面 | ✅ **完成（真机验过）** | 引擎 `scan` / `list` 都带 `candidates[]`（一个文件里几处藏着归档，数据来自定位时**本来就要跑**的全文件扫描，不额外扫）；协议 `extract.candidate` 按偏移精确切那一段（`layout::zip::locate_at_base`，找不到那段就报 `NOT_ARCHIVE`，绝不回退解默认那处）。界面：**预览页**顶部提示条「这个文件里像是有 N 处藏着东西…」+「换一处解压」，队列行也有同样入口；**只有 ≥2 处才显示**（正常包一个字都不多说）。**真机证据**：样本 `[3MB垃圾][ZIP-A][3MB垃圾][ZIP-B][20MB填充]`（尾巴超 16MB 才会退化成全文件扫描）→ 提示条真出现（`screenshots/t5-预览页.png`），点「换一处解压」后产物**从「第B处解出来的.txt」变成「第A处解出来的.txt」**（`~/下载` 实测）。**探针 8/8**（含「非法 candidate 必须被拒」）、**cargo test 404 过 0 挂**、**flutter test 109 过**、clippy / flutter analyze 干净 |
 | T6 | `--force` 界面入口（与 T4 同根） | 界面 | ✅ 完成 | 就是 T4 的「继续试试」：`engine.dart` 的 extract 加了 force → 协议 `extract.force`。真机点过（报错卡片上那个按钮） |
 | T7 | 引擎有、界面没入口的其余项（E1 decoy / E2 layout / E4 test / E5 smart-dir / E6 report / E7 jobs·keep） | 界面 | ⬜ | 每项真机点一次，产物用命令行复核 |
 | T8 | S4 密码框两个「自动找」勾选 | 界面 | ✅ 完成（真机点过 + 端到端验过） | 引擎拆成两档（配置 `auto_from_book` 新 + `auto_from_notes` 原有、开关 `--no-auto-password-notes` / `--no-auto-password-book`），界面设置页接成两个真勾选，保存写回 `[password]` 段。**不需要**新协议命令——设置页本来就能逐行读写 `config.toml`（`flush_movable` 一直这么干），HANDOFF 之前那句「得先加读/写配置的协议命令」是保守误判，已纠正。**真机证据**：`screenshots/settings-auto-password-off.jpg`（两个开关关）+ `settings-save-button.jpg`（保存按钮）；保存后 `config.toml` 里是 `auto_from_notes = "off"`；**端到端**：同一个加密包 + 旁边放 `说明.txt`，开关 off 时输出「这个包带锁，需要解压码」（不翻说明文件），改 on 后输出「解压码是从旁边的说明里找到的：./说明.txt: 解压码：notePW」并解开 |
@@ -31,6 +31,7 @@
 | T13 | 台账失真 + README 假「规划中」 | 文档 | ✅ 完成（16 处） | REFERENCE-INDEX 9 处（含 decoy 真身其实在 `src/pack/decoy.rs`，审计自己写错了路径）、DESIGN 3 处、GUI-PLAN 4 处；每条都先 grep 核代码再改 |
 | T14 | 界面多语言接线（474 条硬编码） | 界面 | ⬜ | 切 `--lang en` 界面变英文；**本轮不保证做完，见下方说明** |
 | T15 | 覆盖率报告（cargo llvm-cov） | 工程 | ⬜ | `scripts/cov_by_file.py` 出分文件表 |
+| T16 | `--candidate` 的 CLI 入口（T5 带出来的小账） | 工程 | ⬜ | T5 做完了，但「解第 N 处」目前只有协议 + 界面能表达，命令行没法指定。加 `--candidate <字节偏移>`（与协议 `extract.candidate` 同名同义，非法值报 USAGE 不静默忽略），探针补一条；顺手加进 `cli_spec.rs`（帮助/man 页/补全三份都是它生成的） |
 
 **本轮范围说明**：T1~T13 是本轮目标；**T14（474 条文案 + 6 语种 2844 条翻译）与 T15
 单独排**，做完 T13 再定是否连做 —— 用户口径「全搞完」，但这两项的体量是「两天级」，

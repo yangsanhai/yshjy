@@ -237,14 +237,32 @@ pub fn 列表(
     });
     // 封面区大小（A② / §5.2①）：界面要把「伪装封面」当成清单里可勾选的一行，
     // 就必须在预览阶段知道它有多大 —— 否则勾选框只能写死一个占位。
-    if let Ok(crate::job::Target::Zip { base, .. }) = crate::job::identify(Path::new(路径), &ctx)
-        && let Some(cover) = crate::cover_extract::probe_zip_cover(Path::new(路径), base)
-    {
-        结果["cover"] = json!({
-            "size": cover.size,
-            "kind": cover.kind,
-            "ext": cover.ext,
-        });
+    //
+    // S10 多候选也在这儿一起带出去：**一个文件里好几处藏着东西**时，
+    // 预览页显示的是「引擎默认那处」的内容，用户要是发现解错了，得有个换一处的入口。
+    // 以前这里只拿 base，候选清单算完就扔（跟 `locate_zip` 同一个毛病）。
+    if let Ok((目标, 候选)) = crate::job::identify_with_candidates(Path::new(路径), &ctx) {
+        if 候选.len() >= 2 {
+            结果["candidates"] = json!(候选
+                .iter()
+                .map(|c| json!({
+                    "format": c.format,
+                    "offset": c.offset,
+                    "confidence": c.confidence,
+                    "note": c.note,
+                    "chosen": c.chosen,
+                }))
+                .collect::<Vec<_>>());
+        }
+        if let crate::job::Target::Zip { base, .. } = 目标
+            && let Some(cover) = crate::cover_extract::probe_zip_cover(Path::new(路径), base)
+        {
+            结果["cover"] = json!({
+                "size": cover.size,
+                "kind": cover.kind,
+                "ext": cover.ext,
+            });
+        }
     }
     Ok(结果)
 }
@@ -299,6 +317,16 @@ pub fn 解压(
         limits: crate::safety::Limits {
             ask: ask.cloned(),
             ..Default::default()
+        },
+        // S10「都试试」：指定解**第几处**（值就是 `scan` 给的 `candidates[].offset`）。
+        // 非法值直接报错，**不许**静默回退成"自己挑一个"——那等于用户点了第 2 处、
+        // 程序偷偷解了第 1 处，是最难发现的那种假成功。
+        candidate_offset: match 参数.get("candidate") {
+            None => None,
+            Some(v) => Some(
+                v.as_u64()
+                    .ok_or_else(|| 错误值("BAD_PARAM", "candidate 必须是候选起点字节偏移"))?,
+            ),
         },
     };
 
@@ -859,6 +887,9 @@ pub fn 批量(
             ask: ask.cloned(),
             ..Default::default()
         },
+        // 批量里每个包的候选各不相同，一个全局偏移没有意义 → 不支持。
+        // 「都试试」由界面逐个包调一次 `extract` + `candidate`（一次一个，进度也清楚）。
+        candidate_offset: None,
     };
     let sink: Arc<dyn EventSink> = 事件.clone();
     let started = std::time::Instant::now();

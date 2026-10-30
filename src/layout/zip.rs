@@ -278,6 +278,47 @@ pub fn locate_with_window<R: Read + Seek>(
     })
 }
 
+/// 按「归档数据起点」精确取出一段（S10 多候选的「都试试」用）
+///
+/// 一个文件里可能塞着好几个 ZIP：`locate()` 永远只给**最后**那一段。要解前面那些，
+/// 就得从文件尾往前一个 EOCD 一个 EOCD 地退，直到反推出的 `base` 对上目标。
+///
+/// 实现上**不重写倒扫逻辑**：每轮把 `ceiling` 当成"文件尾"再调一次
+/// [`locate_with_window`] —— 走的是同一条被大量样本验过的路径，只是窗口往前挪。
+/// 代价是解第 N 段要倒扫 N 遍，但这只在用户显式点「都试试」时才发生。
+pub fn locate_at_base<R: Read + Seek>(
+    r: &mut R,
+    file_size: u64,
+    base_target: u64,
+) -> Result<ZipLayout> {
+    if base_target >= file_size {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "candidate_offset_out_of_range")
+            .with("offset", base_target)
+            .with("size", file_size));
+    }
+    let mut ceiling = file_size;
+    loop {
+        let l = locate_with_window(r, ceiling, ceiling)?;
+        if l.base == base_target {
+            return Ok(l);
+        }
+        if l.base < base_target {
+            // 越往前 base 只会越小 → 目标位置不是任何一段的开头
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "no_archive_at_candidate_offset")
+                .with("offset", base_target)
+                .with("nearest_base", l.base));
+        }
+        ceiling = l.base;
+        if ceiling == 0 {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "no_archive_at_candidate_offset")
+                .with("offset", base_target));
+        }
+    }
+}
+
 /// 解析 ZIP64 EOCD（先从定位器入手，失败再按紧邻位置推算）
 fn read_zip64<R: Read + Seek>(
     r: &mut R,

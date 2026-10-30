@@ -1298,6 +1298,10 @@ fn do_extract(a: 解压参数) -> ExitCode {
             warn_executables: cfg.safety.warn_executables,
             ..Default::default()
         },
+        // S10「都试试」目前只走协议（界面逐个候选调 `extract` + `candidate`）。
+        // CLI 入口（`--candidate <偏移>`）记在 `docs/TODO.md` 表尾，本轮不做 ——
+        // 命令行复核用 `tests/t5_candidates.py`（走 --serve，验的是同一段引擎代码）。
+        candidate_offset: None,
     };
 
     let sink: Arc<dyn yshjy::event::EventSink> = Arc::new(终端出口::new(quiet, json));

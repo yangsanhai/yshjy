@@ -27,6 +27,11 @@ class _QueueItem {
   final int volumes;
   final bool archive;
 
+  /// S10 多候选：这个文件里像是有几处藏着东西
+  ///
+  /// 正常包永远只有一条（`chosen`）—— `length >= 2` 才值得给用户看选择界面。
+  final List<ArchiveCandidate> candidates;
+
   /// pending / running / ok / partial / failed / cancelled
   String status = 'pending';
 
@@ -42,7 +47,11 @@ class _QueueItem {
     required this.kind,
     required this.volumes,
     required this.archive,
+    this.candidates = const [],
   });
+
+  /// 是不是「一个文件里好几处都像藏着东西」
+  bool get hasManyCandidates => candidates.length >= 2;
 }
 
 class HomePage extends StatefulWidget {
@@ -75,6 +84,12 @@ class HomePage extends StatefulWidget {
   /// 没有它，「三个数」只能靠真机撞小容量盘才验得到 —— 那条路要 sudo 挂 loop 盘。
   final Map<String, dynamic>? debugErrorDetail;
 
+  /// 测试用：直接灌一份 `scan` 原始结果进队列（生产代码永远传 null）。
+  ///
+  /// 传的是**引擎原样输出**（`items` 里那几个 Map），不是界面自己造的模型 ——
+  /// 这样「解析 + 渲染」整条链都被测到，不会出现"测试看着绿、真机字段对不上"。
+  final List<Map<String, dynamic>>? debugScanItems;
+
   const HomePage({
     super.key,
     this.initialFile,
@@ -84,6 +99,7 @@ class HomePage extends StatefulWidget {
     this.debugErrorCode,
     this.debugErrorNote,
     this.debugErrorDetail,
+    this.debugScanItems,
   });
 
   @override
@@ -135,6 +151,9 @@ class _HomePageState extends State<HomePage> {
   /// 这一轮扫的是几个文件夹（D6：拖文件夹进来要明说「会自动展开」）
   int _foldersScanned = 0;
   Map<String, dynamic>? _batch;
+
+  /// S10：正在挨个换候选解压（按钮据此禁用，避免连点堆起一串任务）
+  bool _switching = false;
   String? _password;
   /// 解压码是否显示明文（眼睛图标，调研 07:383「是标配，必须做」）
   bool _showPw = false;
@@ -215,6 +234,12 @@ class _HomePageState extends State<HomePage> {
       _errorNote = widget.debugErrorNote ?? '';
       _errorDetail = widget.debugErrorDetail;
       _phase = Phase.error;
+    }
+    // 测试注入口：直接灌一份 scan 结果进队列（与 debugPreview 同一个理由）
+    final q0 = widget.debugScanItems;
+    if (q0 != null) {
+      _applyScanItems(q0);
+      _phase = Phase.queue;
     }
     // 从右键菜单带文件启动：等首帧画完再开，避免 setState 早于 build
     final f = widget.initialFile;
@@ -429,6 +454,25 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 把 `scan` 的原始 items 变成队列行
+  ///
+  /// **生产与测试共用这一份**：`debugScanItems` 注入的也是引擎原样输出，
+  /// 要是各写一份解析，就会出现"测试里字段对、真机解析对不上"的假绿。
+  void _applyScanItems(List items) {
+    for (final raw in items) {
+      final i = (raw as Map).cast<String, dynamic>();
+      _queue.add(_QueueItem(
+        path: i['path'] as String? ?? '',
+        name: i['name'] as String? ?? '',
+        size: (i['size'] as num?)?.toInt() ?? 0,
+        kind: i['kind'] as String? ?? 'UNKNOWN',
+        volumes: (i['volumes'] as num?)?.toInt() ?? 1,
+        archive: i['archive'] == true,
+        candidates: EngineClient.candidatesOf(i),
+      ));
+    }
+  }
+
   /// 扫一批路径 → 队列（目录展开、分卷归并都在引擎里做）
   Future<void> _scan(List<String> paths) async {
     // D6：传进来的是文件夹 → 队列顶部要明说「会自动展开里面的压缩包」
@@ -447,17 +491,7 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       final items = (r['items'] as List?) ?? const [];
       setState(() {
-        for (final raw in items) {
-          final i = (raw as Map).cast<String, dynamic>();
-          _queue.add(_QueueItem(
-            path: i['path'] as String? ?? '',
-            name: i['name'] as String? ?? '',
-            size: (i['size'] as num?)?.toInt() ?? 0,
-            kind: i['kind'] as String? ?? 'UNKNOWN',
-            volumes: (i['volumes'] as num?)?.toInt() ?? 1,
-            archive: i['archive'] == true,
-          ));
-        }
+        _applyScanItems(items);
         _phase = Phase.queue;
       });
       widget.onStatus?.call('找到 ${_queue.where((q) => q.archive).length} 个可解包');
@@ -490,6 +524,77 @@ class _HomePageState extends State<HomePage> {
       // 探测失败就当没有，绝不影响解压结果
       if (mounted) setState(() => _nestedArchives = []);
     }
+  }
+
+  /// S10 多候选：这个文件里像是有好几处藏着东西 —— 替用户挨个试，解开就停
+  ///
+  /// 为什么不让用户自己挑：新手面对「第 3 处 · 从开头算 5.2 GB 处」根本无从判断，
+  /// 反而更慌。界面只做一件事：按候选顺序（可信度高的在前、默认那处放最后）替他试。
+  ///
+  /// 引擎侧走 `locate_at_base`（协议 `extract.candidate`）：**试哪段就解哪段**，
+  /// 对不上就报 `NOT_ARCHIVE`，绝不会偷偷回头解默认那处（那种"假成功"最难发现）。
+  Future<void> _tryOtherCandidates(int i) async {
+    if (i < 0 || i >= _queue.length) return;
+    final q = _queue[i];
+    if (!q.hasManyCandidates) return;
+
+    // 默认那处放最后：用户点这个按钮，多半是因为刚才「开始解压」用它已经失败了
+    final order = [
+      ...q.candidates.where((c) => !c.chosen),
+      ...q.candidates.where((c) => c.chosen),
+    ];
+
+    setState(() {
+      _phase = Phase.extracting;
+      _progress = null;
+      _current = q.name;
+      _nestedArchives = [];
+    });
+
+    String lastError = '';
+    for (var k = 0; k < order.length; k++) {
+      final c = order[k];
+      if (!mounted) return;
+      setState(() => q.status = 'running');
+      widget.onStatus?.call(
+          '正在试第 ${k + 1}/${order.length} 处（${c.offsetText}）…');
+      try {
+        final r = await _client.extract(
+          q.path,
+          password: _password,
+          dest: _outDir,
+          encoding: _encoding,
+          candidate: c.offset,
+        );
+        if (!mounted) return;
+        setState(() {
+          q.status = 'ok';
+          _result = r;
+          _phase = Phase.done;
+        });
+        widget.onStatus?.call('第 ${k + 1} 处解开了：${r.entriesDone} 个文件');
+        Notifier.send(
+          '解压完成',
+          '第 ${k + 1}/${order.length} 处 · ${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
+        );
+        await HistoryStore.add(HistoryEntry(
+          time: DateTime.now().toIso8601String(),
+          input: q.path,
+          dest: r.dest,
+          ok: r.ok,
+          bytes: r.bytesWritten,
+        ));
+        await _maybeOpenAfterDone(r.dest);
+        _probeNested();
+        return;
+      } on EngineError catch (e) {
+        lastError = e.note.isEmpty ? e.code : e.note;
+      }
+    }
+
+    // 几处全试完都不行：如实报错，别假装解开了
+    setState(() => q.status = 'failed');
+    _showError('NOT_ARCHIVE', lastError.isEmpty ? '这几处都解不开' : lastError);
   }
 
   /// 只取消这一行（D5）：其余任务照跑
@@ -654,7 +759,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _extract({bool force = false}) async {
+  Future<void> _extract({bool force = false, int? candidate}) async {
     final path = _file;
     if (path == null) return;
     setState(() {
@@ -675,10 +780,16 @@ class _HomePageState extends State<HomePage> {
         cover: _wantCover,
         wantExtract: _wantExtract,
         dest: _outDir,
-        select: (_wantExtract && !pickedAll) ? _picked.toList() : null,
+        // S10：换候选解压时不带挑选序号 —— 另一段里的条目跟当前预览完全可能不同，
+        // 带着旧序号去解等于用 A 包的清单挑 B 包的文件（会漏解或报错）。
+        select: (_wantExtract && !pickedAll && candidate == null)
+            ? _picked.toList()
+            : null,
         encoding: _encoding,
         // S5「继续试试」：跳过空间预检（引擎侧早支持，界面以前没传）
         force: force,
+        // S10 多候选：只解用户点的那一处（预览页「换一处解压」）
+        candidate: candidate,
       );
       if (!mounted) return;
       setState(() {
@@ -705,6 +816,30 @@ class _HomePageState extends State<HomePage> {
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
+  }
+
+  /// S10：当前这处像是不对 —— 按候选顺序换别的，直接解出来
+  ///
+  /// 为什么不重新 list 一遍再让用户挑：用户要的是「解出对的东西」，不是再看清单；
+  /// 而且多候选文件定位要走全文件扫描，重新预览等于再扫一遍（8 GB 包要几十秒）。
+  Future<void> _extractOtherCandidate() async {
+    final pv = _preview;
+    if (pv == null || !pv.hasManyCandidates || _switching) return;
+    // 当前这处（chosen）跳过，按可信度顺序试其余的
+    final order = pv.candidates.where((c) => !c.chosen).toList();
+    if (order.isEmpty) return;
+
+    setState(() => _switching = true);
+    widget.onStatus?.call('换个地方试，共 ${order.length} 处…');
+    for (var k = 0; k < order.length; k++) {
+      if (!mounted) return;
+      widget.onStatus?.call('正在试第 ${k + 1}/${order.length} 处（${order[k].offsetText}）…');
+      await _extract(candidate: order[k].offset);
+      if (!mounted) return;
+      // 解开了就停（_extract 成功会把 phase 设成 done）
+      if (_phase == Phase.done) break;
+    }
+    if (mounted) setState(() => _switching = false);
   }
 
   /// 这些失败还能抢救：索引（中央目录）坏了、数据只坏了一部分。
@@ -1180,6 +1315,8 @@ class _HomePageState extends State<HomePage> {
                   },
                   child: ListTile(
                   dense: true,
+                  // 多候选那行会多出一句话，普通两行装不下
+                  isThreeLine: q.hasManyCandidates,
                   leading: Icon(
                     q.archive ? Icons.inventory_2_outlined : Icons.help_outline,
                     size: 20,
@@ -1208,10 +1345,47 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ],
                   ),
-                  subtitle: Text(
-                    q.archive ? '${q.kind.toUpperCase()} · ${_size(q.size)}'
-                        : '看起来不是压缩包 · ${_size(q.size)}',
-                    style: const TextStyle(fontSize: 11),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        q.archive
+                            ? '${q.kind.toUpperCase()} · ${_size(q.size)}'
+                            : '看起来不是压缩包 · ${_size(q.size)}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      // S10 多候选：一个文件里好几处都像藏着东西
+                      //
+                      // 不列「第1处/第2处」让用户自己挑 —— 新手面对
+                      // 「从开头算 5.2 MB 处」根本无从判断。只给一句话 +
+                      // 一个「换个地方试」，程序替他挨个试。
+                      if (q.hasManyCandidates)
+                        Row(
+                          children: [
+                            Icon(Icons.travel_explore,
+                                size: 13, color: cs.primary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '这个文件里像是有 ${q.candidates.length} 处藏着东西'
+                                '（会先用最可能的第 1 处）',
+                                style:
+                                    TextStyle(fontSize: 11, color: cs.primary),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _tryOtherCandidates(i),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6),
+                              ),
+                              child: const Text('换个地方试',
+                                  style: TextStyle(fontSize: 11)),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1479,6 +1653,40 @@ class _HomePageState extends State<HomePage> {
       key: const ValueKey('preview'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // S10 多候选：一个文件里好几处都像藏着东西
+        //
+        // 为什么放在**预览页**而不是只在队列里：用户拖单个文件进来走的就是这条路
+        // （`_open` → 预览），只看不到队列。真机验时才发现这点 —— 队列那版做完
+        // 在真机上一次都碰不到，等于没做。
+        if (pv.hasManyCandidates)
+          Container(
+            key: const ValueKey('multi-candidates'),
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.travel_explore, size: 16, color: cs.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '这个文件里像是有 ${pv.candidates.length} 处藏着东西，'
+                    '现在解的是引擎认为最可能的那处；不对就换一处试试',
+                    style: TextStyle(fontSize: 12, color: cs.onSurface),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _switching ? null : () => _extractOtherCandidate(),
+                  child: Text(_switching ? '正在换…' : '换一处解压',
+                      style: const TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
         Row(
           children: [
             Chip(

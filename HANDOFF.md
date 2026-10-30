@@ -1,5 +1,40 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-31 凌晨 · T5 / S10 多候选做完（真机验过，未发版；装机版仍是 0.9.35）**
+>
+> 用户 2026-10-30 点头的方案是「界面只说最可能的那个 + 一个『都不是？挨个试一遍』」，
+> 没有让用户从 6 个候选里挑。做法与证据：
+> - **引擎**：`scan::ScanHit` 早就带着「所有像归档的位置」（格式/偏移/置信度），以前
+>   `locate_zip` 只取第一个、把其余扔了 → 现在 `job::identify_with_candidates` 带出来，
+>   老 `identify` 变成它的 `.0`。排序 **chosen 优先 → 置信度高在前 → 偏移升序**。
+> - **协议**：`extract.candidate = <offset>` 精确解指定那一处（新 `layout::zip::locate_at_base`，
+>   从文件尾逐个 EOCD 往前退，复用验过的 `locate_with_window`）；`list` 在 ≥2 处时带
+>   `candidates[]`。**非法偏移报 `NOT_ARCHIVE`，绝不回退解默认那处。**
+> - **界面**：预览页提示条 + 「换一处解压」，队列行同款；**只有 ≥2 处才显示**。
+> - **真机铁证**：样本 `[3MB垃圾][ZIP-A][3MB垃圾][ZIP-B][20MB填充]`（尾巴必须超 16MB，
+>   否则尾部窗口就找到了、不会走全文件扫描）→ 提示条真出现
+>   （`screenshots/t5-multi-candidates.png`）→ 点「换一处解压」后产物从
+>   **「第B处解出来的.txt」变成「第A处解出来的.txt」**（`~/下载` 实测）。
+> - **回归**：探针 `tests/t5_candidates.py` 8/8、`cargo test` 404 过、`flutter test` 109 过、
+>   clippy / analyze 干净。
+>
+> **★ 两个只有真机能撞出来的坑**
+> 1. **入口位置错了**：我第一版只把入口做在队列里，而用户拖单个文件进来的主路径是
+>    `_open` → **预览页**（`_scan` 队列只在拖文件夹时才走）。那版真机上一次都碰不到。
+> 2. **排序会让文案骗人**：按偏移排序时"第 1 处"是用户没在看的那段（真机截图里显示的是 B，
+>    文案却说"第 1 处"）。改成 chosen 排第一才对得上。
+>
+> **★ 工具坑**
+> - 探针默认优先 `target/release/yshjy`，那是旧的 0.9.35 —— 第一次跑验的是旧二进制，
+>   看起来像"功能没做"。验新代码要显式传 `target/debug/yshjy`。
+> - Dart **不认中文变量名**（第三次踩），`flutter analyze` 会报一串 illegal character。
+> - 本机截图：`grim` 不支持 GNOME Wayland、`org.gnome.Shell.Screenshot` 被 AccessDenied；
+>   `gnome-screenshot -f <路径>` 可用（已装）。computer-use 的 `get_app_state` 对这个
+>   Flutter 窗口会超时（没有无障碍树），但 `list_windows` 正常。
+>
+> **剩下没做**：`--candidate` 的 **CLI 入口**（目前只有协议 + 界面；命令行复核走探针）。
+> 记在 `docs/TODO.md` 表尾，不阻塞发版。
+
 > **2026-10-30 更深夜 · T8 界面半：设置页两个「自动找解压码」开关接成真勾选（第 7 个提交，未发版）**
 >
 > 两行假开关（硬编码字符串）换成了真 SwitchListTile，保存写回 `[password]` 段，**不需要新协议命令**
