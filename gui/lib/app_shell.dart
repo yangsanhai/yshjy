@@ -87,7 +87,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final EngineClient _client = EngineClient.instance;
   int _index = 0;
   String _engineVersion = '…';
-  String _status = t('shell.status.ready');
+  /// 状态栏文字。**null 表示「还没收到任何状态」**，此时显示「就绪」。
+  ///
+  /// 为什么不用 `String _status = t('shell.status.ready')`：那样在 State 创建时
+  /// 就把当时的语言定死了，用户切界面语言后状态栏会一直停在旧语言（真机撞到过：
+  /// 英文界面下底部仍写着「就绪」）。存 null 让它在 build 里现算，切语言就跟着变。
+  String? _statusRaw;
 
   /// 引擎事件订阅（托盘进度行的数据源）
   StreamSubscription<EngineEvent>? _eventSub;
@@ -236,13 +241,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     } catch (e) {
       // 引擎没装、崩了、路径不对 —— 界面必须还能开，只在状态栏说明
       if (!mounted) return;
-      setState(() => _status = t('shell.engine.notReady', {'type': '${e.runtimeType}'}));
+      setState(() => _statusRaw = t('shell.engine.notReady', {'type': '${e.runtimeType}'}));
     }
   }
 
   void _setStatus(String s) {
     if (!mounted) return;
-    setState(() => _status = s);
+    setState(() => _statusRaw = s);
     // 底部状态栏的文字**不再**直接抄进托盘。
     //
     // 为什么：底部状态栏说的是「人话流水账」（「找到 3 个可解包」「已识别：12 个文件」…），
@@ -324,13 +329,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         autoStart: widget.bootstrapEngine,
                       ),
                       PackPage(onStatus: _setStatus),
-                      const HistoryPage(),
-                      const SettingsPage(),
+                      // 不能加 const：切界面语言时父级 rebuild，同一个 const 实例会被
+                      // Flutter 判定为「没变化」而跳过重建 —— 历史页内容会停在旧语言。
+                      // ignore: prefer_const_constructors
+                      HistoryPage(),
+                      // 同上：设置页也要能跟着语言重建。
+                      // ignore: prefer_const_constructors
+                      SettingsPage(),
                       AboutPage(engineVersion: _engineVersion),
                     ],
                   ),
                 ),
-                _StatusBar(engineVersion: _engineVersion, status: _status),
+                _StatusBar(
+                  engineVersion: _engineVersion,
+                  status: _statusRaw ?? t('shell.status.ready'),
+                ),
               ],
             ),
           ),
