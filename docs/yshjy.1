@@ -3,7 +3,7 @@
 .\" 生成：python3 scripts/gen-cli-assets.py   （读 src/cli_spec.rs 的选项表 + locales/zh-CN.toml 的 help.text）
 .\" 模板占位符（由生成器替换）：日期 / 版本号 / 选项段 / 选项总数
 .\" 查看：man ./docs/yshjy.1        安装：deb 包或 install.sh 装到 man1
-.TH YSHJY 1 "2026-10-31" "yshjy 0.9.41" "用户命令"
+.TH YSHJY 1 "2026-10-31" "yshjy 0.9.42" "用户命令"
 .SH 名称
 yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件，也能反向打包
 .SH 概要
@@ -119,7 +119,7 @@ yshjy \- 杨三海解压：把伪装成视频/图片的压缩包还原成文件�
 .B --level \fI0-9\fR
 打包压缩级别 0-9：0 = 仅存储（最快），9 = 最小体积（默认 6）。
 .TP
-.B --layout \fIL1|L2\fR
+.B --layout \fIL1|L2|L4\fR
 打包布局：L1 尾部追加 / L2 藏进 free 原子（默认 L2）。
 .TP
 .B --decoy \fIN\fR

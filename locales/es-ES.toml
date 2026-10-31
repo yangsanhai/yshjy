@@ -57,7 +57,8 @@ OPCIONES HABITUALES:
   --show-config ver la configuración actual (dónde está el archivo y qué valores)
   --tail                          empaquetar «añadiendo al final» (por defecto: free atom; se usa solo si la portada es imagen/texto)
   --config <archivo>              usar este archivo de configuración
-  --layout L1|L2                  diseño: L1 al final / L2 dentro de un free atom (por defecto)
+  --layout L1|L2|L4               diseño: L1 al final / L2 dentro de un free atom (por defecto) /
+                                   L4 dentro del vídeo (se reproduce, pero solo 7-Zip y esta herramienta lo encuentran)
   --cover <archivo>               usar tu propia imagen/vídeo como portada
   --password-file <archivo>       lista de contraseñas (una por línea, # comentarios)
   --no-auto-password              no buscar contraseñas en notas ni en la lista
@@ -195,6 +196,7 @@ pack_locked = "   Cifrado: {mask} (oculto)"
 pack_done = "✅ Escrito {total} (portada {cover} + contenido {zip}), {entries} entradas, diseño {layout}"
 pack_layout_tail = "añadir al final"
 pack_layout_free = "átomo free"
+pack_layout_mid = "dentro del vídeo"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ Autocomprobación correcta (el archivo se reproduce y se puede descomprimir)"
 pack_done_archive = "✅ Escrito {total}, {entries} entradas ({format}, archivo normal, sin portada)"

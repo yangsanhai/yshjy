@@ -29,6 +29,7 @@ use zip::unstable::write::FileOptionsExt as _;
 
 pub mod cover;
 pub mod decoy;
+pub mod mp4;
 
 /// 伪装布局
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -38,6 +39,40 @@ pub enum PackLayout {
     /// 藏进尾部 `free` 原子（推荐）
     #[default]
     FreeAtom,
+    /// 插进视频数据中间（L4）—— ZIP 夹在 `mdat` 的两条 chunk 之间，视频照常能播
+    ///
+    /// 做法见 [`mp4::准备插槽`]：`mdat.size += 插入长度`，所有 `>= 插点` 的
+    /// `stco`/`co64` 条目 `+= 插入长度`，插点只从 chunk 起点里挑。
+    ///
+    /// **代价**：ZIP 的 EOCD 离文件尾 \(= 后半段视频\) 很远，超出 unzip / Windows
+    /// 资源管理器 / 手机解压器「只在文件尾 64 KiB 找 EOCD」的搜索窗 → **它们全都
+    /// 看不到这个包**，只有 7-Zip（会从文件头扫）和本工具能开。所以它是高级选项。
+    MidChunk,
+}
+
+impl PackLayout {
+    /// 给人看的名字（`warnings` / 日志 / 界面降级提示用）
+    pub fn 名字(self) -> &'static str {
+        match self {
+            PackLayout::TailAppend => "尾部追加",
+            PackLayout::FreeAtom => "free 原子",
+            PackLayout::MidChunk => "插在视频中间",
+        }
+    }
+
+    /// 从协议 / 命令行传来的字符串名解析（大小写不敏感）
+    ///
+    /// 收两套写法：上位名（tail / free / mid）和实测报告里的编号（L1 / L2 / L4）。
+    /// L5（分散多段）/ L6（前后加垃圾）**故意不认** —— 实测前者 7-Zip 只解出 1/4、
+    /// 后者视频直接播不了，属于「看着更隐蔽、实际把用户坑了」。
+    pub fn 解析(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "tail" | "l1" | "append" => Some(Self::TailAppend),
+            "free" | "l2" => Some(Self::FreeAtom),
+            "mid" | "middle" | "l4" => Some(Self::MidChunk),
+            _ => None,
+        }
+    }
 }
 
 /// 打包用的归档格式（T17-4）
@@ -452,6 +487,13 @@ pub fn build_ctx_decoy<W: Write>(
     }
     // 参数越界要在**动磁盘之前**就报错（别打到一半才发现 --decoy 填错）
     decoy.validate()?;
+    // L4 与干扰数据互斥：噪声不管写在 ZIP 前面还是后面，都落在视频数据中间，
+    // 会把某条 chunk 切成两段 → 视频坏（实测 §4：非 chunk 边界插入 = marker 不匹配）。
+    // 与其打出一个播不了的文件，不如在动磁盘之前就拒。
+    if opts.layout == PackLayout::MidChunk && decoy.is_on() {
+        return Err(Error::new(ErrorCode::InvalidArgument)
+            .with("reason", "「插在视频中间」不能和干扰数据一起用：乱码会把视频数据切断"));
+    }
 
     // ① 封面：用户给的，或内置素材
     let cover: Vec<u8> = match &opts.cover {
@@ -489,7 +531,29 @@ pub fn build_ctx_decoy<W: Write>(
         warnings.push("封面不是 MP4，已自动改用「尾部追加」布局（free 原子只适合 MP4）".into());
     }
 
-    out.write_all(&cover)
+    // L4（插在视频中间）：先算出「插点在哪、封面要怎么补」。
+    // 算不出来就如实降级并说明原因 —— 绝不为了「看起来成功」写出一个播不了的视频。
+    let mut 槽: Option<mp4::中间插槽> = None;
+    if layout == PackLayout::MidChunk {
+        match mp4::准备插槽(&cover, zip_size) {
+            Ok(s) => 槽 = Some(s),
+            Err(原因) => {
+                layout = if 封面是mp4 {
+                    PackLayout::FreeAtom
+                } else {
+                    PackLayout::TailAppend
+                };
+                warnings.push(format!("{}；已自动改用「{}」布局", 原因.说明(), layout.名字()));
+            }
+        }
+    }
+
+    // 封面怎么落地：L4 得拆两段写（中间夹 ZIP），别的布局就是一整块（后段为空）
+    let (封面前, 封面后): (&[u8], &[u8]) = match &槽 {
+        Some(s) => (&s.封面[..s.插点], &s.封面[s.插点..]),
+        None => (&cover[..], &[][..]),
+    };
+    out.write_all(封面前)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover: {e}")))?;
 
     // 干扰数据的种子：只由输入路径派生（**不看系统时间**），
@@ -527,9 +591,22 @@ pub fn build_ctx_decoy<W: Write>(
             noise_size = 写噪声带进度(out, decoy, 噪声种子, 进度)?;
             拷贝带进度(&tmp, out, 进度)?;
         }
+        PackLayout::MidChunk => {
+            // L4：ZIP 直接接在「前半段视频」后面，后面再补封面的后半段。
+            // 这里没有噪声 —— 见函数开头的互斥检查。
+            拷贝带进度(&tmp, out, 进度)?;
+            noise_size = 0;
+        }
     }
+    // 封面的后半段（只有 L4 有内容；别的布局这里是空的）
+    out.write_all(封面后)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover tail: {e}")))?;
     // ZIP 起点：自检要拿它核对「噪声确实全在压缩数据之外」
-    let zip_offset = cover_size + atom_overhead + pad_len + noise_size;
+    let zip_offset = match layout {
+        // 插点在封面内部，封面从产物第 0 字节开始 → 插点就是 ZIP 的起点
+        PackLayout::MidChunk => 槽.as_ref().map_or(0, |s| s.插点 as u64),
+        _ => cover_size + atom_overhead + pad_len + noise_size,
+    };
 
     if 保留中间产物已开启() {
         // `--keep`：留着中间 ZIP（外壳会把路径打出来）

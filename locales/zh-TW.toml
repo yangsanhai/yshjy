@@ -57,7 +57,8 @@ text = """
   --show-config 看目前設定（設定檔在哪、各項現在是什麼值）
   --tail                          打包用「附加到檔尾」佈局（預設藏進 free 原子；封面是圖片/文字時自動用它）
   --config <檔案>                 用指定的設定檔（預設 ~/.config/yshjy/config.toml）
-  --layout L1|L2                  打包佈局：L1 附加到檔尾 / L2 藏進 free 原子（預設）
+  --layout L1|L2|L4               打包佈局：L1 附加到檔尾 / L2 藏進 free 原子（預設）/
+                                   L4 插在影片中間（影片還能播，但只有 7-Zip 和本工具認得出）
   --cover <檔案>                  用自己的圖片/影片當封面（預設用內建素材）
   --password-file <檔案>          密碼本：每行一個（# 註解），只對這次指令有效
   --no-auto-password              不自動從「說明.txt」和密碼本找解壓碼
@@ -195,6 +196,7 @@ pack_locked = "   加密：{mask}（不回顯）"
 pack_done = "✅ 寫出 {total}（封面 {cover} + 內容 {zip}），共 {entries} 個項目，佈局 {layout}"
 pack_layout_tail = "尾部附加"
 pack_layout_free = "free 原子"
+pack_layout_mid = "插在影片中間"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ 自檢通過（這個檔案能播放，也能被我們解回來）"
 pack_done_archive = "✅ 寫出 {total}，共 {entries} 個項目（{format}，標準封存檔，沒有外殼）"
