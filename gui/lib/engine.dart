@@ -478,6 +478,11 @@ class EngineClient {
     bool checksum = true,
     bool readme = true,
     String mode = 'disguise',
+    /// 归档格式（T17-4 / 协议 `pack.format`）：'zip' / 'tar.gz' / 'tar.zst'
+    ///
+    /// 只在**普通压缩**（`mode: 'plain'`）下才传 —— 伪装包只能是 zip（引擎会拒，
+    /// 见 `pack::PackFormat` 的探针注释）。null = 不传，引擎默认 zip。
+    String? format,
     String? cover,
     /// 自解压种类（P23-5）：'windows'（exe）/ 'linux'（.sh）；null = 不自解压
     String? sfxKind,
@@ -507,6 +512,7 @@ class EngineClient {
       'inputs': inputs,
       'out': out,
       'mode': mode,
+      if (format != null) 'format': format,
       if (password != null) 'password': password,
       if (cover != null) 'cover': cover,
       if (sfxKind != null) 'sfx': sfxKind,

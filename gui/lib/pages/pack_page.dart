@@ -53,6 +53,13 @@ class _PackPageState extends State<PackPage> {
   bool _outUserPicked = false;
   /// 打包模式（GUI-PLAN §5.2②）：普通压缩是默认，伪装是特殊功能
   String _mode = 'plain';
+  /// 归档格式（T17-4）：zip / tar.gz / tar.zst
+  ///
+  /// **只有普通压缩能选** —— 伪装包只能是 zip（封面 + tar 系的包定位不出来，
+  /// 见引擎 `pack::PackFormat` 的探针注释）。所以选 tar 时密码 / 分卷 / 防扫描
+  /// 全部置灰并写明原因，而不是「点了才报错」。
+  String _format = 'zip';
+  bool get _isTar => _format != 'zip';
   /// 用户挑的伪装文件（外壳）：任意类型，用户选什么就是什么
   String? _coverPath;
   int _coverSize = 0;
@@ -83,7 +90,6 @@ class _PackPageState extends State<PackPage> {
   /// 引擎里 decoy 与 `mode:"plain"`、`sfx` 互斥，会回 BAD_PARAM ——
   /// 所以这里直接禁用并说明，而不是做一个点了才报错的假开关。
   bool get _canDecoy => _mode == 'disguise' && !_sfx;
-
   // ── 强制尾部追加（E2 / 协议 pack.tail）──
   // 默认交给引擎按封面文件头决定：MP4 尽量塞进 free 原子（视频还能正常播），
   // 图片/文本/认不出的只能接在文件末尾。打开这个 = **封面一个字节都不改**，
@@ -187,7 +193,7 @@ class _PackPageState extends State<PackPage> {
   /// 当前模式对应的输出扩展名
   /// （普通 = .zip；自解压 = .exe / .sh；伪装 = 外壳的扩展名）
   String get _ext => _mode == 'plain'
-      ? 'zip'
+      ? _format
       : (_sfx
           ? (_sfxKind == 'linux' ? 'sh' : 'exe')
           : (_coverExt.isEmpty ? 'mp4' : _coverExt));
@@ -223,8 +229,8 @@ class _PackPageState extends State<PackPage> {
     setState(() {
       _outUserPicked = true;
       if (_mode == 'plain') {
-        // 普通压缩产物就是 ZIP，名字必须对得上（用户手打 .7z 也不让）
-        _out = withExt(loc.path, 'zip');
+        // 普通压缩产物就是选的那种归档，名字必须对得上（用户手打 .7z 也不让）
+        _out = withExt(loc.path, _format);
       } else {
         _out = withExt(loc.path, _ext);
       }
@@ -270,15 +276,21 @@ class _PackPageState extends State<PackPage> {
     try {
       // 普通压缩产物永远是 ZIP；伪装产物扩展名必须和外壳一致
       final out = _mode == 'plain'
-          ? withExt(_out!, 'zip')
+          ? withExt(_out!, _format)
           : withExt(_out!, _ext);
       final r = await _client.pack(
         inputs: _inputs,
         out: out,
-        password: _pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim(),
+        // 归档格式（T17-4）：只有普通压缩能指定，伪装包只能是 zip
+        format: _mode == 'plain' ? _format : null,
+        // tar 系没有加密 —— 界面上那格已经置灰，这里再兜一道
+        // （用户先前在 zip 下填过密码、切到 tar 后那格是灰的，别把看不见的值偷偷传下去）
+        password: _isTar
+            ? null
+            : (_pwCtrl.text.trim().isEmpty ? null : _pwCtrl.text.trim()),
         cover: _mode == 'disguise' && !isSfx ? _coverPath : null,
         sfxKind: isSfx ? _sfxKind : null,
-        splitBytes: !isSfx && _split ? _parseSize(_splitCtrl.text) : null,
+        splitBytes: !isSfx && !_isTar && _split ? _parseSize(_splitCtrl.text) : null,
         level: _level,
         // 防网盘扫描（E1）：只有伪装模式、非自解压才传 —— 引擎里 decoy 与
         // mode:"plain"、sfx 互斥（回 BAD_PARAM），不做「点了才报错」的假开关。
@@ -371,6 +383,47 @@ class _PackPageState extends State<PackPage> {
                     });
                   },
           ),
+          // 归档格式（T17-4）：只有普通压缩能选 —— 伪装包只能是 zip
+          if (_mode == 'plain') ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(t('pack.format.title'),
+                    style: const TextStyle(fontSize: 13)),
+                const SizedBox(width: 10),
+                DropdownButton<String>(
+                  key: const ValueKey('pack-format'),
+                  value: _format,
+                  isDense: true,
+                  style: const TextStyle(fontSize: 12),
+                  items: [
+                    DropdownMenuItem(
+                        value: 'zip', child: Text(t('pack.format.zip'))),
+                    DropdownMenuItem(
+                        value: 'tar.gz', child: Text(t('pack.format.targz'))),
+                    DropdownMenuItem(
+                        value: 'tar.zst', child: Text(t('pack.format.tarzst'))),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (v) => setState(() {
+                            _format = v ?? 'zip';
+                            // tar 没有分卷 / 加密：亮着的开关要跟着关掉，
+                            // 别留一个「看着开着、其实不生效」的假开关
+                            if (_isTar) _split = false;
+                            if (_out != null) _out = withExt(_out!, _ext);
+                          }),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                _isTar ? t('pack.format.hintTar') : t('pack.format.hintZip'),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ],
           if (_mode == 'disguise') ...[
             const SizedBox(height: 4),
             SwitchListTile(
@@ -566,9 +619,13 @@ class _PackPageState extends State<PackPage> {
           TextField(
             controller: _pwCtrl,
             obscureText: !_showPw,
+            // tar 系没有加密（引擎层不支持，见 PackFormat）—— 置灰并说明，
+            // 不是让用户输了密码才发现没生效
+            enabled: !_isTar,
             decoration: InputDecoration(
               // 第 23 批 P23-5：自解压也支持解压码了（存根会提示输入）
               labelText: t('pack.password'),
+              helperText: _isTar ? t('pack.format.noPassword') : null,
               isDense: true,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock_outline, size: 18),
@@ -673,10 +730,11 @@ class _PackPageState extends State<PackPage> {
             ),
           // 交付选项：默认「校验和 + 说明书」开（DESIGN §14.2），分卷按需
           SwitchListTile(
+            key: const ValueKey('split-toggle'),
             dense: true,
             contentPadding: EdgeInsets.zero,
             value: _split,
-            onChanged: _busy || _sfx ? null : (v) => setState(() => _split = v),
+            onChanged: _busy || _sfx || _isTar ? null : (v) => setState(() => _split = v),
             title: Text(
                 _sfx ? t('pack.volumes') : t('pack.volumes.short'),
                 style: const TextStyle(fontSize: 13)),
