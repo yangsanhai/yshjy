@@ -108,6 +108,10 @@
 - **证据**：探针 `tests/l8_proto.py` **18/18**（已挂 `all.sh`，本机没 ffmpeg 时自动 skip）；
   `cargo test` 399 + 31 + 2、`clippy -D warnings` 干净、`cli_spec_match` 7/7；
   L3 26/26、L7 22/22 不动（回归）。
+- **界面**：打包页布局下拉第六档「MKV 附件」—— 选它时「输出文件」的后缀自动变 `.mkv`
+  （用户自己改过名字就不动他的），说明里写明「要装 ffmpeg、unzip 找不到包」。
+  7 语言各 3 条新文案（`pack.layout.mkv.choice/desc/name`，语言包 514 键）。
+  README 补了 ffmpeg 的依赖与许可证说明（用户对「用别人的必须明示来源」要求很硬）。
 
 ## [0.9.42] · 2026-11-01 凌晨（T18-1 · 打包布局 L4「插在视频中间」）
 
