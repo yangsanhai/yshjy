@@ -1,6 +1,38 @@
 # 发布检查（T5）—— 逐项核对
 
-## 0.9.37 发布记录（2026-10-31，最新一次）
+## 0.9.38 发布记录（2026-10-31，最新一次）
+
+> 内容：**T7 全部 5 项**（引擎/协议早就有、界面一个参数都没传的那批）+ 真机撞出的两个 bug
+> （打包页溢出、诊断包 `findings.error` 没脱敏）。详见 `CHANGELOG.md` 的 `[0.9.38]` 节。
+> 提交：`a63f2c9`（E4 只检查）、`6df4be1`（E1 防网盘扫描）、`a46ced6`（E5 智能解压）、
+> `38bb58a`（E2 不改封面 + E6 诊断包存下载）、`023017c`（脱敏修复）、`e4d51b3`（文档）。
+
+| 步骤 | 结果 |
+|---|---|
+| 六处版本号 → 0.9.38 | 6/6（`Cargo.toml` / `ffi/Cargo.toml` / `gui/pubspec.yaml` / `PROTOCOL.md` 两处 / `README` 两处；`docs/yshjy.1` 由生成器带出 = 0.9.38） |
+| `cargo build --release` | 成功（`--version` = 0.9.38） |
+| `flutter build linux --release` | 成功（`version.json` = 0.9.38） |
+| `scripts/release.sh` | 常用版 3.9M + 全能版 3.9M |
+| `scripts/build-deb.sh` | deb **10M**，自查通过：CLI + GUI + 菜单项(14 种格式) + 图标 + man + 三种补全 + 右键脚本，版本 0.9.38 |
+| `scripts/test-packages.sh` | **37 项全绿 / 0 失败**（含「deb 内引擎版本 == 包版本」「真打包真解压逐字节一致」） |
+| 装机 | `apt-get -s` 先模拟：**只升级 1 个包、0 新装 0 卸载**；然后 0.9.37 → **0.9.38**（用户授权 sudo） |
+
+**装机后五项实测（2026-10-31 13:4x，全部真跑）**：
+① `dpkg -l yshjy` = **0.9.38** ✔
+② `yshjy --version` / `yshys --version` = `yshjy 0.9.38（常用版）` ✔
+③ 菜单 `MimeType` **14 种格式** ✔
+④ `bash tests/pick.sh /usr/bin/yshjy` = **11 通过 / 0 失败**（含「Ctrl-C 后一个文件都没解、termios 复原」）✔
+⑤ 用**装机版**真打包→真解压：3 个文件（中文名 + 三层嵌套 + 500KB 随机二进制）**sha256 逐一致**，
+   `file` 认作真 `ISO Media, MP4` ✔
+
+**额外四项：证明「新功能真进了装机版」，不是只换了界面**：
+- `tests/smart_dir_proto.py` 拿**装机版** `/usr/bin/yshjy` 跑 = **3/3**（新协议 `smart_dir` 真的在里面）
+- 启动**装机版 GUI**（`/usr/lib/yshjy/gui/yshjy_gui`）打开样本：底部「只检查」按钮在、
+  右下角写着 `引擎 0.9.38` → `screenshots/v0.9.38-装机预览页.png`
+- 装机版 `pack.tail`：`ys 内容 -o x.mp4 --cover 封面.mp4 --tail` 走尾部追加（ZIP 紧贴封面末尾）
+- 装机版 `report.out_dir`：诊断包按 `out_dir` 落盘
+
+## 0.9.37 发布记录（2026-10-31 凌晨）
 
 > 内容：**T16 —— 命令行 `--candidate <字节偏移>`**（「解第 N 处」以前只有界面和协议能表达）
 > + **顺手修掉让 `flutter test` 一直红的界面测试保险丝**（同一规则手抄两份、判断不一样）
