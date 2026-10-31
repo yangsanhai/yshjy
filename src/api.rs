@@ -707,6 +707,27 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
     {
         opts.layout = crate::pack::PackLayout::TailAppend;
     }
+    // 打包布局（T18-1 · L4 插在视频中间）：`layout` = tail / free / mid（也认 L1/L2/L4）。
+    // 不传 = 老行为（默认 free 原子，非 MP4 封面由引擎自动降级）。
+    //
+    // 为什么与 `tail:true` 一起给要拒：`tail` 就是「布局 = tail」的老写法，
+    // 两个一起给还互相矛盾 = 两套优先级，永远说不清谁赢。
+    if let Some(v) = 参数.get("layout").and_then(|v| v.as_str()) {
+        let 要求 = crate::pack::PackLayout::解析(v).ok_or_else(|| {
+            错误值(
+                "BAD_PARAM",
+                &format!("layout 只能是 tail / free / mid（也认 L1 / L2 / L4，收到 {v}）"),
+            )
+        })?;
+        let 说过尾巴 = 参数.get("tail").and_then(|x| x.as_bool()) == Some(true);
+        if 说过尾巴 && 要求 != crate::pack::PackLayout::TailAppend {
+            return Err(错误值(
+                "BAD_PARAM",
+                "tail:true 等于「布局 = 尾部追加」，和 layout 说的不是同一个，只能留一个",
+            ));
+        }
+        opts.layout = 要求;
+    }
 
     let 文件 = std::fs::File::create(输出)
         .map_err(|e| 错误值("PERMISSION_DENIED", &format!("建不了输出文件: {e}")))?;

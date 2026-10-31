@@ -57,7 +57,8 @@ yshjy(楊三海解壓) —— '동영상으로 위장한 압축 파일'을 한 �
   --show-config 현재 설정 보기 (설정 파일 위치와 각 항목 값)
   --tail                          '끝에 덧붙이기' 레이아웃으로 묶기 (기본: free atom 안, 표지가 그림/텍스트면 자동)
   --config <파일>                 설정 파일 지정 (기본: ~/.config/yshjy/config.toml)
-  --layout L1|L2                  패키지 배치: L1 끝에 추가 / L2 free atom (기본)
+  --layout L1|L2|L4               패키지 배치: L1 끝에 추가 / L2 free atom (기본) /
+                                   L4 영상 중간에 삽입 (재생은 되지만 7-Zip 과 이 도구만 찾을 수 있음)
   --cover <파일>                  직접 만든 이미지/영상을 표지로 사용
   --password-file <파일>          비밀번호 목록 (한 줄에 하나, # 주석)
   --no-auto-password              설명 파일/목록에서 비밀번호를 자동으로 찾지 않음
@@ -195,6 +196,7 @@ pack_locked = "   암호화: {mask} (표시하지 않음)"
 pack_done = "✅ 기록 {total} (커버 {cover} + 내용 {zip}), {entries}개 항목, 배치 {layout}"
 pack_layout_tail = "끝에 추가"
 pack_layout_free = "free 아톰"
+pack_layout_mid = "영상 중간에 삽입"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ 자체 검사 통과 (재생되고 다시 풀 수 있습니다)"
 pack_done_archive = "✅ {total} 기록됨, 항목 {entries}개 ({format}, 일반 압축 파일, 겉포장 없음)"

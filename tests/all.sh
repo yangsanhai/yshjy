@@ -175,6 +175,9 @@ if [ -n "$BIN" ]; then
   run "协议 pack.tweak_time（tweak_time_proto.py）" python3 tests/tweak_time_proto.py "$BIN"
   # T18-2 自定义显示名：--name 只改名字不改位置；顺带盯「-o 目录」对打包是否管用
   run "自定义显示名（name_cli.py）" python3 tests/name_cli.py "$BIN"
+  # T18-1 布局 L4（插在视频中间）：核心断言是「ffmpeg rc=0 且 stderr 空」——
+  # 只看 rc 会让「改了 mdat size 没改 stco」那种满是坏帧的包也过验收
+  run "布局 L4 插在视频中间（l4_proto.py）" python3 tests/l4_proto.py "$BIN"
   run "协议 report.out_dir（report_outdir_proto.py）" python3 tests/report_outdir_proto.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then

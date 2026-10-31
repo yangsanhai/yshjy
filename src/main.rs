@@ -2720,11 +2720,10 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
     if tail || !素材.is_video() {
         opts.layout = yshjy::pack::PackLayout::TailAppend;
     }
-    // `--layout`：显式指定优先（L1 尾部追加 / L2 free 原子）
+    // `--layout`：显式指定优先（L1 尾部追加 / L2 free 原子 / L4 插在视频中间）
     if let Some(l) = layout {
-        match l.to_ascii_lowercase().as_str() {
-            "l1" => opts.layout = yshjy::pack::PackLayout::TailAppend,
-            "l2" => opts.layout = yshjy::pack::PackLayout::FreeAtom,
+        match l.trim().to_ascii_lowercase().as_str() {
+            // L5 / L6 是**实测判死**的：前者 7-Zip 只解出 1/4，后者视频直接播不了
             "l5" | "l6" => {
                 eprintln!(
                     "❌ --layout {l} 不做：实测 L5 解压残废、L6 视频播不了 —— \
@@ -2732,14 +2731,29 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 );
                 return ExitCode::from(code::USAGE);
             }
-            "l3" | "l4" => {
-                eprintln!("❌ --layout {l} 还没实现（假签名 / 干扰数据排在 0.9.22-c 评估）");
+            // L3 / L7 / L8 是 T18-1 的另外三项，本轮只做了 L4
+            "l3" | "l7" | "l8" => {
+                eprintln!("❌ --layout {l} 还没实现（本轮做的是 L4 插在视频中间）");
                 return ExitCode::from(code::USAGE);
             }
-            _ => {
-                eprintln!("❌ --layout 只认 L1（尾部追加）/ L2（free 原子），收到 {l}");
-                return ExitCode::from(code::USAGE);
-            }
+            _ => match yshjy::pack::PackLayout::解析(l) {
+                Some(布局) => {
+                    // `--tail` 就是 `--layout L1` 的别名：两个一起给、还说不同的话 =
+                    // 自相矛盾。静默让后者赢会变成「两套优先级」，项目里一直避免这种。
+                    if tail && 布局 != yshjy::pack::PackLayout::TailAppend {
+                        eprintln!("❌ --tail 等于 --layout L1，和 --layout {l} 打架了，只能留一个");
+                        return ExitCode::from(code::USAGE);
+                    }
+                    opts.layout = 布局
+                }
+                None => {
+                    eprintln!(
+                        "❌ --layout 只认 L1（尾部追加）/ L2（free 原子）/ L4（插在视频中间），\
+                         收到 {l}"
+                    );
+                    return ExitCode::from(code::USAGE);
+                }
+            },
         }
     }
     // `--cover <文件>`：用户自己的封面。读不到就报错 —— 静默换内置素材
@@ -2845,6 +2859,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 let 布局 = match rep.layout {
                     yshjy::pack::PackLayout::TailAppend => 语.t("cli.pack_layout_tail", &[]),
                     yshjy::pack::PackLayout::FreeAtom => 语.t("cli.pack_layout_free", &[]),
+                    yshjy::pack::PackLayout::MidChunk => 语.t("cli.pack_layout_mid", &[]),
                 };
                 println!(
                     "{}",

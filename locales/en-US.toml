@@ -61,7 +61,8 @@ COMMON OPTIONS:
   --encoding <name>              force filename encoding (auto / gbk / big5 / sjis / utf-8; gb18030 and shift-jis are aliases)
   --tail                          pack with the "append to tail" layout (default: free atom; used automatically when the cover is an image/text)
   --config <file>                 use this config file (default: ~/.config/yshjy/config.toml)
-  --layout L1|L2                  pack layout: L1 tail-append / L2 free atom (default)
+  --layout L1|L2|L4               pack layout: L1 tail-append / L2 free atom (default) /
+                                   L4 inside the video (still plays, but only 7-Zip and this tool find the archive)
   --cover <file>                  use your own image/video as the cover
   --password-file <file>          password list (one per line, # comments), this run only
   --no-auto-password              don't look for passwords in notes or the password list
@@ -198,6 +199,7 @@ pack_locked = "   Encrypted: {mask} (hidden)"
 pack_done = "✅ Wrote {total} (cover {cover} + payload {zip}), {entries} entries, layout {layout}"
 pack_layout_tail = "tail append"
 pack_layout_free = "free atom"
+pack_layout_mid = "inside the video"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ Self-check passed (the file plays, and we can unpack it back)"
 pack_done_archive = "✅ Wrote {total}, {entries} entries ({format}, plain archive, no cover)"

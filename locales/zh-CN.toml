@@ -58,7 +58,8 @@ text = """
   --encoding <编码>              手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子；封面是图片/文字时自动用它）
   --config <文件>                 用指定的配置文件（默认 ~/.config/yshjy/config.toml）
-  --layout L1|L2                  打包布局：L1 尾部追加 / L2 藏进 free 原子（默认）
+  --layout L1|L2|L4               打包布局：L1 尾部追加 / L2 藏进 free 原子（默认）/
+                                   L4 插在视频中间（视频还能播，但只有 7-Zip 和本工具能认出包）
   --cover <文件>                  用自己的图片/视频当封面（默认用内置素材）
   --password-file <文件>          密码本：每行一个（# 注释），只对这次命令有效
   --no-auto-password              不自动从「说明.txt」和密码本找解压码
@@ -195,6 +196,7 @@ pack_locked = "   加密：{mask}（不回显）"
 pack_done = "✅ 写出 {total}（封面 {cover} + 内容 {zip}），共 {entries} 个条目，布局 {layout}"
 pack_layout_tail = "尾部追加"
 pack_layout_free = "free 原子"
+pack_layout_mid = "插在视频中间"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ 自检通过（这个文件能播放，也能被我们解回来）"
 pack_done_archive = "✅ 写出 {total}，共 {entries} 个条目（{format}，标准归档，没有外壳）"
