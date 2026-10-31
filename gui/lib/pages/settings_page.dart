@@ -79,7 +79,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _theme = gen['theme'] ?? 'auto';
         // 界面语言：认不出的值一律当「跟随系统」（配置被手改错不该让语言变未知状态）
         final uiLang = gen['ui_language'] ?? 'system';
-        _uiLocale = supportedLocales.contains(uiLang) ? uiLang : 'system';
+        _uiLocale = availableLocales.contains(uiLang) ? uiLang : 'system';
         _notify = (gen['notify'] ?? 'on') != 'off';
         _openAfter = (gen['open_after'] ?? 'off') == 'on';
         // 默认开（引擎默认也是 true）；只有明确写 off/false 才算关。
@@ -283,7 +283,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           items: [
             DropdownMenuItem(value: 'system', child: Text(t('settings.theme.auto'))),
-            for (final code in supportedLocales)
+            for (final code in availableLocales)
               DropdownMenuItem(value: code, child: Text(localeNames[code] ?? code)),
           ],
           onChanged: (v) async {

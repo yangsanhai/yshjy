@@ -41,6 +41,16 @@ const List<String> supportedLocales = [
   'ru-RU',
 ];
 
+/// **界面文案已经翻完**的语言（`assets/l10n/<code>.json` 真正存在的那些）。
+///
+/// 跟 [supportedLocales] 不是一回事：那是引擎能输出的语言数，这里是界面自己的进度。
+/// 没翻完的语言**一律不能出现在下拉里**，也不能留在配置里 —— 否则会出现两种让用户
+/// 以为软件坏了的自相矛盾状态：
+///   · 选了「日本語」-> 找不到语言包 -> 界面停在英文（「怎么还是英文」）
+///   · 选了「日本語」-> 回落到中文 -> 下拉写着日本語、界面是中文
+/// 翻完一种就往这里加一个，并在 [localeNames] 里它已经有了名字。
+const List<String> availableLocales = ['zh-CN', 'en-US'];
+
 /// 每种语言在**它自己语言里**的名字（设置页下拉用，永远不翻译）
 const Map<String, String> localeNames = {
   'zh-CN': '简体中文',
@@ -111,7 +121,14 @@ Future<Map<String, String>> loadPack(String code) async {
 /// 基准包自己读不出来才让异常冒出来 —— 那是安装包坏了，没什么可救的。
 Future<void> initLocale(String setting) async {
   _base = await loadPack(baseLocale);
-  final target = resolveLocale(setting, Platform.localeName);
+  var target = resolveLocale(setting, Platform.localeName);
+  var effective = setting;
+  if (!availableLocales.contains(target)) {
+    // 配置里存着一个还没翻完的语言（手改的、或旧版本留下的）：界面用基准语言，
+    // 并把这个值当成「跟随系统」，免得设置页写着「日本語」而界面是中文。
+    target = baseLocale;
+    effective = 'system';
+  }
   if (target == baseLocale) {
     _table = _base;
     currentLocale = baseLocale;
@@ -122,27 +139,41 @@ Future<void> initLocale(String setting) async {
     } catch (_) {
       _table = _base;
       currentLocale = baseLocale;
+      effective = 'system';
     }
   }
-  uiLocaleSetting.value = setting;
+  uiLocaleSetting.value = effective;
 }
 
 /// 设置页切语言：先换表，再通知界面重建
 ///
-/// 切换时读包失败**不抛错**：留在原来的语言上，界面不动 —— 用户点一下语言
-/// 然后整个界面变错误提示，比什么都不发生更糟。
+/// 目标语言**没有语言包**（T14 还没翻到它）或包读坏了，一律回落到基准语言，
+/// 并且把 `uiLocaleSetting` 也改成基准 —— 绝不能「保持现状」：那样用户点一下
+/// 「日本語」，界面停在原来的语言上（之前就是这样：从英文点日本語，界面一直是英文，
+/// 看起来像切换失灵）。宁可明确变成中文，也不要静止不动。
 Future<void> switchLocale(String setting) async {
-  final target = resolveLocale(setting, Platform.localeName);
-  if (target != currentLocale) {
+  var target = resolveLocale(setting, Platform.localeName);
+  var effective = setting;
+  if (!availableLocales.contains(target)) {
+    target = baseLocale;
+    effective = baseLocale;
+  }
+  Map<String, String> next;
+  if (target == baseLocale) {
+    next = _base;
+  } else {
     try {
-      _table = target == baseLocale ? _base : await loadPack(target);
-      currentLocale = target;
+      next = await loadPack(target);
     } catch (_) {
-      // 目标语言包坏了：保持现状，别把界面切成一堆 key
-      return;
+      // 语言包文件坏了（不是没做）：退回基准，别把界面切成一堆 key
+      target = baseLocale;
+      effective = baseLocale;
+      next = _base;
     }
   }
-  uiLocaleSetting.value = setting;
+  _table = next;
+  currentLocale = target;
+  uiLocaleSetting.value = effective;
 }
 
 /// 取一条文案：`t('about.report.make')`，带占位符时

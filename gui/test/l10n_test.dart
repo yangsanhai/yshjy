@@ -144,4 +144,21 @@ void main() {
     }
     expect(localeNames.length, supportedLocales.length);
   });
+
+  test('可用的语言（有语言包的）只能是支持语言的子集，且每种都真有语言包文件', () {
+    expect(availableLocales, contains(baseLocale), reason: '基准语言必须有语言包');
+    for (final code in availableLocales) {
+      expect(supportedLocales, contains(code), reason: '$code 不在支持列表里，下拉会出现引擎不认的语言');
+      expect(File('assets/l10n/$code.json').existsSync(), isTrue,
+          reason: '$code 在 availableLocales 里但没有 assets/l10n/$code.json —— '
+              '用户选它就只会回落到中文，等于骗人');
+    }
+    // 反向：有语言包却没进 availableLocales，同样会让「翻完了却选不到」
+    for (final code in supportedLocales) {
+      final hasPack = File('assets/l10n/$code.json').existsSync();
+      expect(hasPack, availableLocales.contains(code),
+          reason: '$code 语言包存在=$hasPack，但 availableLocales 里=${availableLocales.contains(code)} —— '
+              '两边必须一致，翻完一种就要加进 availableLocales');
+    }
+  });
 }

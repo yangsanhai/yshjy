@@ -68,15 +68,28 @@ void main() {
     _writeConfig('[general]\nui_language = "klingon"\n');
     await _pump(tester);
 
-    // 「跟随系统（推荐）」= 认不出的值被规整成了 system（主题那一项也是这句，所以 findsWidgets）
+    // 「跟随系统（推荐）」= 认不出的值被规整成了 system（主题那一项也是这句话，所以 findsWidgets）
     expect(find.text('跟随系统（推荐）'), findsWidgets,
         reason: '认不出的语言值必须回落到「跟随系统」，不能让界面停在未知状态');
+  });
+
+  testWidgets('配置写了还没翻完的语言（ja-JP）→ 当跟随系统，下拉不出现日本語', (tester) async {
+    // 之前这里是个真 bug：`switchLocale` 读不到语言包就「保持现状」，
+    // 用户在英文界面点「日本語」→ 界面一直是英文 → 看着像切换失灵。
+    // 现在没翻完的语言根本不进下拉，配置里残留也会被当成「跟随系统」。
+    _writeConfig('[general]\nui_language = "ja-JP"\n');
+    await _pump(tester);
+
+    expect(find.text('日本語'), findsNothing,
+        reason: 'ja-JP 还没翻完，下拉里不该出现它 —— 选了只会回落中文');
+    expect(find.text('跟随系统（推荐）'), findsWidgets,
+        reason: '配置里的 ja-JP 要当成「跟随系统」');
   });
 
   testWidgets('点保存 → 写出 ui_language，且同段其它键与注释原样保留', (tester) async {
     _writeConfig('[general]\n'
         '# 用户手写的注释也要留着\n'
-        'ui_language = "ja-JP"\n'
+        'ui_language = "en-US"\n'
         'theme = "dark"\n'
         'close_action = "tray"\n');
     await _pump(tester);
@@ -88,7 +101,9 @@ void main() {
     await tester.pump();
 
     final text = File(_cfgPath).readAsStringSync();
-    expect(text.contains('ui_language = "ja-JP"'), isTrue, reason: '保存后要写回语言：\n$text');
+    // 用 en-US 而不是 ja-JP：ja-JP 还没翻完，会被当成「跟随系统」写成 system，
+    // 那测的就不是「保存」而是「回落」了。
+    expect(text.contains('ui_language = "en-US"'), isTrue, reason: '保存后要写回语言：\n$text');
     expect(text.contains('# 用户手写的注释也要留着'), isTrue, reason: '注释不能被冲掉：\n$text');
     expect(text.contains('theme = "dark"'), isTrue, reason: '同段其它键不能被冲掉：\n$text');
     expect(text.contains('close_action = "tray"'), isTrue, reason: '同段其它键不能被冲掉：\n$text');
