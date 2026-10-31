@@ -65,7 +65,7 @@
         "split_volumes": true
       },
       "tar": {
-        "can_create": false,
+        "can_create": true,
         "encrypted": false,
         "encrypted_names": false,
         "restores_mtime": true,

@@ -45,7 +45,22 @@ class _PackPageState extends State<PackPage> {
   final EngineClient _client = EngineClient.instance;
 
   final List<String> _inputs = [];
-  String? _out;
+  /// 输出文件（完整路径）。改名输入框的文本由 setter 同步 ——
+  /// 只维护**一份**状态（`_out`），输入框里显示 `baseName(_out)`；
+  /// 另记一份「名字」迟早两边对不上（T18-2 做显示名时的定法）。
+  String? _outRaw;
+  final TextEditingController _nameCtrl = TextEditingController();
+  String? get _out => _outRaw;
+  set _out(String? v) {
+    _outRaw = v;
+    final want = v == null ? '' : baseName(v);
+    if (_nameCtrl.text != want) {
+      _nameCtrl.value = TextEditingValue(
+        text: want,
+        selection: TextSelection.collapsed(offset: want.length),
+      );
+    }
+  }
   /// 用户自己挑过输出位置？（挑过就不再自动改名字，尊重用户选择）
   ///
   /// 以前 `_out` 用 `??=` 赋值，结果是「只建议一次」，换输入文件后输出名还停在上一个，
@@ -134,7 +149,7 @@ class _PackPageState extends State<PackPage> {
         _coverExt = ext.isEmpty ? 'bin' : ext;
         // 与 _pickCover 里的「输出名跟着外壳走」保持一致，
         // 否则测试验的是另一套初始状态（两处要一起改）。
-        if (_out != null) _out = withExt(_out!, _coverExt);
+        if (_out != null) _out = reExt(_out!, _coverExt);
       }
     }
   }
@@ -167,6 +182,7 @@ class _PackPageState extends State<PackPage> {
   void dispose() {
     _sub?.cancel();
     _pwCtrl.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
@@ -217,7 +233,7 @@ class _PackPageState extends State<PackPage> {
       final ext = extOf(f.path);
       _coverExt = ext.isEmpty ? 'bin' : ext;
       if (_out != null) {
-        _out = withExt(_out!, _coverExt);
+        _out = reExt(_out!, _coverExt);
       } else if (_inputs.isNotEmpty) {
         _out = suggestOut(_inputs.first, _ext);
       }
@@ -232,9 +248,9 @@ class _PackPageState extends State<PackPage> {
       _outUserPicked = true;
       if (_mode == 'plain') {
         // 普通压缩产物就是选的那种归档，名字必须对得上（用户手打 .7z 也不让）
-        _out = withExt(loc.path, _format);
+        _out = reExt(loc.path, _format);
       } else {
-        _out = withExt(loc.path, _ext);
+        _out = reExt(loc.path, _ext);
       }
     });
   }
@@ -248,15 +264,47 @@ class _PackPageState extends State<PackPage> {
     return null;
   }
 
+  /// 改名输入框（T18-2）：只改**文件名**，目录沿用当前输出目录。
+  ///
+  /// 这里**不走 `_out` 的 setter**：setter 会用 `baseName` 回写输入框，而用户打了
+  /// `a/b.mp4` 时 `baseName` 只剩 `b.mp4` —— 违规的斜杠被抹掉、校验形同虚设，
+  /// 输入框还会自己跳字（widget 测试撞到）。直接改底层字段，输入框文本归用户所有。
+  void _onNameChanged(String text) {
+    setState(() {
+      _outRaw = '${_out == null ? '' : dirOf(_out!)}$text';
+      // 用户亲手改过名字 = 挑过位置，换输入文件时不再自动覆盖（与「另存为」同一语义）
+      _outUserPicked = true;
+    });
+  }
+
+  /// 输入框下面的红字：空 / 非法名。`_out == null` 时不算错误（用户还没选东西）。
+  ///
+  /// **校验的是输入框原文，不是 `baseName(_out)`** —— 用户打 `a/b.mp4` 时 `_out` 会被拼成
+  /// `/tmp/a/b.mp4`，`baseName` 只剩 `b.mp4`，违规的斜杠正好被抹掉、看着像没事（widget 测试撞到）。
+  String? get _nameErrorText {
+    if (_out == null) return null;
+    final e = nameError(_nameCtrl.text);
+    if (e == null) return null;
+    return e == 'NAME_EMPTY' ? t('pack.output.nameEmpty') : t('pack.output.nameInvalid');
+  }
+
   /// 错误码 → 人话（界面不糊 code；引擎码查 `humanize.dart`，界面自己的码在这补）
   String _errorText(String code) => switch (code) {
         'NO_COVER' => t('pack.err.needCover'),
         'SPLIT_SIZE_INVALID' => t('pack.err.badVolume'),
+        'BAD_NAME' => t('pack.err.badName'),
         _ => errorText(code),
       };
 
   Future<void> _pack() async {
     if (_inputs.isEmpty || _out == null) return;
+    // 显示名（T18-2）：界面即时红字已经在输入框下面了，这里再兜一道 ——
+    // 空的 / 带分隔符的名字不能发出去（引擎那头是路径，别让「改名」变成「换位置」）。
+    final nameErr = nameError(_nameCtrl.text);
+    if (nameErr != null) {
+      setState(() => _error = 'BAD_NAME');
+      return;
+    }
     final isSfx = _mode == 'disguise' && _sfx;
     if (!isSfx && _mode == 'disguise' && _coverPath == null) {
       setState(() => _error = 'NO_COVER');
@@ -276,10 +324,12 @@ class _PackPageState extends State<PackPage> {
     });
     widget.onStatus?.call(t('pack.busy'));
     try {
-      // 普通压缩产物永远是 ZIP；伪装产物扩展名必须和外壳一致
+      // 普通压缩产物永远是 ZIP；伪装产物扩展名必须和外壳一致。
+      // 用 reExt 而不是 withExt：用户手写的 `电影.2026.1080p` 要补成 `.mp4`，
+      // 不能被理解成「把 1080p 换成 mp4」（T18-2）。
       final out = _mode == 'plain'
-          ? withExt(_out!, _format)
-          : withExt(_out!, _ext);
+          ? reExt(_out!, _format)
+          : reExt(_out!, _ext);
       final r = await _client.pack(
         inputs: _inputs,
         out: out,
@@ -383,7 +433,7 @@ class _PackPageState extends State<PackPage> {
                     setState(() {
                       _mode = s.first;
                       // 输出名跟着换扩展名（普通 = .zip；伪装 = 外壳的扩展名）
-                      if (_out != null) _out = withExt(_out!, _ext);
+                      if (_out != null) _out = reExt(_out!, _ext);
                     });
                   },
           ),
@@ -415,7 +465,7 @@ class _PackPageState extends State<PackPage> {
                             // tar 没有分卷 / 加密：亮着的开关要跟着关掉，
                             // 别留一个「看着开着、其实不生效」的假开关
                             if (_isTar) _split = false;
-                            if (_out != null) _out = withExt(_out!, _ext);
+                            if (_out != null) _out = reExt(_out!, _ext);
                           }),
                 ),
               ],
@@ -439,7 +489,7 @@ class _PackPageState extends State<PackPage> {
                   ? null
                   : (v) => setState(() {
                         _sfx = v;
-                        if (_out != null) _out = withExt(_out!, _ext);
+                        if (_out != null) _out = reExt(_out!, _ext);
                       }),
               secondary: const Icon(Icons.window_outlined, size: 20),
               title: Text(t('pack.mode.sfx.title'), style: const TextStyle(fontSize: 13)),
@@ -467,7 +517,7 @@ class _PackPageState extends State<PackPage> {
                           ? null
                           : (v) => setState(() {
                                 _sfxKind = v ?? 'windows';
-                                if (_out != null) _out = withExt(_out!, _ext);
+                                if (_out != null) _out = reExt(_out!, _ext);
                               }),
                     ),
                   ],
@@ -601,23 +651,27 @@ class _PackPageState extends State<PackPage> {
             ),
           ],
           const SizedBox(height: 10),
-          // 只读展示（不用 TextField：每帧 new controller 会丢状态）
-          InputDecorator(
+          // 显示名（T18-2）：**文件名可以直接改**。
+          // 以前这里是一段只读文字，理由是「每帧 new controller 会丢状态」——
+          // 把 controller 放进 State 字段就不丢了，那不是不能改的理由。
+          // 目录不在这里：右边那个按钮负责选位置，一条规则只有一个出口。
+          TextField(
+            key: const ValueKey('output-name'),
+            controller: _nameCtrl,
+            enabled: !_busy,
+            style: const TextStyle(fontSize: 12),
             decoration: InputDecoration(
               labelText: t('pack.output'),
               isDense: true,
               border: const OutlineInputBorder(),
+              helperText: t('pack.output.nameHint'),
+              errorText: _nameErrorText,
               suffixIcon: IconButton(
                 icon: const Icon(Icons.folder_open, size: 18),
                 onPressed: _busy ? null : _pickOut,
               ),
             ),
-            child: Text(
-              _out ?? t('pack.output.none'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
+            onChanged: _onNameChanged,
           ),
           const SizedBox(height: 10),
           TextField(

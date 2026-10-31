@@ -32,6 +32,7 @@ for bin in yshjy yshys
     complete -c $bin -l delete-source -d '解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）'
     complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M，也认纯字节数）'
     complete -c $bin -l format -x -a 'zip tar.gz tar.zst' -d '打包成普通归档（不加外壳）：zip / tar.gz / tar.zst。给了就是普通压缩，不给还是伪装包'
+    complete -c $bin -l name -r -F -d '改产物的文件名（伪装成 电影.2026.1080p.mp4 这种）；只换名字不换位置，位置用 -o'
     complete -c $bin -l tweak-time -d '防炸链：把条目时间戳打乱（每次都不一样），网盘就不会判成同一个文件；默认关'
     complete -c $bin -l level -x
     complete -c $bin -l layout -x -a 'L1 L2'
