@@ -2,6 +2,54 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-10-31 夜（T17-4 打包格式可选）
+
+> 引擎 / 协议 / CLI / 界面四层都做完了，**还差真机截图**（要用户自己点，项目规矩）。
+> 提交：`a593942`（引擎+协议+CLI+探针）、`a9184eb`（界面+文档）。
+
+### 探针先行的结论（设计文档要求「验过再承诺」的那条）
+
+- 解压侧 **tar / tar.gz / tar.zst 本来就能解**：造三种包真解压，md5 与源一致。
+- 但「MP4 封面 + tar 系」的伪装包 `--list` **三种全报 NOT_ARCHIVE** —— 定位器只认 ZIP 的 EOCD。
+  所以 **tar 系只能走普通压缩**，伪装模式在协议层直接拒（不是等用户撞上才说）。
+
+### 引擎
+
+- `PackFormat`（Zip / TarGz / TarZst）+ `PackOptions.format`；`write_tar` 用 tar crate，
+  外面套 flate2(gzip) / zstd。目录**显式加条目**（空目录不丢）、`read_dir` **排序**
+  （两次打包逐字节一致）、mtime 由 tar 头自带（ZIP 那边要手填）。
+- 依赖新增 `zstd = 0.13`（`ruzstd` 只会解压）；zstd-sys vendored 编译，46 秒。
+- `self_check_tar`：tar 头就是索引，读回来数非目录条目。CLI 自检按格式分派 ——
+  以前只认 ZIP 的 EOCD，tar 包会被自检误报「❌ 自检失败」（包本身是好的）。
+- 顺手修：「ZIP 起点为 0，封面没包住数据」这条警告只在真声称有封面时才报
+  （普通压缩 zip_offset 就是 0，以前会误报）。
+- caps 里 tar 的 `can_create` 改 true（只出 tar.gz / tar.zst，不出裸 .tar）。
+
+### 协议 / CLI
+
+- `pack.format`；tar 系拒绝 `password` / `split` / `sfx` / `decoy`，各回 BAD_PARAM + 人话理由。
+- 结果新增 `format` 回显。
+- CLI `--format`：一给就是普通压缩（不加外壳、不写说明书），默认输出名跟格式走。
+- 帮助 / man / 三份补全全部跟着生成器更新（长选项 49 → **50**）。
+- 文案：`pack_done_archive` / `pack_selfcheck_ok_archive` × 7 语言 + `--format` 帮助行 × 7 语言。
+
+### 界面
+
+- 打包页「普通压缩」下新增「打包格式」下拉；**伪装模式不显示**（伪装只能是 zip）。
+- 选 tar 系：密码框置灰 + 「tar 格式不支持加密」、分卷开关禁用、输出名换后缀、
+  请求里**不带** password / split（用户在 zip 下填过的不能偷偷带过去）。
+- l10n 新增 7 条 × 7 语言（485 键，各语言齐）。
+
+### 证据（都是真跑的）
+
+- `cargo test` 全绿 / `cargo clippy --all-targets -D warnings` 干净
+- `flutter analyze` No issues / `flutter test` **162 过**（原 158 + 新 4 条）
+- `tests/format_proto.py` **20 项全过**（已挂 `tests/all.sh`）：真打真解（Python tarfile + 系统 tar --zstd）、
+  矩阵拒绝 5 组、老行为不变
+- `bash tests/cli_spec_match.sh` 7/7
+- 真机 CLI：三种格式打包 + 三种冲突报错，逐条贴过产物校验
+- **未验**：界面真机截图（等用户自己点）
+
 ## [0.9.39] · 2026-10-31（P1 三条小活 + 界面多语言 T14：七种语言全部到位）
 
 > 0.9.38 已出包装机，这一批从 0.9.39 起算；**做完 T14 再统一出包**。
