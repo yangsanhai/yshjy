@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../engine.dart';
 import '../humanize.dart';
+import '../l10n.dart';
 import '../platform_paths.dart';
 
 /// 关于页：版本、边界、报障入口
+///
+/// 文案全部走 `t()`（T14）：这一页是界面多语言的样板页 —— 句子最长、
+/// 占位符最多（版本号、诊断包路径、失败原因），先在这一页把三种形态
+/// （纯文本 / 带一个占位符 / 带「失败原因」这类子句）都跑通，再推别的页。
 class AboutPage extends StatefulWidget {
   final String engineVersion;
 
@@ -29,9 +34,10 @@ class _AboutPageState extends State<AboutPage> {
       setState(() => _reportPath = r['path'] as String?);
     } on EngineError catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          // 五态审计：同上，错误码要翻成人话
-          .showSnackBar(SnackBar(content: Text('生成失败：${errorText(e.code)}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        // 错误码先翻成人话（humanize），再套进「生成失败：{reason}」这句里
+        SnackBar(content: Text(t('about.report.failed', {'reason': errorText(e.code)}))),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -54,9 +60,9 @@ class _AboutPageState extends State<AboutPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('杨三海解压', style: Theme.of(context).textTheme.titleLarge),
+                Text(t('app.name'), style: Theme.of(context).textTheme.titleLarge),
                 Text(
-                  'yshjy · 引擎 ${widget.engineVersion} · 协议 v1 · MIT 许可',
+                  t('app.tagline', {'version': widget.engineVersion}),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ],
@@ -65,25 +71,20 @@ class _AboutPageState extends State<AboutPage> {
         ),
         const SizedBox(height: 18),
         Text(
-          '专门对付「网盘下载下来、扩展名是 .mp4 / .png，但所有工具都打不开」的压缩包。\n'
-          '自己定位真归档藏在哪，再交给成熟的解码库解压；反向也能打包成伪装视频。',
+          t('about.intro'),
           style: TextStyle(fontSize: 13, height: 1.7, color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 20),
         _card(
           cs,
-          title: '它不做什么（硬边界）',
-          body: '· 不联网、不上传任何东西\n'
-              '· 不做字典/爆破、不内置密码表\n'
-              '· 抓到的解压码只试不存\n'
-              '· 解出可执行文件一定提醒你',
+          title: t('about.limits.title'),
+          body: t('about.limits.body'),
         ),
         const SizedBox(height: 12),
         _card(
           cs,
-          title: '出问题了？',
-          body: '点下面生成诊断包（路径已脱敏），把这一个 zip 发给开发者就行。\n'
-              '它包含：版本、系统、当时参数、识别结果；**不含**文件内容和密码。',
+          title: t('about.report.title'),
+          body: t('about.report.body'),
         ),
         const SizedBox(height: 12),
         if (_reportPath != null)
@@ -94,7 +95,7 @@ class _AboutPageState extends State<AboutPage> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: SelectableText(
-              '诊断包：$_reportPath',
+              t('about.report.path', {'path': _reportPath!}),
               style: const TextStyle(fontSize: 11),
             ),
           ),
@@ -105,7 +106,7 @@ class _AboutPageState extends State<AboutPage> {
               ? const SizedBox(
                   width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.bug_report_outlined),
-          label: Text(_busy ? '生成中…' : '生成诊断包'),
+          label: Text(_busy ? t('about.report.busy') : t('about.report.make')),
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
@@ -115,12 +116,12 @@ class _AboutPageState extends State<AboutPage> {
             await openDirectory(dir);
           },
           icon: const Icon(Icons.folder_open, size: 18),
-          label: const Text('打开状态目录（崩溃日志在这里）'),
+          label: Text(t('about.stateDir')),
         ),
         const SizedBox(height: 20),
         Center(
           child: Text(
-            '用 Flutter + Rust 做的 · 界面与引擎通过 docs/PROTOCOL.md 通信',
+            t('about.footer'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
         ),

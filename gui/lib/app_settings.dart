@@ -1,6 +1,46 @@
 import 'dart:io';
 
+import 'l10n.dart';
 import 'platform_paths.dart';
+
+/// 读 `[general] <键>` 的字符串值（新加的键走这里，别再抄一遍逐行解析）
+Future<String?> _readGeneralKey(String key) async {
+  try {
+    final f = File('$configDir/config.toml');
+    if (!await f.exists()) return null;
+    var inGeneral = false;
+    for (final line in (await f.readAsString()).split('\n')) {
+      final t = line.trim();
+      if (t.startsWith('[') && t.endsWith(']')) {
+        inGeneral = t == '[general]';
+        continue;
+      }
+      if (!inGeneral || t.isEmpty || t.startsWith('#')) continue;
+      final i = t.indexOf('=');
+      if (i <= 0) continue;
+      if (t.substring(0, i).trim() != key) continue;
+      var v = t.substring(i + 1).trim();
+      if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+        v = v.substring(1, v.length - 1);
+      }
+      return v;
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// 界面语言：`[general] ui_language = "system"`（默认，跟随系统）或 `zh-CN` 这类 code。
+///
+/// 为什么归界面而不是引擎：引擎有自己的 `--lang`（**输出语言**，指命令行提示），
+/// 界面语言是另一件事 —— 塞进同一个键会让两条需求互相覆盖。
+/// 认不出的值一律当「跟随系统」：配置被手改错了不该让界面语言变成未知状态。
+Future<String> uiLanguageSetting() async {
+  final v = await _readGeneralKey('ui_language');
+  if (v == null || v.isEmpty || v == 'system') return 'system';
+  return supportedLocales.contains(v) ? v : 'system';
+}
 
 /// 界面侧的少量偏好，借 `config.toml` 的 `[general]` 段一起存
 /// —— 不另起一份 state 文件，用户在设置页看到的就是唯一真源。
