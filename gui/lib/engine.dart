@@ -507,7 +507,13 @@ class EngineClient {
     /// - `'tail'`：封面一个字节都不改，数据直接接在文件末尾（最保险）
     /// - `'mid'`：插进视频数据中间（L4）—— 视频照常能播，包藏得比尾巴深；
     ///   代价是 EOCD 离文件尾远，别的解压软件多半认不出（7-Zip 和本工具一定行）
+    /// - `'head'`：放进文件头部（L3）—— 代价比 mid 更狠，unzip / 资源管理器全找不到
+    /// - `'two'`：一个文件里放**两个包**（L7）—— 封面 + 本次输入 + `second` 指定的现成 zip；
+    ///   通用解压器只看得见其中一个（7-Zip 看第一个、unzip 看最后一个）
     String? layout,
+    /// L7 的第二个包（协议 `pack.second`）：一个现成 ZIP 的绝对路径。
+    /// 只有 `layout == 'two'` 才有意义 —— 给别的布局会被引擎拒（那边有人话说明）。
+    String? second,
   }) async {
     final r = await _call({
       'cmd': 'pack',
@@ -524,8 +530,10 @@ class EngineClient {
       if (decoy != null && decoy > 0) 'decoy': decoy,
       if (decoySize != null) 'decoy_size': decoySize,
       if (decoySignatures) 'decoy_signatures': true,
-      // 数据藏在哪（E2 的 tail 是这里的一个档；T18-1 又加了 mid）
+      // 数据藏在哪（E2 的 tail 是这里的一个档；T18-1 又加了 mid / head / two）
       if (layout != null) 'layout': layout,
+      // L7 的第二个包：只在选了「两个包」时传
+      if (second != null && second.isNotEmpty) 'second': second,
       'checksum': checksum,
       // 防炸链（T18-3）：默认关，开着才传
       if (tweakTime) 'tweak_time': true,
