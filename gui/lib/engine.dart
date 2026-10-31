@@ -418,6 +418,15 @@ class EngineClient {
     /// 用户点「换个地方试」时才会传。引擎侧 `locate_at_base` 精确切那一段；
     /// 传了但那段解不开，引擎报 `NOT_ARCHIVE`（不会偷偷回头解默认那处）。
     int? candidate,
+    /// 只检查不落盘（协议 `extract.verify_only`，CLI 的 `--test`）
+    ///
+    /// 引擎侧**早就支持**：批处理和三套解压器每条落盘路径都判了 `verify_only`，
+    /// 连 `PartFile::create_with` 都带着它，`--test` 走的就是这条路 —— 只是界面
+    /// 以前一个字都没传，于是「这包坏没坏」只能真解一遍、把硬盘占满（T7 / E4）。
+    ///
+    /// ⚠️ 用它的调用方必须同时把 `cover` 关掉：提取封面是真写盘的另一条路径，
+    /// 一起开着就与「一个字节都不写」矛盾（实测 CLI `--test` 是零字节）。
+    bool verifyOnly = false,
   }) async {
     final r = await _call({
       'cmd': 'extract',
@@ -439,6 +448,8 @@ class EngineClient {
       if (candidate != null) 'candidate': candidate,
       // 声明「我能处理 ASK_USER」—— 不写的话引擎遇到限额直接失败（协议设计如此）
       if (ask) 'ask': true,
+      // 只检查不落盘（E4）：引擎走 verify_only，解码 + 校验但一个字节都不写
+      if (verifyOnly) 'verify_only': true,
     });
     return ExtractResult.fromJson(_unwrap(r));
   }

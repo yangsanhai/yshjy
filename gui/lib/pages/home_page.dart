@@ -126,6 +126,13 @@ class _HomePageState extends State<HomePage> {
   ExtractResult? _result;
   String? _errorCode;
 
+  /// 这一轮是「只检查」而不是真解压（E4 / 协议 `extract.verify_only`）
+  ///
+  /// 结果页据此换文案：验证时引擎照样报 `done=2 / bytes=13440`（它确实解码+校验了），
+  /// 但**一个字节都没落盘**，`dest` 目录也不存在。照普通成功页写「解开了 2 个文件」
+  /// 加「打开目录」，用户点进去只会看到「目录不存在」—— 和以前那种假成功是同一类毛病。
+  bool _verifyMode = false;
+
   /// 引擎给的结构化细节（如缺分卷的 missing/found）—— 失败卡据此说"缺哪一块"
   Map<String, dynamic>? _errorDetail;
 
@@ -759,17 +766,19 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _extract({bool force = false, int? candidate}) async {
+  Future<void> _extract(
+      {bool force = false, int? candidate, bool verifyOnly = false}) async {
     final path = _file;
     if (path == null) return;
     setState(() {
       _phase = Phase.extracting;
+      _verifyMode = verifyOnly;
       _progress = null;
       _current = null;
       _nestedArchives = [];
     });
     try {
-      widget.onStatus?.call('正在解压…');
+      widget.onStatus?.call(verifyOnly ? '正在校验（不写盘）…' : '正在解压…');
       final pv = _preview;
       // 全勾 = 不传 select（引擎默认全解，与以前行为完全一致）
       final pickedAll = pv == null ||
@@ -777,31 +786,47 @@ class _HomePageState extends State<HomePage> {
       final r = await _client.extract(
         path,
         password: _password,
-        cover: _wantCover,
-        wantExtract: _wantExtract,
-        dest: _outDir,
+        // 「只检查」时封面必须关：切封面是真写盘的另一条路，
+        // 开着它就与「硬盘一个字节都不动」矛盾（实测 CLI --test 是零字节）。
+        cover: verifyOnly ? false : _wantCover,
+        // 校验不跟随界面勾选：勾了一半不等于包只坏了一半，
+        // 而且用户点「只检查」想要的答案就是「整包完不完好」。
+        wantExtract: verifyOnly ? true : _wantExtract,
+        dest: verifyOnly ? null : _outDir,
         // S10：换候选解压时不带挑选序号 —— 另一段里的条目跟当前预览完全可能不同，
         // 带着旧序号去解等于用 A 包的清单挑 B 包的文件（会漏解或报错）。
-        select: (_wantExtract && !pickedAll && candidate == null)
-            ? _picked.toList()
-            : null,
+        select: (verifyOnly || !_wantExtract || pickedAll || candidate != null)
+            ? null
+            : _picked.toList(),
         encoding: _encoding,
         // S5「继续试试」：跳过空间预检（引擎侧早支持，界面以前没传）
         force: force,
         // S10 多候选：只解用户点的那一处（预览页「换一处解压」）
         candidate: candidate,
+        // E4：只检查不落盘（协议 verify_only）
+        verifyOnly: verifyOnly,
       );
       if (!mounted) return;
       setState(() {
         _result = r;
         _phase = Phase.done;
       });
-      widget.onStatus?.call(r.ok ? '完成：${r.entriesDone} 个文件' : '部分完成');
+      widget.onStatus?.call(verifyOnly
+          ? (r.ok ? '校验通过：${r.entriesDone} 个文件' : '校验发现问题')
+          : (r.ok ? '完成：${r.entriesDone} 个文件' : '部分完成'));
       // 解压完发桌面通知：切到别的窗口也知道；发不出不影响主流程
       Notifier.send(
-        r.ok ? '解压完成' : '解压部分完成',
-        '${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
+        verifyOnly
+            ? (r.ok ? '校验通过' : '校验发现问题')
+            : (r.ok ? '解压完成' : '解压部分完成'),
+        verifyOnly
+            ? '${r.entriesDone} 个文件 · 没写任何文件'
+            : '${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
       );
+      // 「只检查」到此为止：没有产物、没有目录、也没有历史。
+      // 这三样都别做 —— 否则历史页会多一条指向不存在目录的记录，
+      // _maybeOpenAfterDone 还会真去打开它（就是那类「点了没反应」）。
+      if (verifyOnly) return;
       await _maybeOpenAfterDone(r.dest);
       // 产物里若还套着压缩包，问一句要不要再解一层（不自动，免得大包解到天荒地老）
       _probeNested();
@@ -1902,6 +1927,19 @@ class _HomePageState extends State<HomePage> {
               icon: const Icon(Icons.close),
               label: const Text('取消'),
             ),
+            const SizedBox(width: 8),
+            // E4「只检查」：完整解码 + 校验，一个字节都不落盘（协议 verify_only）。
+            // 用 TextButton 不用 OutlinedButton：旁边那个才是主入口，
+            // 两个描边按钮并排会让用户不知道点哪个（首屏「唯一最强入口」同一条规矩）。
+            Tooltip(
+              message: '把包完整解一遍看坏没坏，但不写任何文件（不占硬盘）',
+              child: TextButton.icon(
+                key: const ValueKey('verify-only'),
+                onPressed: () => _extract(verifyOnly: true),
+                icon: const Icon(Icons.fact_check_outlined, size: 18),
+                label: const Text('只检查'),
+              ),
+            ),
             const Spacer(),
             FilledButton.icon(
               onPressed: (_wantExtract && _picked.isEmpty) ||
@@ -2348,25 +2386,35 @@ class _HomePageState extends State<HomePage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            ok ? Icons.check_circle_outline : Icons.info_outline,
+            _verifyMode
+                ? (ok ? Icons.verified_outlined : Icons.report_problem_outlined)
+                : (ok ? Icons.check_circle_outline : Icons.info_outline),
             size: 72,
             color: ok ? cs.primary : cs.tertiary,
           ),
           const SizedBox(height: 16),
           Text(
-            ok
-                ? (onlyCover
-                    ? '封面已提取出来'
-                    : '解开了 ${r.entriesDone} 个文件')
-                : '只解出了一部分（${r.entriesDone}/${r.entriesTotal}）',
+            _verifyMode
+                // 别写「解开了 N 个文件」：一个字节都没写，目录也不存在
+                ? (ok
+                    ? '校验通过：${r.entriesDone} 个文件都完好'
+                    : '有文件校验不过（${r.entriesDone}/${r.entriesTotal}）')
+                : (ok
+                    ? (onlyCover
+                        ? '封面已提取出来'
+                        : '解开了 ${r.entriesDone} 个文件')
+                    : '只解出了一部分（${r.entriesDone}/${r.entriesTotal}）'),
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
           Text(
-            '用时 $seconds 秒 · ${_size(r.bytesWritten)}',
+            // 校验时 bytesWritten 是「解码过的字节」，不是写进硬盘的量 —— 不能拿来当产物大小
+            _verifyMode
+                ? '用时 $seconds 秒 · 没写任何文件，包还在原地'
+                : '用时 $seconds 秒 · ${_size(r.bytesWritten)}',
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
-          if (r.dest != null) ...[
+          if (!_verifyMode && r.dest != null) ...[
             const SizedBox(height: 6),
             Text(
               r.dest!,
@@ -2415,7 +2463,9 @@ class _HomePageState extends State<HomePage> {
               label: const Text('打开封面', style: TextStyle(fontSize: 12)),
             ),
           ],
-          if (_entryHint() case final hint?) ...[
+          // 「接下来点这个」说的是产物里的启动文件 —— 校验模式没有产物，别指路
+          if (!_verifyMode)
+            if (_entryHint() case final hint?) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2441,7 +2491,9 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (r.dest != null)
+              // 校验模式没有产物目录：那个 dest 是引擎顺手回显的路径，
+              // 目录根本没建过，摆个「打开目录」只会点了报错。
+              if (!_verifyMode && r.dest != null)
                 FilledButton.icon(
                   onPressed: () => _openFolder(r.dest),
                   icon: const Icon(Icons.folder_open),
