@@ -41,7 +41,10 @@
   · `flutter analyze` No issues、`flutter test` **188 过**（`pack_tail_widget_test` 升级成
     `pack_layout_widget_test` 7 条：默认传 free 绝不传 tail / 两档都真传 / 引擎降级要红字 / 图片外壳 mid 灰掉）；
   · `bash tests/all.sh` **52 通过 / 1 失败（cli_spec_match，补全没同步）→ 重跑生成器后 7/7** / 267 秒；
-  · 真机证据：`screenshots/t18-1-*.png`（等用户点过再补）。
+  · **真机证据（用户本人点过，2026-10-31 21:29）**：`screenshots/t18-1-布局三档.png`
+    （下拉展开，三个选项都在：free 原子（推荐）/ 接在文件末尾 / 插在视频中间）、
+    `screenshots/t18-1-选中插在中间.png`（选中后副标题换成「ZIP 夹在视频数据中间…」的代价说明）；
+    状态栏「引擎 0.9.42」、**无溢出、无报错**。
 
 ## [0.9.41] · 2026-10-31 深夜（T18-2 自定义显示名）
 

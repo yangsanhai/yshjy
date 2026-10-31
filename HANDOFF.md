@@ -19,6 +19,9 @@
 >   498 KB 封面时 unzip 彻底找不到。所以它是**高级选项**，不是默认。
 > - **验证**：`cargo test` **392+31+2**、`flutter test` **188**、`clippy -D warnings` 干净、
 >   `all.sh` **52 过**（新探针 `tests/l4_proto.py` **19/19** 已挂）、`cli_spec_match` 7/7。
+> - **真机**：0.9.42 已装机，用户本人点过 —— `screenshots/t18-1-布局三档.png`（三档都在）、
+>   `screenshots/t18-1-选中插在中间.png`（副标题正确、无溢出）；装机版另跑过真打包：
+>   ffmpeg rc=0 且 stderr 空、解压两个文件 sha256 一致。
 > - **踩坑**：改了 `--layout` 的帮助文本却没跑 `scripts/gen-cli-assets.py` → `cli_spec_match` 红；
 >   补全与 man 是生成物，动了 CLI 表就得生成一次。
 > - **下一项**：T18-1 剩下的 **L3 → L7 → L8**（都比 L4 轻，本质是「换一种拼法」）。
