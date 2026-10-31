@@ -81,6 +81,14 @@ class _AboutPageState extends State<AboutPage> {
           body: t('about.limits.body'),
         ),
         const SizedBox(height: 12),
+        // T18-6：用户的安全口径是「完全离线」（原话：「保证用户安全，尽量本地解决」），
+        // 所以「检查更新」整块砍掉，换成正面告诉用户这里**没有**联网这回事。
+        _card(
+          cs,
+          title: t('about.offline.title'),
+          body: t('about.offline.body'),
+        ),
+        const SizedBox(height: 12),
         _card(
           cs,
           title: t('about.report.title'),

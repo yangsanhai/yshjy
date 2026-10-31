@@ -76,7 +76,6 @@ pub const OPTS: &[Opt] = &[
     opt("--force", Some("-f"), None, false),              // 跳过磁盘空间预检
     opt("--test", None, None, false),                    // 只测不写：完整解码 + 校验，一个字节都不落盘
     opt("--no-smart-dir", None, None, false),
-    opt("--keep", None, None, false),                     // 保留中间 ZIP
     opt("--trash-source", None, None, false),             // 解完把原包移进回收站（可还原）
     opt("--delete-source", None, None, false),            // 解完永久删除原包（要二次确认）
     // ── 打包路径 ────────────────────────────────────────────────
@@ -237,11 +236,12 @@ mod tests {
     /// + 2026-10-31 的 `--tweak-time`（T18-3 防炸链）
     /// + 2026-10-31 的 `--name <名称>`（T18-2 自定义显示名）
     /// + 2026-11-01 的 `--second <文件>`（L7 的第二个包，一个现成的 zip）
+    /// − 2026-11-01 删掉 `--keep`（T18-7：用户口径「打包完就删了，不用留」，整条链删除）
     #[test]
-    fn 长选项总数是_53() {
+    fn 长选项总数是_52() {
         assert_eq!(
             OPTS.len(),
-            53,  // +1：--second（L7）
+            52,  // −1：--keep 已删（T18-7）
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

@@ -68,7 +68,6 @@ OPCIONES HABITUALES:
   -v, -vv, --verbose              salida detallada / depuración (-vv más detalle, con --log)
   --log <archivo>                 escribir un registro en archivo (para reportes)
   --no-color                      sin colores (para tuberías/registros)
-  --keep                          conservar el ZIP intermedio al empaquetar
   --trash-source                  tras extraer, mover el archivo original a la papelera (recuperable)
   --delete-source                 tras extraer, borrar el archivo original definitivamente (no se puede deshacer; pregunta una vez y se niega si no es interactivo)
   --format <formato>              Empaquetar un archivo normal (sin portada): zip / tar.gz / tar.zst. Indicado = empaquetado normal; omitido = paquete camuflado

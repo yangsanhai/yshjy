@@ -27,7 +27,6 @@ for bin in yshjy yshys
     complete -c $bin -s f -l force -d '跳过解压前的磁盘空间预检（空间不够时会直接拒绝开始）'
     complete -c $bin -l test -d '只测不写：完整解码 + 校验，一个字节都不落盘（查包完不完整用）'
     complete -c $bin -l no-smart-dir -d '关掉「智能解压」：默认会看包里有没有单一顶层目录来决定'
-    complete -c $bin -l keep -d '打包时保留中间 ZIP（排错用）'
     complete -c $bin -l trash-source -d '解完把原包移进回收站（能还原）'
     complete -c $bin -l delete-source -d '解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）'
     complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M，也认纯字节数）'

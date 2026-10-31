@@ -83,6 +83,20 @@ pub enum DiskKind {
     Unknown,
 }
 
+impl DiskKind {
+    /// 机器标识（协议里用；展示名归前端语言包，别在这里塞中文）
+    ///
+    /// 用字符串而不是布尔：将来要区分 U 盘 / 网络盘（`removable` / `network`）时，
+    /// 前端不用改代码就知道多了一档。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DiskKind::SolidState => "solid",
+            DiskKind::Rotational => "rotational",
+            DiskKind::Unknown => "unknown",
+        }
+    }
+}
+
 /// 采集到的硬件环境
 #[derive(Debug, Clone)]
 pub struct Hardware {

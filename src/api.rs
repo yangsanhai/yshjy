@@ -106,8 +106,33 @@ pub fn hello() -> Value {
         //
         // **只加不删**：老前端不认识 `formats` 就忽略，行为不变，所以协议版本不用升。
         // `format` / `shape` 都是机器标识（zip / rar5 / volumes / single…），展示名归前端。
-        "formats": formats_caps()
+        "formats": formats_caps(),
+        // 本机磁盘类型（T17-2 设置页给「并行任务数」出建议用）。
+        //
+        // ★ 数据是**真探测**来的：`hardware::detect_disk_kind` 读 `/sys/block/<dev>/queue/rotational`
+        //   （1 = 机械，0 = 固态），不是前端猜的、也不是写死的文案。
+        // 取值 `solid` / `rotational` / `unknown`；老前端不认识就忽略 → 协议版本不用升。
+        "disk": 本机磁盘类型()
     })
+}
+
+/// `hello.disk`：以「输出目录所在盘」为准（没有输出目录就用 HOME）。
+///
+/// 为什么不是随便挑个路径：并行数的风险在**写入盘**上（机械盘磁头来回跳），
+/// 所以拿输出目录去探测才对得上用户实际会遇到的情况。
+/// `canonicalize` 要求路径存在，所以不存在就退回 HOME（一定存在）。
+fn 本机磁盘类型() -> &'static str {
+    let out = crate::config::全局配置().output_dir();
+    let target = match out {
+        Some(p) if p.exists() => p,
+        _ => std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(".")),
+    };
+    crate::hardware::Hardware::detect()
+        .with_target(target)
+        .disk_kind
+        .as_str()
 }
 
 /// `hello.formats` 的数据源：与 CLI `--caps --json` 同源（`unpack::能力行()`）

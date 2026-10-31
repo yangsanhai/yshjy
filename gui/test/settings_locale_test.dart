@@ -24,6 +24,7 @@ import 'package:yshjy_gui/pages/settings_page.dart';
 import 'package:yshjy_gui/platform_paths.dart';
 
 import 'config_guard.dart';
+import 'fake_engine.dart';
 
 String get _cfgPath => '$configDir/config.toml';
 
@@ -32,11 +33,20 @@ Future<void> _pump(WidgetTester tester) async {
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   // 页面内部 `_load()` 要读真文件 → 整段放进 runAsync（假时钟里 File.* 永不完成）。
-  // 等 300ms 而不是 150ms：机器忙时读配置 + 首帧构建可能超过 150ms，
-  // 曾出现过「偶发第一条红、重跑就绿」的 flaky（那是等待不够，不是业务问题）。
+  // 等待方式：轮询到「保存按钮可用」= 配置真读完了。以前睡固定 300ms，
+  // 全量并发跑时机器忙就偶发红（那条 flaky 的根因就是它，不是业务问题）。
+  bool loaded() {
+    final f = find.widgetWithText(FilledButton, '保存');
+    if (f.evaluate().isEmpty) return false;
+    return tester.widget<FilledButton>(f).onPressed != null;
+  }
+
   await tester.runAsync(() async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsPage())));
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    for (var i = 0; i < 120 && !loaded(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      await tester.pump();
+    }
   });
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
@@ -49,12 +59,22 @@ void _writeConfig(String text) {
 }
 
 void main() {
+  FakeEngine? fake;
+
   setUpAll(() => requireIsolatedConfigDir('界面语言测试'));
 
-  setUp(() {
+  setUp(() async {
+    // 设置页 `initState` 会问引擎（格式表 + 磁盘类型）—— 换掉真子进程
+    fake?.dispose();
+    await Future<void>.delayed(Duration.zero);
+    fake = FakeEngine();
+    installFakeEngine(fake!);
+
     final f = File(_cfgPath);
     if (f.existsSync()) f.deleteSync();
   });
+
+  tearDownAll(restoreRealTransport);
 
   testWidgets('配置写了 en-US → 下拉显示 English', (tester) async {
     _writeConfig('[general]\nui_language = "en-US"\n');

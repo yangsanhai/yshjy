@@ -368,7 +368,7 @@ fn main() -> ExitCode {
     if has("--no-auto-password-book") {
         yshjy::config::关闭密码本找();
     }
-    // ④ `-v` / `-vv` / `--log` / `--no-color` / `--keep`
+    // ④ `-v` / `-vv` / `--log` / `--no-color`
     let 日志级别 = if has("-vv") {
         2
     } else if has("-v") || has("--verbose") {
@@ -382,10 +382,6 @@ fn main() -> ExitCode {
     }
     if has("--no-color") {
         设定颜色(false);
-    }
-    if has("--keep") {
-        yshjy::pack::设定保留中间产物(true);
-        详细("--keep：打包的中间 ZIP 会保留");
     }
 
     // 配置（读一次就够；文件不在就用默认值 —— 见 config 模块的"读的时候宽容"）
@@ -3028,12 +3024,6 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 for w in &rep.warnings {
                     println!("{}", 语.t("cli.pack_warn", &[("warn", w)]));
                 }
-            }
-            // `--keep`：把中间 ZIP 的位置告诉用户（不然「保留了」等于没说）
-            if !quiet
-                && let Some(tmp) = &rep.intermediate
-            {
-                println!("中间文件（--keep 保留）：{}", tmp.display());
             }
             // 落盘检验 —— **必须排在自检之前**
             //

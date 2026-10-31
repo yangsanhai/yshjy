@@ -48,6 +48,14 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _autoFromBook = false;
   // 关窗口时：tray（缩到托盘）| exit（直接退出），默认分平台（见 app_settings.dart）
   String _closeAction = Platform.isWindows ? 'exit' : 'tray';
+  /// 并行任务数（T17-2）：三档 **1 / 2 / 4**，默认 1（设计口径：机械盘不该被打成碎片）
+  int _jobs = 1;
+  /// 解出可执行文件时提醒（T17-2）：默认开，与引擎 config.rs 的 `warn_executables` 默认一致
+  bool _warnExec = true;
+  /// 本机写入盘类型：`solid` / `rotational` / `unknown`（引擎 hello.disk 真探测来的）
+  ///
+  /// ★ 只用于**给建议**，不参与任何判断。探不到就 unknown —— 绝不对用户说"你是固态"。
+  String _disk = 'unknown';
   bool _loaded = false;
   bool _saving = false;
 
@@ -55,6 +63,8 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _load();
+    // 磁盘类型单独拿（只影响一句建议文案；拿不到就用 unknown，不阻塞别的东西）
+    _loadDisk();
   }
 
   @override
@@ -88,6 +98,11 @@ class _SettingsPageState extends State<SettingsPage> {
         _autoFromBook = _readSwitch(pwd['auto_from_book'], dflt: false);
         // 默认关；只有明确写 on/true 才算开
         _flushMovable = const ['on', 'true'].contains(saf['flush_movable'] ?? 'off');
+        // 并行任务数（T17-2）：只认三档 1 / 2 / 4。配置被手改成别的数时**夹到最近的档位**
+        // —— 下拉里放一个不在 items 里的值会直接 assert 崩（Flutter 的硬规则）。
+        _jobs = _normalizeJobs(gen['jobs']);
+        // 可执行提醒（T17-2）：默认开（引擎 config.rs 也是 true），只有明确写 off 才算关
+        _warnExec = _readSwitch(saf['warn_executables'], dflt: true);
         final ca = gen['close_action'];
         _closeAction = (ca == 'tray' || ca == 'exit')
             ? ca!
@@ -96,6 +111,46 @@ class _SettingsPageState extends State<SettingsPage> {
       });
     } catch (_) {
       if (mounted) setState(() => _loaded = true);
+    }
+  }
+
+  /// 把配置里的 `jobs` 夹到三档（1 / 2 / 4）。
+  ///
+  /// 为什么往上取整不是往下：用户手写 3 说明他想开并行，但界面只提供 2 和 4 两档；
+  /// 取 2 更保守（机械盘上并行的收益本来就小、代价是磁头来回跳）。
+  static int _normalizeJobs(String? v) {
+    final n = int.tryParse((v ?? '').trim()) ?? 1;
+    if (n >= 4) return 4;
+    if (n >= 2) return 2;
+    return 1;
+  }
+
+  /// 问引擎要「本机写入盘是机械还是固态」（T17-2 的那句建议靠它才不是假话）。
+  ///
+  /// 只影响一行提示文案：引擎没装 / 老引擎没 `hello.disk` / 探测失败
+  /// → 全部当 `unknown`，界面照常能用，**绝不因此报错**。
+  Future<void> _loadDisk() async {
+    try {
+      final h = await EngineClient.instance.hello();
+      if (!mounted) return;
+      final d = h['disk'];
+      setState(() {
+        _disk = (d == 'solid' || d == 'rotational') ? d as String : 'unknown';
+      });
+    } catch (_) {
+      // 保持 unknown
+    }
+  }
+
+  /// 把机器标识翻成用户看得懂的一句话（语言包里的三个键）
+  String _diskText() {
+    switch (_disk) {
+      case 'solid':
+        return t('settings.perf.diskSolid');
+      case 'rotational':
+        return t('settings.perf.diskRotational');
+      default:
+        return t('settings.perf.diskUnknown');
     }
   }
 
@@ -131,18 +186,30 @@ class _SettingsPageState extends State<SettingsPage> {
     return dflt;
   }
 
-  /// 在原文里逐行更新 `[output]` 的三个键；段不存在就追加
-  String _upsertSection(String text, String section, Map<String, String> vals) {
+  /// 在原文里逐行更新某个段的键；段不存在就追加
+  ///
+  /// `numeric` 里的键**不加引号**写（`jobs = 2`）。为什么要这个参数：
+  /// 引擎读 `jobs` 用的是 `as_integer()`，写成 `jobs = "2"` 会被静默当没写
+  /// → 用户在界面选了并行数、其实一点没生效（本页最怕的「假开关」）。
+  String _upsertSection(
+    String text,
+    String section,
+    Map<String, String> vals, {
+    Set<String> numeric = const {},
+  }) {
     final lines = text.isEmpty ? <String>[] : text.split('\n');
     final result = <String>[];
     final seen = <String>{};
     var inOutput = false;
     var sectionFound = false;
 
+    String render(String k, String v) =>
+        numeric.contains(k) ? '$k = $v' : '$k = "$v"';
+
     void flushMissing() {
       for (final e in vals.entries) {
         if (!seen.contains(e.key)) {
-          result.add('${e.key} = "${e.value}"');
+          result.add(render(e.key, e.value));
           seen.add(e.key);
         }
       }
@@ -160,7 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (inOutput && !t.startsWith('#') && t.contains('=')) {
         final k = t.substring(0, t.indexOf('=')).trim();
         if (vals.containsKey(k)) {
-          result.add('$k = "${vals[k]}"');
+          result.add(render(k, vals[k]!));
           seen.add(k);
           continue;
         }
@@ -173,7 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ..add('')
         ..add('[$section]');
       for (final e in vals.entries) {
-        result.add('${e.key} = "${e.value}"');
+        result.add(render(e.key, e.value));
       }
     }
     return result.join('\n');
@@ -195,10 +262,14 @@ class _SettingsPageState extends State<SettingsPage> {
         'notify': _notify ? 'on' : 'off',
         'open_after': _openAfter ? 'on' : 'off',
         'close_action': _closeAction,
-      });
+        // 并行任务数（T17-2）：引擎按整数读，必须写成 `jobs = 2` 而不是 `jobs = "2"`
+        'jobs': '$_jobs',
+      }, numeric: {'jobs'});
       // 落盘检验开关：引擎读 [safety] 这一段（config.rs 的 flush_movable）
       updated = _upsertSection(updated, 'safety', {
         'flush_movable': _flushMovable ? 'on' : 'off',
+        // 可执行提醒（T17-2）：界面从「一行说明」改成真开关，关掉后引擎不再提醒
+        'warn_executables': _warnExec ? 'on' : 'off',
       });
       // 自动找解压码的两个开关：引擎读 [password] 这一段（config.rs 的 auto_from_notes
       // / auto_from_book）。只写这两行，`file` 和 `max_candidates` 由 _upsertSection
@@ -473,14 +544,58 @@ class _SettingsPageState extends State<SettingsPage> {
         _section(t('settings.section.caps'), cs),
         const _CapsTable(),
         const SizedBox(height: 18),
-        _section(t('settings.section.misc'), cs),
-        // 以前这里还并列写着 7 个语言代码（像在暗示「改 config.toml 就能切界面语言」，
-        // 而当时文案全是硬编码中文），后来界面语言进了「外观」下拉，那行就删掉了。
-        // 再下面原本还有一段「还没做的（我不装样子）」—— T14 把 479 条文案搬完、
-        // 七种语言全部上线之后它就成了过期话，一并删掉。
-        _kv(t('settings.misc.jobs'), t('settings.misc.jobsValue')),
-        _kv(t('settings.misc.ratio'), t('settings.misc.ratioValue')),
-        _kv(t('settings.misc.warn'), 'warn_executables = true'),
+        _section(t('settings.section.perf'), cs),
+        // 并行任务数（T17-2）：三档下拉。
+        //
+        // 为什么不按 CPU 核数自动定档：并行的瓶颈在**磁盘**不在 CPU —— 机械盘多开
+        // 反而更慢（磁头来回跳）；而"探测完自动给个值"在廉价固态 / 网络盘上会猜错，
+        // 猜错比不猜更糟。所以给档位 + 把怎么选写清楚，值由用户自己定。
+        DropdownButtonFormField<String>(
+          key: const ValueKey('jobs-select'),
+          initialValue: '$_jobs',
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: t('settings.perf.jobs'),
+            helperText: t('settings.perf.jobsHint'),
+            helperMaxLines: 3,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(value: '1', child: Text(t('settings.perf.jobs1'))),
+            DropdownMenuItem(value: '2', child: Text(t('settings.perf.jobs2'))),
+            DropdownMenuItem(value: '4', child: Text(t('settings.perf.jobs4'))),
+          ],
+          onChanged: (v) => setState(() => _jobs = _normalizeJobs(v)),
+        ),
+        const SizedBox(height: 6),
+        // 本机磁盘类型（引擎 hello.disk 真探测来的，不是写死的文案）
+        Row(
+          children: [
+            Icon(Icons.storage_outlined, size: 14, color: cs.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                _diskText(),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+        // 可执行提醒（T17-2）：原来只是一行说明文字，现在是真的开关。
+        // 引擎侧 `config.rs` 的 `warn_executables` 一直在读，只是界面从来没给出入口。
+        SwitchListTile(
+          key: const ValueKey('warn-exec-toggle'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(t('settings.perf.warn')),
+          subtitle: Text(
+            t('settings.perf.warnHint'),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: _warnExec,
+          onChanged: (v) => setState(() => _warnExec = v),
+        ),
       ],
     );
   }
@@ -511,29 +626,18 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
         trailing: action,
       );
-
-  Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 96,
-              child: Text(k, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            ),
-            Expanded(
-              child: Text(v, style: const TextStyle(fontSize: 12)),
-            ),
-          ],
-        ),
-      );
 }
 
-/// 各格式能力表（阶段 1 梯队三·第 3 项）
+/// 支持的格式表（T17-1：进页面直接显示，不再需要点按钮）
 ///
 /// 为什么不是写死的：能力位只在引擎的 `Caps` 里（`InArchive::caps()`），
 /// 界面自己抄一份就等于第二本账 —— 引擎哪天改了能力，界面还在按老账本显示。
-/// 所以这里每次进设置页都问引擎要（`--caps --json`），要不到就如实说读不到。
+/// 所以这里每次进设置页都问引擎要（协议 `hello.formats`），要不到就如实说读不到。
+///
+/// 2026-11-01 改成自动加载：以前要点一下「读取各格式能力」才出表格，用户的感觉像
+/// 「在查远程数据」；而且那行标题括号里写「问引擎要的，不是写死的」是说给开发者听的。
+/// 现在进页面就自动读 —— 走的是**已经握过手的传输层**（不是 spawn 子进程），
+/// 一次往返，代价可以忽略。
 class _CapsTable extends StatefulWidget {
   const _CapsTable();
 
@@ -546,11 +650,14 @@ class _CapsTableState extends State<_CapsTable> {
   String? _err;
   bool _loading = false;
 
-  // ⚠️ 故意**不**在 initState 里加载：
-  //   ① widget 测试的 fake_async 环境会把 `Process.run` 的定时器当成「未完成」判失败
-  //   ② 每次进设置页就 spawn 一个进程也不划算（等 5 秒才出表格）
-  //   改成点一下才读，用户想看才付出这点代价。
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
   Future<void> _load() async {
+    if (_loading) return;
     setState(() {
       _loading = true;
       _err = null;
@@ -585,19 +692,29 @@ class _CapsTableState extends State<_CapsTable> {
     final cs = Theme.of(context).colorScheme;
     final rows = _rows;
     if (rows == null) {
+      // 读不到就如实说，**不摆一排按钮** —— 只给一个「重试」小文字按钮。
+      // ⚠️ 这里不用 CircularProgressIndicator：转圈是无限动画，任何 pumpAndSettle
+      //    都会等到超时（设置页已经在别的测试里被 pump 过）。
+      if (_loading) {
+        return Text(
+          t('settings.caps.reading'),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        );
+      }
       return Row(
         children: [
-          TextButton(
-            onPressed: _loading ? null : _load,
-            child: Text(_loading ? t('settings.caps.reading') : t('settings.caps.read')),
-          ),
-          if (_err != null)
-            Expanded(
-              child: Text(
-                t('settings.caps.error', {'reason': '$_err'}),
-                style: TextStyle(fontSize: 12, color: cs.error),
-              ),
+          Expanded(
+            child: Text(
+              _err == null
+                  ? t('settings.caps.tooOld')
+                  : t('settings.caps.error', {'reason': _err!}),
+              style: TextStyle(fontSize: 12, color: cs.error),
             ),
+          ),
+          TextButton(
+            onPressed: _load,
+            child: Text(t('settings.caps.retry')),
+          ),
         ],
       );
     }

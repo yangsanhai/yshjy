@@ -666,6 +666,24 @@ class EngineClient {
     _proc?.kill();
     _events.close();
   }
+
+  /// **只在测试里用**：把「起没起过」的内部状态清干净。
+  ///
+  /// 为什么需要它（2026-11-01 撞的）：`EngineClient` 是全局单例，`_started` 一旦
+  /// 变成 true 就不会再调用 `transportFactory`。widget 测试一个文件里跑好几个用例，
+  /// 每个用例都换一个新的假传输 —— 不清状态的话，第二个用例的 `hello` 会被写进
+  /// **第一个用例已经关掉的那条假流**里，永远等不到回包。
+  /// 症状特别坑：单独跑这个文件全绿，全量并发跑偶发红（看着像 flaky，其实是状态没清）。
+  ///
+  /// 生产代码永远不会调它（没有 UI 入口），所以不影响任何真实行为。
+  @visibleForTesting
+  void resetForTest() {
+    _proc?.kill();
+    _proc = null;
+    _started = false;
+    _starting = null;
+    _pending.clear();
+  }
 }
 
 /// S10 多候选：一个文件里「像归档」的一处
