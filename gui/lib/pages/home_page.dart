@@ -1075,13 +1075,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 一键生成诊断包（路径已脱敏），发给开发者就能定位问题
+  ///
+  /// E6：**必须给 out_dir**。引擎不给就落在进程当前目录（GUI 从哪启动就落在哪），
+  /// 用户看到「已生成」却满电脑找不到文件 —— 比报错还气人。默认落「下载」，
+  /// 并配一个「打开文件夹」，让他一眼看到东西在哪。
   Future<void> _makeReport() async {
     try {
-      final r = await _client.report(path: _file);
+      final dir = downloadsDir;
+      final r = await _client.report(path: _file, outDir: dir);
       final p = r['path'] as String? ?? '';
       if (!mounted) return;
+      final name = p.split(Platform.pathSeparator).last;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('诊断包已生成（路径已脱敏）：$p\n把它发给我就行')),
+        SnackBar(
+          content: Text('诊断包已存到「${prettyPath(dir)}」：$name\n把它发给我就行'),
+          duration: const Duration(seconds: 12),
+          action: SnackBarAction(
+            label: '打开文件夹',
+            onPressed: () => openDirectory(dir),
+          ),
+        ),
       );
     } on EngineError catch (e) {
       if (!mounted) return;

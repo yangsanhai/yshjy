@@ -492,6 +492,14 @@ class EngineClient {
     int? decoySize,
     /// 每段里夹一枚假特征码（协议 `pack.decoy_signatures`，默认关）
     bool decoySignatures = false,
+    /// 强制「尾部追加」布局（E2 / 协议 `pack.tail`）
+    ///
+    /// 默认（false）引擎按封面文件头自动选：MP4 走 `free` 原子（视频还能正常播），
+    /// 图片/文本只能尾部追加。传 true = **不改封面一个字节**，数据直接接在文件末尾。
+    ///
+    /// 什么时候要强制：封面是「改过的 MP4」（某些播放器对 free 原子敏感）、
+    /// 或者就想要「原文件字节完全不动」的保险。
+    bool tailLayout = false,
   }) async {
     final r = await _call({
       'cmd': 'pack',
@@ -507,6 +515,8 @@ class EngineClient {
       if (decoy != null && decoy > 0) 'decoy': decoy,
       if (decoySize != null) 'decoy_size': decoySize,
       if (decoySignatures) 'decoy_signatures': true,
+      // 强制尾部追加布局（E2）：只在用户打开时才传 true，默认交给引擎按封面类型判断
+      if (tailLayout) 'tail': true,
       'checksum': checksum,
       'readme': readme,
     }, timeout: const Duration(hours: 2));
@@ -550,10 +560,15 @@ class EngineClient {
       _unwrap(await _call({'cmd': 'skip'}, timeout: const Duration(seconds: 10)));
 
   /// 生成诊断包（报障用）。默认**路径脱敏**，方便直接贴到群里。
-  Future<Map<String, dynamic>> report({String? path}) async {
+  ///
+  /// `outDir`（E6 / 协议 `report.out_dir`）：存到哪个目录。**不传时引擎落在进程当前
+  /// 目录** —— 对 GUI 来说就是「从哪启动就落在哪」（可能是 `/` 或 `~`），用户回头
+  /// 根本找不着。所以界面一律传一个好找的地方（见 `platform_paths.downloadsDir`）。
+  Future<Map<String, dynamic>> report({String? path, String? outDir}) async {
     final r = await _call({
       'cmd': 'report',
       if (path != null) 'path': path,
+      if (outDir != null) 'out_dir': outDir,
       'no_paths': true,
     }, timeout: const Duration(minutes: 2));
     return _unwrap(r);
