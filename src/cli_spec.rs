@@ -89,7 +89,8 @@ pub const OPTS: &[Opt] = &[
     // 防炸链（T18-3）：抖条目时间戳，让网盘当成新文件；默认关
     opt("--tweak-time", None, None, false),
     opt("--level", None, Some("0-9"), false),
-    opt("--layout", None, Some("L1|L2|L3|L4"), false),
+    opt("--layout", None, Some("L1|L2|L3|L4|L7"), false),
+    opt("--second", None, Some("文件"), false),             // L7 的第二个包（现成 zip）
     opt("--decoy", None, Some("N"), false),                // 撒几段干扰数据（0 = 不打）
     opt("--decoy-size", None, Some("大小"), false),         // 每段多大（4K–1M）
     opt("--decoy-signatures", None, None, false),           // 每段夹一枚假特征码
@@ -235,11 +236,12 @@ mod tests {
     /// + 2026-10-31 的 `--format zip|tar.gz|tar.zst`（T17-4 打包格式可选）
     /// + 2026-10-31 的 `--tweak-time`（T18-3 防炸链）
     /// + 2026-10-31 的 `--name <名称>`（T18-2 自定义显示名）
+    /// + 2026-11-01 的 `--second <文件>`（L7 的第二个包，一个现成的 zip）
     #[test]
-    fn 长选项总数是_52() {
+    fn 长选项总数是_53() {
         assert_eq!(
             OPTS.len(),
-            52,  // +1：--name（T18-2）
+            53,  // +1：--second（L7）
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

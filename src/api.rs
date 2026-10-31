@@ -729,6 +729,18 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         }
         opts.layout = 要求;
     }
+    // L7 的第二个包（`layout:"two"` 专用）：一个**现成 ZIP 的绝对路径**。
+    // 只做类型/空值校验 —— 「不是 L7 却给了 second」「是 L7 却没给」由引擎在动磁盘之前拒，
+    // 那里能给出带布局名字的人话（同一套判断不在这里复制一遍）。
+    if let Some(v) = 参数.get("second") {
+        let s = v
+            .as_str()
+            .ok_or_else(|| 错误值("BAD_PARAM", "second 必须是字符串（第二个 zip 的路径）"))?;
+        if s.trim().is_empty() {
+            return Err(错误值("BAD_PARAM", "second 是空路径"));
+        }
+        opts.second = Some(std::path::PathBuf::from(s));
+    }
 
     let 文件 = std::fs::File::create(输出)
         .map_err(|e| 错误值("PERMISSION_DENIED", &format!("建不了输出文件: {e}")))?;
@@ -849,6 +861,10 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         // 归档格式（T17-4）：界面据此显示「打成 tar.gz」而不是只会说 zip
         "format": 格式.名字(),
         "layout": format!("{:?}", rep.layout),
+        // L7：第二个包在产物里的位置（起点 + 字节数）；别的布局是 null。
+        // 界面用它告诉用户「第二个包也在里面」，探针用它核对落点（不靠猜）。
+        "second_offset": rep.second.map(|(o, _)| o),
+        "second_size": rep.second.map(|(_, n)| n),
         // 干扰数据（第三期 B）：界面要能显示「撒了几段、占多少」，
         // 跟 CLI 的 `cli.pack_decoy` 是同一份信息
         "noise_size": rep.noise_size,

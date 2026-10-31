@@ -57,6 +57,16 @@ pub enum PackLayout {
     /// 资源管理器 / 手机解压器「只在文件尾 64 KiB 找 EOCD」的搜索窗 → **它们全都
     /// 看不到这个包**，只有 7-Zip（会从文件头扫）和本工具能开。所以它是高级选项。
     MidChunk,
+    /// 一个文件里放**两个独立包**（L7）：封面 → ZIP1（本次输入压出来的）→ ZIP2（用户给的现成 zip）
+    ///
+    /// 两个包各自完整、都能单独解开。**代价（界面上必须写）**：任何通用解压器只会看到
+    /// 其中一个 —— 7-Zip 报第一个（`Offset=封面大小`），`unzip` / Python `zipfile`
+    /// 报最后一个，而且**都不会提示「还有另一个」**。只有 7-Zip 的扫描模式（`7z x -t#`）
+    /// 和本工具（多候选扫描，T5 做的）能两个都拿到。
+    ///
+    /// 为什么第二个包是「现成文件的路径」而不是再压一份：用户想要的通常是「把手里这个
+    /// 已经压好的包也塞进来」，重压一遍既慢又可能改变内容（压缩级别不同）。
+    TwoPackages,
 }
 
 impl PackLayout {
@@ -67,6 +77,7 @@ impl PackLayout {
             PackLayout::FreeAtom => "free 原子",
             PackLayout::HeadFreeAtom => "放在文件头部",
             PackLayout::MidChunk => "插在视频中间",
+            PackLayout::TwoPackages => "两个包",
         }
     }
 
@@ -81,6 +92,7 @@ impl PackLayout {
             "free" | "l2" => Some(Self::FreeAtom),
             "head" | "front" | "l3" => Some(Self::HeadFreeAtom),
             "mid" | "middle" | "l4" => Some(Self::MidChunk),
+            "two" | "both" | "l7" => Some(Self::TwoPackages),
             _ => None,
         }
     }
@@ -317,6 +329,11 @@ pub struct PackOptions {
     /// 网盘按内容哈希判重，同一份东西反复上传会秒传 / 炸链。时间戳是 ZIP/tar 头里的
     /// 字段，改了它整包字节就变 —— 哈希也变，网盘当成新文件。**默认关**（DESIGN §14.2）。
     pub tweak_time: bool,
+    /// L7 的**第二个包**：一个现成的 ZIP 文件路径（`layout` 必须是 [`PackLayout::TwoPackages`]）
+    ///
+    /// 为什么是路径不是字节：第二个包可能是几百 MB 的现成压缩包，先读进内存等于白占一份。
+    /// 引擎按 `拷贝带进度` 流式追加，内存里只有 4 MB 缓冲。
+    pub second: Option<PathBuf>,
 }
 
 impl Default for PackOptions {
@@ -331,6 +348,7 @@ impl Default for PackOptions {
             level: 6,
             format: PackFormat::Zip,
             tweak_time: false,
+            second: None,
         }
     }
 }
@@ -352,6 +370,8 @@ pub struct PackReport {
     pub noise_size: u64,
     /// ZIP 数据在产物里的起点偏移（自检用它核对「噪声确实在压缩数据之外」）
     pub zip_offset: u64,
+    /// L7：第二个包的「起点偏移 + 字节数」（别的布局是 `None`）
+    pub second: Option<(u64, u64)>,
     /// 自检发现的问题（空 = 全好）
     pub warnings: Vec<String>,
     /// `--keep` 时保留的中间 ZIP（默认已删除，这里是 None）
@@ -505,6 +525,27 @@ pub fn build_ctx_decoy<W: Write>(
         return Err(Error::new(ErrorCode::InvalidArgument)
             .with("reason", "「插在视频中间」不能和干扰数据一起用：乱码会把视频数据切断"));
     }
+    // L7（两个包）：和干扰数据也互斥，理由不同 —— 噪声只能接在 ZIP2 后面，那第二个包的
+    // EOCD 就不在文件尾了，连"只看最后一个包"的 unzip / zipfile 也会瞎掉（实测它们
+    // 正是靠尾部窗口找到 ZIP2 的）。
+    if opts.layout == PackLayout::TwoPackages && decoy.is_on() {
+        return Err(Error::new(ErrorCode::InvalidArgument)
+            .with("reason", "「两个包」不能和干扰数据一起用：噪声接在第二个包后面会让它的目录区不在文件尾，通用解压器连第二个包都找不到"));
+    }
+    // 第二个包：给了就必须是 L7，是 L7 就必须给 —— 两种半配置都在动磁盘之前拒掉
+    if opts.second.is_some() && opts.layout != PackLayout::TwoPackages {
+        return Err(Error::new(ErrorCode::InvalidArgument).with(
+            "reason",
+            format!(
+                "第二个包只能配「两个包」布局（现在是「{}」），它在那儿没有位置",
+                opts.layout.名字()
+            ),
+        ));
+    }
+    if opts.second.is_none() && opts.layout == PackLayout::TwoPackages {
+        return Err(Error::new(ErrorCode::InvalidArgument)
+            .with("reason", "「两个包」布局必须给第二个包（一个现成的 zip 文件）"));
+    }
 
     // ① 封面：用户给的，或内置素材
     let cover: Vec<u8> = match &opts.cover {
@@ -513,6 +554,32 @@ pub fn build_ctx_decoy<W: Write>(
             .bytes()
             .to_vec(),
     };
+
+    // 第二个包必须是 ZIP：这套布局的整个前提就是「两个 ZIP 相邻、各自有自己的 EOCD」。
+    // 给个 7z / rar 进来，产物看着成功、我们自己也只认得出第一个包 —— 等于骗人。
+    let mut 第二大小 = 0u64;
+    if let Some(p) = &opts.second {
+        use std::io::Read as _;
+        let mut f = fs::File::open(p).map_err(|e| {
+            Error::new(ErrorCode::InvalidArgument)
+                .with("reason", format!("读不到第二个包 {}：{e}", p.display()))
+        })?;
+        let mut 头 = [0u8; 4];
+        f.read_exact(&mut 头).map_err(|_| {
+            Error::new(ErrorCode::InvalidArgument)
+                .with("reason", format!("第二个包太小，不像压缩包：{}", p.display()))
+        })?;
+        if &头 != b"PK\x03\x04" {
+            return Err(Error::new(ErrorCode::InvalidArgument).with(
+                "reason",
+                format!(
+                    "第二个包不是 ZIP（文件头不是 PK\\x03\\x04）：{}",
+                    p.display()
+                ),
+            ));
+        }
+        第二大小 = fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    }
 
     // ② 内容先打成 ZIP（走临时文件，避免大包占内存）
     let tmp = std::env::temp_dir().join(format!(
@@ -597,7 +664,7 @@ pub fn build_ctx_decoy<W: Write>(
     let 噪声总量 = decoy.total();
 
     // 压缩完了：告诉外壳「接下来还要写多少字节」，进度条才不会停在压缩阶段的百分比
-    进度(PackTick::TotalHint(zip_size + 噪声总量));
+    进度(PackTick::TotalHint(zip_size + 噪声总量 + 第二大小));
 
     let mut atom_overhead = 0u64;
     let mut noise_size;
@@ -640,6 +707,17 @@ pub fn build_ctx_decoy<W: Write>(
             拷贝带进度(&tmp, out, 进度)?;
             noise_size = 0;
         }
+        PackLayout::TwoPackages => {
+            // L7：封面 → ZIP1（本次输入压出来的）→ ZIP2（用户给的现成 zip）。
+            // 两个包各自完整：ZIP1 的 EOCD 在 ZIP2 之前，ZIP2 的 EOCD 正好在文件尾。
+            拷贝带进度(&tmp, out, 进度)?;
+            let 第二 = opts
+                .second
+                .as_ref()
+                .ok_or_else(|| Error::new(ErrorCode::Internal).with("reason", "缺第二个包"))?;
+            拷贝带进度(第二, out, 进度)?;
+            noise_size = 0;
+        }
     }
     // 封面的后半段（L3 / L4 有内容；别的布局这里是空的）
     out.write_all(封面后)
@@ -668,7 +746,7 @@ pub fn build_ctx_decoy<W: Write>(
     }
 
     Ok(PackReport {
-        total_size: cover_size + zip_size + atom_overhead + pad_len + noise_size,
+        total_size: cover_size + zip_size + atom_overhead + pad_len + noise_size + 第二大小,
         zip_size,
         cover_size,
         entries,
@@ -676,6 +754,9 @@ pub fn build_ctx_decoy<W: Write>(
         layout,
         noise_size,
         zip_offset,
+        // L7 的第二个包紧跟在 ZIP1 后面 —— 起点 = 封面 + ZIP1
+        second: (layout == PackLayout::TwoPackages && 第二大小 > 0)
+            .then(|| (cover_size + zip_size, 第二大小)),
         warnings,
         intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
@@ -737,6 +818,7 @@ pub fn build_plain_ctx<W: Write>(
         // 塞垃圾，会把别人的 unzip 搞出 warning —— CLI/协议层会明确拒绝这个组合。
         noise_size: 0,
         zip_offset: 0,
+        second: None,
         warnings: Vec::new(),
         intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
@@ -1281,6 +1363,93 @@ pub fn self_check_at(
     Ok(warnings)
 }
 
+/// L7 专项自检：第二个包真的落在报告说的位置吗？
+///
+/// 为什么单独一个函数：`self_check_at` 验的是**第一个**包（ZIP1 的起点 + 条目数）。
+/// L7 的卖点是「一个文件里两个包」—— 第二个包要是落歪了，产物看着成功、
+/// 用户点「第二处」却解不开。必须回读核对，不能靠写的时候「应该对吧」。
+///
+/// 只读三段字节（几百 MB 的包也不会读进内存）：
+///   ① 起点处 4 字节必须是 `PK\x03\x04`；
+///   ② 起点 + 大小 必须正好是文件尾（第二个包后面不该还有东西）；
+///   ③ 文件最后 64 KiB 里必须有 `PK\x05\x06`（EOCD）—— 通用解压器（unzip / zipfile）
+///      能找到第二个包，靠的就是它在文件尾的目录区。
+pub fn self_check_second(path: &Path, offset: u64, size: u64) -> Result<Vec<String>> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    let mut w = Vec::new();
+    let mut f = fs::File::open(path)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open out: {e}")))?;
+    let 总 = f
+        .metadata()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?
+        .len();
+    if offset + size != 总 {
+        w.push(format!(
+            "自检：第二个包应当正好到文件尾（起点 {offset} + 大小 {size} ≠ 文件 {总}）"
+        ));
+    }
+    let mut 四 = [0u8; 4];
+    f.seek(SeekFrom::Start(offset))
+        .and_then(|_| f.read_exact(&mut 四))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读第二个包起点: {e}")))?;
+    if &四 != b"PK\x03\x04" {
+        w.push(format!(
+            "自检：第二个包起点 {offset} 处不是 PK 头（读到 {四:?}）"
+        ));
+    }
+    let 窗 = 总.saturating_sub(64 * 1024);
+    let mut 尾 = vec![0u8; (总 - 窗) as usize];
+    f.seek(SeekFrom::Start(窗))
+        .and_then(|_| f.read_exact(&mut 尾))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读文件尾: {e}")))?;
+    if !尾.windows(4).any(|x| x == b"PK\x05\x06") {
+        w.push(
+            "自检：文件最后 64 KiB 里没有 ZIP 目录尾（EOCD），通用解压器会找不到第二个包"
+                .to_string(),
+        );
+    }
+    Ok(w)
+}
+
+/// L7 专用：**按已知起点**核对第一个包（不解「最后一个包」那套）
+///
+/// 为什么不能用 [`self_check_at`]：那里的 `locate()` 找的是文件里**最后一个** EOCD。
+/// L7 的产物里有两个包，`locate()` 一定落在**第二个**包上（ZIP2 的目录在文件尾），
+/// 于是「ZIP 起点应为 90224，实际 110434」这种误报就出来了 —— 第一个包其实好好的。
+/// 这里改用 `locate_at_base` 精确定位到报告说的起点，再数条目。
+pub fn self_check_first_of_two(path: &Path, base: u64, expect_entries: usize) -> Result<Vec<String>> {
+    use std::io::Seek as _;
+    let mut w = Vec::new();
+    let mut f = fs::File::open(path)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open out: {e}")))?;
+    let size = f
+        .metadata()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?
+        .len();
+    let layout = crate::layout::zip::locate_at_base(&mut f, size, base).map_err(|e| {
+        Error::new(ErrorCode::NotArchive)
+            .context(format!("自检失败：第一个包（起点 {base}）定位不了（{e}）"))
+    })?;
+    let entries = crate::layout::zip::list_entries(&mut f, &layout).map_err(|e| {
+        Error::new(ErrorCode::NotArchive).context(format!("自检失败：第一个包列不出条目（{e}）"))
+    })?;
+    if layout.base != base {
+        w.push(format!(
+            "自检：第一个包起点应为 {base} 字节，实际 {}",
+            layout.base
+        ));
+    }
+    if entries.len() != expect_entries {
+        w.push(format!(
+            "自检：第一个包条目数不一致（写入 {expect_entries}，读回 {}）",
+            entries.len()
+        ));
+    }
+    // 让编译器知道 f 用过了（locate_at_base 内部会 seek，这里显式对齐一下更好读）
+    let _ = f.seek(std::io::SeekFrom::Start(0));
+    Ok(w)
+}
+
 /// 普通压缩（tar 系）的自检：把产物读回来数条目（T17-4）
 ///
 /// ZIP 那套靠 EOCD 定位产物，tar 系没有 EOCD —— 但 tar 的头本身就是索引，
@@ -1473,6 +1642,7 @@ pub fn build_sfx_ctx<W: Write>(
         layout: PackLayout::TailAppend,
         noise_size: 0,
         zip_offset: 存根大小,
+        second: None,
         warnings: Vec::new(),
         intermediate: None,
     })
@@ -1547,6 +1717,7 @@ pub fn build_sfx_sh_ctx<W: Write>(
         layout: PackLayout::TailAppend,
         noise_size: 0,
         zip_offset: 偏移,
+        second: None,
         warnings: Vec::new(),
         intermediate: None,
     })

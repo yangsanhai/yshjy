@@ -370,6 +370,54 @@ fn 开头像zip(f: &mut std::fs::File) -> bool {
     buf[0] == b'P' && buf[1] == b'K' && matches!(buf[2], 0x03 | 0x05 | 0x07)
 }
 
+/// 在 `base` 之前找「前一个包的 EOCD」，反推出它的起点（L7「一个文件两个包」）
+///
+/// 为什么只看前 64 KiB：ZIP 规范规定 EOCD 之后最多 65535 字节注释，而下一个包的起点
+/// 紧挨着上一个包的尾部 —— 所以前一个包的 EOCD **一定**落在 `[base-64K, base)` 里。
+/// 这让发现「前面还有一个包」的代价只是一次 64 KiB 的读，不用全文件扫描。
+///
+/// 反推公式：`base = eocd位置 - 中央目录大小 - 中央目录偏移`（EOCD 里都记着，小端）。
+/// 校验：算出来的起点必须 < `base`，且那个位置确实是 `PK\x03\x04`（本地文件头）。
+pub fn 前一个包的起点(f: &mut std::fs::File, base: u64) -> Option<u64> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    if base == 0 {
+        return None;
+    }
+    let 窗 = base.saturating_sub(64 * 1024);
+    let mut buf = vec![0u8; (base - 窗) as usize];
+    f.seek(SeekFrom::Start(窗)).ok()?;
+    f.read_exact(&mut buf).ok()?;
+
+    // 从后往前找（越靠后的越可能是「紧挨着下一个包」的那个 EOCD）
+    let mut i = buf.len().saturating_sub(4);
+    loop {
+        if &buf[i..i + 4] == b"PK\x05\x06" && i + 20 <= buf.len() {
+            let cd_size = u32::from_le_bytes([buf[i + 12], buf[i + 13], buf[i + 14], buf[i + 15]]) as u64;
+            let cd_off = u32::from_le_bytes([buf[i + 16], buf[i + 17], buf[i + 18], buf[i + 19]]) as u64;
+            let 总 = 窗 + i as u64;
+            if let Some(起点) = 总.checked_sub(cd_size + cd_off) {
+                if 起点 < base && 起点 > 0 {
+                    // 起点处必须是本地文件头 —— 否则这个 EOCD 其实是别的东西
+                    let mut 四 = [0u8; 4];
+                    let 原位 = f.stream_position().ok();
+                    f.seek(SeekFrom::Start(起点)).ok()?;
+                    let 读得到 = f.read_exact(&mut 四).is_ok();
+                    if let Some(p) = 原位 {
+                        f.seek(SeekFrom::Start(p)).ok()?;
+                    }
+                    if 读得到 && &四 == b"PK\x03\x04" {
+                        return Some(起点);
+                    }
+                }
+            }
+        }
+        if i == 0 {
+            return None;
+        }
+        i -= 1;
+    }
+}
+
 fn locate_zip(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Result<Target> {
     let mut f = std::fs::File::open(path)
         .map_err(|e| Error::new(ErrorCode::PathNotFound).context(format!("open: {e}")))?;
@@ -379,17 +427,47 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Resu
         .len();
 
     if let Ok(l) = crate::layout::zip::locate(&mut f, size) {
-        // 正常包（不必扫全文）：只有一处，外壳据此不显示选择界面
-        候选.push(Candidate {
-            format: "zip".to_string(),
-            offset: l.base,
-            confidence: "high".to_string(),
-            note: "located".to_string(),
-            chosen: true,
-        });
+        // ★ L7「一个文件里两个包」：`locate()` 找的是**最后一个** EOCD，也就是
+        //   「附加包」。若这个包前面还有一个完整包，那**默认该解更靠前的那个**
+        //   —— 用户打包时主内容在前，解出来却是另一个包会很怪（实测撞到过）。
+        //   能不能发现它，只看紧挨着的 64 KiB 窗口，不做全文件扫描。
+        let 主 = match 前一个包的起点(&mut f, l.base) {
+            Some(前) => match crate::layout::zip::locate_at_base(&mut f, size, 前) {
+                Ok(前l) => {
+                    候选.push(Candidate {
+                        format: "zip".to_string(),
+                        offset: 前l.base,
+                        confidence: "high".to_string(),
+                        note: "two_packages_first".to_string(),
+                        chosen: true,
+                    });
+                    候选.push(Candidate {
+                        format: "zip".to_string(),
+                        offset: l.base,
+                        confidence: "high".to_string(),
+                        note: "two_packages_second".to_string(),
+                        chosen: false,
+                    });
+                    (前l.base, 前l.data_len())
+                }
+                // 反推出来的起点定位不成完整包 → 老实按原来那个包走
+                Err(_) => (l.base, l.data_len()),
+            },
+            None => (l.base, l.data_len()),
+        };
+        if 候选.is_empty() {
+            // 正常包（不必扫全文）：只有一处，外壳据此不显示选择界面
+            候选.push(Candidate {
+                format: "zip".to_string(),
+                offset: 主.0,
+                confidence: "high".to_string(),
+                note: "located".to_string(),
+                chosen: true,
+            });
+        }
         return Ok(Target::Zip {
-            base: l.base,
-            len: l.data_len(),
+            base: 主.0,
+            len: 主.1,
         });
     }
 
