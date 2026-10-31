@@ -190,6 +190,26 @@ impl 脱敏器 {
         占位
     }
 
+    /// 任意文本里的路径脱敏：映射表里的原路径换成占位符，家目录兜底换成 `<home>`。
+    ///
+    /// 为什么需要它：`findings.error` 是引擎的**错误原文**（`path=/home/…/坏文件.bin`），
+    /// 不走 [`脱敏器::路径`] 那条路 —— 只脱 `target` 会让界面那句「路径已脱敏」变成
+    /// 假话（2026-10-31 真机验收诊断包时撞到：包里明晃晃一串 /home/用户名）。
+    fn 文本(&mut self, s: &str) -> String {
+        if !self.开 {
+            return s.to_string();
+        }
+        let mut 出 = s.to_string();
+        // 长的先换：否则 `/home/x/包.mp4` 可能被 `/home/x/包` 先咬掉一半
+        let mut 键: Vec<(&String, &String)> = self.表.iter().collect();
+        键.sort_by_key(|b| std::cmp::Reverse(b.0.len()));
+        for (原文, 占位) in 键 {
+            出 = 出.replace(原文.as_str(), 占位.as_str());
+        }
+        // 表里没有的（比如错误原文里只出现了一部分路径）→ 至少把家目录抹掉
+        抹掉家目录(&出)
+    }
+
     /// 命令行脱敏：`-p xxx` / `--password xxx` / `--password=xxx` 的值一律抹掉
     ///
     /// 这是**最关键的一条**：完整命令行可能就是明文密码（见模块头那段说明）。
@@ -404,7 +424,7 @@ fn findings_json(opts: &ReportOptions, ctx: &UnpackCtx, 脱敏: &mut 脱敏器) 
             "target": 脱敏路径,
             "size_bytes": 大小,
             "identified": null,
-            "error": format!("{e}"),
+            "error": 脱敏.文本(&format!("{e}")),
             "privacy_note": "识别失败本身也是结果 —— 报障时通常正是要看这个",
         })),
     }
@@ -500,4 +520,46 @@ fn 配置快照(脱敏: &mut 脱敏器) -> String {
         cfg.safety.zip_bomb_ratio,
         cfg.safety.warn_executables,
     )
+}
+
+#[cfg(test)]
+mod 脱敏测试 {
+    use super::脱敏器;
+
+    /// 2026-10-31 真机验收诊断包时撞出来的真 bug：
+    /// `findings.json` 里 `target` 脱成了 `<path-2>`，`error` 却是完整的
+    /// `/home/用户名/…/坏文件.bin` —— 界面写着「路径已脱敏」，包里明晃晃一串，
+    /// 而这包正是要贴到群里/发给别人的。
+    #[test]
+    fn 错误原文里的家目录要脱掉() {
+        let home = std::env::var("HOME").expect("测试机总有 HOME");
+        let mut 脱敏 = 脱敏器::new(true);
+        let 出 = 脱敏.文本(&format!(
+            "[NOT_ARCHIVE] path={home}/下载/坏文件.bin looks_like=text"
+        ));
+        assert!(!出.contains(&home), "错误原文里泄漏了家目录: {出}");
+        assert!(出.contains("<home>"), "应当换成 <home>: {出}");
+    }
+
+    /// 同一个路径在 `target` 和 `error` 里必须映射到**同一个**占位符 ——
+    /// 否则报障时看不出「这两个其实是同一个文件」
+    #[test]
+    fn 同一个路径在不同字段里的占位符一致() {
+        let mut 脱敏 = 脱敏器::new(true);
+        let 路径 = std::path::Path::new("/tmp/我的包.mp4");
+        let 占位 = 脱敏.路径(路径);
+        let 文案 = 脱敏.文本("失败位置: /tmp/我的包.mp4");
+        assert!(文案.contains(&占位), "应当复用 {占位}: {文案}");
+        assert!(!文案.contains("/tmp/我的包.mp4"), "原文不该原样留下: {文案}");
+    }
+
+    /// 关闭脱敏（不带 `--no-paths`）时必须原样保留 —— 别帮倒忙，
+    /// 开发者要能看出问题出在哪个具体文件上
+    #[test]
+    fn 关掉脱敏时原样保留() {
+        let mut 脱敏 = 脱敏器::new(false);
+        let home = std::env::var("HOME").unwrap_or_default();
+        let 原文 = format!("path={home}/x.bin");
+        assert_eq!(脱敏.文本(&原文), 原文);
+    }
 }
