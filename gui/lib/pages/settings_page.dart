@@ -255,6 +255,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _section(t('settings.section.appearance'), cs),
         DropdownButtonFormField<String>(
           initialValue: _theme,
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: t('settings.theme'),
             isDense: true,
@@ -273,6 +274,7 @@ class _SettingsPageState extends State<SettingsPage> {
         // 看不懂的语言之后，用户连「怎么切回中文」都找不到。
         DropdownButtonFormField<String>(
           initialValue: _uiLocale,
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: t('settings.language'),
             helperText: t('settings.language.help'),
@@ -308,41 +310,40 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                initialValue: _conflict,
-                decoration: InputDecoration(
-                  labelText: t('settings.output.conflict'),
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                ),
-                items: [
-                  DropdownMenuItem(value: 'rename', child: Text(t('settings.conflict.rename'))),
-                  DropdownMenuItem(value: 'skip', child: Text(t('settings.conflict.skip'))),
-                  DropdownMenuItem(value: 'replace', child: Text(t('settings.conflict.replace'))),
-                ],
-                onChanged: (v) => setState(() => _conflict = v ?? 'rename'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                initialValue: _onDone,
-                decoration: InputDecoration(
-                  labelText: t('settings.output.onDone'),
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                ),
-                items: [
-                  DropdownMenuItem(value: 'keep', child: Text(t('settings.onDone.keep'))),
-                  DropdownMenuItem(value: 'trash', child: Text(t('settings.onDone.trash'))),
-                ],
-                onChanged: (v) => setState(() => _onDone = v ?? 'keep'),
-              ),
-            ),
+        // 两个下拉原本并排（Row + 两个 Expanded）。英文 label 比中文长得多
+        // （"Rename automatically (recommended)" / "The archive itself after extraction"），
+        // 并排在 576px 的真机窗口里直接把右边挤出去 —— 用户在真机截图上撞到
+        // `RIGHT OVERFLOWED BY 40 PIXELS`。改成上下排列 + `isExpanded`（让按钮内文本
+        // 能吃满宽度并省略），中英文都不会溢出。**以后再往里加东西，别改回 Row。**
+        DropdownButtonFormField<String>(
+          initialValue: _conflict,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: t('settings.output.conflict'),
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(value: 'rename', child: Text(t('settings.conflict.rename'))),
+            DropdownMenuItem(value: 'skip', child: Text(t('settings.conflict.skip'))),
+            DropdownMenuItem(value: 'replace', child: Text(t('settings.conflict.replace'))),
           ],
+          onChanged: (v) => setState(() => _conflict = v ?? 'rename'),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: _onDone,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: t('settings.output.onDone'),
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(value: 'keep', child: Text(t('settings.onDone.keep'))),
+            DropdownMenuItem(value: 'trash', child: Text(t('settings.onDone.trash'))),
+          ],
+          onChanged: (v) => setState(() => _onDone = v ?? 'keep'),
         ),
         const SizedBox(height: 6),
         Text(
@@ -411,6 +412,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         DropdownButtonFormField<String>(
           initialValue: _closeAction,
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: t('settings.closeAction'),
             isDense: true,

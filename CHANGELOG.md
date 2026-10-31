@@ -36,6 +36,11 @@
 - **踩到的坑（已写进项目技能）**：测试体里 `await File(...).writeAsString(...)` 在
   `testWidgets` 的假时钟下永不完成 → 三条测试齐挂 10 分钟超时，报错里没有 Expected/Actual，
   看起来像界面卡死。夹具一律用同步 API（`writeAsStringSync`），点保存这类真写盘操作包进 `runAsync`。
+- **真机验收抓到的 bug（用户截图）**：「遇到同名文件 / 解压完原包」两个下拉原本并排，英文
+  `Rename automatically (recommended)` 在 576px 真机窗口里把右边挤出去 40px，Flutter 画出黄黑
+  `RIGHT OVERFLOWED BY 40 PIXELS` 竖条。改成上下排列 + `isExpanded: true`。
+  补一条 576 宽渲染整页的回归 —— **注意 `ListView` 懒加载，必须滚到那两行再断言**：
+  不滚动时 320 宽都「通过」，第一版就是条假护栏（改窄到 120 才红，证明机制有效后定稿 576）。
 - **Windows 未实测**：系统语言识别在 Windows 上只做了代码层兼容（`zh_CN` 下划线格式、
   繁简按地区），等 Windows 打包那轮在那边实测；细节见 `docs/TODO.md` 的 T14 明细。
 
