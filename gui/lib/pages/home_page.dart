@@ -90,6 +90,13 @@ class HomePage extends StatefulWidget {
   /// 这样「解析 + 渲染」整条链都被测到，不会出现"测试看着绿、真机字段对不上"。
   final List<Map<String, dynamic>>? debugScanItems;
 
+  /// 测试用：预设「输出到指定目录」（生产代码永远 null）。
+  ///
+  /// 为什么要这个口子：「智能解压」开关在**选了输出目录时必须禁用**（引擎给了 dest
+  /// 就忽略 smart_dir），而选目录要走系统对话框、widget 测试点不到 ——
+  /// 不给口子这条「禁用 + 说明」就永远没人验，下一轮很容易被改回一个点了没反应的开关。
+  final String? debugOutDir;
+
   const HomePage({
     super.key,
     this.initialFile,
@@ -100,6 +107,7 @@ class HomePage extends StatefulWidget {
     this.debugErrorNote,
     this.debugErrorDetail,
     this.debugScanItems,
+    this.debugOutDir,
   });
 
   @override
@@ -190,6 +198,14 @@ class _HomePageState extends State<HomePage> {
   String? _outDir;
   /// 文件名编码（P23-3）：auto = 引擎自动链（UTF-8 → 0x7075 → GB18030）
   String _encoding = 'auto';
+
+  /// 智能解压（E5 / 协议 `extract.smart_dir`）
+  ///
+  /// 默认开，与引擎/命令行一致：包里只有一个顶层目录或只有一个文件时**不**多套一层。
+  /// 关掉 = 永远建一个和包同名的文件夹（`--no-smart-dir` 的语义）。
+  /// ⚠️ 选了「输出到指定目录」时它不生效（引擎两种模式都直接铺进 dest）—— 界面要
+  /// 禁用并说明，不能留个点了没反应的开关。
+  bool _smartDir = true;
   /// 文件列表的滚动条控制器（用户报过「滚轮没反应」——至少要有可见滚动条能拖）
   final ScrollController _listCtrl = ScrollController();
 
@@ -233,6 +249,8 @@ class _HomePageState extends State<HomePage> {
         ..addAll(allDirPaths(_tree));
       _crumb = '';
     }
+    // 测试注入口：预设「输出到指定目录」（与 debugPreview 同理，只影响测试）
+    if (widget.debugOutDir != null) _outDir = widget.debugOutDir;
     // 测试注入口：直接进失败态（与 debugPreview 同样只影响测试）
     final ec0 = widget.debugErrorCode;
     if (ec0 != null && ec0.isNotEmpty) {
@@ -805,6 +823,8 @@ class _HomePageState extends State<HomePage> {
         candidate: candidate,
         // E4：只检查不落盘（协议 verify_only）
         verifyOnly: verifyOnly,
+        // E5：智能解压（不传 = 引擎默认 true，与老行为一致）
+        smartDir: _smartDir,
       );
       if (!mounted) return;
       setState(() {
@@ -998,6 +1018,28 @@ class _HomePageState extends State<HomePage> {
                     DropdownMenuItem(value: 'utf-8', child: Text('UTF-8')),
                   ],
                   onChanged: (v) => setDlg(() => _encoding = v ?? 'auto'),
+                ),
+              ),
+              // 智能解压（E5）：不重复套文件夹。
+              // 选了「输出到指定目录」时它**不生效**（引擎给了 dest 就两种模式都直接铺进去）
+              // —— 所以这里禁用并写明原因，不做点了没反应的假开关。
+              SwitchListTile(
+                key: const ValueKey('smart-dir'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: _smartDir,
+                onChanged:
+                    _outDir != null ? null : (v) => setDlg(() => _smartDir = v),
+                secondary: const Icon(Icons.folder_copy_outlined, size: 18),
+                title: const Text('智能解压（不重复套文件夹）',
+                    style: TextStyle(fontSize: 13)),
+                subtitle: Text(
+                  _outDir != null
+                      ? '选了输出目录时不生效：产物会直接铺在你选的那个目录里'
+                      : (_smartDir
+                          ? '包里只有一个文件夹时不再多套一层（推荐）'
+                          : '永远建一个和包同名的文件夹'),
+                  style: const TextStyle(fontSize: 11),
                 ),
               ),
             ],

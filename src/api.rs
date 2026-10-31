@@ -307,7 +307,14 @@ pub fn 解压(
             .map(str::to_string),
         selection,
         dest: job.dest.clone(),
-        smart_dir: true,
+        // 智能解压（E5）：不传 = true，与老行为完全一致。
+        // 传 false = 永远多套一层「包名」文件夹（`--no-smart-dir` 的语义）。
+        // 以前这里是写死的 true —— 协议里只有 `batch` 有这个字段，单条 extract
+        // 的命令行 `--no-smart-dir` 有效、走协议的界面却表达不了。
+        smart_dir: 参数
+            .get("smart_dir")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
         force: 参数.get("force").and_then(|v| v.as_bool()).unwrap_or(false),
         // 只测不写：界面/脚本可以只要「这个包完好么」而不要产物
         verify_only: 参数
