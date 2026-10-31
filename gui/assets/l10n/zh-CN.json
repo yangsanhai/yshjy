@@ -191,6 +191,8 @@
   "pack.volumeSize": "每卷大小",
   "pack.sha": "生成 SHA-256 校验和",
   "pack.sha.desc": "对方可以 sha256sum -c 验证没下坏",
+  "pack.tweak": "防网盘炸链（打乱时间戳）",
+  "pack.tweak.desc": "每次打包都把文件时间打乱，网盘就不会判成同一个文件；代价是包里的时间不再是真实修改时间",
   "pack.notes": "生成说明.txt",
   "pack.notes.desc": "告诉对方这不是视频、怎么打开（有密码会写进去）",
   "pack.flush.progress": "正在检验落盘：还剩约 {size} 待写入 · 已等 {secs} 秒 · ⚠️ 请勿拔出设备",
