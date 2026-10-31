@@ -73,17 +73,32 @@ void main() {
         reason: '认不出的语言值必须回落到「跟随系统」，不能让界面停在未知状态');
   });
 
-  testWidgets('配置写了还没翻完的语言（ja-JP）→ 当跟随系统，下拉不出现日本語', (tester) async {
+  testWidgets('配置写了根本不存在的语言（xx-XX）→ 当跟随系统', (tester) async {
     // 之前这里是个真 bug：`switchLocale` 读不到语言包就「保持现状」，
     // 用户在英文界面点「日本語」→ 界面一直是英文 → 看着像切换失灵。
-    // 现在没翻完的语言根本不进下拉，配置里残留也会被当成「跟随系统」。
-    _writeConfig('[general]\nui_language = "ja-JP"\n');
+    // 现在没有语言包的语言不进下拉（[availableLocales]），配置里残留也当成「跟随系统」。
+    // 这条原本拿 ja-JP 当例子，后来七种语言全翻完了、ja-JP 已经真生效，
+    // 所以换成不存在的代码 —— 测的是「认不出就回落」这个机制本身。
+    _writeConfig('[general]\nui_language = "xx-XX"\n');
     await _pump(tester);
 
-    expect(find.text('日本語'), findsNothing,
-        reason: 'ja-JP 还没翻完，下拉里不该出现它 —— 选了只会回落中文');
     expect(find.text('跟随系统（推荐）'), findsWidgets,
-        reason: '配置里的 ja-JP 要当成「跟随系统」');
+        reason: '配置里的未知语言要当成「跟随系统」');
+  });
+
+  testWidgets('七种语言都翻完了 → 下拉里七种名字都在', (tester) async {
+    // 和 l10n_test 的双向校验互补：那边看「有包 ⇔ 在 availableLocales」，
+    // 这边看用户真正能看到的下拉里有没有这七项。
+    _writeConfig('[general]\nui_language = "system"\n');
+    await _pump(tester);
+
+    // 下拉未展开时，选项在 IndexedStack 里是 offstage 的 ——
+    // find.text 默认 skipOffstage: true 会一个都找不到（那样这条测试就是假绿），
+    // 必须显式 skipOffstage: false 才是在验证「选项真的存在」。
+    for (final name in ['简体中文', '繁體中文', 'English', '日本語', '한국어', 'Español', 'Русский']) {
+      expect(find.text(name, skipOffstage: false), findsWidgets,
+          reason: '「$name」应该出现在界面语言下拉里');
+    }
   });
 
   testWidgets('点保存 → 写出 ui_language，且同段其它键与注释原样保留', (tester) async {
