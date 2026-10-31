@@ -1752,14 +1752,13 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '这个文件里像是有 ${pv.candidates.length} 处藏着东西，'
-                    '现在解的是引擎认为最可能的那处；不对就换一处试试',
+                    t('home.candidateCount2', {'n': '${pv.candidates.length}'}),
                     style: TextStyle(fontSize: 12, color: cs.onSurface),
                   ),
                 ),
                 TextButton(
                   onPressed: _switching ? null : () => _extractOtherCandidate(),
-                  child: Text(_switching ? '正在换…' : '换一处解压',
+                  child: Text(_switching ? t('home.switching') : t('home.switchCandidate'),
                       style: const TextStyle(fontSize: 12)),
                 ),
               ],
@@ -1802,7 +1801,7 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              '⚠ 索引不完整，下面是能读到的部分',
+              t('home.indexIncomplete'),
               style: TextStyle(color: cs.error),
             ),
           ),
@@ -1813,11 +1812,11 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               switch (pv.encKind) {
-                'zipcrypto' => '🔓 老式加密（ZipCrypto）：密码可能蒙对，但解出的文件可能是坏的',
-                'aes256' => '🔐 AES-256 加密：密码校验可靠',
-                'aes128' || 'aes192' => '🔐 AES 加密：密码校验可靠',
-                'aes' => '🔐 AES 加密',
-                _ => '🔐 加密方式未知',
+                'zipcrypto' => t('home.encZipcrypto'),
+                'aes256' => t('home.encAes256'),
+                'aes128' || 'aes192' => t('home.encAes'),
+                'aes' => t('home.encAesShort'),
+                _ => t('home.encUnknown'),
               },
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
@@ -1837,7 +1836,7 @@ class _HomePageState extends State<HomePage> {
             },
             decoration: InputDecoration(
               labelText: '解压码（这个包有 ${pv.encryptedCount} 个文件加密）',
-              hintText: '留空也行，点「开始解压」我会再问你一次',
+              hintText: t('home.pwEmptyHint'),
               isDense: true,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.key, size: 18),
@@ -1846,7 +1845,7 @@ class _HomePageState extends State<HomePage> {
                   _showPw ? Icons.visibility_off : Icons.visibility,
                   size: 18,
                 ),
-                tooltip: _showPw ? '隐藏解压码' : '显示解压码',
+                tooltip: _showPw ? t('home.pwHide') : t('home.pwShow'),
                 onPressed: () => setState(() => _showPw = !_showPw),
               ),
             ),
@@ -1912,9 +1911,9 @@ class _HomePageState extends State<HomePage> {
                     '${pv.cover!['ext'] != null ? ' · ${pv.cover!['ext']}' : ''}）',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                   ),
-                  subtitle: const Text(
-                    '勾上就把里面的原视频/图片切出来',
-                    style: TextStyle(fontSize: 11),
+                  subtitle: Text(
+                    t('home.pickMedia'),
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ),
               CheckboxListTile(
@@ -1927,9 +1926,9 @@ class _HomePageState extends State<HomePage> {
                   '压缩包内容（${pv.fileCount} 个文件 · ${_size(pv.totalSize)}）',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-                subtitle: const Text(
-                  '勾上就解压里面的文件',
-                  style: TextStyle(fontSize: 11),
+                subtitle: Text(
+                  t('home.pickFiles'),
+                  style: const TextStyle(fontSize: 11),
                 ),
               ),
             ],
@@ -1948,22 +1947,22 @@ class _HomePageState extends State<HomePage> {
               '已选 ${_picked.length} / ${pv.fileCount} 个文件 · ${_size(_pickedBytes(pv))}',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
-            _miniBtn('全选', () => setState(() {
+            _miniBtn(t('home.selectAll'), () => setState(() {
                   _picked
                     ..clear()
                     ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
                 })),
-            _miniBtn('全不选', () => setState(() => _picked.clear())),
+            _miniBtn(t('home.selectNone'), () => setState(() => _picked.clear())),
             const Spacer(),
             // 树 / 平铺切换：树是默认（看层级 + 按目录勾），平铺留给「只想全选」的老习惯
             _miniBtn(
-              _treeView ? '平铺' : '树形',
+              _treeView ? t('home.viewFlat') : t('home.viewTree'),
               () => setState(() => _treeView = !_treeView),
               icon: _treeView ? Icons.view_list_outlined : Icons.account_tree_outlined,
             ),
             _miniBtn(
-              '高级：${_outDir == null ? '包旁边' : '自定义'} · '
-              '${_encoding == 'auto' ? '自动编码' : _encoding.toUpperCase()}',
+              '高级：${_outDir == null ? '包旁边' : t('home.viewCustom')} · '
+              '${_encoding == 'auto' ? t('home.encodingAutoName') : _encoding.toUpperCase()}',
               _showAdvanced,
               icon: Icons.tune,
             ),
@@ -1978,19 +1977,19 @@ class _HomePageState extends State<HomePage> {
             OutlinedButton.icon(
               onPressed: () => setState(() => _phase = Phase.empty),
               icon: const Icon(Icons.close),
-              label: const Text('取消'),
+              label: Text(t('home.cancel')),
             ),
             const SizedBox(width: 8),
             // E4「只检查」：完整解码 + 校验，一个字节都不落盘（协议 verify_only）。
             // 用 TextButton 不用 OutlinedButton：旁边那个才是主入口，
             // 两个描边按钮并排会让用户不知道点哪个（首屏「唯一最强入口」同一条规矩）。
             Tooltip(
-              message: '把包完整解一遍看坏没坏，但不写任何文件（不占硬盘）',
+              message: t('home.verifyOnlyHint'),
               child: TextButton.icon(
                 key: const ValueKey('verify-only'),
                 onPressed: () => _extract(verifyOnly: true),
                 icon: const Icon(Icons.fact_check_outlined, size: 18),
-                label: const Text('只检查'),
+                label: Text(t('home.verifyOnly')),
               ),
             ),
             const Spacer(),
@@ -2005,7 +2004,7 @@ class _HomePageState extends State<HomePage> {
                     ? ((pv.hasCover && _wantCover)
                         ? '开始解压 ${_picked.length} 个 + 提取封面'
                         : '开始解压（${_picked.length} 个文件）')
-                    : (pv.hasCover && _wantCover ? '只提取封面' : '请勾选要提取的内容'),
+                    : (pv.hasCover && _wantCover ? t('home.extractCoverOnly') : t('home.mustPickSomething')),
               ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -2113,12 +2112,12 @@ class _HomePageState extends State<HomePage> {
             children: [
               SizedBox(
                 width: 76,
-                child: Text('大小', textAlign: TextAlign.right, style: hdr),
+                child: Text(t('home.colSize'), textAlign: TextAlign.right, style: hdr),
               ),
               if (wide)
                 SizedBox(
                   width: 72,
-                  child: Text('压缩后', textAlign: TextAlign.right, style: hdr),
+                  child: Text(t('home.colCompressed'), textAlign: TextAlign.right, style: hdr),
                 ),
             ],
           ),
@@ -2215,7 +2214,7 @@ class _HomePageState extends State<HomePage> {
       // 目录带一行「N 个文件」；窄窗口省掉（把高度让给列表）
       subtitle: (tree && n.isDir && wide)
           ? Text(
-              n.isEmptyDir ? '空目录（没有东西可解）' : '${n.fileCount} 个文件',
+              n.isEmptyDir ? t('home.emptyDir') : '${n.fileCount} 个文件',
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             )
           : null,
@@ -2230,7 +2229,7 @@ class _HomePageState extends State<HomePage> {
               child: IconButton(
                 padding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
-                tooltip: '只看这一层',
+                tooltip: t('home.onlyThisLevel'),
                 icon: const Icon(Icons.subdirectory_arrow_right, size: 16),
                 onPressed: () => setState(() => _crumb = n.path),
               ),
@@ -2295,7 +2294,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Expanded(
                   child: Text(
-                    _current ?? '准备中…',
+                    _current ?? t('home.preparing'),
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12),
                   ),
@@ -2327,10 +2326,10 @@ class _HomePageState extends State<HomePage> {
               ),
             Text(
               _stage == 'LOCATE'
-                  ? '第 1 步：在文件里找压缩包'
+                  ? t('home.step1')
                   : _stage == 'LIST'
-                      ? '第 2 步：读目录'
-                      : '第 3 步：写文件（可随时取消，已解出的会保留）',
+                      ? t('home.step2')
+                      : t('home.step3'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
@@ -2342,14 +2341,14 @@ class _HomePageState extends State<HomePage> {
                   OutlinedButton.icon(
                     onPressed: _skipCurrent,
                     icon: const Icon(Icons.skip_next_outlined),
-                    label: const Text('跳过这项'),
+                    label: Text(t('home.skipThisItem')),
                   ),
                   const SizedBox(width: 8),
                 ],
                 OutlinedButton.icon(
                   onPressed: _cancel,
                   icon: const Icon(Icons.stop_circle_outlined),
-                  label: Text(_batchOrder.length > 1 ? '取消整批' : '取消'),
+                  label: Text(_batchOrder.length > 1 ? t('home.cancelBatch') : t('home.cancel')),
                 ),
               ],
             ),
@@ -2377,10 +2376,10 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('正在检验落盘…', style: Theme.of(context).textTheme.titleMedium),
+            Text(t('home.flushing'), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
-              '文件已经解出来了，现在在等它们真正写进设备。⚠️ 请勿拔出设备。',
+              t('home.flushExplain'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
@@ -2405,8 +2404,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '慢速U盘上这一步可能要几分钟（这块盘持续写速约 1-2 MB/s）。'
-              '想停就点「停止等待」——停下来的话，文件还在，但可能有数据没写完。',
+              t('home.flushTips'),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
@@ -2416,7 +2414,7 @@ class _HomePageState extends State<HomePage> {
                 OutlinedButton.icon(
                   onPressed: _cancel,
                   icon: const Icon(Icons.stop_circle_outlined),
-                  label: const Text('停止等待'),
+                  label: Text(t('home.stopWaiting')),
                 ),
               ],
             ),
@@ -2454,7 +2452,7 @@ class _HomePageState extends State<HomePage> {
                     : '有文件校验不过（${r.entriesDone}/${r.entriesTotal}）')
                 : (ok
                     ? (onlyCover
-                        ? '封面已提取出来'
+                        ? t('home.coverExtracted')
                         : '解开了 ${r.entriesDone} 个文件')
                     : '只解出了一部分（${r.entriesDone}/${r.entriesTotal}）'),
             style: Theme.of(context).textTheme.headlineSmall,
@@ -2513,7 +2511,7 @@ class _HomePageState extends State<HomePage> {
             TextButton.icon(
               onPressed: () => _openFolder(r.cover!['path'] as String),
               icon: const Icon(Icons.play_circle_outline, size: 16),
-              label: const Text('打开封面', style: TextStyle(fontSize: 12)),
+              label: Text(t('home.openCover'), style: const TextStyle(fontSize: 12)),
             ),
           ],
           // 「接下来点这个」说的是产物里的启动文件 —— 校验模式没有产物，别指路
@@ -2550,7 +2548,7 @@ class _HomePageState extends State<HomePage> {
                 FilledButton.icon(
                   onPressed: () => _openFolder(r.dest),
                   icon: const Icon(Icons.folder_open),
-                  label: const Text('打开目录'),
+                  label: Text(t('home.openDir')),
                 ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
@@ -2561,17 +2559,14 @@ class _HomePageState extends State<HomePage> {
                       ? ''
                       : '解压码：$_password\n';
                   Clipboard.setData(ClipboardData(
-                    text: '「$name」不是视频/图片，是伪装包。\n'
-                        '用「杨三海解压」（yshjy）打开它，拖进去就行。\n'
-                        '$pw'
-                        '（普通播放器打不开是正常的）',
+                    text: t('home.copyHowto', {'name': name, 'pw': pw}),
                   ));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已复制，直接发给对方就行')),
+                    SnackBar(content: Text(t('home.copiedSend'))),
                   );
                 },
                 icon: const Icon(Icons.copy_all_outlined, size: 18),
-                label: const Text('复制解压方法'),
+                label: Text(t('home.copyHowtoBtn')),
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
@@ -2583,7 +2578,7 @@ class _HomePageState extends State<HomePage> {
                   _notes.clear();
                 }),
                 icon: const Icon(Icons.add),
-                label: const Text('再处理一个'),
+                label: Text(t('home.againOne')),
               ),
             ],
           ),
@@ -2611,7 +2606,7 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '磁盘空间不够',
+              t('home.noSpace'),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -2633,26 +2628,26 @@ class _HomePageState extends State<HomePage> {
             key: const ValueKey('space-change-dest'),
             onPressed: _changeDestAndRetry,
             icon: const Icon(Icons.folder_open, size: 18),
-            label: const Text('换个位置'),
+            label: Text(t('home.changeLocation')),
           ),
           if (_preview != null)
             OutlinedButton.icon(
               key: const ValueKey('space-pick-part'),
               onPressed: () => setState(() => _phase = Phase.preview),
               icon: const Icon(Icons.checklist, size: 18),
-              label: const Text('只解压部分'),
+              label: Text(t('home.extractPartialBtn')),
             ),
           FilledButton.icon(
             key: const ValueKey('space-force'),
             onPressed: () => _extract(force: true),
             icon: const Icon(Icons.play_arrow, size: 18),
-            label: const Text('继续试试'),
+            label: Text(t('home.tryAnyway')),
           ),
         ],
       ),
       const SizedBox(height: 4),
       Text(
-        '「继续试试」不做空间检查：写到一半满了会停下，已经解出来的文件保留。',
+        t('home.tryAnywayHint'),
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
       ),
@@ -2674,7 +2669,7 @@ class _HomePageState extends State<HomePage> {
     final need = pick('need');
     final avail = pick('available');
     if (need == null || avail == null) {
-      return '清一点空间再试，或者换个地方解。';
+      return t('home.freeSpaceHint');
     }
     final short = need > avail ? need - avail : 0;
     return '需要 ${_size(need)} / 目标盘只有 ${_size(avail)} / 还差 ${_size(short)}';
@@ -2746,7 +2741,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       (_errorDetail?['missing'] as String?) != null
                           ? '缺这一块：${_errorDetail!['missing']}'
-                          : '分卷不全',
+                          : t('home.volumesIncomplete'),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -2756,9 +2751,8 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 4),
                     Text(
                       (_errorDetail?['found'] as String?) != null
-                          ? '已经找到 ${_errorDetail!['found']} 块。'
-                              '把缺的那几块一起下下来（网盘里通常是同一个文件夹），再拖进来。'
-                          : '把缺的那几块一起下下来，再拖进来。',
+                          ? t('home.volumesFound', {'n': '${_errorDetail!['found']}'})
+                          : t('home.volumesMissing'),
                       style: const TextStyle(fontSize: 12, height: 1.5),
                     ),
                   ],
@@ -2774,11 +2768,11 @@ class _HomePageState extends State<HomePage> {
                 key: const ValueKey('rescue'),
                 onPressed: _rescue,
                 icon: const Icon(Icons.healing_outlined, size: 18),
-                label: const Text('试着救出来（索引坏了也能抢救）'),
+                label: Text(t('home.rescueBtn')),
               ),
               const SizedBox(height: 4),
               Text(
-                '按文件头把能救的条目捞出来，可能慢一些，也可能缺东西',
+                t('home.rescueDesc'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
@@ -2789,18 +2783,18 @@ class _HomePageState extends State<HomePage> {
               TextButton.icon(
                 onPressed: _makeReport,
                 icon: const Icon(Icons.bug_report_outlined, size: 15),
-                label: const Text('生成诊断包（报障用）', style: TextStyle(fontSize: 12)),
+                label: Text(t('home.diagPack'), style: const TextStyle(fontSize: 12)),
               ),
             if ((_errorNote ?? '').isNotEmpty)
               TextButton.icon(
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: _errorNote!));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已复制错误详情 —— 报障时贴给我就行')),
+                    SnackBar(content: Text(t('home.copiedDetail'))),
                   );
                 },
                 icon: const Icon(Icons.copy, size: 15),
-                label: const Text('复制错误详情', style: TextStyle(fontSize: 12)),
+                label: Text(t('home.copyDetail'), style: const TextStyle(fontSize: 12)),
               ),
             // S5：空间不够 —— 三个数 + 三条出路。
             //
@@ -2815,7 +2809,7 @@ class _HomePageState extends State<HomePage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '常用解压码（来自密码本，点一下就用）',
+                    t('home.commonPw'),
                     style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   ),
                 ),
@@ -2845,8 +2839,8 @@ class _HomePageState extends State<HomePage> {
                 onSubmitted: (_) => _retryWithPassword(),
                 textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
-                  labelText: '解压码',
-                  hintText: '一般写在群公告、文件名里，或旁边的 txt',
+                  labelText: t('home.pwLabel'),
+                  hintText: t('home.pwHint'),
                   border: const OutlineInputBorder(),
                   isDense: true,
                   prefixIcon: const Icon(Icons.key),
@@ -2856,7 +2850,7 @@ class _HomePageState extends State<HomePage> {
                       _showPw ? Icons.visibility_off : Icons.visibility,
                       size: 18,
                     ),
-                    tooltip: _showPw ? '隐藏解压码' : '显示解压码',
+                    tooltip: _showPw ? t('home.pwHide') : t('home.pwShow'),
                     onPressed: () => setState(() => _showPw = !_showPw),
                   ),
                 ),
@@ -2865,7 +2859,7 @@ class _HomePageState extends State<HomePage> {
               FilledButton.icon(
                 onPressed: _retryWithPassword,
                 icon: const Icon(Icons.lock_open),
-                label: const Text('用这个解压码重试'),
+                label: Text(t('home.retryWithPw')),
               ),
             ],
             const SizedBox(height: 24),
@@ -2875,12 +2869,12 @@ class _HomePageState extends State<HomePage> {
                 FilledButton.icon(
                   onPressed: _pick,
                   icon: const Icon(Icons.folder_open),
-                  label: const Text('换个文件'),
+                  label: Text(t('home.changeFile')),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton(
                   onPressed: () => setState(() => _phase = Phase.empty),
-                  child: const Text('返回'),
+                  child: Text(t('home.back')),
                 ),
               ],
             ),
@@ -2907,8 +2901,8 @@ class _HomePageState extends State<HomePage> {
   /// 说清楚这句，用户点「开始解压」前就知道磁盘上会多出什么。
   String _smartDirHint(Preview pv) {
     final files = pv.entries.where((e) => !e.isDir).toList();
-    if (files.isEmpty) return '包里没有文件';
-    if (files.length == 1) return '会直接解出这 1 个文件';
+    if (files.isEmpty) return t('home.noFilesInArchive');
+    if (files.length == 1) return t('home.willExtractOne');
     final roots = files.map((e) => e.path.split('/').first).toSet();
     final allNested = files.every((e) => e.path.contains('/'));
     if (roots.length == 1 && allNested) {
