@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/humanize.dart';
+import 'package:yshjy_gui/l10n.dart';
 
 /// 文案表 / 判断函数的单测（2026-10-30 补）
 ///
@@ -53,9 +57,20 @@ const engineDiagCodes = <String>[
 ];
 
 void main() {
+  // T14：文案搬进语言包了，测试必须先把基准语言的表装进去 ——
+  // 否则 t() 一律返回 key，所有码看起来都「等于兜底」，测试会集体假绿。
+  setUpAll(() {
+    final raw = File('assets/l10n/zh-CN.json').readAsStringSync();
+    final parsed = jsonDecode(raw) as Map<String, dynamic>;
+    installTables(table: {
+      for (final e in parsed.entries)
+        if (!e.key.startsWith('_') && e.value is String) e.key: e.value as String,
+    });
+  });
+
   group('文案表覆盖引擎真实码', () {
     test('错误码 17 个都有专属人话，不落到"原因不明"', () {
-      const fallback = '这次没成功 —— 原因不明，可以点「生成诊断包」查一下';
+      final fallback = t('err.unknown');
       final missing = <String>[];
       for (final code in engineErrorCodes) {
         if (errorText(code) == fallback) missing.add(code);
@@ -64,12 +79,20 @@ void main() {
     });
 
     test('诊断码 11 个都有专属人话', () {
-      const fallback = '有提示（不影响使用）';
+      final fallback = t('diag.unknown');
       final missing = <String>[];
       for (final code in engineDiagCodes) {
         if (diagText(code) == fallback) missing.add(code);
       }
       expect(missing, isEmpty, reason: '这些诊断码没有文案：$missing');
+    });
+
+    test('语言包里真有这些码的条目（搬表时漏一条会红）', () {
+      final missing = [
+        ...engineErrorCodes.where((c) => t('err.$c') == 'err.$c').map((c) => 'err.$c'),
+        ...engineDiagCodes.where((c) => t('diag.$c') == 'diag.$c').map((c) => 'diag.$c'),
+      ];
+      expect(missing, isEmpty, reason: '语言包里缺这些条目：$missing');
     });
   });
 

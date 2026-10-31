@@ -1,4 +1,4 @@
-/// 码 → 中文人话（D21 / N1）
+/// 码 → 人话（D21 / N1）
 ///
 /// 规矩：**引擎只给码，外壳查文案**。这个文件就是「外壳那一份表」。
 /// 两条铁律：
@@ -11,66 +11,31 @@
 ///    只见一句「需要解压码」，永远见不到输入框（2026-10-30 用户在真机撞上）。
 ///    所以这类判断一律走下面两个纯函数，**并且有单测**（`gui/test/humanize_test.dart`），
 ///    别在各页面里手写码名比较。
+///
+/// T14 起文案搬进语言包（`assets/l10n/*.json` 的 `err.*` / `diag.*` / `item.*` / `batch.*`），
+/// 界面切成英文时错误提示也跟着变。**查表的规矩没变**：查不到就用该组的 `*.unknown`
+/// 那句通用人话，绝不把码名甩给用户。
 library;
 
+import 'l10n.dart';
+
+/// 查一条文案；查不到就用兜底 key（**绝不把码名显示给用户**）
+String _lookup(String key, String fallbackKey) {
+  final text = t(key);
+  return text == key ? t(fallbackKey) : text;
+}
+
 /// 错误码 → 人话（引擎 `ErrorCode::as_str()` + 外壳自己的几个码）
-String errorText(String code) => switch (code) {
-      'NOT_ARCHIVE' => '这里面没找到压缩包 —— 可能不是伪装包，或者文件下坏了',
-      'MISSING_VOLUME' => '分卷不齐 —— 缺了一块，把缺的那块也下回来再试',
-      'TRUNCATED' => '文件没下完（数据不完整）',
-      'DATA_LOST' => '文件坏了，只能救回一部分',
-      'ENCRYPTED_UNBREAKABLE' => '这个包加密了，而且没法试出解压码',
-      'NEED_PASSWORD' => '这个包需要解压码',
-      // 头加密：连文件清单都看不到，必须强调「清单也加密了」
-      'HEAD_ENCRYPTED' => '这个包连文件清单都加密了，必须给解压码才能看里面有什么',
-      'WRONG_PASSWORD' => '解压码不对',
-      'INVALID_ARGUMENT' => '参数不对（选的东西可能不合适）',
-      'NOT_ENOUGH_SPACE' => '磁盘空间不够了，清一点再试',
-      'PERMISSION_DENIED' => '没有权限读写这个位置（换个目录试试）',
-      'PATH_TOO_LONG' => '路径太长，这个位置放不下这么长的文件名',
-      'DEST_IS_FILE' => '目标位置是个文件，不是文件夹（换个文件夹）',
-      'PATH_NOT_FOUND' => '文件不存在（是不是被移走或改名了？）',
-      // 封面视频本身坏了：解压不受影响，但错误码通道也会出现这个码
-      'VIDEO_UNPLAYABLE' => '封面视频本身坏了（不影响解压）',
-      // `IO` 是外壳自造的旧码（引擎 17 个码里没有，留着兼容老日志）
-      'IO' => '读写文件出错了（磁盘满了 / 磁盘有问题）',
-      'CANCELLED' => '已取消（已经解出来的文件都保留着）',
-      'INTERNAL' => '程序内部出错了 —— 可以点「生成诊断包」发给开发者',
-      // ↓ 下面几条是外壳自己造的码（引擎不会发）
-      'ENGINE_EXITED' => '引擎进程退出了（重开一次界面就好）',
-      'TIMEOUT' => '等太久了，没等到引擎回应',
-      'BAD_PARAM' => '界面传的参数不对（这是软件的问题，麻烦报一下）',
-      'UNKNOWN_COMMAND' => '引擎不认这条命令（版本可能对不上）',
-      _ => '这次没成功 —— 原因不明，可以点「生成诊断包」查一下',
-    };
+///
+/// 输入也接受 Rust 枚举名（`WrongPassword`）—— 协议 golden 里带的就是那种写法，
+/// 统一先过 [camelToCode] 再查表。
+String errorText(String code) => _lookup('err.${camelToCode(code)}', 'err.unknown');
 
 /// 归档级诊断码 → 人话（引擎 `DiagnosticCode::as_str()`）
-String diagText(String code) => switch (code) {
-      'HIDDEN_AT_OFFSET' => '包藏在文件中间，已按真实位置定位',
-      'REBUILT_INDEX' => '索引坏了，清单是按文件头重建的',
-      'OFFSET_CORRECTED' => '偏移不对，已自动修正',
-      'VOLUMES_MERGED' => '分卷已自动拼起来了',
-      'LAYOUT_GUESSED' => '布局是猜出来的，没十足把握',
-      'VIDEO_UNPLAYABLE' => '封面视频本身坏了（不影响解压）',
-      'RISKY_ENTRY' => '解出了可执行文件，运行前请确认来源',
-      'SLOW_PATH' => '走了慢路（全文件扫描），请耐心等',
-      'PASSWORD_FROM_NOTES' => '解压码是从旁边的说明里找到的',
-      'PARTIAL_DATA' => '数据不完整，能救多少算多少',
-      'MOVABLE_NOT_VERIFIED' =>
-        '目标是U盘/移动硬盘：拔盘前请先「安全弹出」，否则可能有数据还没写进盘',
-      _ => '有提示（不影响使用）',
-    };
+String diagText(String code) => _lookup('diag.${camelToCode(code)}', 'diag.unknown');
 
 /// 条目级结果 → 人话（引擎 `ItemResult::as_str()`）
-String itemResultText(String code) => switch (code) {
-      'OK' => '成功',
-      'SKIPPED' => '跳过',
-      'CRC_ERROR' => '校验不过（内容坏了）',
-      'DATA_ERROR' => '数据损坏',
-      'ENCRYPTED' => '加密，没解开',
-      'NOT_EXTRACTED' => '没解出来',
-      _ => '未完成',
-    };
+String itemResultText(String code) => _lookup('item.${camelToCode(code)}', 'item.unknown');
 
 /// 批量结果里的任务结论 → 人话
 ///
@@ -79,11 +44,11 @@ String itemResultText(String code) => switch (code) {
 String batchOutcomeText(String oc) {
   switch (oc) {
     case 'ok':
-      return '完成';
+      return t('batch.ok');
     case 'partial':
-      return '部分完成';
+      return t('batch.partial');
     case 'cancelled':
-      return '已取消';
+      return t('batch.cancelled');
   }
   return errorText(camelToCode(oc));
 }

@@ -20,3 +20,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # 界面文案（T14）：与引擎 locales/*.toml 同名同规则，见 lib/l10n.dart 顶部说明
+  assets:
+    - assets/l10n/

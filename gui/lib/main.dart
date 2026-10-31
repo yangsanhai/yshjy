@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'app_shell.dart';
+import 'l10n.dart';
 import 'platform_paths.dart';
 import 'theme_mode.dart';
 
@@ -33,9 +35,22 @@ Future<void> _loadThemeMode() async {
   }
 }
 
+/// 启动前读一次界面语言（`[general] ui_language`，默认跟随系统）
+///
+/// 语言包读不出来**不能拦着启动**：退回基准语言，界面照开
+/// （`initLocale` 内部已经处理「目标语言包坏了」，这里只兜底最外层）。
+Future<void> _loadUiLanguage() async {
+  try {
+    await initLocale(await uiLanguageSetting());
+  } catch (_) {
+    // 连基准语言包都读不出来 —— 那就保持空表，界面显示 key，至少还能开起来报障
+  }
+}
+
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await _loadThemeMode();
+  await _loadUiLanguage();
   // 右键「用杨三海解压打开」时，桌面环境会把文件路径当参数传进来
   runApp(YshjyApp(initialFile: args.isNotEmpty ? args.first : null));
 }
@@ -61,13 +76,18 @@ class YshjyApp extends StatelessWidget {
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeMode,
-      builder: (_, mode, __) => MaterialApp(
-        title: '杨三海解压',
-        debugShowCheckedModeBanner: false,
-        theme: theme(Brightness.light),
-        darkTheme: theme(Brightness.dark),
-        themeMode: mode,
-        home: AppShell(initialFile: initialFile),
+      builder: (_, mode, __) => ValueListenableBuilder<String>(
+        // 切语言要整棵树重建：各页面的文案都在 build 里用 t() 取，
+        // 只换表不重建 = 界面还停在旧语言
+        valueListenable: uiLocaleSetting,
+        builder: (_, ___, ____) => MaterialApp(
+          title: t('app.name'),
+          debugShowCheckedModeBanner: false,
+          theme: theme(Brightness.light),
+          darkTheme: theme(Brightness.dark),
+          themeMode: mode,
+          home: AppShell(initialFile: initialFile),
+        ),
       ),
     );
   }

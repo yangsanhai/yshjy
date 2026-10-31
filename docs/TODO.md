@@ -55,7 +55,19 @@ E5 智能解压 `a46ced6`、E2 不改封面 + E6 诊断包存下载 `38bb58a`；
 | E7-b | `--keep` 保留中间 ZIP | — | ⏸ 极客项延后 | 只在打包路径有意义（CLI 打完告诉你中间文件在哪）；界面用户看不到中间文件，要做先定「留在哪、怎么清理」 |
 | E7-c | `--no-auto-password` 总开关 | — | ✅ **已被覆盖** | T8 已把「自动抓解压码」拆成两个勾选（笔记 / 说明书），两个都关＝总开关关。再加一个只会造出两套优先级 |
 
+### T14 明细（界面多语言 · 进行中）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 地基：l10n 框架 | ✅ 框架 + about 页接上（真机验过：用户自己点「关于」，英文页正常） | 文案放 `assets/l10n/<code>.json`，与引擎语言包同名同规则（`段.键` + `{占位符}`）；不引 `flutter_localizations`/`intl`，理由见 `gui/lib/l10n.dart` 顶部。`gui/test/l10n_test.dart` 16 条（含「各语种缺/多/空/占位符」全量比对） |
+| 错误码文案（humanize 45 条） | ✅ 完成 | 文案搬进语言包的 `err.*` / `diag.*` / `item.*` / `batch.*`；`errorText` / `diagText` / `itemResultText` / `batchOutcomeText` 改成查表，查不到仍回退「原因不明」那类通用人话（**绝不把码名甩给用户**，D21 铁律不动）。新增 `test/flutter_test_config.dart`：所有测试统一装基准语言表（否则表是空的，界面显示 key，一堆断言人话的测试会集体假红） |
+| 设置页 78 条 + 界面语言下拉 | ⬜ | 下拉做完用户才不用改配置文件切语言 |
+| 打包页 80 条 / 首页 259 条 / 外壳 20 条 + 小文件 | ⬜ | 首页最大，拆着做 |
+| 6 个语种的翻译（2871 条） | ⬜ | 按语言包逐份翻，翻完靠 l10n_test 的全量比对兜底 |
+| **Windows 上的系统语言识别** | ⬜ **等 Windows 打包那轮做** | 现在用 `Platform.localeName`（dart:io）：Linux 读 LANG、macOS/iOS 读系统设置、**Windows 官方文档没写来源**（实际返回 `zh_CN` 这种下划线格式，代码已兼容 `_` / `-` / `.UTF-8` 三种写法）。**本机无法实测 Windows 路径**，等用户在自己的 Windows 机器上打包时：① 真机看默认语言对不对（中文系统应出简体、繁体系统应出繁体）；② 若有偏差，改成优先用 `PlatformDispatcher.instance.locale`（返回拆好的 language/script/country，跨平台统一）再把 `Platform.localeName` 当兜底；③ 顺带确认 Flutter 在 Windows 上 `computePlatformResolvedLocale` 仍未实现（issue 151755），所以映射表必须自己写，不能指望那个 API |
+
 ### 下一轮建议（2026-10-31 收尾时列 · 按优先级 · 做之前先跟用户对一次）
+
 
 | # | 建议 | 为什么值得做 | 怎么做 | 量 |
 |---|---|---|---|---|

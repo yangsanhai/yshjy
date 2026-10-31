@@ -6,6 +6,25 @@
 
 > 0.9.38 已出包装机，这一批从 0.9.39 起算；**做完 T14 再统一出包**。
 
+### T14 界面多语言 · 第一批（地基 + 关于页）与第二批（错误码文案）
+
+- **方案**：不引 `flutter_localizations` / `intl`。文案放 `gui/assets/l10n/<code>.json`，
+  **键名与占位符跟引擎 `locales/*.toml` 同一套规则**（`段.键` + `{name}`），贡献文档讲一次就够。
+  代价是缺 key 不会编译期报错，用 `gui/test/l10n_test.dart` 的全量比对补回来。
+- 语言选择：默认**跟随系统**（`Platform.localeName`），中文按地区分繁简（TW/HK/MO/Hant → 繁体），
+  其它语言按主语言配对，认不出的退回中文；`[general] ui_language` 可以钉死一种。
+- 第一批接的是「关于」页（样板页：纯文本 / 单占位符 / 带子句三种形态都跑过），
+  真机由用户自己点开验收 —— 英文页正常。
+- 第二批把错误码文案搬进语言包：`err.*` / `diag.*` / `item.*` / `batch.*` 共 44 条，
+  `errorText` / `diagText` / `itemResultText` / `batchOutcomeText` 改成查表。
+  **查不到仍回退通用人话**（D21：不把码名甩给用户），这条规矩没变。
+- 新增 `gui/test/flutter_test_config.dart`：所有测试统一装基准语言表。
+  没有它，widget 测试里表是空的 → 界面显示 `err.NEED_PASSWORD` 这种 key → 断言人话的测试假红。
+- **证据**：`flutter test` 148 过（原 131 + l10n 16 + humanize 1）；`flutter analyze` 干净；
+  l10n 的护栏含「各语种缺/多/空一条 → 红」「译文丢占位符 → 红」。
+- **Windows 未实测**：系统语言识别在 Windows 上只做了代码层兼容（`zh_CN` 下划线格式、
+  繁简按地区），等 Windows 打包那轮在那边实测；细节见 `docs/TODO.md` 的 T14 明细。
+
 ### P1-1 崩溃日志脱敏：实测早就做了，补的是护栏
 
 - 待办原话是「崩溃日志**原样复制**进包、不经脱敏器」—— **实测不成立**：
