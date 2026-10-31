@@ -74,6 +74,7 @@ COMMON OPTIONS:
   --trash-source                  Move the source archive to Trash after extracting (recoverable)
   --delete-source                 Permanently delete the source archive after extracting (cannot be undone; asks once, refuses when non-interactive)
   --format <fmt>                  Pack a plain archive (no cover): zip / tar.gz / tar.zst. Given = plain packing; omitted = disguise as before
+  --tweak-time                    Anti-dedup: randomize entry timestamps (different every run) so cloud drives don't treat it as the same file; off by default
   --level 0-9                     pack compression level: 0 = store (fastest), 9 = smallest (default 6)
   --sfx / --sfx-linux             pack a self-extracting archive (.exe / .sh) that unpacks on double-click; cannot be used with --split, --cover not needed, no .说明.txt written
   --decoy <N>                     Scatter N decoy segments into the pack (max 64, default 0 = off)

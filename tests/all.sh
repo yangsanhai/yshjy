@@ -172,6 +172,7 @@ if [ -n "$BIN" ]; then
   # 引擎那侧真怎么落盘没人守 —— 改坏了 flutter test 照样绿。
   run "协议 pack.tail（tail_proto.py）" python3 tests/tail_proto.py "$BIN"
   run "协议 pack.format（format_proto.py）" python3 tests/format_proto.py "$BIN"
+  run "协议 pack.tweak_time（tweak_time_proto.py）" python3 tests/tweak_time_proto.py "$BIN"
   run "协议 report.out_dir（report_outdir_proto.py）" python3 tests/report_outdir_proto.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
