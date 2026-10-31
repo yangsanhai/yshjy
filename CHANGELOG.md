@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布] · 2026-10-31 夜 二（T18-3 防炸链）
+### T18-3 防炸链（同批）
 
 > 提交：`d2f6c13`（引擎+协议+CLI+探针）、`2383a4a`（界面+文案+测试）。
 
@@ -20,7 +20,7 @@
   · 真机（用户本人点 + 截图）：`screenshots/t18-3-tweak-off.png`（默认关，说明小字对）/
     `screenshots/t18-3-tweak-on.png`（点开变蓝）。
 
-## [未发布] · 2026-10-31 夜（T17-4 打包格式可选）
+## [0.9.40] · 2026-10-31 夜（T17-4 打包格式可选 + T18-3 防炸链）
 
 > 引擎 / 协议 / CLI / 界面四层都做完了，**还差真机截图**（要用户自己点，项目规矩）。
 > 提交：`a593942`（引擎+协议+CLI+探针）、`a9184eb`（界面+文档）。
@@ -66,6 +66,14 @@
   矩阵拒绝 5 组、老行为不变
 - `bash tests/cli_spec_match.sh` 7/7
 - 真机 CLI：三种格式打包 + 三种冲突报错，逐条贴过产物校验
+### 发版记录
+
+- 产物：`dist/yshjy_0.9.40_amd64.deb`（11M）、`yshjy-0.9.40-linux-x86_64.tar.gz`、`yshjy-full-0.9.40-…tar.gz`
+- `scripts/test-packages.sh`：**37 项全过**（权限 / prerm 区分 upgrade / deb 内二进制版本一致 /
+  真打包真解压逐字节一致 / tar.gz sha256）
+- 已装机：`dpkg -l yshjy` = **0.9.40**；CLI、GUI（19:33 的 libapp.so）、man、三种补全、14 种格式菜单项一起换新
+- 版本号 7 处同步：`Cargo.toml` / `ffi/Cargo.toml` / `gui/pubspec.yaml` / `README.md`×2 / `docs/PROTOCOL.md`×2
+
 - **真机验收（用户本人点 + 截图，2026-10-31 19:15–19:18）**：
   · `screenshots/t17-4-format-zip.png` —— 普通压缩默认：格式下拉在、值 zip、解压码框可用；
   · `screenshots/t17-4-format-tarzst.png` —— 选 tar.zst：解压码框置灰 + 小字「tar 格式不支持加密」，
