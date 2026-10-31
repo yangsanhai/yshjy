@@ -75,7 +75,7 @@
 | # | 能力 | 引擎 & 协议 | 界面 | 用户影响 |
 |---|---|---|---|---|
 | E1 | 干扰数据 + 假签名（防网盘扫描） | `--decoy` / `--decoy-size` / `--decoy-signatures`；协议 `pack.decoy*`；`src/decoy.rs` 83 处 | ✅ **已接**（T7-E1 `6df4be1`：打包页总开关；普通压缩 / 自解压下禁用并写明原因） | — |
-| E2 | 打包布局（free 原子 / 尾部追加） | `--tail` / `--layout L1\|L2`；协议 `pack.tail` | ✅ **已接**（T7-E2 `38bb58a`：「不改封面，接在文件末尾」；默认关且请求里不出现 `tail` 键） | — |
+| E2 | 打包布局（free 原子 / 尾部追加 / 头部 / 视频中间 / 两个包 / MKV 附件） | `--tail` / `--layout L1\|L2\|L3\|L4\|L7\|L8`、`--second`；协议 `pack.tail` / `pack.layout` / `pack.second` | ✅ **六档全接**（T7-E2 `38bb58a` 打底；T18-1 补完 L3 / L4 / L7 / L8，0.9.43 装机验收）：界面下拉六档、CLI 六档、协议 `tail/free/head/mid/two/mkv`；每种的高级代价（unzip 找不到 / 只见一个包 / 需 ffmpeg）都写进界面说明 | — |
 | E3 | 强制跳过空间预检 | `--force`；协议 `extract.force` | ✅ **已接**（T4/T6：报错卡片上的「继续试试」传 `force`） | — |
 | E4 | 只测不写（查包完整性） | `--test` | ✅ **已接**（T7-E4 `a63f2c9`：预览页底部「只检查」，目录零新增） | — |
 | E5 | 智能解压开关（永远建同名文件夹） | `--no-smart-dir`；协议 `batch.smart_dir` | ✅ **已接**（T7-E5 `a46ced6`：协议补 `extract.smart_dir` + 高级选项开关） | — |
