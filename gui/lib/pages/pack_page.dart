@@ -227,10 +227,21 @@ class _PackPageState extends State<PackPage> {
     final f = await openFile(acceptedTypeGroups: [group]);
     if (f == null) return;
     final size = File(f.path).lengthSync();
+    // 外壳类型按**文件头魔数**认（与 CLI 同一套）：用户把 PNG 存成「封面.dat」也认得出。
+    // 认不出才退回文件名扩展名 —— 后缀必须和里面的真实内容一致，否则一认文件头就露馅。
+    List<int> head = const <int>[];
+    try {
+      final raf = File(f.path).openSync();
+      head = raf.readSync(64);
+      raf.closeSync();
+    } catch (_) {
+      // 读不了头就当认不出（走扩展名兜底），不拦着用户选文件
+    }
+    final magic = shellExtFromHead(head);
     setState(() {
       _coverPath = f.path;
       _coverSize = size;
-      final ext = extOf(f.path);
+      final ext = magic ?? extOf(f.path);
       _coverExt = ext.isEmpty ? 'bin' : ext;
       if (_out != null) {
         _out = reExt(_out!, _coverExt);

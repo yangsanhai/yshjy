@@ -184,6 +184,69 @@ pub fn 是外壳扩展名(ext: &str) -> bool {
     常见外壳扩展名.contains(&e.as_str())
 }
 
+/// 按**文件头魔数**认出外壳类型，返回规范扩展名（T18-2 补强）
+///
+/// 为什么不看文件名的扩展名：用户把截图存成 `封面.dat`、视频存成 `片` 都很常见，
+/// 而产物后缀必须和里面的**真实内容**一致 —— 外壳是 PNG 却叫 .mp4，看图软件一认魔数
+/// 就判「坏文件」。布局判断本来就是按魔数做的（`pack::build` 里那句 `cover 是 mp4`），
+/// 这里把同一份判断扩成「顺便给出该用什么后缀」：CLI 定名、界面选外壳都优先用它，
+/// 认不出来才退回文件名扩展名。
+///
+/// `头` 只喂前 64 字节就够（调用方别整个文件读进来 —— 视频外壳几百 MB）。
+pub fn 外壳类型(头: &[u8]) -> Option<&'static str> {
+    let h = 头;
+    if h.starts_with(&[0x89, b'P', b'N', b'G']) {
+        return Some("png");
+    }
+    if h.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Some("jpg");
+    }
+    if h.starts_with(b"GIF87a") || h.starts_with(b"GIF89a") {
+        return Some("gif");
+    }
+    if h.len() > 12 && &h[0..4] == b"RIFF" {
+        return match &h[8..12] {
+            b"WEBP" => Some("webp"),
+            b"WAVE" => Some("wav"),
+            b"AVI " => Some("avi"),
+            _ => None,
+        };
+    }
+    // ISO BMFF（mp4 / m4v / mov…）：第 4..8 字节是 ftyp
+    if h.len() > 8 && &h[4..8] == b"ftyp" {
+        return Some("mp4");
+    }
+    // Matroska / WebM 的 EBML 头
+    if h.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        return Some("mkv");
+    }
+    if h.starts_with(b"%PDF") {
+        return Some("pdf");
+    }
+    if h.starts_with(b"PK\x03\x04") {
+        return Some("zip");
+    }
+    if h.starts_with(b"Rar!") {
+        return Some("rar");
+    }
+    if h.starts_with(&[0x37, 0x7A, 0xBC, 0xAF]) {
+        return Some("7z");
+    }
+    if h.starts_with(b"MZ") {
+        return Some("exe");
+    }
+    if h.starts_with(b"ID3") || h.starts_with(&[0xFF, 0xFB]) {
+        return Some("mp3");
+    }
+    if h.starts_with(b"fLaC") {
+        return Some("flac");
+    }
+    if h.starts_with(b"OggS") {
+        return Some("ogg");
+    }
+    None
+}
+
 /// 打包参数
 #[derive(Debug, Clone)]
 pub struct PackOptions {
@@ -1428,6 +1491,26 @@ mod tests {
         for 不是 in ["1080p", "2026", "x265", "part1", "", ".", "未知"] {
             assert!(!是外壳扩展名(不是), "不该认成外壳类型：{不是:?}");
         }
+    }
+
+    /// 按魔数认外壳类型：名字不可信（用户会把 PNG 存成 `封面.dat`），
+    /// 所以后缀跟文件头走。与 `main.rs` 的 `--cover` 定名、界面的 `shellExtFromHead` 共用一套。
+    #[test]
+    fn 外壳类型按魔数认() {
+        assert_eq!(外壳类型(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00"), Some("mp4"));
+        assert_eq!(外壳类型(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]), Some("png"));
+        assert_eq!(外壳类型(&[0xFF, 0xD8, 0xFF, 0xE0]), Some("jpg"));
+        assert_eq!(外壳类型(b"GIF89a......"), Some("gif"));
+        assert_eq!(外壳类型(b"RIFF\0\0\0\0WEBPVP8 "), Some("webp"));
+        assert_eq!(外壳类型(b"RIFF\0\0\0\0WAVEfmt "), Some("wav"));
+        assert_eq!(外壳类型(b"%PDF-1.7\n"), Some("pdf"));
+        assert_eq!(外壳类型(b"PK\x03\x04rest"), Some("zip"));
+        assert_eq!(外壳类型(b"Rar!\x1a\x07\x00"), Some("rar"));
+        assert_eq!(外壳类型(b"MZ\x90\x00"), Some("exe"));
+        assert_eq!(外壳类型(b"\x1a\x45\xdf\xa3...."), Some("mkv"));
+        // 认不出就老实返回 None（调用方再退回文件名扩展名），别猜一个
+        assert_eq!(外壳类型("随便一段文字".as_bytes()), None);
+        assert_eq!(外壳类型(b""), None);
     }
 
     fn scratch(tag: &str) -> PathBuf {
