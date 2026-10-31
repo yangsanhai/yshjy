@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../humanize.dart';
+import '../l10n.dart';
 import '../notify.dart';
 import '../pack_naming.dart';
 import '../platform_paths.dart';
@@ -162,8 +163,8 @@ class _PackPageState extends State<PackPage> {
   }
 
   Future<void> _addFiles() async {
-    const group = XTypeGroup(label: '任意文件');
-    final files = await openFiles(acceptedTypeGroups: const [group]);
+    final group = XTypeGroup(label: t('pack.filter.any'));
+    final files = await openFiles(acceptedTypeGroups: [group]);
     if (files.isEmpty) return;
     setState(() {
       for (final f in files) {
@@ -198,8 +199,8 @@ class _PackPageState extends State<PackPage> {
   /// 输出扩展名自动跟着外壳走 —— 名字和内容不一致会一认文件头就露馅。
   Future<void> _pickCover() async {
     // 不传 extensions / mimeTypes = 允许所有文件（任意类型都能当外壳）
-    const group = XTypeGroup(label: '所有文件');
-    final f = await openFile(acceptedTypeGroups: const [group]);
+    final group = XTypeGroup(label: t('pack.filter.all'));
+    final f = await openFile(acceptedTypeGroups: [group]);
     if (f == null) return;
     final size = File(f.path).lengthSync();
     setState(() {
@@ -233,16 +234,16 @@ class _PackPageState extends State<PackPage> {
   /// 分卷大小的实时校验（看不懂就红字，绝不静默变成「不分卷」）
   String? get _splitSizeError {
     if (!_split) return null;
-    final t = _splitCtrl.text.trim();
-    if (t.isEmpty) return '填个大小，例如 2G';
-    if (_parseSize(t) == null) return '看不懂这个大小，用 2G / 500M / 1048576';
+    final text = _splitCtrl.text.trim();
+    if (text.isEmpty) return t('pack.size.hint');
+    if (_parseSize(text) == null) return t('pack.size.error');
     return null;
   }
 
   /// 错误码 → 人话（界面不糊 code；引擎码查 `humanize.dart`，界面自己的码在这补）
   String _errorText(String code) => switch (code) {
-        'NO_COVER' => '伪装模式要先选一个伪装文件（在下面「伪装文件」那里选）',
-        'SPLIT_SIZE_INVALID' => '分卷大小填得不对，改一下再开始',
+        'NO_COVER' => t('pack.err.needCover'),
+        'SPLIT_SIZE_INVALID' => t('pack.err.badVolume'),
         _ => errorText(code),
       };
 
@@ -265,7 +266,7 @@ class _PackPageState extends State<PackPage> {
       _progress = null;
       _current = null;
     });
-    widget.onStatus?.call('正在打包…');
+    widget.onStatus?.call(t('pack.busy'));
     try {
       // 普通压缩产物永远是 ZIP；伪装产物扩展名必须和外壳一致
       final out = _mode == 'plain'
@@ -292,13 +293,13 @@ class _PackPageState extends State<PackPage> {
       );
       if (!mounted) return;
       setState(() => _result = r);
-      widget.onStatus?.call('打包完成');
-      Notifier.send('打包完成', '输出目录里看结果，或点历史页');
+      widget.onStatus?.call(t('pack.done'));
+      Notifier.send(t('pack.done'), t('pack.done.hint'));
     } on EngineError catch (e) {
       if (!mounted) return;
       setState(() => _error = e.code);
       // 五态审计：失败态要「有话说」——裸错误码（SPLIT_SIZE_INVALID）用户看不懂
-      widget.onStatus?.call('打包失败：${errorText(e.code)}');
+      widget.onStatus?.call(t('pack.failed', {'reason': errorText(e.code)}));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -334,29 +335,29 @@ class _PackPageState extends State<PackPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              _mode == 'plain' ? '压缩文件' : '打包成伪装文件',
+              _mode == 'plain' ? t('pack.mode.zip') : t('pack.mode.disguise'),
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
           Text(
             _mode == 'plain'
-                ? '把文件夹/文件压成一个 .zip，任何解压工具都能打开'
-                : '选一个真实文件当外壳，压缩包藏在它后面 —— 外壳是什么，产物就是什么',
+                ? t('pack.mode.zip.desc')
+                : t('pack.mode.disguise.desc'),
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           // 模式二选一（GUI-PLAN §5.2②）：普通压缩是默认，伪装是特殊功能
           SegmentedButton<String>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: 'plain',
-                icon: Icon(Icons.folder_zip_outlined, size: 16),
-                label: Text('普通压缩（.zip）'),
+                icon: const Icon(Icons.folder_zip_outlined, size: 16),
+                label: Text(t('pack.mode.zip.title')),
               ),
               ButtonSegment(
                 value: 'disguise',
-                icon: Icon(Icons.movie_outlined, size: 16),
-                label: Text('伪装成文件'),
+                icon: const Icon(Icons.movie_outlined, size: 16),
+                label: Text(t('pack.mode.disguise.title')),
               ),
             ],
             selected: {_mode},
@@ -384,16 +385,16 @@ class _PackPageState extends State<PackPage> {
                         if (_out != null) _out = withExt(_out!, _ext);
                       }),
               secondary: const Icon(Icons.window_outlined, size: 20),
-              title: const Text('生成自解压包（双击就解压）', style: TextStyle(fontSize: 13)),
-              subtitle: const Text('别人不用装任何软件；支持解压码，不支持分卷',
-                  style: TextStyle(fontSize: 11)),
+              title: Text(t('pack.mode.sfx.title'), style: const TextStyle(fontSize: 13)),
+              subtitle: Text(t('pack.mode.sfx.desc'),
+                  style: const TextStyle(fontSize: 11)),
             ),
             if (_sfx)
               Padding(
                 padding: const EdgeInsets.only(left: 40, right: 4, bottom: 6),
                 child: Row(
                   children: [
-                    const Text('目标系统：', style: TextStyle(fontSize: 12)),
+                    Text(t('pack.targets'), style: const TextStyle(fontSize: 12)),
                     DropdownButton<String>(
                       key: const ValueKey('sfx-kind'),
                       value: _sfxKind,
@@ -422,19 +423,19 @@ class _PackPageState extends State<PackPage> {
               OutlinedButton.icon(
                 onPressed: _busy ? null : _addFolder,
                 icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-                label: const Text('加文件夹'),
+                label: Text(t('pack.addDir')),
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: _busy ? null : _addFiles,
                 icon: const Icon(Icons.insert_drive_file_outlined, size: 18),
-                label: const Text('加文件'),
+                label: Text(t('pack.addFiles')),
               ),
               const Spacer(),
               if (_inputs.isNotEmpty)
                 TextButton(
                   onPressed: _busy ? null : () => setState(_inputs.clear),
-                  child: const Text('清空'),
+                  child: Text(t('pack.clear')),
                 ),
             ],
           ),
@@ -445,7 +446,7 @@ class _PackPageState extends State<PackPage> {
             child: _inputs.isEmpty
                 ? Center(
                     child: Text(
-                      '先加一个文件夹或几个文件',
+                      t('pack.empty'),
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   )
@@ -465,7 +466,7 @@ class _PackPageState extends State<PackPage> {
                           ),
                           title: Text(p.split('/').last, style: const TextStyle(fontSize: 13)),
                           subtitle: Text(
-                            isDir ? '文件夹（会整个打进去）' : p,
+                            isDir ? t('pack.dirEntry') : p,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11),
@@ -484,14 +485,14 @@ class _PackPageState extends State<PackPage> {
           if (_mode == 'disguise' && !_sfx) ...[
             Row(
               children: [
-                const Expanded(
-                  child: Text('伪装文件',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                Expanded(
+                  child: Text(t('pack.cover'),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                 ),
                 if (_coverPath != null)
                   TextButton(
                     onPressed: _busy ? null : _pickCover,
-                    child: const Text('换一个', style: TextStyle(fontSize: 12)),
+                    child: Text(t('pack.change'), style: const TextStyle(fontSize: 12)),
                   ),
               ],
             ),
@@ -501,7 +502,7 @@ class _PackPageState extends State<PackPage> {
                 key: const ValueKey('pick-cover'),
                 onPressed: _busy ? null : _pickCover,
                 icon: const Icon(Icons.folder_open_outlined, size: 18),
-                label: const Text('选择伪装文件（任意类型）'),
+                label: Text(t('pack.cover.pick')),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -520,12 +521,12 @@ class _PackPageState extends State<PackPage> {
                     style: const TextStyle(fontSize: 13),
                   ),
                   subtitle: Text(
-                    '${_size(_coverSize)} · ${_coverExt.isEmpty ? '无扩展名' : '.$_coverExt'}',
+                    '${_size(_coverSize)} · ${_coverExt.isEmpty ? t('pack.noExt') : '.$_coverExt'}',
                     style: const TextStyle(fontSize: 11),
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.close, size: 16),
-                    tooltip: '清掉，重新选',
+                    tooltip: t('pack.cover.clear'),
                     onPressed: _busy
                         ? null
                         : () => setState(() {
@@ -538,10 +539,7 @@ class _PackPageState extends State<PackPage> {
               ),
             const SizedBox(height: 6),
             Text(
-              '这个文件会原样放在最前面，压缩数据追加在它后面。'
-              '视频、图片、PDF、音乐、exe、安装包……选什么都行。\n'
-              '选 exe / 安装包时，别人双击运行的是这个程序本身；'
-              '建议挑一个体积和内容相称的真实文件，太小的外壳看起来会不自然。',
+              t('pack.cover.hint'),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.5),
             ),
           ],
@@ -549,7 +547,7 @@ class _PackPageState extends State<PackPage> {
           // 只读展示（不用 TextField：每帧 new controller 会丢状态）
           InputDecorator(
             decoration: InputDecoration(
-              labelText: '输出文件',
+              labelText: t('pack.output'),
               isDense: true,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
@@ -558,7 +556,7 @@ class _PackPageState extends State<PackPage> {
               ),
             ),
             child: Text(
-              _out ?? '（还没选输出位置）',
+              _out ?? t('pack.output.none'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12),
@@ -570,7 +568,7 @@ class _PackPageState extends State<PackPage> {
             obscureText: !_showPw,
             decoration: InputDecoration(
               // 第 23 批 P23-5：自解压也支持解压码了（存根会提示输入）
-              labelText: '解压码（可选，留空就不加密）',
+              labelText: t('pack.password'),
               isDense: true,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock_outline, size: 18),
@@ -579,7 +577,7 @@ class _PackPageState extends State<PackPage> {
                   _showPw ? Icons.visibility_off : Icons.visibility,
                   size: 18,
                 ),
-                tooltip: _showPw ? '隐藏解压码' : '显示解压码',
+                tooltip: _showPw ? t('pack.password.hide') : t('pack.password.show'),
                 onPressed: () => setState(() => _showPw = !_showPw),
               ),
             ),
@@ -590,18 +588,18 @@ class _PackPageState extends State<PackPage> {
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.speed, size: 18),
-            title: const Text('压缩级别', style: TextStyle(fontSize: 13)),
-            subtitle: const Text('越小越快、越大越省空间（默认「标准」）',
-                style: TextStyle(fontSize: 11)),
+            title: Text(t('pack.level'), style: const TextStyle(fontSize: 13)),
+            subtitle: Text(t('pack.level.hint'),
+                style: const TextStyle(fontSize: 11)),
             trailing: DropdownButton<int>(
               value: _level,
               isDense: true,
               style: const TextStyle(fontSize: 12),
-              items: const [
-                DropdownMenuItem(value: 0, child: Text('仅存储（最快）')),
-                DropdownMenuItem(value: 1, child: Text('很快')),
-                DropdownMenuItem(value: 6, child: Text('标准')),
-                DropdownMenuItem(value: 9, child: Text('最小体积（最慢）')),
+              items: [
+                DropdownMenuItem(value: 0, child: Text(t('pack.level.store'))),
+                DropdownMenuItem(value: 1, child: Text(t('pack.level.fast'))),
+                DropdownMenuItem(value: 6, child: Text(t('pack.level.normal'))),
+                DropdownMenuItem(value: 9, child: Text(t('pack.level.smallest'))),
               ],
               onChanged: _busy ? null : (v) => setState(() => _level = v ?? 6),
             ),
@@ -620,16 +618,16 @@ class _PackPageState extends State<PackPage> {
             secondary: const Icon(Icons.merge_type, size: 20),
             title: Text(
               _canTail
-                  ? '不改封面，接在文件末尾（更保险）'
-                  : '不改封面（只有伪装成文件时可用）',
+                  ? t('pack.layout.append')
+                  : t('pack.layout.append.short'),
               style: const TextStyle(fontSize: 13),
             ),
             subtitle: Text(
               _canTail
                   ? (_tail
-                      ? '数据接在封面最后，封面文件一个字节都不动'
-                      : '默认让封面的视频结构装数据，视频还能正常播（多数情况选这个）')
-                  : '普通压缩 / 自解压没有封面，不涉及布局',
+                      ? t('pack.layout.append.desc')
+                      : t('pack.layout.free'))
+                  : t('pack.layout.none'),
               style: const TextStyle(fontSize: 11),
             ),
           ),
@@ -652,12 +650,12 @@ class _PackPageState extends State<PackPage> {
                     }),
             secondary: const Icon(Icons.blur_on, size: 20),
             title: Text(
-              _canDecoy ? '防网盘扫描（撒假数据）' : '防网盘扫描（只有伪装成文件时可用）',
+              _canDecoy ? t('pack.scan') : t('pack.scan.short'),
               style: const TextStyle(fontSize: 13),
             ),
-            subtitle: const Text(
-              '往里撒 4 段乱码，让扫描器以为这是普通视频（约多 64 KB）',
-              style: TextStyle(fontSize: 11),
+            subtitle: Text(
+              t('pack.scan.desc'),
+              style: const TextStyle(fontSize: 11),
             ),
           ),
           if (_decoy && _canDecoy)
@@ -668,10 +666,10 @@ class _PackPageState extends State<PackPage> {
               value: _decoySignatures,
               onChanged:
                   _busy ? null : (v) => setState(() => _decoySignatures = v),
-              title: const Text('连文件指纹也伪造（更保险）',
-                  style: TextStyle(fontSize: 12)),
-              subtitle: const Text('每段里夹一枚假特征码，骗过按文件头认格式的扫描器',
-                  style: TextStyle(fontSize: 11)),
+              title: Text(t('pack.fingerprint'),
+                  style: const TextStyle(fontSize: 12)),
+              subtitle: Text(t('pack.fingerprint.desc'),
+                  style: const TextStyle(fontSize: 11)),
             ),
           // 交付选项：默认「校验和 + 说明书」开（DESIGN §14.2），分卷按需
           SwitchListTile(
@@ -680,7 +678,7 @@ class _PackPageState extends State<PackPage> {
             value: _split,
             onChanged: _busy || _sfx ? null : (v) => setState(() => _split = v),
             title: Text(
-                _sfx ? '分成多个卷（自解压不支持）' : '分成多个卷（大于 4 GB 建议开）',
+                _sfx ? t('pack.volumes') : t('pack.volumes.short'),
                 style: const TextStyle(fontSize: 13)),
             subtitle: _split
                 ? Padding(
@@ -689,7 +687,7 @@ class _PackPageState extends State<PackPage> {
                       controller: _splitCtrl,
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
-                        labelText: '每卷大小',
+                        labelText: t('pack.volumeSize'),
                         hintText: '2G / 500M',
                         errorText: _splitSizeError,
                         isDense: true,
@@ -704,9 +702,9 @@ class _PackPageState extends State<PackPage> {
             contentPadding: EdgeInsets.zero,
             value: _checksum,
             onChanged: _busy ? null : (v) => setState(() => _checksum = v),
-            title: const Text('生成 SHA-256 校验和', style: TextStyle(fontSize: 13)),
-            subtitle: const Text('对方可以 sha256sum -c 验证没下坏',
-                style: TextStyle(fontSize: 11)),
+            title: Text(t('pack.sha'), style: const TextStyle(fontSize: 13)),
+            subtitle: Text(t('pack.sha.desc'),
+                style: const TextStyle(fontSize: 11)),
           ),
           // 说明书是给「伪装包」用的（告诉对方这不是视频）；普通压缩和自解压不需要
           if (_mode == 'disguise' && !_sfx)
@@ -715,9 +713,9 @@ class _PackPageState extends State<PackPage> {
               contentPadding: EdgeInsets.zero,
               value: _readme,
               onChanged: _busy ? null : (v) => setState(() => _readme = v),
-              title: const Text('生成说明.txt', style: TextStyle(fontSize: 13)),
-              subtitle: const Text('告诉对方这不是视频、怎么打开（有密码会写进去）',
-                  style: TextStyle(fontSize: 11)),
+              title: Text(t('pack.notes'), style: const TextStyle(fontSize: 13)),
+              subtitle: Text(t('pack.notes.desc'),
+                  style: const TextStyle(fontSize: 11)),
             ),
           const SizedBox(height: 8),
           // 打包进度（N2）：有读数就画一条，打大包时能看见在动
@@ -736,9 +734,12 @@ class _PackPageState extends State<PackPage> {
                   const SizedBox(height: 4),
                   Text(
                     _flushing
-                        ? '正在检验落盘：还剩约 ${_size(_flushPending)} 待写入 · 已等 $_flushSecs 秒 · ⚠️ 请勿拔出设备'
+                        ? t('pack.flush.progress', {
+                            'size': _size(_flushPending),
+                            'secs': '$_flushSecs',
+                          })
                         : _progress == null
-                            ? '正在准备…'
+                            ? t('pack.preparing')
                             : '${((_progress!.fraction ?? 0) * 100).toStringAsFixed(1)}% · '
                                 '${_size(_progress!.doneBytes)} / ${_size(_progress!.totalBytes)}'
                                 '${_current == null ? '' : ' · $_current'}',
@@ -770,10 +771,10 @@ class _PackPageState extends State<PackPage> {
                 : const Icon(Icons.archive),
             label: Text(
               _busy
-                  ? (_mode == 'plain' ? '压缩中…' : (_sfx ? '生成中…' : '打包中…'))
+                  ? (_mode == 'plain' ? t('pack.working.zip') : (_sfx ? t('pack.working.sfx') : t('pack.working.disguise')))
                   : (_mode == 'plain'
-                      ? '开始压缩'
-                      : (_sfx ? '开始生成自解压 exe' : '开始打包（伪装）')),
+                      ? t('pack.start.zip')
+                      : (_sfx ? t('pack.start.sfx') : t('pack.start.disguise'))),
             ),
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
           ),
@@ -807,15 +808,19 @@ class _PackPageState extends State<PackPage> {
         children: [
           Text(
         sfx
-            ? '✅ 自解压包完成：${_size(size)}，$entries 个条目\n'
-                '把这个 exe 发给别人（Windows），双击就会解压到它旁边的新文件夹，不用装任何软件。'
+            ? t('pack.result.sfx', {'size': _size(size), 'entries': '$entries'})
             : plain
-                ? '✅ 压缩完成：${_size(size)}，$entries 个条目\n'
-                    '这是一个标准 ZIP，任何解压工具都能直接打开。'
-                : '✅ 打包完成：${_size(size)}，$entries 个条目，'
-                    '${layout == 'FreeAtom' ? 'free 原子布局（推荐）' : '尾部追加布局'}\n'
-                    '${coverName == null ? '' : '外壳：$coverName\n'}'
-                    '外壳文件原样保留，双击打开的还是它；压缩数据藏在尾部，拖进杨三海解压就能还原。',
+                ? t('pack.result.zip', {'size': _size(size), 'entries': '$entries'})
+                : t('pack.result.disguise', {
+                    'size': _size(size),
+                    'entries': '$entries',
+                    'layout': layout == 'FreeAtom'
+                        ? t('pack.layout.free.name')
+                        : t('pack.layout.append.name'),
+                    'cover': coverName == null
+                        ? ''
+                        : t('pack.result.coverLine', {'name': coverName}),
+                  }),
             style: const TextStyle(fontSize: 12, height: 1.5),
           ),
           // 用户 2026-10-30 报「显示输出位置但打开没看到文件」：
@@ -823,7 +828,7 @@ class _PackPageState extends State<PackPage> {
           if (outPath != null && outPath.isNotEmpty) ...[
             const SizedBox(height: 8),
             SelectableText(
-              '文件在这儿：$outPath',
+              t('pack.result.path', {'path': outPath}),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 4),
@@ -834,15 +839,15 @@ class _PackPageState extends State<PackPage> {
                   key: const ValueKey('open-out-dir'),
                   onPressed: () => openDirectory(parentOf(outPath)),
                   icon: const Icon(Icons.folder_open, size: 16),
-                  label: const Text('打开所在文件夹', style: TextStyle(fontSize: 12)),
+                  label: Text(t('pack.result.openFolder'), style: const TextStyle(fontSize: 12)),
                 ),
                 TextButton.icon(
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: outPath));
-                    Notifier.send('已复制', '输出文件的完整路径已复制到剪贴板');
+                    Notifier.send(t('pack.notify.copied'), t('pack.notify.copiedHint'));
                   },
                   icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('复制路径', style: TextStyle(fontSize: 12)),
+                  label: Text(t('pack.copyPath'), style: const TextStyle(fontSize: 12)),
                 ),
               ],
             ),
