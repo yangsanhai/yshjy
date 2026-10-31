@@ -219,7 +219,7 @@
 | **AppStream `metainfo.xml`** | ✅ **已接**（`data/io.github.yangsanhai.yshjy.metainfo.xml`，`appstreamcli validate` ✔ 通过；装机在 `/usr/share/metainfo/`） | GNOME 软件中心 / Flathub / KDE Discover 靠它显示名称、简介、截图、版本说明。没有它，装了也像"野生程序" |
 | **截图** | 🟡 **一半**：`screenshots/` 已有 **18 张真机截图**；但 README 里仍是徽章、metainfo 没填 `screenshots` → 差最后一步（T9） | 别人第一眼判断"这软件能不能用"就靠截图；上架也必须有 |
 | **图标多尺寸 / SVG** | 🟡 只有 `gui/linux/yshjy.png` 一张 **256×256**，装到系统也只有 `hicolor/256x256/` 一个尺寸 | Flathub 要求 SVG 或 ≥256 方形 PNG（勉强达标）；但 16/24/32/48 缩放会糊 |
-| README 徽章版本 | ✅ 写 **v0.9.39**，与装机 `dpkg -l` 一致（2026-10-31 核） | 对外数字必须真 |
+| README 徽章版本 | ✅ 写 **v0.9.40**，与装机 `dpkg -l` 一致（2026-10-31 核） | 对外数字必须真 |
 
 **② 开源项目规范（GitHub 社区标准）**
 | 项 | 现状 |
