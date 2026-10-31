@@ -500,14 +500,14 @@ class EngineClient {
     bool decoySignatures = false,
     /// 防炸链（T18-3 / 协议 `pack.tweak_time`）：抖条目时间戳，让网盘判不成同一个文件
     bool tweakTime = false,
-    /// 强制「尾部追加」布局（E2 / 协议 `pack.tail`）
+    /// 数据藏在哪（T18-1 · 协议 `pack.layout`，也认老写法 `pack.tail`）
     ///
-    /// 默认（false）引擎按封面文件头自动选：MP4 走 `free` 原子（视频还能正常播），
-    /// 图片/文本只能尾部追加。传 true = **不改封面一个字节**，数据直接接在文件末尾。
-    ///
-    /// 什么时候要强制：封面是「改过的 MP4」（某些播放器对 free 原子敏感）、
-    /// 或者就想要「原文件字节完全不动」的保险。
-    bool tailLayout = false,
+    /// - `null`：老行为，交给引擎按封面文件头决定（MP4 走 free 原子，图片/文本尾部追加）
+    /// - `'free'`：藏进封面的 `free` 原子（推荐：视频能播，8 种工具全通）
+    /// - `'tail'`：封面一个字节都不改，数据直接接在文件末尾（最保险）
+    /// - `'mid'`：插进视频数据中间（L4）—— 视频照常能播，包藏得比尾巴深；
+    ///   代价是 EOCD 离文件尾远，别的解压软件多半认不出（7-Zip 和本工具一定行）
+    String? layout,
   }) async {
     final r = await _call({
       'cmd': 'pack',
@@ -524,8 +524,8 @@ class EngineClient {
       if (decoy != null && decoy > 0) 'decoy': decoy,
       if (decoySize != null) 'decoy_size': decoySize,
       if (decoySignatures) 'decoy_signatures': true,
-      // 强制尾部追加布局（E2）：只在用户打开时才传 true，默认交给引擎按封面类型判断
-      if (tailLayout) 'tail': true,
+      // 数据藏在哪（E2 的 tail 是这里的一个档；T18-1 又加了 mid）
+      if (layout != null) 'layout': layout,
       'checksum': checksum,
       // 防炸链（T18-3）：默认关，开着才传
       if (tweakTime) 'tweak_time': true,
