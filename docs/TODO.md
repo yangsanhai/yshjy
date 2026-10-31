@@ -68,7 +68,7 @@ E5 智能解压 `a46ced6`、E2 不改封面 + E6 诊断包存下载 `38bb58a`；
 | engine / 面包屑 / 设置页零散 10 条 | ✅ 完成 | 偏移描述（`从开头算 X MB 处`）、三档可信度、引擎退出·超时提示、面包屑「全部」、选目录按钮「就用这个目录」 |
 | 有意不翻译的 4 处 | ✅ 定论 | `localeNames` 语言名（每种语言用自己的写法）、`platform_paths` 的 `$HOME/下载` 系统目录、`notify` 品牌名、`engine_transport` 给开发者看的 StateError |
 | **合计 479 条，中英双份** | ✅ | 源码里已扫不到用户可见的中文字面量（用正则扫全部 `lib/**/*.dart` 的字符串字面量验证） |
-| 6 个语种的翻译 | ⬜ | 现在只有 zh-CN + en-US 两套（**availableLocales 只列这两种**，没翻完的语言不进下拉 —— 否则选了只会回落，看着像切换失灵）。按语言包逐份翻，翻完靠 l10n_test 双向比对兜底（有包⇔在 availableLocales 里） |
+| 6 个语种的翻译 | ✅ 完成 | zh-TW 用 `opencc -c s2twp` 转 + 术语按引擎 `locales/zh-TW.toml` 对齐（壓縮檔/解壓密碼/資料夾/網路/預設），品牌名写繁体「楊三海解壓」；ja/ko/es/ru 用 DeepSeek 分批翻（每批 50 条，带英文对照和语气要求），共 12 万 token。五种各 479 条，键名与占位符逐条对齐。**踩坑**：日语第一批有 49 条直接抄英文（高级选项、格式名），整批重翻；格式名改确定性映射（video→動画）比让模型自由发挥稳；DeepSeek 的 `json_object` 模式要求 prompt 里出现 JSON 字样，否则 400。**`availableLocales` 已列全 7 种** |
 | **Windows 上的系统语言识别** | ⬜ **等 Windows 打包那轮做** | 现在用 `Platform.localeName`（dart:io）：Linux 读 LANG、macOS/iOS 读系统设置、**Windows 官方文档没写来源**（实际返回 `zh_CN` 这种下划线格式，代码已兼容 `_` / `-` / `.UTF-8` 三种写法）。**本机无法实测 Windows 路径**，等用户在自己的 Windows 机器上打包时：① 真机看默认语言对不对（中文系统应出简体、繁体系统应出繁体）；② 若有偏差，改成优先用 `PlatformDispatcher.instance.locale`（返回拆好的 language/script/country，跨平台统一）再把 `Platform.localeName` 当兜底；③ 顺带确认 Flutter 在 Windows 上 `computePlatformResolvedLocale` 仍未实现（issue 151755），所以映射表必须自己写，不能指望那个 API |
 
 ### 下一轮建议（2026-10-31 收尾时列 · 按优先级 · 做之前先跟用户对一次）
