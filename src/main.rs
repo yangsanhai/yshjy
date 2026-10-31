@@ -638,6 +638,8 @@ fn main() -> ExitCode {
         let pw_o = val_of("--password");
         let split_o = val_of("--split");
         let layout_o = val_of("--layout");
+        // L7 的第二个包：一个现成 zip 的路径（只有 --layout L7 时才有意义）
+        let second_o = val_of("--second");
         let cover_o = val_of("--cover");
         // 归档格式（T17-4）：一给就走普通压缩（不加外壳）
         let format_o = val_of("--format");
@@ -707,6 +709,7 @@ fn main() -> ExitCode {
                 && !has("--sfx-linux")
                 && format_o.is_none(),
             layout: &layout_o,
+            second: &second_o,
             cover: &cover_o,
             format: &format_o,
             name: &name_o,
@@ -867,6 +870,20 @@ fn do_list(
                     println!("{}", 预览_json(t, &pv));
                 } else {
                     打印预览(t, &pv, quiet);
+                    // L7（一个文件两个包）：`--list` 列的是**第一个**包，文件里可能还有第二处。
+                    // 不说的话用户永远不知道 —— 只说「还有一处 + 偏移」，不重复列内容
+                    // （要看第二处的内容就 `--candidate <偏移> --list`）。
+                    let 另一处 = if quiet { None } else { 还有第二处(&path) };
+                    if let Some(偏移) = 另一处 {
+                        println!();
+                        println!(
+                            "{}",
+                            文案().t(
+                                "preview.hint.more_candidates",
+                                &[("offset", &偏移.to_string())]
+                            )
+                        );
+                    }
                 }
             }
             Err(e) => {
@@ -892,6 +909,24 @@ fn do_list(
         }
     }
     ExitCode::from(worst)
+}
+
+/// L7 辅助：除了「默认那一处」，文件里还有另一个包吗？有就返回**那一处**的起点
+///
+/// `locate()` 找的是**最后一个** EOCD（附加包），而 `--list` 默认列的是最靠前那个。
+/// 所以「另一处」= `locate()` 给的那个起点，前提是它前面确实还有一个完整包
+/// （否则就是一个普通伪装包，不该提示）。
+///
+/// 为什么重开一次文件：`preview` 只回内容、不回候选；这里只做两次便宜的定位
+/// （`locate` 读文件尾一次 + 64 KiB 窗口扫 EOCD 一次），不扫全文件。
+fn 还有第二处(path: &std::path::Path) -> Option<u64> {
+    let mut f = std::fs::File::open(path).ok()?;
+    let size = f.metadata().ok()?.len();
+    let 最后 = yshjy::layout::zip::locate(&mut f, size).ok()?;
+    let 前 = yshjy::job::前一个包的起点(&mut f, 最后.base)?;
+    // 前面那个必须能定位成完整包 —— 那才是 `--list` 正在列的那个
+    yshjy::layout::zip::locate_at_base(&mut f, size, 前).ok()?;
+    Some(最后.base)
 }
 
 /// 预览提示码 → 一句话（**引擎只发码，文案归外壳** —— 这里查语言包）
@@ -2464,6 +2499,8 @@ struct 打包参数<'a> {
     readme: bool,
     /// `--layout L1|L2|…`
     layout: &'a Option<String>,
+    /// `--second <文件>`（L7）：第二个包，一个现成的 zip
+    second: &'a Option<String>,
     /// `--cover <文件>`
     cover: &'a Option<String>,
     /// `--format zip|tar.gz|tar.zst`：一给就走「普通压缩」（不加外壳），不给＝伪装包
@@ -2493,6 +2530,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         checksum,
         readme,
         layout,
+        second,
         cover,
         format,
         name,
@@ -2731,9 +2769,9 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 );
                 return ExitCode::from(code::USAGE);
             }
-            // L7 / L8 是 T18-1 剩下的两项，还没做
-            "l7" | "l8" => {
-                eprintln!("❌ --layout {l} 还没实现（现在有 L1 / L2 / L3 / L4）");
+            // L8 是 T18-1 剩下的最后一项，还没做
+            "l8" => {
+                eprintln!("❌ --layout {l} 还没实现（现在有 L1 / L2 / L3 / L4 / L7）");
                 return ExitCode::from(code::USAGE);
             }
             _ => match yshjy::pack::PackLayout::解析(l) {
@@ -2749,12 +2787,33 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 None => {
                     eprintln!(
                         "❌ --layout 只认 L1（尾部追加）/ L2（free 原子）/ \
-                         L3（放在文件头部）/ L4（插在视频中间），收到 {l}"
+                         L3（放在文件头部）/ L4（插在视频中间）/ L7（两个包），收到 {l}"
                     );
                     return ExitCode::from(code::USAGE);
                 }
             },
         }
+    }
+    // `--second <文件>`（L7）：第二个包，一个**现成的** zip。
+    // 两条半配置在这里就拒，别等引擎（反馈越快越不容易误操作；引擎那边同样有一道，
+    // 因为协议调用不经过 CLI）。
+    if let Some(p) = second {
+        if p.trim().is_empty() {
+            eprintln!("❌ --second 是空路径");
+            return ExitCode::from(code::USAGE);
+        }
+        opts.second = Some(std::path::PathBuf::from(p));
+    }
+    if second.is_some() && opts.layout != yshjy::pack::PackLayout::TwoPackages {
+        eprintln!(
+            "❌ --second 只能配 --layout L7（现在是「{}」），它在那儿没有位置",
+            opts.layout.名字()
+        );
+        return ExitCode::from(code::USAGE);
+    }
+    if opts.layout == yshjy::pack::PackLayout::TwoPackages && second.is_none() {
+        eprintln!("❌ --layout L7 必须配 --second <一个现成的 zip 文件>");
+        return ExitCode::from(code::USAGE);
     }
     // `--cover <文件>`：用户自己的封面。读不到就报错 —— 静默换内置素材
     // 等于「以为用了自己的图，实际没有」
@@ -2785,6 +2844,36 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         if let Some(pw) = password {
             println!("{}", 语.t("cli.pack_locked", &[("mask", &mask(pw))]));
         }
+    }
+
+    // ── 写盘之前的前置校验 ────────────────────────────────────────────
+    // 为什么放在 File::create 之前：校验放引擎里也能拦住，但那时输出文件**已经建好了**
+    // （0 字节空文件留在用户下载目录里）。「拒绝了」就该干干净净什么都不留。
+    if let Some(p) = &opts.second {
+        // 第二个包必须是 ZIP：读 4 字节文件头（扩展名可以骗人，文件头不行）
+        use std::io::Read as _;
+        let mut 头 = [0u8; 4];
+        let mut ff = match std::fs::File::open(p) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!(
+                    "❌ 读不到第二个包 {}：{e}",
+                    p.display()
+                );
+                return ExitCode::from(code::USAGE);
+            }
+        };
+        if ff.read_exact(&mut 头).is_err() || &头 != b"PK\x03\x04" {
+            eprintln!(
+                "❌ 第二个包不是 ZIP（文件头不是 PK\\x03\\x04）：{}",
+                p.display()
+            );
+            return ExitCode::from(code::USAGE);
+        }
+    }
+    if opts.layout == yshjy::pack::PackLayout::TwoPackages && decoy.is_on() {
+        eprintln!("❌ 「两个包」不能和干扰数据一起用：噪声接在第二个包后面会让它的目录区不在文件尾");
+        return ExitCode::from(code::USAGE);
     }
 
     let f = match std::fs::File::create(&out) {
@@ -2861,6 +2950,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                     yshjy::pack::PackLayout::FreeAtom => 语.t("cli.pack_layout_free", &[]),
                     yshjy::pack::PackLayout::HeadFreeAtom => 语.t("cli.pack_layout_head", &[]),
                     yshjy::pack::PackLayout::MidChunk => 语.t("cli.pack_layout_mid", &[]),
+                    yshjy::pack::PackLayout::TwoPackages => 语.t("cli.pack_layout_two", &[]),
                 };
                 println!(
                     "{}",
@@ -2979,6 +3069,11 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             // 因为 CLI 当时根本没有普通压缩这条路）。
             let 自检结果 = if 普通压缩 && 格式.是tar() {
                 yshjy::pack::self_check_tar(&out, 格式, rep.entries)
+            } else if rep.second.is_some() {
+                // L7：产物里有两个包，`locate()` 找的是**最后一个** EOCD，也就是第二个包 ——
+                // 拿它跟「第一个包的起点」比必然误报。这里改成按已知起点精确定位第一个包，
+                // 第二个包由下面那段 `self_check_second` 单独核。
+                yshjy::pack::self_check_first_of_two(&out, rep.zip_offset, rep.entries)
             } else {
                 let 起点 = (rep.zip_offset > 0).then_some(rep.zip_offset);
                 // 「噪声字节数」这条自检的语义是**噪声写在 ZIP 起点之前**（L1 / L2），
@@ -2992,6 +3087,20 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                     rep.noise_size
                 };
                 yshjy::pack::self_check_at(&out, rep.entries, 起点, 噪声)
+            };
+            // L7：第一个包验完再核**第二个包**的落点（回读，不靠「写的时候应该对」）——
+            // 第二个包落歪了，产物看着成功、用户点「第二处」却解不开。
+            let 自检结果 = match (自检结果, rep.second) {
+                (Ok(mut w), Some((二起点, 二大小))) => {
+                    match yshjy::pack::self_check_second(&out, 二起点, 二大小) {
+                        Ok(more) => {
+                            w.extend(more);
+                            Ok(w)
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                (r, _) => r,
             };
             match 自检结果 {
                 Ok(warns) if warns.is_empty() => {

@@ -126,6 +126,7 @@ nested_archive = "中にもう一つ圧縮ファイルが入っています（{i
 needs_password = "{count} 件がロックされています —— パスワードが必要です"
 looks_truncated = "この圧縮ファイルは未完了の可能性があります（末尾のデータ欠落）"
 hidden_at = "圧縮ファイルはファイルの途中にあります（オフセット {offset}）。実際の位置で特定しました"
+more_candidates = "ℹ このファイルには別の書庫も入っています（オフセット {offset}）— そちらを見るには --candidate {offset}"
 rebuilt_index = "インデックスが壊れていたため、ヘッダーから一覧を再構築しました"
 video_unplayable = "カバー動画自体は壊れていますが、中のファイルは展開できます"
 
@@ -197,6 +198,7 @@ pack_done = "✅ 書き出し {total}（カバー {cover} + 内容 {zip}）、{e
 pack_layout_tail = "末尾追加"
 pack_layout_free = "free アトム"
 pack_layout_head = "ファイル先頭に配置"
+pack_layout_two = "2 つの書庫"
 pack_layout_mid = "動画の途中に挿入"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ セルフチェック合格（再生でき、元に戻せます）"

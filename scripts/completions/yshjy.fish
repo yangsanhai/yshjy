@@ -36,6 +36,7 @@ for bin in yshjy yshys
     complete -c $bin -l tweak-time -d '防炸链：把条目时间戳打乱（每次都不一样），网盘就不会判成同一个文件；默认关'
     complete -c $bin -l level -x
     complete -c $bin -l layout -x -a 'L1 L2'
+    complete -c $bin -l second -r -F -d '给 L7 用：第二个包，一个现成的 zip（只有 --layout L7 认它）'
     complete -c $bin -l decoy -x -d '打包时撒 N 段干扰数据（最多 64 段，默认 0 = 不打）'
     complete -c $bin -l decoy-size -x -d '每段多大（4K–1M，默认 16K）'
     complete -c $bin -l decoy-signatures -d '每段里夹一枚假特征码（骗扫描器；默认关）'
