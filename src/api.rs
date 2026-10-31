@@ -600,6 +600,38 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         ));
     }
 
+    // 打包格式（T17-4）：zip 默认；tar 系只给**普通压缩**（备份场景）。
+    //
+    // 为什么 tar 不能进伪装模式：解压侧定位靠按字节找 ZIP 的 EOCD，
+    // 封面 + tar/gzip/zstd 的包 `--list` 报 NOT_ARCHIVE（2026-10-31 探针实测，
+    // 三种都试过）—— 打出来我们自己也解不开，所以先拒绝，别等用户撞上。
+    let 格式 = match 参数.get("format").and_then(|v| v.as_str()) {
+        None => crate::pack::PackFormat::Zip,
+        Some(s) => crate::pack::PackFormat::解析(s).ok_or_else(|| {
+            错误值(
+                "BAD_PARAM",
+                &format!("format 只能是 zip / tar.gz / tar.zst（收到 {s}）"),
+            )
+        })?,
+    };
+    if 格式.是tar() {
+        if !普通压缩 {
+            return Err(错误值(
+                "BAD_PARAM",
+                "伪装打包只能是 zip —— tar / gzip / zstd 的包解压时定位不出来；要 tar 请选「普通压缩」",
+            ));
+        }
+        if 参数.get("password").and_then(|v| v.as_str()).is_some() {
+            return Err(错误值("BAD_PARAM", "tar 格式不支持加密 —— 想设密码请用 zip"));
+        }
+        if 参数.get("split").and_then(|v| v.as_u64()).is_some() {
+            return Err(错误值("BAD_PARAM", "tar 格式不支持分卷 —— 分卷只有 zip 能做"));
+        }
+        if 参数.get("sfx").map(|v| !v.is_null()).unwrap_or(false) {
+            return Err(错误值("BAD_PARAM", "tar 格式不能做自解压 —— 自解压包装的是 zip"));
+        }
+    }
+
     // 外壳文件（伪装模式）：任意类型，用户选什么就是什么。
     //
     // 之前协议没这个参数，界面只能拿三个内置小素材 —— 用户想伪装成 PDF / 安装包 /
@@ -649,6 +681,7 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
             .map(str::to_string),
         cover: 外壳字节,
         cover_ext: 扩展名.clone(),
+        format: 格式,
         ..Default::default()
     };
     // 压缩级别（P23-4）：0=仅存储（最快）/ 1-9 越大越小越慢，默认 6。
@@ -786,6 +819,8 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         "cover_size": rep.cover_size,
         "entries": rep.entries,
         "level": opts.level,
+        // 归档格式（T17-4）：界面据此显示「打成 tar.gz」而不是只会说 zip
+        "format": 格式.名字(),
         "layout": format!("{:?}", rep.layout),
         // 干扰数据（第三期 B）：界面要能显示「撒了几段、占多少」，
         // 跟 CLI 的 `cli.pack_decoy` 是同一份信息

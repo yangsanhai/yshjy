@@ -40,6 +40,61 @@ pub enum PackLayout {
     FreeAtom,
 }
 
+/// 打包用的归档格式（T17-4）
+///
+/// - `Zip`：默认。**密码 / 分卷 / 自解压 / 伪装布局只有 ZIP 能做。**
+/// - `TarGz` / `TarZst`：只给普通压缩用（备份场景）。
+///
+/// # 为什么 tar 系不能进伪装模式（2026-10-31 探针实测，不是推论）
+///
+/// 手工拼「`mini.mp4` 封面 + tar / tar.gz / tar.zst」后跑 `yshjy --list`：
+/// 三种全部报 `NOT_ARCHIVE`（定位器只找 ZIP 的 EOCD `PK\x05\x06`，认不出
+/// gzip `1f 8b` / zstd `28 b5 2f fd` / tar 的 `ustar` 头）。
+/// 也就是说「打出来我们自己也解不开」—— 与其做完再解释，不如协议层直接拒绝
+/// （用户能理解：伪装是给网盘看的，tar.gz 本来就是个正经归档）。
+/// 解压侧**单文件** tar / tar.gz / tar.zst 是好的（`--list` 与真解压都实测过）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PackFormat {
+    /// 标准 ZIP（默认）
+    #[default]
+    Zip,
+    /// tar + gzip
+    TarGz,
+    /// tar + zstd
+    TarZst,
+}
+
+impl PackFormat {
+    /// 从协议 / 命令行 / 界面传来的字符串名解析（大小写不敏感，收几种常见写法）
+    pub fn 解析(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "zip" => Some(Self::Zip),
+            "tar.gz" | "targz" | "tgz" | "tar_gz" => Some(Self::TarGz),
+            "tar.zst" | "tarzst" | "tzst" | "tar_zst" => Some(Self::TarZst),
+            _ => None,
+        }
+    }
+
+    /// 对外名字（协议 / 报告里用这个）
+    pub fn 名字(self) -> &'static str {
+        match self {
+            Self::Zip => "zip",
+            Self::TarGz => "tar.gz",
+            Self::TarZst => "tar.zst",
+        }
+    }
+
+    /// tar 系：没有密码、没有分卷、不能自解压、不能伪装
+    pub fn 是tar(self) -> bool {
+        !matches!(self, Self::Zip)
+    }
+
+    /// 中间产物后缀（临时文件名要跟着格式走，别让 .zip 里装着 tar）
+    fn 临时后缀(self) -> &'static str {
+        self.名字()
+    }
+}
+
 /// 打包参数
 #[derive(Debug, Clone)]
 pub struct PackOptions {
@@ -57,6 +112,8 @@ pub struct PackOptions {
     pub pad_range: (usize, usize),
     /// 压缩级别 0-9（0 = 只存不压）
     pub level: u32,
+    /// 归档格式（`Zip` 默认；tar 系只给普通压缩用，见 [`PackFormat`]）
+    pub format: PackFormat,
 }
 
 impl Default for PackOptions {
@@ -69,6 +126,7 @@ impl Default for PackOptions {
             layout: PackLayout::default(),
             pad_range: (64, 256),
             level: 6,
+            format: PackFormat::Zip,
         }
     }
 }
@@ -228,6 +286,12 @@ pub fn build_ctx_decoy<W: Write>(
     if opts.inputs.is_empty() {
         return Err(Error::new(ErrorCode::Internal).with("reason", "没有要打包的文件"));
     }
+    // 防御：伪装 / 自解压路径只认 ZIP。正常调用方（api / CLI）已在参数校验里拦过，
+    // 这里再守一道 —— 免得以后有人绕开校验直接调库，打出一个「自己都解不开」的包。
+    if opts.format.是tar() {
+        return Err(Error::new(ErrorCode::Internal)
+            .with("reason", "伪装打包只支持 zip：tar 系没有可靠的定位方式，解压侧认不出"));
+    }
     // 参数越界要在**动磁盘之前**就报错（别打到一半才发现 --decoy 填错）
     decoy.validate()?;
 
@@ -351,14 +415,16 @@ pub fn build_plain_ctx<W: Write>(
     }
 
     let tmp = std::env::temp_dir().join(format!(
-        "yshjy_plain_{}_{}.zip",
+        // 后缀跟着格式走：tar 系别叫 .zip（`--keep` 时用户会拿着个 .zip 名去 tar -tzf）
+        "yshjy_plain_{}_{}.{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
-            .unwrap_or(0)
+            .unwrap_or(0),
+        opts.format.临时后缀()
     ));
-    let entries = write_zip(&opts.inputs, &tmp, opts, 进度)?;
+    let entries = write_archive(&opts.inputs, &tmp, opts, 进度)?;
     let zip_size = fs::metadata(&tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tmp meta: {e}")))?
         .len();
@@ -458,6 +524,145 @@ fn write_free_atom_header<W: Write>(out: &mut W, payload_len: u64) -> Result<u64
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("free atom: {e}")))?;
         Ok(8)
     }
+}
+
+/// 按 [`PackOptions::format`] 选写入器（T17-4）
+///
+/// 只有**普通压缩**走这里 —— 伪装 / 自解压永远 ZIP（理由见 [`PackFormat`]
+/// 的类型注释：封面 + tar 系的包定位不出来，探针实测过）。
+fn write_archive(
+    inputs: &[PathBuf],
+    tmp: &Path,
+    opts: &PackOptions,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<usize> {
+    match opts.format {
+        PackFormat::Zip => write_zip(inputs, tmp, opts, 进度),
+        PackFormat::TarGz | PackFormat::TarZst => write_tar(inputs, tmp, opts, 进度),
+    }
+}
+
+/// 把输入打成 tar（外面套 gzip 或 zstd）
+///
+/// 与 [`write_zip`] 的三处有意为之的不同：
+/// 1. **mtime 不用手填**：`append_path_with_name` 自己读文件的修改时间
+///    （ZIP 那边得手工填，因为不填会变成 1980-01-01）；
+/// 2. **目录要显式加条目**：tar 没有「隐式路径」，空目录不加就丢了；
+/// 3. **名字用相对顶层名**：`/home/…/照片/a.jpg` → `照片/a.jpg`，
+///    与 ZIP 侧「保留顶层目录名」一致。
+fn write_tar(
+    inputs: &[PathBuf],
+    tmp: &Path,
+    opts: &PackOptions,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<usize> {
+    use std::io::Write as _;
+    let file = fs::File::create(tmp)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("create tmp: {e}")))?;
+    let buf = std::io::BufWriter::new(file);
+
+    // 两个分支只差「外面套什么」，里面都是 tar::Builder
+    let count;
+    match opts.format {
+        PackFormat::TarGz => {
+            let enc = flate2::write::GzEncoder::new(buf, flate2::Compression::new(opts.level));
+            let mut tb = tar::Builder::new(enc);
+            count = 加tar条目(&mut tb, inputs, 进度)?;
+            let enc = tb
+                .into_inner()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tar 收尾: {e}")))?;
+            let mut f = enc
+                .finish()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("gzip 收尾: {e}")))?;
+            f.flush()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("gzip flush: {e}")))?;
+        }
+        PackFormat::TarZst => {
+            // zstd 的「0 级」是「用库默认值」，不是「不压缩」—— level 0 要往上抬到 1，
+            // 否则界面选「仅存储」的 zstd 包反而被压了一遍，语义对不上。
+            let 级 = opts.level.max(1) as i32;
+            let enc = zstd::stream::write::Encoder::new(buf, 级)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zstd 初始化: {e}")))?;
+            let mut tb = tar::Builder::new(enc);
+            count = 加tar条目(&mut tb, inputs, 进度)?;
+            let enc = tb
+                .into_inner()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tar 收尾: {e}")))?;
+            let mut f = enc
+                .finish()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zstd 收尾: {e}")))?;
+            f.flush()
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zstd flush: {e}")))?;
+        }
+        PackFormat::Zip => unreachable!("write_tar 只处理 tar 系"),
+    }
+    Ok(count)
+}
+
+/// 按 tar 的规则把顶层输入逐个加进去（目录递归）
+fn 加tar条目<W: Write>(
+    tb: &mut tar::Builder<W>,
+    inputs: &[PathBuf],
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<usize> {
+    let mut count = 0usize;
+    for input in inputs {
+        let meta = fs::metadata(input)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("stat {input:?}: {e}")))?;
+        let base: PathBuf = input
+            .file_name()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("item"));
+        if meta.is_dir() {
+            count += tar走目录(tb, input, &base, 进度)?;
+        } else {
+            tb.append_path_with_name(input, &base).map_err(|e| {
+                Error::new(ErrorCode::Internal).context(format!("tar 加入 {input:?}: {e}"))
+            })?;
+            count += 1;
+            进度(PackTick::Wrote(meta.len(), Some(base.to_string_lossy().to_string())));
+        }
+    }
+    Ok(count)
+}
+
+/// tar 的目录递归
+///
+/// `read_dir` 的顺序由文件系统决定，两次可能不一样 —— 这里**排序**，
+/// 否则「同一份输入打两次逐字节一致」那条验收会时绿时红。
+fn tar走目录<W: Write>(
+    tb: &mut tar::Builder<W>,
+    dir: &Path,
+    prefix: &Path,
+    进度: &mut dyn FnMut(PackTick),
+) -> Result<usize> {
+    tb.append_dir(prefix, dir)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tar 目录 {dir:?}: {e}")))?;
+    let rd = fs::read_dir(dir)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read_dir {dir:?}: {e}")))?;
+    let mut 条目: Vec<_> = rd
+        .map(|e| e.map_err(|e| Error::new(ErrorCode::Internal).context(format!("entry: {e}"))))
+        .collect::<Result<Vec<_>>>()?;
+    条目.sort_by_key(|e| e.file_name());
+
+    let mut n = 0usize;
+    for ent in 条目 {
+        let p = ent.path();
+        let arc = prefix.join(ent.file_name());
+        let meta = ent
+            .metadata()
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?;
+        if meta.is_dir() {
+            n += tar走目录(tb, &p, &arc, 进度)?;
+        } else {
+            tb.append_path_with_name(&p, &arc).map_err(|e| {
+                Error::new(ErrorCode::Internal).context(format!("tar 加入 {p:?}: {e}"))
+            })?;
+            n += 1;
+            进度(PackTick::Wrote(meta.len(), Some(arc.to_string_lossy().to_string())));
+        }
+    }
+    Ok(n)
 }
 
 /// 把输入路径（文件或目录，可递归）打成 ZIP
@@ -660,7 +865,7 @@ pub fn self_check_at(
             entries.len()
         ));
     }
-    if layout.base == 0 && layout.entries_total > 0 {
+    if layout.base == 0 && layout.entries_total > 0 && expect_zip_offset.is_some() {
         warnings.push("自检：ZIP 起点为 0，说明封面没有真正包裹住数据".to_string());
     }
     if let Some(exp) = expect_zip_offset {
@@ -676,6 +881,47 @@ pub fn self_check_at(
                 layout.base, noise_size
             ));
         }
+    }
+    Ok(warnings)
+}
+
+/// 普通压缩（tar 系）的自检：把产物读回来数条目（T17-4）
+///
+/// ZIP 那套靠 EOCD 定位产物，tar 系没有 EOCD —— 但 tar 的头本身就是索引，
+/// 直接用 tar crate 从头读到尾数条目就够了，比 ZIP 那套更直白。
+///
+/// 只数**非目录条目**：`write_tar` 的 `entries` 也只在文件上 +1
+/// （目录条目是 tar 格式的要求，不该算进用户看到的「几个文件」）。
+pub fn self_check_tar(
+    path: &Path,
+    format: PackFormat,
+    expect_entries: usize,
+) -> Result<Vec<String>> {
+    let f = fs::File::open(path)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open out: {e}")))?;
+    let reader: Box<dyn std::io::Read> = match format {
+        PackFormat::TarGz => Box::new(flate2::read::GzDecoder::new(f)),
+        PackFormat::TarZst => Box::new(zstd::stream::read::Decoder::new(f).map_err(|e| {
+            Error::new(ErrorCode::Internal).context(format!("zstd 解压器建不起来: {e}"))
+        })?),
+        PackFormat::Zip => unreachable!("self_check_tar 只处理 tar 系"),
+    };
+    let mut ar = tar::Archive::new(reader);
+    let mut n = 0usize;
+    let 条目 = ar
+        .entries()
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tar 读不起来: {e}")))?;
+    for e in 条目 {
+        let e = e.map_err(|e| {
+            Error::new(ErrorCode::Internal).context(format!("tar 条目坏: {e}"))
+        })?;
+        if !e.header().entry_type().is_dir() {
+            n += 1;
+        }
+    }
+    let mut warnings = Vec::new();
+    if n != expect_entries {
+        warnings.push(format!("自检：条目数不一致（写入 {expect_entries}，读回 {n}）"));
     }
     Ok(warnings)
 }

@@ -70,6 +70,7 @@ text = """
   --keep                          打包时保留中间 ZIP（排错用）
   --trash-source                  解完把原包移进回收站（能还原）
   --delete-source                 解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）
+  --format <格式>                 打包成普通归档（不加外壳）：zip / tar.gz / tar.zst。给了就是普通压缩，不给还是伪装包
   --level 0-9                     打包压缩级别：0 = 仅存储（最快），9 = 最小体积（默认 6）
   --sfx / --sfx-linux             打包成自解压包（.exe / .sh），双击自己解开；不能与 --split 同用、不用 --cover，这种包不生成 .说明.txt
   --decoy <N>                     打包时撒 N 段干扰数据（最多 64 段，默认 0 = 不打）
@@ -194,6 +195,8 @@ pack_layout_tail = "尾部追加"
 pack_layout_free = "free 原子"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ 自检通过（这个文件能播放，也能被我们解回来）"
+pack_done_archive = "✅ 写出 {total}，共 {entries} 个条目（{format}，标准归档，没有外壳）"
+pack_selfcheck_ok_archive = "   ✅ 自检通过（{entries} 个条目可读）"
 pack_selfcheck_bad = "   ❌ 自检失败：{err}"
 pack_decoy = "   🎭 干扰数据：{count} 段，共 {total}（每段 {size}，假签名：{sig}）"
 pack_decoy_sig_on = "开"

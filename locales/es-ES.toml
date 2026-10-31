@@ -70,6 +70,7 @@ OPCIONES HABITUALES:
   --keep                          conservar el ZIP intermedio al empaquetar
   --trash-source                  tras extraer, mover el archivo original a la papelera (recuperable)
   --delete-source                 tras extraer, borrar el archivo original definitivamente (no se puede deshacer; pregunta una vez y se niega si no es interactivo)
+  --format <formato>              Empaquetar un archivo normal (sin portada): zip / tar.gz / tar.zst. Indicado = empaquetado normal; omitido = paquete camuflado
   --level 0-9                     nivel de compresión al empaquetar: 0 = sin comprimir (rápido), 9 = tamaño mínimo (por defecto 6)
   --sfx / --sfx-linux             empaquetar como archivo autoextraíble (.exe / .sh); no se puede con --split, --cover no hace falta, no se crea .说明.txt
   --decoy <N>                     Añadir N segmentos de datos señuelo (máx. 64, por defecto 0 = no)
@@ -194,6 +195,8 @@ pack_layout_tail = "añadir al final"
 pack_layout_free = "átomo free"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ Autocomprobación correcta (el archivo se reproduce y se puede descomprimir)"
+pack_done_archive = "✅ Escrito {total}, {entries} entradas ({format}, archivo normal, sin portada)"
+pack_selfcheck_ok_archive = "   ✅ Autocomprobación correcta ({entries} entradas legibles)"
 pack_selfcheck_bad = "   ❌ Autocomprobación fallida: {err}"
 pack_decoy = "   🎭 Datos señuelo: {count} segmento(s), {total} en total ({size} cada uno, firmas falsas: {sig})"
 pack_decoy_sig_on = "activadas"

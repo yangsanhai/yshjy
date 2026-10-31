@@ -81,6 +81,8 @@ pub const OPTS: &[Opt] = &[
     opt("--delete-source", None, None, false),            // 解完永久删除原包（要二次确认）
     // ── 打包路径 ────────────────────────────────────────────────
     opt("--split", None, Some("大小"), false),
+    // 归档格式（T17-4）：一给就走「普通压缩」（不加外壳）；不给＝原来的伪装包
+    opt("--format", None, Some("zip|tar.gz|tar.zst"), false),
     opt("--level", None, Some("0-9"), false),
     opt("--layout", None, Some("L1|L2"), false),
     opt("--decoy", None, Some("N"), false),                // 撒几段干扰数据（0 = 不打）
@@ -224,12 +226,13 @@ mod tests {
     /// + `--pick`（全屏勾选）+ 2026-10-29 的 `--trash-source` / `--delete-source`
     /// + `--test`（只测不写：完整解码 + 校验，一个字节都不落盘）
     /// + 2026-10-29 第三期 B 的 `--decoy` / `--decoy-size` / `--decoy-signatures`
-    /// + 2026-10-31 的 `--candidate <字节偏移>`（S10 多候选的命令行入口，T16）。
+    /// + 2026-10-31 的 `--candidate <字节偏移>`（S10 多候选的命令行入口，T16）
+    /// + 2026-10-31 的 `--format zip|tar.gz|tar.zst`（T17-4 打包格式可选）
     #[test]
-    fn 长选项总数是_49() {
+    fn 长选项总数是_50() {
         assert_eq!(
             OPTS.len(),
-            49,  // +2：--no-auto-password-notes / --no-auto-password-book（T8）
+            50,  // +1：--format（T17-4）
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

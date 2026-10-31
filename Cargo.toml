@@ -45,6 +45,8 @@ lz4_flex = "0.14.0"
 lzma-rs = "0.3.0"
 rars = { version = "0.11.0", default-features = false, features = ["encryption", "parallel"] }
 ruzstd = "0.9.1"
+# tar.zst 的**写入**：ruzstd 只会解压，压缩得用这个（T17-4 打包格式可选）
+zstd = { version = "0.13", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 sha2 = "0.10"
 serde_json = "1.0"

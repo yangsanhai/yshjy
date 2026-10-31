@@ -29,6 +29,7 @@ _yshjy() {
         '--trash-source[解完把原包移进回收站（能还原）]' \
         '--delete-source[解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）]' \
         '--split[打包时分卷（如 2G / 500M，也认纯字节数）]:大小:' \
+        '--format[打包成普通归档（不加外壳）：zip / tar.gz / tar.zst。给了就是普通压缩，不给还是伪装包]:zip|tar.gz|tar.zst:(zip tar.gz tar.zst)' \
         '--level:0-9:' \
         '--layout:L1|L2:(L1 L2)' \
         '--decoy[打包时撒 N 段干扰数据（最多 64 段，默认 0 = 不打）]:N:' \

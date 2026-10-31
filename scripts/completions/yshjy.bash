@@ -13,7 +13,7 @@ _yshjy_complete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --no-auto-password-notes --no-auto-password-book --encoding --select --candidate --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --level --layout --decoy --decoy-size --decoy-signatures --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
+    local opts="-l --list --rescue --extract-cover -o --dest -p --password --password-file --no-auto-password --no-auto-password-notes --no-auto-password-book --encoding --select --candidate --pick -j --jobs -f --force --test --no-smart-dir --keep --trash-source --delete-source --split --format --level --layout --decoy --decoy-size --decoy-signatures --cover --tail --no-checksum --no-readme --sfx --sfx-linux --json -q --quiet --no-color --verbose --log --lang --config --show-config --caps --import-passwords --report --no-paths -h --help -V --version -v -vv jy ys"
 
     case "$prev" in
         -o|--dest)
@@ -34,6 +34,10 @@ _yshjy_complete() {
             ;;
         -j|--jobs)
             COMPREPLY=($(compgen -W "1 2 4 8" -- "$cur"))
+            return 0
+            ;;
+        --format)
+            COMPREPLY=($(compgen -W "zip tar.gz tar.zst" -- "$cur"))
             return 0
             ;;
         --layout)
