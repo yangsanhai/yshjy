@@ -68,16 +68,26 @@ String prettyPath(String p) {
   return p;
 }
 
+/// 「下载」目录的候选顺序（由近到远）—— 抽成纯函数才能测：
+/// getter 里读的是**真机**路径，测试机上验不出 Windows 分支。
+///
+/// Windows 上「下载」是 Known Folder 的**本地化显示名**：中文系统里用户目录下
+/// 真的叫「下载」，不是 `Downloads`。以前只试 `Downloads`，中文 Windows 上必然
+/// 落空 → 退回**家目录**，诊断包混在家目录里，用户还是难找。
+List<String> downloadDirCandidates(bool isWindows, {String? home}) {
+  final h = home ?? homeDir;
+  return isWindows
+      ? ['$h\\下载', '$h\\Downloads']
+      : ['$h/下载', '$h/Downloads'];
+}
+
 /// 「下载」目录 —— 诊断包、导出这类「给用户拿走的文件」默认落这里。
 ///
 /// 为什么不落引擎的默认位置：`report` 不给 `out_dir` 时引擎落在**进程当前目录**，
 /// GUI 从哪启动就在哪（可能是 `/` 或 `~`），用户回头根本找不着（E6 的病根）。
 /// 中文系统叫「下载」、其它叫 `Downloads`，都没有就退回家目录。
 String get downloadsDir {
-  final candidates = Platform.isWindows
-      ? ['$homeDir\\Downloads']
-      : ['$homeDir/下载', '$homeDir/Downloads'];
-  for (final d in candidates) {
+  for (final d in downloadDirCandidates(Platform.isWindows)) {
     if (Directory(d).existsSync()) return d;
   }
   return homeDir;
