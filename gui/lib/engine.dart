@@ -472,6 +472,16 @@ class EngineClient {
     String? sfxKind,
     /// 压缩级别（P23-4）：0 = 仅存储最快 / 6 = 标准 / 9 = 最小体积
     int? level,
+    /// 干扰数据（E1 / 协议 `pack.decoy`）：往里撒 N 段乱码，让网盘/在线扫描
+    /// 以为这是普通视频；null 或 0 = 不打。
+    ///
+    /// ⚠️ 与 `mode:"plain"`（普通 ZIP）和自解压互斥 —— 引擎会回 `BAD_PARAM`，
+    /// 不是静默忽略。所以调用方只在伪装模式且非自解压时才传。
+    int? decoy,
+    /// 每段字节数（协议 `pack.decoy_size`，引擎允许 4K–1M，默认 16K）
+    int? decoySize,
+    /// 每段里夹一枚假特征码（协议 `pack.decoy_signatures`，默认关）
+    bool decoySignatures = false,
   }) async {
     final r = await _call({
       'cmd': 'pack',
@@ -483,6 +493,10 @@ class EngineClient {
       if (sfxKind != null) 'sfx': sfxKind,
       if (splitBytes != null) 'split': splitBytes,
       if (level != null) 'level': level,
+      // 干扰数据（E1）：段数 > 0 才传，0 等于不打
+      if (decoy != null && decoy > 0) 'decoy': decoy,
+      if (decoySize != null) 'decoy_size': decoySize,
+      if (decoySignatures) 'decoy_signatures': true,
       'checksum': checksum,
       'readme': readme,
     }, timeout: const Duration(hours: 2));

@@ -18,7 +18,23 @@ import '../platform_paths.dart';
 class PackPage extends StatefulWidget {
   final ValueChanged<String>? onStatus;
 
-  const PackPage({super.key, this.onStatus});
+  /// 测试用：预设输入 / 输出 / 外壳（生产代码永远传 null）。
+  ///
+  /// 为什么留这个口子：「勾了「防网盘扫描」到底有没有把 `decoy` 传给引擎」只有
+  /// 真点一次「开始打包」才验得到，而真机上加文件要走系统文件对话框 ——
+  /// widget 测试点不到那个对话框，这条接线（界面 → 协议字段名）就没人守。
+  /// 与 HomePage 的 `debugPreview` / `debugScanItems` 同一个理由：只影响测试。
+  final List<String>? debugInputs;
+  final String? debugOut;
+  final String? debugCover;
+
+  const PackPage({
+    super.key,
+    this.onStatus,
+    this.debugInputs,
+    this.debugOut,
+    this.debugCover,
+  });
 
   @override
   State<PackPage> createState() => _PackPageState();
@@ -54,6 +70,18 @@ class _PackPageState extends State<PackPage> {
   bool _split = false;
   bool _checksum = true;
   bool _readme = true;
+  // ── 干扰数据（E1 / 协议 pack.decoy*）──
+  // 目的：让网盘/在线扫描以为这是普通视频，而不是「一个带 ZIP 尾巴的文件」。
+  // 段数和每段大小走默认（4 段 × 16 KB ≈ 64 KB，用户看不出体积变化），
+  // 界面只给「开 / 关」和一个更保险的子开关 —— 新手不需要懂「段」是什么。
+  bool _decoy = false;
+  bool _decoySignatures = false;
+  static const int _decoySegments = 4;
+
+  /// 只有「伪装成文件、且不是自解压」才允许撒干扰数据。
+  /// 引擎里 decoy 与 `mode:"plain"`、`sfx` 互斥，会回 BAD_PARAM ——
+  /// 所以这里直接禁用并说明，而不是做一个点了才报错的假开关。
+  bool get _canDecoy => _mode == 'disguise' && !_sfx;
   final _splitCtrl = TextEditingController(text: '2G');
   bool _busy = false;
   String? _error;
@@ -74,6 +102,23 @@ class _PackPageState extends State<PackPage> {
     super.initState();
     // 引擎事件是广播流：打包页订阅自己关心的（解压页订阅它自己的）
     _sub = _client.events.listen(_onEvent);
+    // 测试注入口：灌一份「已经选好输入 + 外壳」的状态（生产永远 null）。
+    // 与 HomePage.debugPreview 同一个理由 —— 只影响测试，不改任何行为。
+    final in0 = widget.debugInputs;
+    if (in0 != null) {
+      _inputs.addAll(in0);
+      _out = widget.debugOut;
+      final cover = widget.debugCover;
+      if (cover != null) {
+        _mode = 'disguise';
+        _coverPath = cover;
+        final ext = extOf(cover);
+        _coverExt = ext.isEmpty ? 'bin' : ext;
+        // 与 _pickCover 里的「输出名跟着外壳走」保持一致，
+        // 否则测试验的是另一套初始状态（两处要一起改）。
+        if (_out != null) _out = withExt(_out!, _coverExt);
+      }
+    }
   }
 
   /// 只关心打包进度和它的落盘检验，别的 kind（解压进度/诊断…）不归这页管
@@ -225,6 +270,10 @@ class _PackPageState extends State<PackPage> {
         sfxKind: isSfx ? _sfxKind : null,
         splitBytes: !isSfx && _split ? _parseSize(_splitCtrl.text) : null,
         level: _level,
+        // 防网盘扫描（E1）：只有伪装模式、非自解压才传 —— 引擎里 decoy 与
+        // mode:"plain"、sfx 互斥（回 BAD_PARAM），不做「点了才报错」的假开关。
+        decoy: _canDecoy && _decoy ? _decoySegments : null,
+        decoySignatures: _canDecoy && _decoy && _decoySignatures,
         checksum: _checksum,
         // 普通压缩不写「这不是视频」的说明书（用户验收 2026-10-17）；自解压也不需要
         readme: _mode == 'disguise' && !isSfx ? _readme : false,
@@ -265,11 +314,16 @@ class _PackPageState extends State<PackPage> {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            _mode == 'plain' ? '压缩文件' : '打包成伪装文件',
+      // 整页可滚动：伪装模式下光「外壳说明」就五六行，再加「防网盘扫描」两行，
+      // 850x736 的默认窗口会 RenderFlex 溢出（真机截图里那条
+      // BOTTOM OVERFLOWED BY 20 PIXELS 就是它）。列表改成受控高度的滚动区，
+      // 外层整体可滚 —— 窗口再矮也只是要滚，不会再挤爆。
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _mode == 'plain' ? '压缩文件' : '打包成伪装文件',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
@@ -374,7 +428,9 @@ class _PackPageState extends State<PackPage> {
             ],
           ),
           const SizedBox(height: 8),
-          Expanded(
+          SizedBox(
+            height:
+                (MediaQuery.sizeOf(context).height * 0.3).clamp(140.0, 360.0),
             child: _inputs.isEmpty
                 ? Center(
                     child: Text(
@@ -539,6 +595,46 @@ class _PackPageState extends State<PackPage> {
               onChanged: _busy ? null : (v) => setState(() => _level = v ?? 6),
             ),
           ),
+          // 防网盘扫描（E1 / 协议 pack.decoy*）：往包里撒几段乱码，
+          // 让网盘/在线扫描把它当普通视频，而不是「带 ZIP 尾巴的可疑文件」。
+          //
+          // 为什么只给「开/关」：段数、每段大小是引擎调过的默认（4 段 × 16 KB），
+          // 摆出来只会让新手纠结；真正懂行的人用命令行 --decoy N --decoy-size。
+          SwitchListTile(
+            key: const ValueKey('decoy-toggle'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _decoy && _canDecoy,
+            onChanged: (_busy || !_canDecoy)
+                ? null
+                : (v) => setState(() {
+                      _decoy = v;
+                      // 关了总开关就把子开关一起放下，避免下次开了又莫名其妙带着假特征码
+                      if (!v) _decoySignatures = false;
+                    }),
+            secondary: const Icon(Icons.blur_on, size: 20),
+            title: Text(
+              _canDecoy ? '防网盘扫描（撒假数据）' : '防网盘扫描（只有伪装成文件时可用）',
+              style: const TextStyle(fontSize: 13),
+            ),
+            subtitle: const Text(
+              '往里撒 4 段乱码，让扫描器以为这是普通视频（约多 64 KB）',
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+          if (_decoy && _canDecoy)
+            SwitchListTile(
+              key: const ValueKey('decoy-sig-toggle'),
+              dense: true,
+              contentPadding: const EdgeInsets.only(left: 40),
+              value: _decoySignatures,
+              onChanged:
+                  _busy ? null : (v) => setState(() => _decoySignatures = v),
+              title: const Text('连文件指纹也伪造（更保险）',
+                  style: TextStyle(fontSize: 12)),
+              subtitle: const Text('每段里夹一枚假特征码，骗过按文件头认格式的扫描器',
+                  style: TextStyle(fontSize: 11)),
+            ),
           // 交付选项：默认「校验和 + 说明书」开（DESIGN §14.2），分卷按需
           SwitchListTile(
             dense: true,
@@ -643,7 +739,8 @@ class _PackPageState extends State<PackPage> {
             ),
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
