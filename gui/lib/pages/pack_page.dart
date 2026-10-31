@@ -110,13 +110,14 @@ class _PackPageState extends State<PackPage> {
   // ── 数据藏在哪（协议 `pack.layout`；`tail` 就是老写法 `pack.tail` 的那一档）──
   //   free = 藏进封面的 free 原子（默认：视频能播，8 种工具全通）
   //   tail = 封面一个字节都不改，数据接在最后（最保险）
+  //   head = 放进文件头部（T18-1 的 L3）：ZIP 包成 free 原子塞在 ftyp 后面
   //   mid  = 插进视频数据中间（T18-1 的 L4）：视频照常能播，包藏得比尾巴深
   String _layout = 'free';
   /// 本次打包「请求的」布局（结果页拿它和引擎实际用的对账，降级了要告诉用户）
   String? _askedLayout;
   /// 没有封面就谈不上布局（普通压缩、自解压）
   bool get _canTail => _mode == 'disguise' && !_sfx;
-  /// 「插在视频中间」只对视频外壳成立。
+  /// 「插在视频中间」「放在文件头部」只对视频外壳成立。
   ///
   /// `_coverExt` 是**按文件头魔数**认出来的（选封面时 `shellExtFromHead`），
   /// 不是看用户起的名字 —— 把 PNG 改名成 .mp4 也骗不过去。
@@ -764,9 +765,11 @@ class _PackPageState extends State<PackPage> {
                   ? t('pack.layout.none')
                   : _layout == 'tail'
                       ? t('pack.layout.append.desc')
-                      : _layout == 'mid'
-                          ? t('pack.layout.mid.desc')
-                          : t('pack.layout.free'),
+                      : _layout == 'head'
+                          ? t('pack.layout.head.desc')
+                          : _layout == 'mid'
+                              ? t('pack.layout.mid.desc')
+                              : t('pack.layout.free'),
               style: const TextStyle(fontSize: 11),
             ),
             trailing: DropdownButton<String>(
@@ -786,7 +789,12 @@ class _PackPageState extends State<PackPage> {
                   value: 'tail',
                   child: Text(t('pack.layout.choice.tail')),
                 ),
-                // 封面不是视频时这一档点不了（引擎按魔数再核一次，认不出会降级）
+                // 封面不是视频时这两档点不了（引擎按魔数再核一次，认不出会降级）
+                DropdownMenuItem(
+                  value: 'head',
+                  enabled: _canMid,
+                  child: Text(t('pack.layout.choice.head')),
+                ),
                 DropdownMenuItem(
                   value: 'mid',
                   enabled: _canMid,
@@ -994,9 +1002,11 @@ class _PackPageState extends State<PackPage> {
                     'entries': '$entries',
                     'layout': layout == 'FreeAtom'
                         ? t('pack.layout.free.name')
-                        : layout == 'MidChunk'
-                            ? t('pack.layout.mid.name')
-                            : t('pack.layout.append.name'),
+                        : layout == 'HeadFreeAtom'
+                            ? t('pack.layout.head.name')
+                            : layout == 'MidChunk'
+                                ? t('pack.layout.mid.name')
+                                : t('pack.layout.append.name'),
                     'cover': coverName == null
                         ? ''
                         : t('pack.result.coverLine', {'name': coverName}),
@@ -1010,6 +1020,14 @@ class _PackPageState extends State<PackPage> {
             const SizedBox(height: 6),
             Text(
               t('pack.layout.mid.failed'),
+              style: TextStyle(fontSize: 12, color: cs.error),
+            ),
+          ],
+          // 同一个坑，L3 也有（封面不是 MP4 / 找不到 moov 或偏移表 / 包太大溢出）
+          if (_askedLayout == 'head' && layout != 'HeadFreeAtom') ...[
+            const SizedBox(height: 6),
+            Text(
+              t('pack.layout.head.failed'),
               style: TextStyle(fontSize: 12, color: cs.error),
             ),
           ],
