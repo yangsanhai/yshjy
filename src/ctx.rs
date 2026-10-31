@@ -297,7 +297,13 @@ impl UnpackCtx {
     }
 
     /// 一个条目处理完了
+    ///
+    /// ★ 这里是 T18-4「全部暂停」的**挂起点**：所有格式（ZIP / 7z / RAR / tar /
+    /// 流式）解完一个条目都会走到这里，所以只在这一处等，全格式一起生效。
+    /// 为什么停在条目边界而不是解压中途：中途打断当前文件等于白解（机械盘上
+    /// 重解一个 7 GB 文件要几分钟），而条目边界停住**不丢任何已解完的数据**。
     pub fn entry_done(&self, index: u64, path: &str, result: ItemResult, bytes: u64) {
+        // 先把「这一条做完了」报出去，再停 —— 暂停时界面上的文件数才是准的
         self.progress.add_file();
         self.emit(&Event::EntryFinished {
             job: self.job,
@@ -306,6 +312,10 @@ impl UnpackCtx {
             result,
             bytes,
         });
+
+        if self.cancel.is_paused() {
+            crate::event::等暂停(&self.sink, &self.cancel, self.job);
+        }
     }
 
     /// 进入某个阶段

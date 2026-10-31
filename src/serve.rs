@@ -174,7 +174,7 @@ fn 处理命令(
     if 忙
         && !matches!(
             cmd.as_str(),
-            "cancel" | "hello" | "report" | "answer" | "skip"
+            "cancel" | "hello" | "report" | "answer" | "skip" | "pause" | "resume"
         )
     {
         写行(
@@ -234,6 +234,24 @@ fn 处理命令(
                 t.取消.skip();
             }
             写行(出, &ok(id, json!({"skipped": 有任务})));
+        }
+        // T18-4：队列「全部暂停」/ 继续 —— 与 cancel 同级，忙的时候也能用。
+        // 注意这里返回的是「请求已送到引擎」，**不是「已经停了」**：引擎要等当前
+        // 这个文件解完才会真的停住，那时会发 PAUSED 事件。界面必须按事件翻按钮。
+        "pause" | "resume" => {
+            let 要暂停 = cmd == "pause";
+            let 送到 = 当前.as_ref().is_some_and(|t| {
+                if 要暂停 {
+                    t.取消.pause();
+                } else {
+                    t.取消.resume();
+                }
+                true
+            });
+            写行(
+                出,
+                &ok(id, json!({"paused": 要暂停, "delivered": 送到})),
+            );
         }
         // 生成诊断包（报障用）：界面点一下就出 zip，不用教用户开终端
         "report" => {

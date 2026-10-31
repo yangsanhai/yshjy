@@ -638,6 +638,29 @@ class EngineClient {
     }
   }
 
+  /// 队列「全部暂停」（T18-4）
+  ///
+  /// 返回 `{"paused": bool, "delivered": bool}`：
+  /// - `delivered: false` —— 当时没有任务在跑（界面该把按钮复位，别假装暂停成功）
+  /// - `delivered: true` **只代表请求送到了**：引擎要等当前这个文件解完才真的停，
+  ///   那时会发 `PAUSED` 事件 —— 界面必须按事件翻按钮，否则就是「点了没反应」
+  Future<Map<String, dynamic>> pauseQueue() async {
+    try {
+      return _unwrap(await _call({'cmd': 'pause'}, timeout: const Duration(seconds: 10)));
+    } catch (_) {
+      return const {'paused': false, 'delivered': false};
+    }
+  }
+
+  /// 队列「继续」（T18-4）：从暂停处接着跑，不重解已经完成的条目
+  Future<Map<String, dynamic>> resumeQueue() async {
+    try {
+      return _unwrap(await _call({'cmd': 'resume'}, timeout: const Duration(seconds: 10)));
+    } catch (_) {
+      return const {'paused': false, 'delivered': false};
+    }
+  }
+
   void dispose() {
     _proc?.closeInput();
     _proc?.kill();

@@ -26,7 +26,7 @@ pub const 协议版本: u64 = 1;
 /// 引擎认识的全部命令（`hello.features` 与 PROTOCOL 命令表都从这里取）
 pub const 命令列表: &[&str] = &[
     "hello", "cancel", "report", "scan", "list", "extract", "pack", "batch", "rescue", "answer",
-    "skip",
+    "skip", "pause", "resume",
 ];
 
 /// 引擎会发出的事件种类（`hello.event_kinds` 从这里取）
@@ -45,6 +45,7 @@ pub const 事件种类: &[&str] = &[
     "SPACE_SHORTAGE",
     "ASK_USER",
     "RESUMED",
+    "PAUSED",
     "DIAGNOSTIC",
 ];
 
@@ -65,10 +66,10 @@ pub fn 执行(
         "batch" => 批量(参数, 事件, 取消, ask),
         "rescue" => 救援(参数, 事件, 取消),
         "report" => 诊断(参数, 事件),
-        // 这两条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令
-        "answer" | "skip" => Err(错误值(
+        // 这几条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令
+        "answer" | "skip" | "pause" | "resume" => Err(错误值(
             "UNSUPPORTED",
-            "answer / skip 需要交互式传输（--serve），C ABI 请直接取消",
+            "answer / skip / pause / resume 需要交互式传输（--serve），C ABI 请直接取消",
         )),
         other => Err(错误值("UNKNOWN_COMMAND", &format!("不认识的 cmd: {other}"))),
     }

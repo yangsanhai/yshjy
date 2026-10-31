@@ -15,7 +15,7 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,14 @@ pub struct CancelToken {
     /// 最近开始跑的任务号（0 = 没有）。用来判断「用户取消的正是正在跑的那个」
     running: Arc<AtomicU64>,
     reason: Arc<Mutex<Option<String>>>,
+    /// 「全部暂停」（队列）—— **与取消分开**：暂停是能继续的，取消不能
+    ///
+    /// 为什么不用 `is_cancelled()` 复用：解压循环把取消当「收尾退出」，
+    /// 一旦走那条路当前任务就变成 `Outcome::Cancelled` 返回了，没法原地接着跑。
+    paused: Arc<AtomicBool>,
+    /// 挂起等待的（真值, 唤醒）。真值放锁里而不是只靠 `paused`：
+    /// `notify_all` 必须在持锁时改值，否则等待方可能错过唤醒（std 文档的经典竞态）
+    pause_gate: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl Default for CancelToken {
@@ -53,12 +61,17 @@ impl CancelToken {
             skip_jobs: Arc::new(Mutex::new(HashSet::new())),
             running: Arc::new(AtomicU64::new(0)),
             reason: Arc::new(Mutex::new(None)),
+            paused: Arc::new(AtomicBool::new(false)),
+            pause_gate: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
 
     /// 请求取消
     pub fn cancel(&self) {
-        self.flag.store(true, Ordering::Relaxed);
+        self.flag.store(true, Ordering::SeqCst);
+        // 暂停中的线程正等在条件变量上 —— 取消后要叫醒它，让它走取消那条路
+        // （不然它要等下一次 100 ms 超时才醒，虽然能醒但没必要多等）
+        self.pause_gate.1.notify_all();
     }
 
     /// 带原因请求取消（原因只进日志，不进用户文案）
@@ -141,6 +154,65 @@ impl CancelToken {
     /// 用户点取消后不会「卡在那里没反应」（三层审查 B1）。
     pub fn raw_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.flag)
+    }
+
+    // ───────────────── 暂停 / 继续（队列「全部暂停」） ─────────────────
+
+    /// 请求暂停（队列「全部暂停」）。
+    ///
+    /// 语义是**软停**：不会打断正在解的那一个文件，而是让它在「下一个条目解完」
+    /// 那一刻停住 —— 挂起点在 [`crate::ctx::UnpackCtx::entry_done`] 和批量循环
+    /// 的任务之间。所以暂停**不丢已解完的条目**，代价是「点了暂停要等当前这个
+    /// 文件解完才真的停」。
+    pub fn pause(&self) {
+        self.设定暂停(true);
+    }
+
+    /// 继续（从暂停处接着跑）
+    pub fn resume(&self) {
+        self.设定暂停(false);
+    }
+
+    fn 设定暂停(&self, 值: bool) {
+        // 顺序要紧：先改锁里的真值（等待方的循环条件看它），再 notify。
+        // 反过来会漏唤醒：等待方刚判完「还在暂停」还没睡下，notify 就过了。
+        {
+            let mut 锁 = match self.pause_gate.0.lock() {
+                Ok(g) => g,
+                Err(毒) => 毒.into_inner(),
+            };
+            *锁 = 值;
+        }
+        self.paused.store(值, Ordering::SeqCst);
+        if !值 {
+            self.pause_gate.1.notify_all();
+        }
+    }
+
+    /// 现在是暂停状态吗（无锁快路径，解压热路径上每条目问一次）
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// 暂停中就**原地阻塞**，直到继续或取消（取消优先，取消后立刻返回让调用方走收尾）
+    ///
+    /// 用 `wait_timeout` 而不是死等：即使某次唤醒丢了（外部代码不当心直接改了
+    /// 标志），最多 100 ms 也会自己复查一遍，不会永远卡死。
+    pub fn wait_while_paused(&self) {
+        if !self.is_paused() {
+            return;
+        }
+        let (锁, 唤醒) = &*self.pause_gate;
+        let mut 暂停中 = match 锁.lock() {
+            Ok(g) => g,
+            Err(毒) => 毒.into_inner(),
+        };
+        while *暂停中 && !self.flag.load(Ordering::SeqCst) {
+            暂停中 = match 唤醒.wait_timeout(暂停中, Duration::from_millis(100)) {
+                Ok((g, _)) => g,
+                Err(毒) => 毒.into_inner().0,
+            };
+        }
     }
 }
 
@@ -654,5 +726,70 @@ mod tests {
         let j = serde_json::to_string(&v).unwrap();
         let back: ProgressView = serde_json::from_str(&j).unwrap();
         assert_eq!(v, back);
+    }
+
+    // ───────── 暂停 / 继续（T18-4 队列「全部暂停」）─────────
+
+    #[test]
+    fn 默认不暂停() {
+        let t = CancelToken::new();
+        assert!(!t.is_paused());
+        // 没暂停时 wait 必须立刻返回（热路径上每条目都调一次，不能有等待）
+        let 开始 = Instant::now();
+        t.wait_while_paused();
+        assert!(开始.elapsed() < Duration::from_millis(50));
+    }
+
+    #[test]
+    fn 暂停真的挡住了继续跑() {
+        let t = CancelToken::new();
+        t.pause();
+        assert!(t.is_paused());
+
+        let 克隆 = t.clone();
+        let (发, 收) = std::sync::mpsc::channel();
+        let 句柄 = thread::spawn(move || {
+            克隆.wait_while_paused();
+            发.send(()).ok();
+        });
+
+        // 150 ms 内不许通过（它是真挡住了，不是慢）
+        assert!(
+            收.recv_timeout(Duration::from_millis(150)).is_err(),
+            "暂停期间不该继续往下跑"
+        );
+        t.resume();
+        assert!(!t.is_paused());
+        收.recv_timeout(Duration::from_secs(2))
+            .expect("继续之后必须立刻醒");
+        句柄.join().ok();
+    }
+
+    #[test]
+    fn 暂停中被取消也要能醒() {
+        // 用户点了暂停后又点取消 —— 不能卡在条件变量里等超时到天荒地老
+        let t = CancelToken::new();
+        t.pause();
+        let 克隆 = t.clone();
+        let (发, 收) = std::sync::mpsc::channel();
+        let 句柄 = thread::spawn(move || {
+            克隆.wait_while_paused();
+            发.send(()).ok();
+        });
+        assert!(收.recv_timeout(Duration::from_millis(100)).is_err());
+        t.cancel();
+        收.recv_timeout(Duration::from_secs(2))
+            .expect("取消必须能把暂停中的线程叫醒");
+        句柄.join().ok();
+    }
+
+    #[test]
+    fn 暂停状态在所有克隆体之间共享() {
+        let a = CancelToken::new();
+        let b = a.clone();
+        b.pause();
+        assert!(a.is_paused(), "克隆体暂停后原件也应当看到");
+        a.resume();
+        assert!(!b.is_paused());
     }
 }
