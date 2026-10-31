@@ -13,6 +13,7 @@ import 'pages/history_page.dart';
 import 'pages/pack_page.dart';
 import 'pages/settings_page.dart';
 import 'tray.dart';
+import 'l10n.dart';
 
 /// 托盘状态行的一次决策结果
 ///
@@ -52,11 +53,11 @@ TrayStatus trayStatusForEvent(EngineEvent e, double lastPct) {
       if (pct < 100 && lastPct >= 0 && pct - lastPct < kTrayThrottleStep) {
         return (text: null, lastPct: lastPct);
       }
-      final verb = e.kind == 'PACK_PROGRESS' ? '正在打包' : '正在解压';
+      final verb = e.kind == 'PACK_PROGRESS' ? t('shell.status.packing') : t('shell.status.extracting');
       return (text: '$verb $pct%', lastPct: pct.toDouble());
     case 'JOB_FINISHED':
       // 任务收工：托盘回到空闲，节流基准也清零（下一单从头算百分比）
-      return (text: '空闲', lastPct: -1);
+      return (text: t('shell.status.idle'), lastPct: -1);
     default:
       return (text: null, lastPct: lastPct);
   }
@@ -86,7 +87,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final EngineClient _client = EngineClient.instance;
   int _index = 0;
   String _engineVersion = '…';
-  String _status = '就绪';
+  String _status = t('shell.status.ready');
 
   /// 引擎事件订阅（托盘进度行的数据源）
   StreamSubscription<EngineEvent>? _eventSub;
@@ -124,22 +125,22 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('三步就会了'),
-          content: const Column(
+          title: Text(t('shell.onboard.title')),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('1️⃣ 把「.mp4 / .png」拖进这个窗口 —— 不用管它真是什么'),
-              SizedBox(height: 10),
-              Text('2️⃣ 自动认格式、自动找解压码；认不出也会试着扫一遍'),
-              SizedBox(height: 10),
-              Text('3️⃣ 解压完会告诉你该点哪个文件启动'),
+              Text(t('shell.onboard.step1')),
+              const SizedBox(height: 10),
+              Text(t('shell.onboard.step2')),
+              const SizedBox(height: 10),
+              Text(t('shell.onboard.step3')),
             ],
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(c),
-              child: const Text('知道了'),
+              child: Text(t('shell.onboard.ok')),
             ),
           ],
         ),
@@ -235,7 +236,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     } catch (e) {
       // 引擎没装、崩了、路径不对 —— 界面必须还能开，只在状态栏说明
       if (!mounted) return;
-      setState(() => _status = '引擎未就绪（${e.runtimeType}）');
+      setState(() => _status = t('shell.engine.notReady', {'type': '${e.runtimeType}'}));
     }
   }
 
@@ -254,7 +255,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // 「正在处理…」只在「引擎正忙、且还没有百分比」时才写：
     // 有百分比之后就不再抢（不然「正在处理…」会把「正在解压 42%」盖掉）。
     if (_client.busy && _lastTrayPct < 0) {
-      unawaited(Tray.setStatus('正在处理…'));
+      unawaited(Tray.setStatus(t('shell.working')));
     }
   }
 
@@ -273,7 +274,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             leading: Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 12),
               child: Tooltip(
-                message: '杨三海解压',
+                message: t('shell.appName'),
                 child: CircleAvatar(
                   radius: 18,
                   backgroundColor: cs.primaryContainer,
@@ -281,31 +282,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            destinations: const [
+            destinations: [
               NavigationRailDestination(
-                icon: Icon(Icons.unarchive_outlined),
-                selectedIcon: Icon(Icons.unarchive),
-                label: Text('解压'),
+                icon: const Icon(Icons.unarchive_outlined),
+                selectedIcon: const Icon(Icons.unarchive),
+                label: Text(t('shell.nav.extract')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.archive_outlined),
-                selectedIcon: Icon(Icons.archive),
-                label: Text('打包'),
+                icon: const Icon(Icons.archive_outlined),
+                selectedIcon: const Icon(Icons.archive),
+                label: Text(t('shell.nav.pack')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.history),
-                selectedIcon: Icon(Icons.history_toggle_off),
-                label: Text('历史'),
+                icon: const Icon(Icons.history),
+                selectedIcon: const Icon(Icons.history_toggle_off),
+                label: Text(t('shell.nav.history')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: Text('设置'),
+                icon: const Icon(Icons.settings_outlined),
+                selectedIcon: const Icon(Icons.settings),
+                label: Text(t('shell.nav.settings')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.info_outline),
-                selectedIcon: Icon(Icons.info),
-                label: Text('关于'),
+                icon: const Icon(Icons.info_outline),
+                selectedIcon: const Icon(Icons.info),
+                label: Text(t('shell.nav.about')),
               ),
             ],
           ),
@@ -369,11 +370,11 @@ class _StatusBar extends StatelessWidget {
           const Spacer(),
           if (outDir.isNotEmpty)
             Tooltip(
-              message: '崩溃日志 / 状态目录',
-              child: Text('状态目录 $outDir', style: dim, overflow: TextOverflow.ellipsis),
+              message: t('shell.tray.logDir'),
+              child: Text(t('shell.tray.stateDir', {'path': outDir}), style: dim, overflow: TextOverflow.ellipsis),
             ),
           const SizedBox(width: 12),
-          Text('引擎 $engineVersion', style: dim),
+          Text(t('shell.tray.engine', {'version': engineVersion}), style: dim),
         ],
       ),
     );

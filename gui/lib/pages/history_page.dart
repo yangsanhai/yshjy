@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../history_store.dart';
 import '../platform_paths.dart';
+import '../l10n.dart';
 
 /// 历史页：本机处理过的记录（纯本地 JSON，不联网）
 class HistoryPage extends StatefulWidget {
@@ -63,9 +64,9 @@ class _HistoryPageState extends State<HistoryPage> {
         children: [
           Row(
             children: [
-              Text('历史记录', style: Theme.of(context).textTheme.titleLarge),
+              Text(t('history.title'), style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(width: 8),
-              Text('${_items.length} 条', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              Text(t('history.count', {'n': '${_items.length}'}), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
               const Spacer(),
               TextButton.icon(
                 onPressed: _items.isEmpty
@@ -75,12 +76,12 @@ class _HistoryPageState extends State<HistoryPage> {
                         _reload();
                       },
                 icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-                label: const Text('清空', style: TextStyle(fontSize: 12)),
+                label: Text(t('history.clear'), style: const TextStyle(fontSize: 12)),
               ),
             ],
           ),
           Text(
-            '只存在本机（${prettyPath(stateDir)}/gui-history.json），不会上传',
+            t('history.subtitle', {'path': '${prettyPath(stateDir)}/gui-history.json'}),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
@@ -94,7 +95,7 @@ class _HistoryPageState extends State<HistoryPage> {
                           children: [
                             Icon(Icons.history, size: 48, color: cs.onSurfaceVariant),
                             const SizedBox(height: 10),
-                            Text('还没处理过文件', style: TextStyle(color: cs.onSurfaceVariant)),
+                            Text(t('history.empty'), style: TextStyle(color: cs.onSurfaceVariant)),
                           ],
                         ),
                       )
