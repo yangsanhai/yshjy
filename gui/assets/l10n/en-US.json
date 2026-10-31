@@ -128,8 +128,6 @@
   "settings.misc.ratio": "Compression ratio cap",
   "settings.misc.ratioValue": "zip_bomb_ratio = 100 (zip-bomb guard)",
   "settings.misc.warn": "Warn on executables",
-  "settings.section.todo": "Not done yet (no pretending)",
-  "settings.todo.body": "· Interface localization is still being wired page by page: About page and all error messages are done, Settings is in progress, Pack/Home still to come\n· Language switching itself already works (see “Appearance → Interface language” above)",
   "pack.filter.any": "Any file",
   "pack.filter.all": "All files",
   "pack.size.hint": "Enter a size, e.g. 2G",

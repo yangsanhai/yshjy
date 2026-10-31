@@ -123,8 +123,6 @@
   "settings.misc.ratio": "圧縮率の上限",
   "settings.misc.ratioValue": "zip_bomb_ratio = 100（爆弾対策）",
   "settings.misc.warn": "実行ファイルの警告",
-  "settings.section.todo": "まだできていないこと（見せかけはしません）",
-  "settings.todo.body": "・画面の文言の多言語化はまだページごとに対応中です：アプリについてページとすべてのエラーメッセージは完了、設定ページは作業中、パッケージページ / ホームはこれからです\n・画面言語の切り替えはすでに使えます（上の「外観 → 画面言語」をご覧ください）",
   "pack.filter.any": "任意のファイル",
   "pack.filter.all": "すべてのファイル",
   "pack.size.hint": "サイズを入力してください。例：2G",

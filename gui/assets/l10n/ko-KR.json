@@ -123,8 +123,6 @@
   "settings.misc.ratio": "압축 비율 상한",
   "settings.misc.ratioValue": "zip_bomb_ratio = 100 (압축 폭탄 방지)",
   "settings.misc.warn": "실행 파일 경고",
-  "settings.section.todo": "아직 안 된 것 (거짓말 안 해요)",
-  "settings.todo.body": "· 화면 문구 다국어는 아직 페이지별로 연결 중이에요: 정보 페이지와 모든 오류 안내는 완료, 설정 페이지는 작업 중, 압축 페이지 / 홈은 아직 남았어요\n· 화면 언어 전환은 이미 쓸 수 있어요 (위의 「모양 → 화면 언어」 참고)",
   "pack.filter.any": "모든 파일",
   "pack.filter.all": "전체 파일",
   "pack.size.hint": "크기를 입력하세요, 예: 2G",

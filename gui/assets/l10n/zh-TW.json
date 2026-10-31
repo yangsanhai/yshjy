@@ -123,8 +123,6 @@
   "settings.misc.ratio": "壓縮比上限",
   "settings.misc.ratioValue": "zip_bomb_ratio = 100（防炸彈）",
   "settings.misc.warn": "可執行提醒",
-  "settings.section.todo": "還沒做的（我不裝樣子）",
-  "settings.todo.body": "· 介面文案多語言還在逐頁接入：關於頁和全部錯誤提示已完成，設定頁正在做，打包頁 / 首頁還在後面\n· 介面語言切換已可用（見上方「外觀 → 介面語言」）",
   "pack.filter.any": "任意檔案",
   "pack.filter.all": "所有檔案",
   "pack.size.hint": "填個大小，例如 2G",
