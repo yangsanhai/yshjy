@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/平台-Linux%20%E5%8F%91%E5%B8%83%E7%BA%A7%20%7C%20Windows%20%E5%91%BD%E4%BB%A4%E8%A1%8C-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.9.42%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
+![状态](https://img.shields.io/badge/状态-v0.9.43%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
 
 > **两个版本**
 > - **常用版**（文件名 `yshjy-*`）—— 日常下载会遇到的格式全都在，体积小、依赖少，**推荐装这个**
@@ -34,7 +34,7 @@
 
 ---
 
-## ✅ 现在就能用（v0.9.42）
+## ✅ 现在就能用（v0.9.43）
 
 ```bash
 # 解压（最简单，就这一行）
@@ -120,6 +120,12 @@ yshjy --report --no-paths 包.mp4    # 路径脱敏（要贴到公开的地方�
 
 > 只使用**开源**技术实现：RAR 仅支持解压（不生成），符合 RAR 官方许可限制。
 > 核心功能**零外部程序依赖** —— 不需要你装 7-Zip / WinRAR / unrar。
+>
+> **唯一的例外是「MKV 附件」布局**（`--layout L8`）：它借系统里的 **ffmpeg**
+> （[ffmpeg.org](https://ffmpeg.org/)，LGPL/GPL 自由软件）把封面视频**重封装**成 MKV，
+> 再把压缩包作为「附件」塞进去。我们不打包、不修改、不替它分发 —— 只在你**自己装了**
+> ffmpeg 的时候调用一次命令行；**没装就自动退回 `free` 原子布局**并在结果里说明，
+> 绝不会为了「看起来成功」写出一个假的 MKV。其余所有功能都不需要 ffmpeg。
 
 ---
 

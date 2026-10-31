@@ -225,12 +225,17 @@ class _PackPageState extends State<PackPage> {
   }
 
   /// 当前模式对应的输出扩展名
-  /// （普通 = .zip；自解压 = .exe / .sh；伪装 = 外壳的扩展名）
+  /// （普通 = .zip；自解压 = .exe / .sh；伪装 = 外壳的扩展名；L8 = .mkv）
+  ///
+  /// L8（MKV 附件）放在最前面判：那套布局的产物是个**真的 MKV**（ffmpeg 重封装），
+  /// 跟封面原本是 mp4 还是 png 无关 —— 名字必须 .mkv，不然播放器按扩展名打开会懵。
   String get _ext => _mode == 'plain'
       ? _format
       : (_sfx
           ? (_sfxKind == 'linux' ? 'sh' : 'exe')
-          : (_coverExt.isEmpty ? 'mp4' : _coverExt));
+          : (_layout == 'mkv'
+              ? 'mkv'
+              : (_coverExt.isEmpty ? 'mp4' : _coverExt)));
 
 
   /// 挑「第二个包」（L7）：只收 .zip。
@@ -792,9 +797,11 @@ class _PackPageState extends State<PackPage> {
                           ? t('pack.layout.head.desc')
                           : _layout == 'two'
                               ? t('pack.layout.two.desc')
-                              : _layout == 'mid'
-                                  ? t('pack.layout.mid.desc')
-                                  : t('pack.layout.free'),
+                              : _layout == 'mkv'
+                                  ? t('pack.layout.mkv.desc')
+                                  : _layout == 'mid'
+                                      ? t('pack.layout.mid.desc')
+                                      : t('pack.layout.free'),
               style: const TextStyle(fontSize: 11),
             ),
             trailing: DropdownButton<String>(
@@ -804,7 +811,14 @@ class _PackPageState extends State<PackPage> {
               style: const TextStyle(fontSize: 12),
               onChanged: (_busy || !_canTail)
                   ? null
-                  : (v) => setState(() => _layout = v ?? 'free'),
+                  : (v) => setState(() {
+                        _layout = v ?? 'free';
+                        // 输出后缀跟着布局走（L8 的产物是 .mkv、别的跟外壳）：
+                        // 用户自己在「输出文件」里改过名就不动他的（_outUserPicked）。
+                        if (!_outUserPicked && _inputs.isNotEmpty) {
+                          _out = suggestOut(_inputs.first, _ext);
+                        }
+                      }),
               items: [
                 DropdownMenuItem(
                   value: 'free',
@@ -829,6 +843,11 @@ class _PackPageState extends State<PackPage> {
                 DropdownMenuItem(
                   value: 'two',
                   child: Text(t('pack.layout.choice.two')),
+                ),
+                // L8 要系统 ffmpeg；没有的话引擎会自动降级并在结果里说明（界面不拦）
+                DropdownMenuItem(
+                  value: 'mkv',
+                  child: Text(t('pack.layout.choice.mkv')),
                 ),
               ],
             ),
@@ -1071,11 +1090,13 @@ class _PackPageState extends State<PackPage> {
                         ? t('pack.layout.free.name')
                         : layout == 'HeadFreeAtom'
                             ? t('pack.layout.head.name')
-                            : layout == 'TwoPackages'
-                                ? t('pack.layout.two.name')
-                                : layout == 'MidChunk'
-                                    ? t('pack.layout.mid.name')
-                                    : t('pack.layout.append.name'),
+                            : layout == 'MkvAttachment'
+                                ? t('pack.layout.mkv.name')
+                                : layout == 'TwoPackages'
+                                    ? t('pack.layout.two.name')
+                                    : layout == 'MidChunk'
+                                        ? t('pack.layout.mid.name')
+                                        : t('pack.layout.append.name'),
                     'cover': coverName == null
                         ? ''
                         : t('pack.result.coverLine', {'name': coverName}),
