@@ -93,11 +93,7 @@ pub fn 生成(opts: &ReportOptions, ctx: &UnpackCtx) -> Result<PathBuf> {
     // --no-paths 时把家目录换成 <home>（日志里的路径是自由文本，套不了逐条映射）。
     let 崩溃 = 最近崩溃日志();
     if let Some((文件名, 内容)) = &崩溃 {
-        let 内容 = if opts.hide_paths {
-            抹掉家目录(内容)
-        } else {
-            内容.clone()
-        };
+        let 内容 = 打包用崩溃日志(内容, opts.hide_paths);
         写一个(&mut zip, &format!("crash/{文件名}"), &内容, 选项)?;
     }
 
@@ -115,8 +111,12 @@ fn 状态目录() -> Option<PathBuf> {
 ///
 /// 找不到就返回 `None` —— 诊断包照样生成，不因为"没有崩溃记录"而失败。
 fn 最近崩溃日志() -> Option<(String, String)> {
-    let dir = 状态目录()?.join("crash");
-    let mut 候选: Vec<PathBuf> = std::fs::read_dir(&dir)
+    最近崩溃日志_在(&状态目录()?.join("crash"))
+}
+
+/// 同上，但目录由调用方给（测试要注入临时目录，不能动用户真实状态目录）
+fn 最近崩溃日志_在(dir: &Path) -> Option<(String, String)> {
+    let mut 候选: Vec<PathBuf> = std::fs::read_dir(dir)
         .ok()?
         .flatten()
         .map(|e| e.path())
@@ -139,6 +139,21 @@ fn 抹掉家目录(文本: &str) -> String {
     match std::env::var("HOME") {
         Ok(home) if !home.is_empty() => 文本.replace(&home, "<home>"),
         _ => 文本.to_string(),
+    }
+}
+
+/// 崩溃日志进诊断包前的整理：`--no-paths` 时抹掉家目录
+///
+/// 崩溃日志是**自由文本**（panic 原文 + 环境），套不了 `脱敏器` 的逐条映射表，
+/// 只能做粗粒度替换。刻意只抹家目录：「在哪种格式上崩的」这类定位信息必须留下，
+/// 全打码这份日志就白带了。
+///
+/// 这条承诺以前只写在注释里、没人守 —— 见 `崩溃日志测试`。
+fn 打包用崩溃日志(内容: &str, hide_paths: bool) -> String {
+    if hide_paths {
+        抹掉家目录(内容)
+    } else {
+        内容.to_string()
     }
 }
 
@@ -561,5 +576,54 @@ mod 脱敏测试 {
         let home = std::env::var("HOME").unwrap_or_default();
         let 原文 = format!("path={home}/x.bin");
         assert_eq!(脱敏.文本(&原文), 原文);
+    }
+}
+
+#[cfg(test)]
+mod 崩溃日志测试 {
+    use super::{打包用崩溃日志, 最近崩溃日志_在};
+
+    /// 崩溃日志是本项目唯一「把用户磁盘上的自由文本带出机器」的东西，
+    /// 而诊断包正是要发出去报障的那一份。`--no-paths` 时家目录必须抹掉。
+    ///
+    /// 2026-10-31 审计：功能早就实现了（v0.9 第 11 批），但**一条测试都没有** ——
+    /// 注释里写着「已脱敏」，谁把它改回原样都不会有人发现。这条是护栏，不是新功能。
+    #[test]
+    fn 崩溃日志里的家目录要脱掉() {
+        let home = std::env::var("HOME").expect("测试机总有 HOME");
+        let 原文 = format!(
+            "版本: 0.9.38\n目标包: {home}/下载/我的项目/游戏.mp4\n临时: /tmp/yshjy-x/part\n"
+        );
+        let 出 = 打包用崩溃日志(&原文, true);
+        assert!(!出.contains(&home), "崩溃日志泄漏了家目录: {出}");
+        assert!(出.contains("<home>"), "家目录该换成 <home>: {出}");
+        assert!(出.contains("版本: 0.9.38"), "定位信息不能被一起抹掉: {出}");
+        assert!(
+            出.contains("/tmp/yshjy-x/part"),
+            "只抹家目录 —— 其它路径照旧保留: {出}"
+        );
+    }
+
+    /// 不带 `--no-paths` 时完全原样：用户自愿交出来，开发者要看到真实路径
+    #[test]
+    fn 不带no_paths时原样保留() {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let 原文 = format!("目标包: {home}/下载/游戏.mp4\n");
+        assert_eq!(打包用崩溃日志(&原文, false), 原文);
+    }
+
+    /// 只挑最新那份，且只认 `crash-*.log`（状态目录里可能有别的东西）
+    #[test]
+    fn 只挑最新的崩溃日志() {
+        let dir = std::env::temp_dir().join(format!("yshjy_crash_pick_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("建临时目录");
+        std::fs::write(dir.join("crash-20260101-120000.log"), "旧").expect("写旧日志");
+        std::fs::write(dir.join("crash-20261031-120000.log"), "新").expect("写新日志");
+        std::fs::write(dir.join("随手放的.txt"), "不是日志").expect("写干扰文件");
+        let (名, 内容) = 最近崩溃日志_在(&dir).expect("应当挑到一份");
+        assert_eq!(名, "crash-20261031-120000.log");
+        assert_eq!(内容, "新");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
