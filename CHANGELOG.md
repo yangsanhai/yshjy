@@ -72,6 +72,7 @@
 - `scripts/test-packages.sh`：**37 项全过**（权限 / prerm 区分 upgrade / deb 内二进制版本一致 /
   真打包真解压逐字节一致 / tar.gz sha256）
 - 已装机：`dpkg -l yshjy` = **0.9.40**；CLI、GUI（19:33 的 libapp.so）、man、三种补全、14 种格式菜单项一起换新
+- **真机确认（2026-10-31 19:4x，用户从应用菜单打开装机版）**：「打包格式」下拉与「防网盘炸链」开关两处都在 —— 发版这版就是新版，不是开发包
 - 版本号 7 处同步：`Cargo.toml` / `ffi/Cargo.toml` / `gui/pubspec.yaml` / `README.md`×2 / `docs/PROTOCOL.md`×2
 
 - **真机验收（用户本人点 + 截图，2026-10-31 19:15–19:18）**：
