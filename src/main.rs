@@ -641,6 +641,8 @@ fn main() -> ExitCode {
         let cover_o = val_of("--cover");
         // 归档格式（T17-4）：一给就走普通压缩（不加外壳）
         let format_o = val_of("--format");
+        // 显示名（T18-2）：只改产物**文件名**，位置仍由 -o/--dest 决定
+        let name_o = val_of("--name");
         // 压缩级别（P23-4）：不给就用引擎默认（6）；给了就必须是 0-9，越界报错不静默
         let level = match val_of("--level") {
             None => None,
@@ -707,6 +709,7 @@ fn main() -> ExitCode {
             layout: &layout_o,
             cover: &cover_o,
             format: &format_o,
+            name: &name_o,
             tweak_time: has("--tweak-time"),
             // 第 23 批：--sfx-linux 生成 .sh；--sfx 生成 Windows exe
             sfx: if has("--sfx-linux") {
@@ -2465,6 +2468,8 @@ struct 打包参数<'a> {
     cover: &'a Option<String>,
     /// `--format zip|tar.gz|tar.zst`：一给就走「普通压缩」（不加外壳），不给＝伪装包
     format: &'a Option<String>,
+    /// `--name <名称>`（T18-2）：自定义产物**文件名**；目录仍由 `dest_opt` 决定
+    name: &'a Option<String>,
     /// `--tweak-time`（T18-3）：抖条目时间戳防网盘炸链，默认关
     tweak_time: bool,
     /// `--sfx` / `--sfx-linux`：自解压种类（第 23 批）
@@ -2490,6 +2495,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         layout,
         cover,
         format,
+        name,
         tweak_time,
         sfx,
         level,
@@ -2546,25 +2552,87 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             return ExitCode::from(code::ERR);
         }
     }
-    let mut out: PathBuf = match dest_opt {
-        Some(d) => PathBuf::from(d),
-        None => {
-            let base = inputs[0]
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "packed".into());
-            let 后缀 = if 普通压缩 {
-                // `--format` 默认名跟着格式走：a.txt → a.txt.tar.gz
-                格式.名字()
-            } else {
-                match sfx {
-                    Some("linux") => "sh",
-                    Some(_) => "exe",
-                    None => "mp4",
-                }
-            };
-            PathBuf::from(format!("{base}.{后缀}"))
+    // 输出位置（T18-2）：显示名只改**文件名**，目录仍由 -o/--dest 决定。
+    //
+    // 顺手修掉一条老 bug：`-o <目录>` 对打包**从来不管用**（路径被原样当文件名 →
+    // 「建不了输出文件：Is a directory」），而 CLI-SPEC 一直写着「输出目录」。
+    // 现在三种形状各有确定行为，`tests/name_cli.py` 盯着。
+    if let Some(n) = name.as_deref()
+        && let Err(e) = yshjy::pack::校验显示名(n)
+    {
+        eprintln!("❌ --name {e}");
+        return ExitCode::from(code::USAGE);
+    }
+
+    let 默认基名 = inputs[0]
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "packed".into());
+    let 默认后缀 = if 普通压缩 {
+        // `--format` 默认名跟着格式走：a.txt → a.txt.tar.gz
+        格式.名字()
+    } else {
+        match sfx {
+            Some("linux") => "sh",
+            Some(_) => "exe",
+            None => "mp4",
         }
+    };
+
+    // 显示名 → 定死的产物文件名。
+    // - 普通压缩 / 自解压：后缀必须与模式一致（`.zip` / `.tar.gz` / `.exe`），
+    //   写了别的就明确报错 —— 名字是 .zip 内容却是 tar.gz 的包会骗人；
+    // - 伪装：后缀决定外壳素材，**只认常见外壳扩展名**；`电影.2026.1080p` 里的
+    //   `1080p` 不是扩展名，补成 `.mp4`（否则产出双击播不了的「视频」）。
+    let 定名 = |n: &str| -> std::result::Result<String, String> {
+        let 已有 = std::path::Path::new(n).extension().and_then(|e| e.to_str());
+        if 普通压缩 || sfx.is_some() {
+            return match 已有 {
+                Some(e) if e.eq_ignore_ascii_case(默认后缀) => Ok(n.to_string()),
+                Some(e) => Err(format!(
+                    "扩展名要跟当前模式一致（.{默认后缀}），现在是 .{e}；或者不写扩展名，自动补齐"
+                )),
+                None => Ok(format!("{n}.{默认后缀}")),
+            };
+        }
+        match 已有 {
+            Some(e) if yshjy::pack::是外壳扩展名(e) => Ok(n.to_string()),
+            _ => Ok(format!("{n}.{默认后缀}")),
+        }
+    };
+    let 定好的名: Option<String> = match name.as_deref() {
+        None => None,
+        Some(n) => match 定名(n) {
+            Ok(x) => Some(x),
+            Err(e) => {
+                eprintln!("❌ --name {e}");
+                return ExitCode::from(code::USAGE);
+            }
+        },
+    };
+
+    let mut out: PathBuf = match (dest_opt.as_deref(), 定好的名.as_deref()) {
+        (Some(d), Some(n)) => {
+            let p = PathBuf::from(d);
+            if !(p.is_dir() || d.ends_with('/') || d.ends_with('\\')) {
+                eprintln!(
+                    "❌ --name 和「-o 指向完整文件名」只能给一个：--name 改名字、-o 换位置；\
+                     两个都要自定义就写 -o <目录> --name <名称>"
+                );
+                return ExitCode::from(code::USAGE);
+            }
+            p.join(n)
+        }
+        (Some(d), None) => {
+            let p = PathBuf::from(d);
+            if p.is_dir() || d.ends_with('/') || d.ends_with('\\') {
+                p.join(format!("{默认基名}.{默认后缀}"))
+            } else {
+                p
+            }
+        }
+        (None, Some(n)) => PathBuf::from(n),
+        (None, None) => PathBuf::from(format!("{默认基名}.{默认后缀}")),
     };
 
     // 自解压（第 23 批）：产物是能双击运行的 exe，和「伪装 / 分卷 / 解压码」互斥。

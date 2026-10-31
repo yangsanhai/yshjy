@@ -83,6 +83,9 @@ pub const OPTS: &[Opt] = &[
     opt("--split", None, Some("大小"), false),
     // 归档格式（T17-4）：一给就走「普通压缩」（不加外壳）；不给＝原来的伪装包
     opt("--format", None, Some("zip|tar.gz|tar.zst"), false),
+    // 显示名（T18-2）：自定义产物文件名（伪装成 电影.2026.1080p.mp4 这种）。
+    // **只改名字，不改位置** —— 目录仍由 -o/--dest 决定，避免两个出口互相打架。
+    opt("--name", None, Some("名称"), false),
     // 防炸链（T18-3）：抖条目时间戳，让网盘当成新文件；默认关
     opt("--tweak-time", None, None, false),
     opt("--level", None, Some("0-9"), false),
@@ -231,11 +234,12 @@ mod tests {
     /// + 2026-10-31 的 `--candidate <字节偏移>`（S10 多候选的命令行入口，T16）
     /// + 2026-10-31 的 `--format zip|tar.gz|tar.zst`（T17-4 打包格式可选）
     /// + 2026-10-31 的 `--tweak-time`（T18-3 防炸链）
+    /// + 2026-10-31 的 `--name <名称>`（T18-2 自定义显示名）
     #[test]
-    fn 长选项总数是_51() {
+    fn 长选项总数是_52() {
         assert_eq!(
             OPTS.len(),
-            51,  // +1：--tweak-time（T18-3）
+            52,  // +1：--name（T18-2）
             "加/删选项后请同步更新这个数字，并跑 tests/cli_spec_match.sh"
         );
     }

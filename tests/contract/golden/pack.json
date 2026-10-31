@@ -1,4 +1,15 @@
 {
-  "events": {},
-  "rc": 1
+  "events": {
+    "PackProgress": {
+      "current": "NoneType",
+      "job": "int",
+      "progress": {
+        "done_bytes": "int",
+        "done_files": "int",
+        "total_bytes": "int",
+        "total_files": "int"
+      }
+    }
+  },
+  "rc": 0
 }

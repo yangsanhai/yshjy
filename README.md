@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/平台-Linux%20%E5%8F%91%E5%B8%83%E7%BA%A7%20%7C%20Windows%20%E5%91%BD%E4%BB%A4%E8%A1%8C-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.9.40%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
+![状态](https://img.shields.io/badge/状态-v0.9.41%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
 
 > **两个版本**
 > - **常用版**（文件名 `yshjy-*`）—— 日常下载会遇到的格式全都在，体积小、依赖少，**推荐装这个**
@@ -34,7 +34,7 @@
 
 ---
 
-## ✅ 现在就能用（v0.9.40）
+## ✅ 现在就能用（v0.9.41）
 
 ```bash
 # 解压（最简单，就这一行）

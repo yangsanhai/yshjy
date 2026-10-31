@@ -95,6 +95,95 @@ impl PackFormat {
     }
 }
 
+/// 产物文件名的长度上限（字节）—— 主流文件系统 255，留出 `.sha256` / `.说明.txt` 后缀的余量
+pub const 显示名最大字节: usize = 200;
+
+/// 校验「自定义显示名」（T18-2 / CLI `--name` / 界面输出名输入框）
+///
+/// 显示名 = 产物**文件名**（伪装包就是给人看的那个名字，如 `电影.2026.1080p.mp4`）。
+/// **目录不在这里** —— 位置仍由 `-o/--dest` 决定，一条规则只有一个出口。
+///
+/// 所有拒绝都**明确报错**，绝不静默改名（静默改名后用户按界面上的名字找不到文件）：
+/// - 空 / 首尾带空格
+/// - 带路径分隔符（`/` `\`）：名字里塞路径会被当成位置，用户以为改了名其实写到了别处
+/// - `.` / `..`
+/// - 控制字符（含换行、制表符）
+/// - Windows 非法字符 `< > : " | ? *`：POSIX 合法但 Windows 上复制 / 解压会炸，
+///   我们做的包就是要发给别人的，宁可当场拒绝
+/// - 超过 [`显示名最大字节`]
+/// - Windows 保留设备名（`CON` / `PRN` / `AUX` / `NUL` / `COM1`–`COM9` / `LPT1`–`LPT9`，含带扩展名的写法）
+pub fn 校验显示名(名: &str) -> std::result::Result<(), String> {
+    if 名.is_empty() || 名.trim().is_empty() {
+        return Err("文件名不能为空".into());
+    }
+    if 名.trim() != 名 {
+        return Err("文件名不能以空格开头或结尾（Windows 会把它吃掉）".into());
+    }
+    // `.` / `..` 必须排在「末尾不能是点」前面，否则报的是错的理由
+    if 名 == "." || 名 == ".." {
+        return Err("文件名不能是 . 或 ..".into());
+    }
+    if 名.ends_with('.') {
+        return Err("文件名末尾不能是点（Windows 会把它吃掉）".into());
+    }
+    if 名.contains('/') || 名.contains('\\') {
+        return Err("文件名里不能带 / 或 \\ —— 想换位置请用 -o <目录>".into());
+    }
+    if let Some(c) = 名.chars().find(|c| c.is_control()) {
+        return Err(format!("文件名里不能有控制字符（发现 U+{:04X}）", c as u32));
+    }
+    if let Some(c) = 名
+        .chars()
+        .find(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+    {
+        return Err(format!(
+            "文件名里不能有 {c}（Windows 上不合法，别人那边会打不开）"
+        ));
+    }
+    if 名.len() > 显示名最大字节 {
+        return Err(format!(
+            "文件名太长了（{} 字节，上限 {}）",
+            名.len(),
+            显示名最大字节
+        ));
+    }
+    let 主名 = 名.split('.').next().unwrap_or(名).to_ascii_uppercase();
+    let 保留名 = ["CON", "PRN", "AUX", "NUL"].contains(&主名.as_str())
+        || (主名.len() == 4
+            && (主名.starts_with("COM") || 主名.starts_with("LPT"))
+            && 主名.as_bytes()[3].is_ascii_digit()
+            && 主名.as_bytes()[3] != b'0');
+    if 保留名 {
+        return Err(format!("{主名} 是 Windows 的保留设备名，换个名字"));
+    }
+    Ok(())
+}
+
+/// 常见「外壳」扩展名 —— 伪装包的显示名用它决定内置素材。
+///
+/// 只有这些后缀才被当成「用户已经写好的扩展名」；别的一律补 `.{默认后缀}`。
+/// 不加这道判断的话，`电影.2026.1080p` 会被 `Path::extension()` 当成扩展名 `1080p`，
+/// 产出一个后缀不是 mp4 的「视频」—— 双击播不了，用户还得自己改名（2026-10-31 实测形状）。
+///
+/// 与 `gui/lib/pack_naming.dart` 的 `knownShellExts` **必须逐字一致**
+/// （界面要即时提示、不能等引擎回错）；两边各有一条测试盯着。
+pub const 常见外壳扩展名: &[&str] = &[
+    // 图片
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic", // 视频
+    "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "m4v", "ts", // 音频
+    "mp3", "flac", "wav", "aac", "ogg", "m4a", // 文档
+    "txt", "md", "log", "ini", "cfg", "csv", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+    "epub", // 归档
+    "zip", "rar", "7z", "tar", "gz", "xz", "zst", // 程序 / 镜像
+    "exe", "msi", "apk", "iso", "dmg", "deb", "rpm", "appimage",
+];
+
+/// 这个后缀算不算「外壳类型」（大小写不敏感，允许带前导点）
+pub fn 是外壳扩展名(ext: &str) -> bool {
+    let e = ext.trim_start_matches('.').to_ascii_lowercase();
+    常见外壳扩展名.contains(&e.as_str())
+}
+
 /// 打包参数
 #[derive(Debug, Clone)]
 pub struct PackOptions {
@@ -658,10 +747,10 @@ fn tar加文件<W: Write>(
     };
     let mut header = tar::Header::new_gnu();
     header.set_metadata(meta);
-    if let Some(t) = 抖动时间(meta.modified().ok(), 种子, &arc.to_string_lossy()) {
-        if let Ok(d) = t.duration_since(std::time::UNIX_EPOCH) {
-            header.set_mtime(d.as_secs());
-        }
+    if let Some(t) = 抖动时间(meta.modified().ok(), 种子, &arc.to_string_lossy())
+        && let Ok(d) = t.duration_since(std::time::UNIX_EPOCH)
+    {
+        header.set_mtime(d.as_secs());
     }
     header.set_cksum();
     let mut f = fs::File::open(src).map_err(|e| {
@@ -1260,6 +1349,86 @@ pub fn build_sfx_sh_ctx<W: Write>(
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    /// 显示名校验（T18-2）：合法名一个都不许误伤，非法名一个都不许放过。
+    ///
+    /// 判据是「这条名字在 Windows 上会不会出问题」—— 我们做的包是给别人的，
+    /// Linux 上合法但 Windows 上炸的名字（`:` `*` 设备名 末尾点）必须当场拒绝。
+    #[test]
+    fn 显示名校验放过正常名字() {
+        for 好 in [
+            "电影.2026.1080p.mp4",
+            "我的游戏.zip",
+            "a.tar.gz",
+            "video_2026-10-31.MOV",
+            ".hidden",
+            "带 空格 的名字.mp4",
+            "日本語のファイル.mp4",
+        ] {
+            assert!(校验显示名(好).is_ok(), "这条本该合法：{好}");
+        }
+    }
+
+    #[test]
+    fn 显示名校验挡住非法名字() {
+        for 坏 in [
+            "",
+            "   ",
+            " 前后有空格.mp4",
+            "尾巴有空格.mp4 ",
+            "末尾有点.",
+            "a/b.mp4",
+            "a\\b.mp4",
+            "..",
+            ".",
+            "换\n行.mp4",
+            "带\t制表.mp4",
+            "冒号:名.mp4",
+            "星号*.mp4",
+            "问号?.mp4",
+            "引号\"名.mp4",
+            "竖线|名.mp4",
+            "小于<.mp4",
+            "大于>.mp4",
+            "CON",
+            "con.mp4",
+            "COM1.mp4",
+            "LPT9.log",
+        ] {
+            assert!(校验显示名(坏).is_err(), "这条本该被拒：{坏:?}");
+        }
+    }
+
+    #[test]
+    fn 显示名_com0_与_lpt0_不算保留名() {
+        // COM0 / LPT0 不是 Windows 保留设备名，别跟着 COM1 一起误伤
+        assert!(校验显示名("COM0.mp4").is_ok());
+        assert!(校验显示名("LPT0.mp4").is_ok());
+    }
+
+    #[test]
+    fn 显示名超长被拒而_200_字节以内放行() {
+        let 正好 = "a".repeat(显示名最大字节);
+        assert!(校验显示名(&正好).is_ok());
+        let 超了 = "a".repeat(显示名最大字节 + 1);
+        assert!(校验显示名(&超了).is_err());
+        // 按字节算：中文 3 字节/字，67 个字就是 201 字节
+        assert!(校验显示名(&"中".repeat(67)).is_err());
+        assert!(校验显示名(&"中".repeat(66)).is_ok());
+    }
+
+    /// 常见外壳扩展名白名单：`1080p` / `2026` / `x265` 这种「像扩展名但其实不是」的
+    /// 不许被当成扩展名，否则 `电影.2026.1080p` 会产出后缀 `1080p` 的假视频。
+    /// 与 `gui/lib/pack_naming.dart` 的 `knownShellExts` 必须逐字一致。
+    #[test]
+    fn 外壳扩展名白名单() {
+        for 是 in ["mp4", ".MP4", "png", "pdf", "zip", "exe", "mkv", "tar"] {
+            assert!(是外壳扩展名(是), "该认成外壳类型：{是}");
+        }
+        for 不是 in ["1080p", "2026", "x265", "part1", "", ".", "未知"] {
+            assert!(!是外壳扩展名(不是), "不该认成外壳类型：{不是:?}");
+        }
+    }
 
     fn scratch(tag: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("yshjy_pack_{tag}_{}", std::process::id()));
