@@ -89,7 +89,7 @@ pub const OPTS: &[Opt] = &[
     // 防炸链（T18-3）：抖条目时间戳，让网盘当成新文件；默认关
     opt("--tweak-time", None, None, false),
     opt("--level", None, Some("0-9"), false),
-    opt("--layout", None, Some("L1|L2|L4"), false),
+    opt("--layout", None, Some("L1|L2|L3|L4"), false),
     opt("--decoy", None, Some("N"), false),                // 撒几段干扰数据（0 = 不打）
     opt("--decoy-size", None, Some("大小"), false),         // 每段多大（4K–1M）
     opt("--decoy-signatures", None, None, false),           // 每段夹一枚假特征码

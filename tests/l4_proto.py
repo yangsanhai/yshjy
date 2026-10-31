@@ -261,9 +261,8 @@ def main() -> int:
     print("\n⑧ 别的布局编号")
     for 代号, 说明 in [("L5", "分散多段（实测 7-Zip 只解出 1/4）"),
                        ("L6", "前后加垃圾（视频直接播不了）"),
-                       ("L3", "ftyp 后 free（本轮还没做）"),
-                       ("L7", "两个包（本轮还没做）"),
-                       ("L8", "MKV 附件（本轮还没做）")]:
+                       ("L7", "两个包（还没做）"),
+                       ("L8", "MKV 附件（还没做）")]:
         p = tmp / f"bad_{代号}.mp4"
         rc8, so8, se8 = run(["ys", str(src1), "-o", str(p), "--layout", 代号,
                              "--no-readme", "--no-checksum"], tmp)
