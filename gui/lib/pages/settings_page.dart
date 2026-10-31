@@ -129,16 +129,26 @@ class _SettingsPageState extends State<SettingsPage> {
   ///
   /// 只影响一行提示文案：引擎没装 / 老引擎没 `hello.disk` / 探测失败
   /// → 全部当 `unknown`，界面照常能用，**绝不因此报错**。
+  ///
+  /// ⚠️ 要重试一次：应用刚启动时这次 hello 是**最先**打出去的（AppShell 和格式表
+  /// 也各要一次），引擎是刚刚 fork 出来的、还没预热，真机上第一次会失败
+  /// （用户 2026-11-01 截图里那句「本机磁盘类型没探到」就是它）。
+  /// `hello()` 已经把并发请求合并成一次且失败不缓存，所以这里再试一次就能拿到。
   Future<void> _loadDisk() async {
-    try {
-      final h = await EngineClient.instance.hello();
-      if (!mounted) return;
-      final d = h['disk'];
-      setState(() {
-        _disk = (d == 'solid' || d == 'rotational') ? d as String : 'unknown';
-      });
-    } catch (_) {
-      // 保持 unknown
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final h = await EngineClient.instance.hello();
+        if (!mounted) return;
+        final d = h['disk'];
+        setState(() {
+          // 拿到响应就定下来：机器标识认不出（老引擎 / 探测不到）就如实说没探到
+          _disk = (d == 'solid' || d == 'rotational') ? d as String : 'unknown';
+        });
+        return;
+      } catch (_) {
+        if (attempt == 1) return; // 两次都失败 → 保持 unknown，不给用户报错
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
     }
   }
 

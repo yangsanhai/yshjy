@@ -382,9 +382,19 @@ class _StatusBar extends StatelessWidget {
           Text(status, style: dim),
           const Spacer(),
           if (outDir.isNotEmpty)
-            Tooltip(
-              message: t('shell.tray.logDir'),
-              child: Text(t('shell.tray.stateDir', {'path': outDir}), style: dim, overflow: TextOverflow.ellipsis),
+            // 必须包 Flexible：Text 的 ellipsis 只有在拿到**有限宽度**时才生效，
+            // 直接放进 Row 会按内容宽度撑开 → 路径一长就 `RIGHT OVERFLOWED`
+            // （2026-11-01 测试里用长临时目录当场撞出来，真机上长用户名/深路径同样会中）。
+            Flexible(
+              child: Tooltip(
+                message: t('shell.tray.logDir'),
+                child: Text(
+                  t('shell.tray.stateDir', {'path': outDir}),
+                  style: dim,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
             ),
           const SizedBox(width: 12),
           Text(t('shell.tray.engine', {'version': engineVersion}), style: dim),

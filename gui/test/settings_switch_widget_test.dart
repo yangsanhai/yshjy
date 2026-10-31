@@ -128,9 +128,16 @@ void main() {
     await tester.tap(find.text('自动试「密码本」里的解压码'));
     await tester.pump();
     // 点保存（同样要进 runAsync：它走真实文件写入）
+    // ⚠️ 等「文件里真的写出去了」而不是睡固定毫秒：全量并发跑测试时机器很忙，
+    //    固定 120ms 会偶发变红（单跑又绿）。轮询到内容出现为止，最多 3 秒。
     await tester.runAsync(() async {
       await tester.tap(find.widgetWithText(FilledButton, '保存'));
-      await Future<void>.delayed(const Duration(milliseconds: 120));
+      for (var i = 0; i < 120; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        final done = File(_cfgPath).existsSync() &&
+            File(_cfgPath).readAsStringSync().contains('auto_from_book = "off"');
+        if (done) break;
+      }
     });
     await tester.pump();
 

@@ -11,8 +11,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:yshjy_gui/l10n.dart';
+import 'package:yshjy_gui/platform_paths.dart';
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
+  // 每个测试文件一个**独立的** config / state 目录。
+  //
+  // 为什么：`flutter test` 默认并发跑多个测试文件（同进程、多 isolate，环境变量共享），
+  // 三个设置页测试会抢同一个 config.toml —— 2026-11-01 实际撞过：
+  // settings_perf 写的 `jobs = 3` 被 settings_switch 读到，断言红得莫名其妙
+  // （单跑全绿、全量偶发红）。这里用时间戳生成唯一目录，各文件互不干扰。
+  final stamp = DateTime.now().microsecondsSinceEpoch.toRadixString(36).substring(4);
+  final base = Platform.environment['TMPDIR'] ?? '/tmp';
+  debugConfigDir = '$base/yt-$stamp/cfg';
+  setPlatformStateDir('$base/yt-$stamp/state');
+
   try {
     final raw = File('assets/l10n/$baseLocale.json').readAsStringSync();
     final parsed = jsonDecode(raw) as Map<String, dynamic>;

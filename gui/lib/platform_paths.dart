@@ -16,6 +16,15 @@ import 'dart:io';
 
 String? _overrideStateDir;
 
+/// **测试专用**：把配置目录指到别处（生产代码永远不设它）。
+///
+/// 为什么需要：`flutter test` 默认**并发**跑多个测试文件（同一进程、多个 isolate，
+/// 环境变量是共享的）。三个设置页测试会同时抢同一个 `$XDG_CONFIG_HOME/yshjy/config.toml`，
+/// 2026-11-01 真撞过：`settings_perf` 写进去的 `jobs = 3` 被 `settings_switch` 读到，
+/// 断言莫名其妙地红（单跑全绿、全量偶发红 —— 最难查的那种）。
+/// 现在由 `test/flutter_test_config.dart` 给每个测试文件生成一个独立目录。
+String? debugConfigDir;
+
 /// 原生层（iOS/Android）注入状态目录；桌面不需要调
 void setPlatformStateDir(String path) {
   _overrideStateDir = path;
@@ -47,6 +56,9 @@ String get stateDir {
 
 /// 配置目录（与引擎 `config_dir()` 一致）
 String get configDir {
+  // 测试覆盖优先（见 [debugConfigDir] 的说明）
+  final injected = debugConfigDir;
+  if (injected != null && injected.isNotEmpty) return injected;
   if (Platform.isWindows) {
     final base = Platform.environment['APPDATA'] ?? '$homeDir\\AppData\\Roaming';
     return _join(base, 'yshjy');

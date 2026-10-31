@@ -256,6 +256,12 @@ class EngineClient {
   int _nextId = 1;
   bool _started = false;
 
+  /// `hello` 的进程内缓存（引擎的能力表在一次运行里不会变；见 `hello()` 的注释）
+  Map<String, dynamic>? _helloCache;
+
+  /// 正在飞的那次 `hello` —— 三个并发调用共享它，避免同时打向还没预热的引擎
+  Future<Map<String, dynamic>>? _helloInflight;
+
   /// 正在启动中的那次 `start()`。
   ///
   /// 为什么需要它：`await Process.start` 挂起期间，第二个调用看到的 `_started`
@@ -373,8 +379,37 @@ class EngineClient {
     );
   }
 
-  Future<Map<String, dynamic>> hello() async =>
-      _unwrap(await _call({'cmd': 'hello'}));
+  /// 握手（`hello`）。**同一个进程里只发一次**，并发调用共享同一个 Future。
+  ///
+  /// 为什么要合并（2026-11-01 真机撞的）：
+  /// 应用一启动，`AppShell`、`SettingsPage`、设置页的格式表**各自**都会要 hello，
+  /// 三个请求同时打向一个**刚刚 fork 出来、还没预热**的引擎进程。
+  /// 真机上（release AOT + 机械盘冷启动）它们中间的一个会失败 —— 症状就是
+  /// `hello.disk` 拿到空，设置页显示「本机磁盘类型没探到」（用户在截图里点出来的），
+  /// 而状态栏和格式表却是好的（它们重试成功了）。
+  /// 而且引擎侧的能力表在**一次运行里不会变**，本来就没必要问三遍。
+  ///
+  /// 失败**不缓存**：下次调用会重新发一次（这样"第一次冷启动失败"能自愈）。
+  /// 要强制重问（引擎升级后刷新能力表）就传 `refresh: true`。
+  Future<Map<String, dynamic>> hello({bool refresh = false}) {
+    if (!refresh && _helloCache != null) return Future.value(_helloCache!);
+    final inflight = _helloInflight;
+    if (inflight != null) return inflight;
+    final f = _doHello();
+    _helloInflight = f;
+    return f;
+  }
+
+  Future<Map<String, dynamic>> _doHello() async {
+    try {
+      final r = _unwrap(await _call({'cmd': 'hello'}));
+      _helloCache = r;
+      return r;
+    } finally {
+      // 失败也要清掉，否则后面所有调用都会拿到这个已失败的 Future
+      _helloInflight = null;
+    }
+  }
 
   Future<Preview> list(String path, {String? password}) async {
     final r = await _call({
@@ -683,6 +718,8 @@ class EngineClient {
     _started = false;
     _starting = null;
     _pending.clear();
+    _helloCache = null;
+    _helloInflight = null;
   }
 }
 
