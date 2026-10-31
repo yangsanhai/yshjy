@@ -70,7 +70,7 @@
   "settings.theme.light": "浅色",
   "settings.theme.dark": "深色",
   "settings.language": "界面语言",
-  "settings.language.help": "现在只有简体中文和 English 能用。繁體中文 / 日本語 / 한국어 / Español / Русский 还在翻，翻完会自动出现在这里——它们现在不显示，是不想让你选了之后界面没反应。",
+  "settings.language.help": "支持 7 种界面语言，选完立刻生效。",
   "settings.section.output": "解压输出",
   "settings.output.dir": "默认输出目录（留空 = 解到包旁边）",
   "settings.output.dirHint": "例如 /home/你/下载/解压结果",

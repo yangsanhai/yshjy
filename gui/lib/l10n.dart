@@ -49,7 +49,15 @@ const List<String> supportedLocales = [
 ///   · 选了「日本語」-> 找不到语言包 -> 界面停在英文（「怎么还是英文」）
 ///   · 选了「日本語」-> 回落到中文 -> 下拉写着日本語、界面是中文
 /// 翻完一种就往这里加一个，并在 [localeNames] 里它已经有了名字。
-const List<String> availableLocales = ['zh-CN', 'en-US'];
+const List<String> availableLocales = [
+  'zh-CN',
+  'zh-TW',
+  'en-US',
+  'ja-JP',
+  'ko-KR',
+  'es-ES',
+  'ru-RU',
+];
 
 /// 每种语言在**它自己语言里**的名字（设置页下拉用，永远不翻译）
 const Map<String, String> localeNames = {
