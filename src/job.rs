@@ -395,19 +395,20 @@ pub fn 前一个包的起点(f: &mut std::fs::File, base: u64) -> Option<u64> {
             let cd_size = u32::from_le_bytes([buf[i + 12], buf[i + 13], buf[i + 14], buf[i + 15]]) as u64;
             let cd_off = u32::from_le_bytes([buf[i + 16], buf[i + 17], buf[i + 18], buf[i + 19]]) as u64;
             let 总 = 窗 + i as u64;
-            if let Some(起点) = 总.checked_sub(cd_size + cd_off) {
-                if 起点 < base && 起点 > 0 {
-                    // 起点处必须是本地文件头 —— 否则这个 EOCD 其实是别的东西
-                    let mut 四 = [0u8; 4];
-                    let 原位 = f.stream_position().ok();
-                    f.seek(SeekFrom::Start(起点)).ok()?;
-                    let 读得到 = f.read_exact(&mut 四).is_ok();
-                    if let Some(p) = 原位 {
-                        f.seek(SeekFrom::Start(p)).ok()?;
-                    }
-                    if 读得到 && &四 == b"PK\x03\x04" {
-                        return Some(起点);
-                    }
+            if let Some(起点) = 总
+                .checked_sub(cd_size + cd_off)
+                .filter(|q| *q < base && *q > 0)
+            {
+                // 起点处必须是本地文件头 —— 否则这个 EOCD 其实是别的东西
+                let mut 四 = [0u8; 4];
+                let 原位 = f.stream_position().ok();
+                f.seek(SeekFrom::Start(起点)).ok()?;
+                let 读得到 = f.read_exact(&mut 四).is_ok();
+                if let Some(p) = 原位 {
+                    f.seek(SeekFrom::Start(p)).ok()?;
+                }
+                if 读得到 && &四 == b"PK\x03\x04" {
+                    return Some(起点);
                 }
             }
         }
