@@ -61,7 +61,7 @@ E5 智能解压 `a46ced6`、E2 不改封面 + E6 诊断包存下载 `38bb58a`；
 |---|---|---|
 | 地基：l10n 框架 | ✅ 框架 + about 页接上（真机验过：用户自己点「关于」，英文页正常） | 文案放 `assets/l10n/<code>.json`，与引擎语言包同名同规则（`段.键` + `{占位符}`）；不引 `flutter_localizations`/`intl`，理由见 `gui/lib/l10n.dart` 顶部。`gui/test/l10n_test.dart` 16 条（含「各语种缺/多/空/占位符」全量比对） |
 | 错误码文案（humanize 45 条） | ✅ 完成 | 文案搬进语言包的 `err.*` / `diag.*` / `item.*` / `batch.*`；`errorText` / `diagText` / `itemResultText` / `batchOutcomeText` 改成查表，查不到仍回退「原因不明」那类通用人话（**绝不把码名甩给用户**，D21 铁律不动）。新增 `test/flutter_test_config.dart`：所有测试统一装基准语言表（否则表是空的，界面显示 key，一堆断言人话的测试会集体假红） |
-| 设置页 78 条 + 界面语言下拉 | ⬜ | 下拉做完用户才不用改配置文件切语言 |
+| 设置页 68 条 + 界面语言下拉 | ✅ 完成 | 下拉选完**立刻生效**、写回 `[general] ui_language`；每种语言用**它自己语言里的名字**（不翻译）—— 切成看不懂的语言时至少还认得出哪个能切回中文。`gui/test/settings_locale_test.dart` 3 条（读回 en-US / 坏值回落成跟随系统 / 保存不冲掉注释与同段其它键） |
 | 打包页 80 条 / 首页 259 条 / 外壳 20 条 + 小文件 | ⬜ | 首页最大，拆着做 |
 | 6 个语种的翻译（2871 条） | ⬜ | 按语言包逐份翻，翻完靠 l10n_test 的全量比对兜底 |
 | **Windows 上的系统语言识别** | ⬜ **等 Windows 打包那轮做** | 现在用 `Platform.localeName`（dart:io）：Linux 读 LANG、macOS/iOS 读系统设置、**Windows 官方文档没写来源**（实际返回 `zh_CN` 这种下划线格式，代码已兼容 `_` / `-` / `.UTF-8` 三种写法）。**本机无法实测 Windows 路径**，等用户在自己的 Windows 机器上打包时：① 真机看默认语言对不对（中文系统应出简体、繁体系统应出繁体）；② 若有偏差，改成优先用 `PlatformDispatcher.instance.locale`（返回拆好的 language/script/country，跨平台统一）再把 `Platform.localeName` 当兜底；③ 顺带确认 Flutter 在 Windows 上 `computePlatformResolvedLocale` 仍未实现（issue 151755），所以映射表必须自己写，不能指望那个 API |
