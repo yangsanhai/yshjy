@@ -184,6 +184,13 @@ if [ -n "$BIN" ]; then
   # T18-1 布局 L7（一个文件两个包）：★ 核心是两条「反向断言」——
   # 7z 只能看到第一个、unzip 只能看到第二个（这是设计代价，不是 bug）；能解两处的只有我们自己
   run "布局 L7 两个包（l7_proto.py）" python3 tests/l7_proto.py "$BIN"
+  # T18-1 布局 L8（MKV 附件轨）：要系统 ffmpeg；没装就自动降级（探针第 ⑭ 条专门验这个）。
+  # ★ 判据不能只看返回码：封装完还要解码一遍**且 stderr 为空**（L3 那次假绿的教训）
+  if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
+    run "布局 L8 MKV 附件（l8_proto.py）" python3 tests/l8_proto.py "$BIN"
+  else
+    skip "布局 L8 MKV 附件（l8_proto.py）" "本机没有 ffmpeg/ffprobe"
+  fi
   run "协议 report.out_dir（report_outdir_proto.py）" python3 tests/report_outdir_proto.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then

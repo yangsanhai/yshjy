@@ -67,6 +67,21 @@ pub enum PackLayout {
     /// 为什么第二个包是「现成文件的路径」而不是再压一份：用户想要的通常是「把手里这个
     /// 已经压好的包也塞进来」，重压一遍既慢又可能改变内容（压缩级别不同）。
     TwoPackages,
+    /// MKV 附件轨（L8）—— 视频重封装成 MKV，ZIP 变成 MKV 的**附件轨**
+    ///
+    /// 做法照 [`refs/analysis/05-压缩布局验证.md`] §3 L8：借系统 `ffmpeg` 做
+    /// `-i 封面 -attach zip -c copy` —— 视频/音频一个字节不转码，只换容器。
+    /// ZIP 原文进 `Attachments/AttachedFile/FileData`（实测落在偏移 540，mimetype
+    /// 写 `application/zip`）。取回路径有三条（实测都通）：我们的 EBML 解析、
+    /// 我们的 EOCD 全文件扫描、`ffmpeg -dump_attachment:t:0`。
+    ///
+    /// **代价**：`unzip` / Windows 资源管理器 / 手机解压器**全都找不到**
+    /// （ZIP 的 EOCD 离文件尾 89,121 B，超出它们 64 KiB 的搜索窗）；
+    /// 7-Zip 能（`Offset=540`），本工具也能。
+    ///
+    /// **依赖**：系统 `ffmpeg`。没装就降级（见 [`build_ctx_decoy`]）——
+    /// 绝不写出一个假的 MKV。产物后缀是 `.mkv`。
+    MkvAttachment,
 }
 
 impl PackLayout {
@@ -78,6 +93,7 @@ impl PackLayout {
             PackLayout::HeadFreeAtom => "放在文件头部",
             PackLayout::MidChunk => "插在视频中间",
             PackLayout::TwoPackages => "两个包",
+            PackLayout::MkvAttachment => "MKV 附件",
         }
     }
 
@@ -93,8 +109,14 @@ impl PackLayout {
             "head" | "front" | "l3" => Some(Self::HeadFreeAtom),
             "mid" | "middle" | "l4" => Some(Self::MidChunk),
             "two" | "both" | "l7" => Some(Self::TwoPackages),
+            "mkv" | "attach" | "l8" => Some(Self::MkvAttachment),
             _ => None,
         }
+    }
+
+    /// 这套布局的产物是不是 MKV（决定要不要把输出后缀改成 `.mkv`）
+    pub fn 产物是mkv(self) -> bool {
+        self == Self::MkvAttachment
     }
 }
 
@@ -650,6 +672,26 @@ pub fn build_ctx_decoy<W: Write>(
         }
     }
 
+    // L8（MKV 附件）：整套流程要借系统 ffmpeg 重封装 —— 没装就**如实降级**。
+    // 不能「装作成功」：那写出来的是个假 MKV（EBML 头都没有），播放器直接打不开。
+    if layout == PackLayout::MkvAttachment && !ffmpeg可用() {
+        layout = if 封面是mp4 {
+            PackLayout::FreeAtom
+        } else {
+            PackLayout::TailAppend
+        };
+        warnings.push(format!(
+            "没装 ffmpeg，「MKV 附件」布局做不了（它要靠 ffmpeg 把视频重封装成 MKV）；已自动改用「{}」布局 —— 视频照常能播、包照常能解",
+            layout.名字()
+        ));
+    }
+
+    // ④ L8（MKV 附件）：产物整个由 ffmpeg 生成 —— 不走「我们自己写封面 + 嵌 ZIP」
+    //    这条老路（MKV 的 EBML 结构得让复用器排）。ZIP 已经躺在 tmp 里，直接交过去。
+    if layout == PackLayout::MkvAttachment {
+        return 封装成mkv附件(opts, &cover, &tmp, zip_size, entries, decoy, 进度, out);
+    }
+
     // 封面怎么落地：L4 得拆两段写（中间夹 ZIP），别的布局就是一整块（后段为空）
     let (封面前, 封面后): (&[u8], &[u8]) = match &槽 {
         Some(s) => (&s.封面[..s.插点], &s.封面[s.插点..]),
@@ -718,6 +760,9 @@ pub fn build_ctx_decoy<W: Write>(
             拷贝带进度(第二, out, 进度)?;
             noise_size = 0;
         }
+        // L8 在上面已经 return 了（产物整个由 ffmpeg 生成，不走这条自己拼装的路）。
+        // 这里只是让 match 穷尽 —— 真走到这儿说明上面的分支被人删了。
+        PackLayout::MkvAttachment => unreachable!("MKV 附件布局应由 封装成mkv附件 处理"),
     }
     // 封面的后半段（L3 / L4 有内容；别的布局这里是空的）
     out.write_all(封面后)
@@ -1087,6 +1132,184 @@ fn tar走目录<W: Write>(
         }
     }
     Ok(n)
+}
+
+/// 系统里有没有 ffmpeg（`-version` 能正常跑起来就算有）
+///
+/// 为什么不缓存：用户可能刚 apt install 完就回来试，缓存会让「装了还是不认」。
+/// 一次 `-version` 是几毫秒，比一次误判便宜。
+fn ffmpeg可用() -> bool {
+    std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// 在 MKV 里找内嵌 ZIP 的起点：拿 ZIP 前 32 字节当指纹去文件里扫
+///
+/// 为什么不用 [`crate::layout::zip::locate`]：它只在**文件尾 64 KiB** 里找 EOCD，
+/// 而 L8 的 ZIP 在文件**头部**（实测 540），EOCD 离文件尾 89,121 B → 必然找不到。
+/// 附件轨是把 ZIP 原文整段嵌进去的，所以指纹一定能命中，而且不可能误命中
+/// （指纹包含 ZIP 的第一个本地文件头，MKV 的 EBML 里不会有这种字节序列）。
+fn 找内嵌zip(f: &mut fs::File, size: u64, 指纹: &[u8]) -> Option<u64> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    if 指纹.len() < 4 || 指纹.len() as u64 > size {
+        return None;
+    }
+    const 块: usize = 1 << 20;
+    let mut buf = vec![0u8; 块 + 指纹.len()];
+    let mut 起点 = 0u64;
+    loop {
+        if 起点 + 指纹.len() as u64 > size {
+            return None;
+        }
+        f.seek(SeekFrom::Start(起点)).ok()?;
+        let n = f.read(&mut buf).ok()?;
+        if n < 指纹.len() {
+            return None;
+        }
+        if let Some(i) = buf[..n].windows(指纹.len()).position(|w| w == 指纹) {
+            return Some(起点 + i as u64);
+        }
+        if 起点 + n as u64 >= size {
+            return None;
+        }
+        // 步进一块，但退回「指纹长度 - 1」：指纹可能正跨在两块的交界上
+        起点 += (n - 指纹.len() + 1) as u64;
+    }
+}
+
+/// L8：把封面 + ZIP 交给系统 ffmpeg 重封装成 MKV（ZIP 进**附件轨**）
+///
+/// 流程照 `refs/analysis/05-压缩布局验证.md` §3 L8 的实测配方：
+/// ① 封面写到临时文件（ffmpeg 要路径）；
+/// ② `-i 封面 -attach payload.zip -metadata:s:t:0 mimetype=application/zip -c copy`
+///    —— **不转码**，只换容器；
+/// ③ 产物读回来（`out` 只是个 Write，我们拿到的是文件路径）；
+/// ④ 核一遍：EBML 魔数在不在、ZIP 起点找得到吗（找不到就等于产了个空壳，必须报错）。
+///
+/// ★ `-fflags +bitexact` / `-flags:v|a +bitexact` 必须写在**输出侧**：不写的话
+///   mkv 复用器会写随机的 SegmentUID / TrackUID → 同一份输入打两次产物不一样
+///   （「两次打包逐字节一致」这条验收会直接挂，实测撞过）。
+fn 封装成mkv附件<W: Write>(
+    _opts: &PackOptions,
+    cover: &[u8],
+    zip_tmp: &Path,
+    zip_size: u64,
+    entries: usize,
+    decoy: &DecoyOptions,
+    进度: &mut dyn FnMut(PackTick),
+    out: &mut W,
+) -> Result<PackReport> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+
+    // 干扰数据做不到：MKV 的附件区位置由复用器排布，噪声只能落在 EBML 元素之间，
+    // 会直接把结构写坏（不是「藏得更好」，是文件打不开）。
+    if decoy.is_on() {
+        return Err(Error::new(ErrorCode::InvalidArgument).with(
+            "reason",
+            "「MKV 附件」不能和干扰数据一起用：噪声会写坏 MKV 的结构，视频都打不开",
+        ));
+    }
+
+    let 目录 = std::env::temp_dir().join(format!("yshjy_mkv_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&目录);
+    fs::create_dir_all(&目录)
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建临时目录: {e}")))?;
+
+    let mut 干活 = |目录: &Path| -> Result<PackReport> {
+        // ① 封面落地（后缀给 .mp4：ffmpeg 按内容探测，扩展名只是给它个提示）
+        let 封面文件 = 目录.join("cover.mp4");
+        fs::write(&封面文件, cover)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("写封面: {e}")))?;
+
+        // ② 重封装：视频/音频 -c copy，ZIP 作附件
+        let 产物 = 目录.join("out.mkv");
+        let 输出 = std::process::Command::new("ffmpeg")
+            .args(["-hide_banner", "-loglevel", "error", "-y"])
+            .arg("-i")
+            .arg(&封面文件)
+            .arg("-attach")
+            .arg(zip_tmp)
+            .args(["-metadata:s:t:0", "mimetype=application/zip"])
+            .args(["-metadata:s:t:0", "filename=payload.zip"])
+            .args(["-map", "0", "-c", "copy"])
+            .args([
+                "-fflags",
+                "+bitexact",
+                "-flags:v",
+                "+bitexact",
+                "-flags:a",
+                "+bitexact",
+            ])
+            .arg(&产物)
+            .output()
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("跑不了 ffmpeg: {e}")))?;
+
+        // ★ 两个条件都要看：rc=0 但 stderr 有内容 = 有非致命错误（L3 那次假绿的教训）
+        if !输出.status.success() || !输出.stderr.is_empty() {
+            let 尾巴 = String::from_utf8_lossy(&输出.stderr);
+            let 尾巴: String = 尾巴.chars().rev().take(400).collect::<Vec<_>>().into_iter().rev().collect();
+            return Err(Error::new(ErrorCode::Internal).with(
+                "reason",
+                format!("ffmpeg 封装成 MKV 失败：{尾巴}"),
+            ));
+        }
+
+        // ③ 核产物：EBML 魔数 + ZIP 指纹
+        let 总 = fs::metadata(&产物)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("mkv meta: {e}")))?
+            .len();
+        let mut f = fs::File::open(&产物)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open mkv: {e}")))?;
+        let mut 四 = [0u8; 4];
+        f.read_exact(&mut 四)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读 mkv 头: {e}")))?;
+        if &四 != b"\x1aE\xdf\xa3" {
+            return Err(Error::new(ErrorCode::Internal)
+                .with("reason", "ffmpeg 的产物不是 MKV（EBML 魔数不对）"));
+        }
+
+        // 指纹 = ZIP 的前 32 字节（不够就取全部）
+        let mut 指纹 = vec![0u8; 32.min(zip_size as usize)];
+        {
+            let mut zf = fs::File::open(zip_tmp)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open zip: {e}")))?;
+            zf.read_exact(&mut 指纹)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("读 zip 头: {e}")))?;
+        }
+        let 起点 = 找内嵌zip(&mut f, 总, &指纹)
+            .ok_or_else(|| {
+                Error::new(ErrorCode::Internal)
+                    .with("reason", "MKV 里找不到 ZIP 附件 —— 这个文件打出来了也解不开")
+            })?;
+
+        // ④ 交付（out 是 Write，把产物流式拷进去）
+        进度(PackTick::TotalHint(总));
+        f.seek(SeekFrom::Start(0))
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("rewind: {e}")))?;
+        拷贝带进度(&产物, out, 进度)?;
+
+        Ok(PackReport {
+            total_size: 总,
+            zip_size,
+            cover_size: 起点, // 「ZIP 之前的那一段」= MKV 头部 + 附件头
+            entries,
+            layout: PackLayout::MkvAttachment,
+            noise_size: 0,
+            zip_offset: 起点,
+            second: None,
+            warnings: Vec::new(),
+            intermediate: None,
+        })
+    };
+
+    let r = 干活(&目录);
+    let _ = fs::remove_dir_all(&目录);
+    r
 }
 
 /// 把输入路径（文件或目录，可递归）打成 ZIP

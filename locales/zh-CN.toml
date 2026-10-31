@@ -58,9 +58,10 @@ text = """
   --encoding <编码>              手动指定文件名编码（auto / gbk / big5 / sjis / utf-8；gb18030、shift-jis 是别名）
   --tail                          打包用"尾部追加"布局（默认藏进 free 原子；封面是图片/文字时自动用它）
   --config <文件>                 用指定的配置文件（默认 ~/.config/yshjy/config.toml）
-  --layout L1|L2|L3|L4|L7         打包布局：L1 尾部追加 / L2 藏进 free 原子（默认）/
+  --layout L1|L2|L3|L4|L7|L8      打包布局：L1 尾部追加 / L2 藏进 free 原子（默认）/
                                    L3 放在文件头部 / L4 插在视频中间（视频都还能播，但这两种
-                                   只有 7-Zip 和本工具能认出包）/ L7 一个文件放两个包
+                                   只有 7-Zip 和本工具能认出包）/ L7 一个文件放两个包 /
+                                   L8 封装成 MKV（ZIP 进附件轨，要装 ffmpeg）
   --second <文件>                 给 L7 用：第二个包，一个现成的 zip（只有 --layout L7 认它）
   --cover <文件>                  用自己的图片/视频当封面（默认用内置素材）
   --password-file <文件>          密码本：每行一个（# 注释），只对这次命令有效
@@ -201,6 +202,7 @@ pack_layout_tail = "尾部追加"
 pack_layout_free = "free 原子"
 pack_layout_head = "放在文件头部"
 pack_layout_two = "两个包"
+pack_layout_mkv = "MKV 附件"
 pack_layout_mid = "插在视频中间"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ 自检通过（这个文件能播放，也能被我们解回来）"

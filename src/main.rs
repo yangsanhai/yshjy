@@ -2627,6 +2627,13 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 .filter(|e| !e.is_empty())
         })
     });
+    // L8（MKV 附件）：产物是 MKV，默认后缀必须跟着走 ——
+    // 不然会得到「内容 MKV、名字 MP4」的文件（播放器和网盘都按扩展名判，等于骗人）。
+    let 要mkv = layout
+        .as_deref()
+        .and_then(yshjy::pack::PackLayout::解析)
+        .map(|l| l.产物是mkv())
+        .unwrap_or(false);
     let 默认后缀: &str = if 普通压缩 {
         // `--format` 默认名跟着格式走：a.txt → a.txt.tar.gz
         格式.名字()
@@ -2634,6 +2641,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         match sfx {
             Some("linux") => "sh",
             Some(_) => "exe",
+            None if 要mkv => "mkv",
             None => 外壳后缀.as_deref().unwrap_or("mp4"),
         }
     };
@@ -2708,6 +2716,27 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         (None, None) => PathBuf::from(format!("{默认基名}.{默认后缀}")),
     };
 
+    // L8（MKV 附件）：产物是 MKV，名字也必须 .mkv ——
+    // 「内容 MKV、名字 MP4」播放器和网盘都按扩展名判，等于骗人（照自解压那条的规矩）。
+    if 要mkv {
+        match out.extension().and_then(|e| e.to_str()) {
+            None => {
+                out.set_extension("mkv");
+            }
+            Some(e) if e.eq_ignore_ascii_case("mkv") => {}
+            Some(e) => {
+                eprintln!("❌ 「MKV 附件」布局的产物是 MKV，文件名要以 .mkv 结尾（现在 .{e}）");
+                return ExitCode::from(code::USAGE);
+            }
+        }
+        // 干扰数据做不到：MKV 的附件区位置由复用器排布，噪声会写坏 EBML 结构。
+        // 放在写盘之前 —— 否则拒绝时会留个 0 字节空文件在用户目录里（L7 那条教训）。
+        if decoy.is_on() {
+            eprintln!("❌ 「MKV 附件」不能和干扰数据一起用：噪声会写坏 MKV 的结构，视频都打不开");
+            return ExitCode::from(code::USAGE);
+        }
+    }
+
     // 自解压（第 23 批）：产物是能双击运行的 exe，和「伪装 / 分卷 / 解压码」互斥。
     // 这些限制都**明确报错**，不静默忽略（D20 的教训）。
     if let Some(种类) = sfx {
@@ -2769,11 +2798,8 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 );
                 return ExitCode::from(code::USAGE);
             }
-            // L8 是 T18-1 剩下的最后一项，还没做
-            "l8" => {
-                eprintln!("❌ --layout {l} 还没实现（现在有 L1 / L2 / L3 / L4 / L7）");
-                return ExitCode::from(code::USAGE);
-            }
+            // L8（MKV 附件）走 PackLayout::解析 → MkvAttachment，
+            // 产物后缀会在下面被改成 .mkv（ffmpeg 按扩展名选复用器，改完还要告诉用户实际路径）
             _ => match yshjy::pack::PackLayout::解析(l) {
                 Some(布局) => {
                     // `--tail` 就是 `--layout L1` 的别名：两个一起给、还说不同的话 =
@@ -2951,6 +2977,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                     yshjy::pack::PackLayout::HeadFreeAtom => 语.t("cli.pack_layout_head", &[]),
                     yshjy::pack::PackLayout::MidChunk => 语.t("cli.pack_layout_mid", &[]),
                     yshjy::pack::PackLayout::TwoPackages => 语.t("cli.pack_layout_two", &[]),
+                    yshjy::pack::PackLayout::MkvAttachment => 语.t("cli.pack_layout_mkv", &[]),
                 };
                 println!(
                     "{}",
