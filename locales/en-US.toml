@@ -71,7 +71,6 @@ COMMON OPTIONS:
   -v, -vv, --verbose              verbose / debug output (-vv is more detailed; use with --log)
   --log <file>                    write a log file (for bug reports)
   --no-color                      disable colors (pipe/log friendly)
-  --keep                          keep the intermediate ZIP when packing
   --trash-source                  Move the source archive to Trash after extracting (recoverable)
   --delete-source                 Permanently delete the source archive after extracting (cannot be undone; asks once, refuses when non-interactive)
   --format <fmt>                  Pack a plain archive (no cover): zip / tar.gz / tar.zst. Given = plain packing; omitted = disguise as before

@@ -201,12 +201,18 @@
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.9.45",
+{"protocol": 1, "engine": "0.9.46",
  "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip","pause","resume"],
  "event_kinds": ["JOB_STARTED", "STAGE_STARTED", "STAGE_FINISHED", "...", "ASK_USER"],
- "languages": ["zh-CN", "..."]}
+ "languages": ["zh-CN", "..."],
+ "disk": "rotational"}
 ```
 （`event_kinds` 的完整真值在 `src/api.rs` 的 `事件种类` 常量 —— 以代码为准。）
+
+`disk`（2026-11-01 新增，只加不删）：本机**写入盘**的类型，取值 `solid` / `rotational` / `unknown`。
+来源是真的读 `/sys/block/<dev>/queue/rotational`（`hardware::detect_disk_kind`），探测目标是
+`[output] dir`（没有就 HOME）。前端拿它给「并行任务数」出建议 —— 机械盘 / U 盘选 1，固态可以 2 或 4。
+老前端不认识这个键就忽略，协议版本不用升。
 
 `list`：
 ```json
@@ -332,7 +338,7 @@ JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryPar
 
 ```
 → {"id":1,"cmd":"hello"}
-← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.45", ...}}
+← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.46", ...}}
 → {"id":2,"cmd":"list","path":"/home/me/游戏.mp4"}
 ← {"type":"event","kind":"STAGE_STARTED","event":{"StageStarted":{"job":2,"stage":"Locate"}}}
 ← {"type":"event","kind":"PREVIEW_READY","event":{"PreviewReady":{...}}}

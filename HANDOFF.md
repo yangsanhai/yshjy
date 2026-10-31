@@ -1,5 +1,31 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · 「界面攒一批」6 项全做完（0.9.46 已出包，等装机验收）**
+>
+> - **做了什么**：T17-2 并行数三档（1/2/4，默认 1）+ 可执行提醒真开关 + 撤掉压缩比那行
+>   + 段标题改「性能与提醒」；T17-1 格式表进页面自动显示（去掉按钮，失败给「重试」）；
+>   T18-5 历史页排序（时间/名称/大小 + 方向按钮）；T18-6「检查更新」砍掉、改成
+>   **完全离线的机器断言**；T18-7 `--keep` 整条链删除；P2-2 诊断包落点写清楚。
+> - **★ 新增协议字段 `hello.disk`**（只加不删，协议版本不用升）：`solid` / `rotational` /
+>   `unknown`，来源是真读 `/sys/block/<dev>/queue/rotational`（`hardware::detect_disk_kind`），
+>   探测目标是 `[output] dir`、没有就 HOME。设置页那句「本机磁盘：机械硬盘」靠它才不是假话。
+> - **★ 两个必须记住的坑**：
+>   ① `EngineClient` 是全局单例，`_started` 为 true 后**不会再调 `transportFactory`**。
+>      测试里换假引擎必须调 `EngineClient.resetForTest()`（`@visibleForTesting`，
+>      配 `gui/test/fake_engine.dart` 的 `installFakeEngine()`）。不清就是「单跑全绿、
+>      全量并发偶发红」。
+>   ② `jobs` 写盘**必须是整数**（`jobs = 2`）。写成 `"2"` 引擎 `as_integer()` 读不到 →
+>      静默用默认 1 → 假开关。给 `_upsertSection` 加了 `numeric:` 参数专门处理这个。
+> - **验证**：`cargo test` **403+31+2** · `clippy -D warnings` 干净 · `flutter test` **210**
+>   （新增 17：性能段 13 + 历史排序 4，另修 3 个老测试文件）· `flutter analyze` 干净 ·
+>   `cli_spec_match` **7/7** · 7 语言 **530 键** · `all.sh` **58 通过 / 0 失败 / 252 秒**。
+> - **包**：`dist/yshjy_0.9.46_amd64.deb`（11M，`test-packages.sh` **37/37**）
+>   + `yshjy-0.9.46` / `yshjy-full-0.9.46` 两个 tar.gz。
+>   **装机命令**：`sudo apt install ./dist/yshjy_0.9.46_amd64.deb`
+> - **下一批**：T15 覆盖率 · T11 无障碍 · T9 真截图 · P2-1 版本号一条命令 · P2-5 拆 home_page。
+> - **顺手记**：`offline_probe.py` 已挂进 `all.sh`；`all.sh` 的 flutter test 现在同时隔离
+>   `XDG_CONFIG_HOME` 和 `XDG_STATE_HOME`（历史页测试要造记录，不隔离就会改用户真实历史）。
+
 > **2026-11-01 · T18-4 队列「全部暂停 / 继续」做完（0.9.44）**
 >
 > - **做了什么**：批量解压能整体**暂停再继续**。以前只有「移出队列」和「取消整批」。

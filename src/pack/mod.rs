@@ -396,8 +396,6 @@ pub struct PackReport {
     pub second: Option<(u64, u64)>,
     /// 自检发现的问题（空 = 全好）
     pub warnings: Vec<String>,
-    /// `--keep` 时保留的中间 ZIP（默认已删除，这里是 None）
-    pub intermediate: Option<PathBuf>,
 }
 
 impl PackReport {
@@ -412,22 +410,6 @@ impl PackReport {
     // 违反了本项目的分层约定（见 src/i18n.rs 模块头：引擎只给结构化数据，
     // 句子归外壳）。结果是：英文/日文界面下面这句永远中文，翻译不了。
     // v0.9 第 10 批把它挪到外壳（main::do_pack）查语言包渲染 —— 别再加回来。
-}
-
-/// `--keep`：保留打包的中间 ZIP（默认删掉）
-///
-/// 放全局开关而不是 [`PackOptions`] 的字段：那个结构体测试里有十几处逐字段构造，
-/// 加字段会把测试一起改坏（同 [`build_plain`] 的注释）。
-static 保留中间产物: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// 设定是否保留中间产物（`--keep`）
-pub fn 设定保留中间产物(b: bool) {
-    保留中间产物.store(b, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// 是否保留中间产物
-pub fn 保留中间产物已开启() -> bool {
-    保留中间产物.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// 统计输入的总字节与文件数（打包进度的分母）
@@ -784,11 +766,9 @@ pub fn build_ctx_decoy<W: Write>(
         _ => cover_size + atom_overhead + pad_len + noise_size,
     };
 
-    if 保留中间产物已开启() {
-        // `--keep`：留着中间 ZIP（外壳会把路径打出来）
-    } else {
-        let _ = fs::remove_file(&tmp);
-    }
+    // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
+    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
         total_size: cover_size + zip_size + atom_overhead + pad_len + noise_size + 第二大小,
@@ -803,7 +783,6 @@ pub fn build_ctx_decoy<W: Write>(
         second: (layout == PackLayout::TwoPackages && 第二大小 > 0)
             .then(|| (cover_size + zip_size, 第二大小)),
         warnings,
-        intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
 }
 
@@ -829,7 +808,7 @@ pub fn build_plain_ctx<W: Write>(
     }
 
     let tmp = std::env::temp_dir().join(format!(
-        // 后缀跟着格式走：tar 系别叫 .zip（`--keep` 时用户会拿着个 .zip 名去 tar -tzf）
+        // 后缀跟着格式走：tar 系别叫 .zip（中间文件只在内部活几秒，但名字也不该叫错）
         "yshjy_plain_{}_{}.{}",
         std::process::id(),
         std::time::SystemTime::now()
@@ -846,11 +825,9 @@ pub fn build_plain_ctx<W: Write>(
     // 拼装阶段（这里以前也没有进度：2 GB 的普通 ZIP 同样会卡住不动）
     进度(PackTick::TotalHint(zip_size));
     拷贝带进度(&tmp, out, 进度)?;
-    if 保留中间产物已开启() {
-        // `--keep`：留着中间 ZIP
-    } else {
-        let _ = fs::remove_file(&tmp);
-    }
+    // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
+    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
         total_size: zip_size,
@@ -865,7 +842,6 @@ pub fn build_plain_ctx<W: Write>(
         zip_offset: 0,
         second: None,
         warnings: Vec::new(),
-        intermediate: 保留中间产物已开启().then(|| tmp.clone()),
     })
 }
 
@@ -1303,7 +1279,6 @@ fn 封装成mkv附件<W: Write>(
             zip_offset: 起点,
             second: None,
             warnings: Vec::new(),
-            intermediate: None,
         })
     };
 
@@ -1851,11 +1826,9 @@ pub fn build_sfx_ctx<W: Write>(
     out.write_all(&zip_size.to_le_bytes())
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write size: {e}")))?;
 
-    if 保留中间产物已开启() {
-        // `--keep`：留着中间 ZIP
-    } else {
-        let _ = fs::remove_file(&tmp);
-    }
+    // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
+    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
         total_size: 存根大小 + zip_size + 24,
@@ -1867,7 +1840,6 @@ pub fn build_sfx_ctx<W: Write>(
         zip_offset: 存根大小,
         second: None,
         warnings: Vec::new(),
-        intermediate: None,
     })
 }
 
@@ -1926,11 +1898,9 @@ pub fn build_sfx_sh_ctx<W: Write>(
     进度(PackTick::TotalHint(zip_size));
     拷贝带进度(&tmp, out, 进度)?;
 
-    if 保留中间产物已开启() {
-        // `--keep`：留着中间 ZIP
-    } else {
-        let _ = fs::remove_file(&tmp);
-    }
+    // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
+    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
         total_size: 偏移 + zip_size,
@@ -1942,7 +1912,6 @@ pub fn build_sfx_sh_ctx<W: Write>(
         zip_offset: 偏移,
         second: None,
         warnings: Vec::new(),
-        intermediate: None,
     })
 }
 

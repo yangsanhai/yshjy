@@ -195,6 +195,8 @@ if [ -n "$BIN" ]; then
   # T18-4 队列「全部暂停 / 继续」：★ 只认 PAUSED 事件 + 文件数不再增长，
   # 不认 pause 的回执（回执只代表请求送到）；产物逐文件 sha256 与不暂停那次对齐
   run "队列暂停继续（t18_4_pause.py）" python3 tests/t18_4_pause.py "$BIN"
+  # 「完全离线」不是口头承诺（T18-6）：依赖表 + 源码非注释行里的网址都查
+  run "完全离线断言（offline_probe.py）" python3 tests/offline_probe.py
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
     run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"
@@ -230,9 +232,12 @@ head_ "4. 界面（flutter test）"
 if [ "$GUI" = 1 ]; then
   # app_settings_test 要读写 configDir（`[general] open_after`），必须给它隔离的
   # XDG_CONFIG_HOME —— 否则测试自带的安全闸会拒绝跑（绝不动用户真实 config.toml）
+  # 历史页测试（T18-5 排序）要**造**几条记录，落点是 stateDir/gui-history.json，
+  # 同理必须隔离 XDG_STATE_HOME（否则直接改用户真实历史）
   CFGTMP="${TMPDIR:-/tmp}/yshjy-all-cfg"
-  mkdir -p "$CFGTMP"
-  run "flutter test" bash -c "cd gui && XDG_CONFIG_HOME='$CFGTMP' '$FLUTTER' test"
+  STMTMP="${TMPDIR:-/tmp}/yshjy-all-state"
+  mkdir -p "$CFGTMP" "$STMTMP"
+  run "flutter test" bash -c "cd gui && XDG_CONFIG_HOME='$CFGTMP' XDG_STATE_HOME='$STMTMP' '$FLUTTER' test"
   # 窗口尺寸记忆（P10）：这条必须真的开界面窗口 —— Wayland 不许外部查询
   # 别人窗口的几何、GNOME 48 的截图接口对非 shell 进程也不给用（都实测过），
   # 只靠界面里 YSHJY_WINDOW_TRACE 的打点断言。默认跳过：用户明确讨厌回归

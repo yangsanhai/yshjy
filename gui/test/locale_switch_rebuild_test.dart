@@ -31,15 +31,17 @@ void main() {
     installTables(table: zh, base: zh, locale: 'zh-CN');
     // 这里**必须**非 const：const 实例在两次 pump 之间是同一个对象，
     // Flutter 会跳过重建，那这条测试就永远绿（假护栏）。
+    // 外面包 Scaffold：T18-5 加的排序下拉是 Material 组件，要求有 Material 祖先
+    // （真实应用里 AppShell 本来就提供 Scaffold，这里只是补上和真实宿主一样的壳）。
     // ignore: prefer_const_constructors
-    await tester.pumpWidget(MaterialApp(home: HistoryPage()));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: HistoryPage())));
     await tester.pump();
     expect(find.text('历史记录'), findsWidgets, reason: '中文表下标题应该是「历史记录」');
 
     // 模拟用户在下拉里切到 English：换表 + 父级重新 pump 一个新实例
     installTables(table: en, base: zh, locale: 'en-US');
     // ignore: prefer_const_constructors
-    await tester.pumpWidget(MaterialApp(home: HistoryPage()));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: HistoryPage())));
     await tester.pump();
     expect(find.text('History'), findsWidgets,
         reason: '切到英文后历史页标题必须是 History —— 还显示中文就是没重建');

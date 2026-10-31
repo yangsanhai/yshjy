@@ -29,3 +29,21 @@ void requireIsolatedConfigDir(String what) {
     );
   }
 }
+
+/// 会读写 `stateDir`（历史记录 GUI 历史 / 崩溃日志）的测试在 `setUp` 里调一次。
+///
+/// 为什么单独一条：历史页测试要**造**几条记录才能验排序，而 `HistoryStore` 的
+/// 落点是 `stateDir/gui-history.json` —— 指到用户真实目录就是直接改他的历史。
+/// 和 config 那条同一个思路：只要不是真实目录（临时目录叫什么都行）就放行。
+void requireIsolatedStateDir(String what) {
+  final xdg = Platform.environment['XDG_STATE_HOME'];
+  final realState = '$homeDir${Platform.pathSeparator}.local'
+      '${Platform.pathSeparator}state${Platform.pathSeparator}yshjy';
+  if ((xdg == null || xdg.isEmpty) && stateDir == realState) {
+    fail(
+      '$what 会读写 stateDir，必须在隔离的 XDG_STATE_HOME 下跑'
+      '（拒绝动用户真实历史记录：$stateDir）\n'
+      '  例：XDG_STATE_HOME=/tmp/yshjy-test-state flutter test',
+    );
+  }
+}

@@ -58,11 +58,9 @@ check("--cover 用上了自定义封面（PNG 魔数）", r.returncode == 0 and 
 r = run("ys", "-o", "x.mp4", "--cover", "没有这个文件", "src")
 check("--cover 读不到时报错（不静默换素材）", r.returncode == 1 and "读不了" in r.stderr, r.stderr.strip()[:60])
 
-# ④ --keep：中间 ZIP 保留，并打印路径
-r = run("ys", "-o", "keep.mp4", "--keep", "src")
-line = [l for l in r.stdout.splitlines() if "中间文件" in l]
-kept = line and os.path.exists(line[0].split("：", 1)[1].strip())
-check("--keep 保留中间 ZIP 并打印路径", bool(kept), line[:1])
+# ④ --keep：**已随 T18-7 整条删除**（用户口径「打包完就删了，不用留」）。
+#    这一项不是"暂时跳过"：参数已经不存在，故意留下一行断言死掉才是错的 ——
+#    `cli_spec_match.sh` 会核对「文档/补全里没有不存在的选项」，那边兜底。
 
 # ⑤ --password-file
 run("ys", "-o", "pw.mp4", "-p", "密码123", "--no-readme", "src")

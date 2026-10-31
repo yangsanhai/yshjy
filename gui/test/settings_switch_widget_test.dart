@@ -24,11 +24,12 @@ import 'package:yshjy_gui/pages/settings_page.dart';
 import 'package:yshjy_gui/platform_paths.dart';
 
 import 'config_guard.dart';
+import 'fake_engine.dart';
 
 String get _cfgPath => '$configDir/config.toml';
 
 Future<void> _pump(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(1200, 3000);
+  tester.view.physicalSize = const Size(1200, 4200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   // ★ 必须整段放进 runAsync：`testWidgets` 默认是假时钟（FakeAsync），
@@ -36,11 +37,23 @@ Future<void> _pump(WidgetTester tester) async {
   //   `_load()` 卡在第一行，界面停在初始默认值。教训：一开始我用 pumpAndSettle()
   //   + 后面补 runAsync 等待，全都不行（Future 是在假 zone 里发起的，跟真实事件循环
   //   断开了），只有「在 runAsync 里 pumpWidget」才连得上。
+  //
+  // 2026-11-01：等待方式从「睡固定 120ms」改成**轮询到保存按钮可用**。
+  // 全量跑时机器忙，固定 sleep 会让这条偶发变红（单跑又绿）。
+  bool loaded() {
+    final f = find.widgetWithText(FilledButton, '保存');
+    if (f.evaluate().isEmpty) return false;
+    return tester.widget<FilledButton>(f).onPressed != null;
+  }
+
   await tester.runAsync(() async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: SettingsPage())),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 120));
+    for (var i = 0; i < 120 && !loaded(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      await tester.pump();
+    }
   });
   await tester.pump();
 }
@@ -58,16 +71,26 @@ bool _switchValue(WidgetTester tester, String title) {
 }
 
 void main() {
+  FakeEngine? fake;
+
   setUpAll(() {
     // 保险丝：跑错目录就会改到用户真配置，宁可整组报错也别偷偷写。
     // 判定收在 `config_guard.dart`（与 app_settings_test 同一套，别再各写一份）
     requireIsolatedConfigDir('设置页测试');
   });
 
-  setUp(() {
+  setUp(() async {
+    // 设置页 `initState` 会问引擎要格式表和磁盘类型 —— 必须换掉真子进程
+    fake?.dispose();
+    await Future<void>.delayed(Duration.zero);
+    fake = FakeEngine();
+    installFakeEngine(fake!);
+
     final f = File(_cfgPath);
     if (f.existsSync()) f.deleteSync();
   });
+
+  tearDownAll(restoreRealTransport);
 
   testWidgets('没有配置文件：两个开关默认都是关（与引擎默认一致）', (tester) async {
     await _pump(tester);
