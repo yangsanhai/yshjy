@@ -427,6 +427,14 @@ class EngineClient {
     /// ⚠️ 用它的调用方必须同时把 `cover` 关掉：提取封面是真写盘的另一条路径，
     /// 一起开着就与「一个字节都不写」矛盾（实测 CLI `--test` 是零字节）。
     bool verifyOnly = false,
+    /// 智能解压（协议 `extract.smart_dir`，CLI 默认开 / `--no-smart-dir` 关）
+    ///
+    /// `true`：包里只有一个顶层目录 / 只有一个文件时不额外套层，一堆散文件才建
+    /// 同名文件夹；`false`：**永远**多套一层「包名」文件夹。
+    ///
+    /// ⚠️ 只有在**不给 dest** 时才看得出区别 —— 给了 dest 两种模式都把产物直接
+    /// 铺在 dest 下（历史行为）。界面里选了输出目录时这个开关必须禁用并说明。
+    bool? smartDir,
   }) async {
     final r = await _call({
       'cmd': 'extract',
@@ -450,6 +458,8 @@ class EngineClient {
       if (ask) 'ask': true,
       // 只检查不落盘（E4）：引擎走 verify_only，解码 + 校验但一个字节都不写
       if (verifyOnly) 'verify_only': true,
+      // 智能解压（E5）：不传 = 引擎默认 true；只有「没给 dest」时才真有区别
+      if (smartDir != null) 'smart_dir': smartDir,
     });
     return ExtractResult.fromJson(_unwrap(r));
   }

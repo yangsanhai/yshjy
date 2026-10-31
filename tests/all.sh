@@ -167,6 +167,7 @@ if [ -n "$BIN" ]; then
   # 命令行能指定解第几处（candidate_cli，T16 —— 界面走协议，命令行走 --candidate）
   run "多候选扫描（t5_candidates.py）" env YSHJY_BIN="$BIN" python3 tests/t5_candidates.py
   run "命令行指定候选（candidate_cli.py）" python3 tests/candidate_cli.py "$BIN"
+  run "协议 smart_dir 开关（smart_dir_proto.py）" python3 tests/smart_dir_proto.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
     run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"
