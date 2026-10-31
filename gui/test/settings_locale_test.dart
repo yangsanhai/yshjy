@@ -14,10 +14,12 @@
 // 注意：这个测试会真写配置文件，必须隔离：
 //   XDG_CONFIG_HOME=/tmp/yshjy-test-config flutter test
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yshjy_gui/l10n.dart';
 import 'package:yshjy_gui/pages/settings_page.dart';
 import 'package:yshjy_gui/platform_paths.dart';
 
@@ -29,12 +31,15 @@ Future<void> _pump(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1200, 3600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  // 页面内部 `_load()` 要读真文件 → 整段放进 runAsync（假时钟里 File.* 永不完成）
+  // 页面内部 `_load()` 要读真文件 → 整段放进 runAsync（假时钟里 File.* 永不完成）。
+  // 等 300ms 而不是 150ms：机器忙时读配置 + 首帧构建可能超过 150ms，
+  // 曾出现过「偶发第一条红、重跑就绿」的 flaky（那是等待不够，不是业务问题）。
   await tester.runAsync(() async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsPage())));
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
   });
   await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
 }
 
 void _writeConfig(String text) {
@@ -87,5 +92,55 @@ void main() {
     expect(text.contains('# 用户手写的注释也要留着'), isTrue, reason: '注释不能被冲掉：\n$text');
     expect(text.contains('theme = "dark"'), isTrue, reason: '同段其它键不能被冲掉：\n$text');
     expect(text.contains('close_action = "tray"'), isTrue, reason: '同段其它键不能被冲掉：\n$text');
+  });
+
+  testWidgets('英文 + 真机窄窗口（576 宽）不溢出', (tester) async {
+    // 真机 576×607 时用户在截图里撞到过 `RIGHT OVERFLOWED BY 40 PIXELS`：
+    // 「遇到同名文件 / 解压完原包」两个下拉原本并排，英文 label 一长就把右边挤出去。
+    // 这条测试按真机宽度渲染整页 —— 任何 RenderFlex overflow 都会作为异常抛出来。
+    _writeConfig('[general]\nui_language = "en-US"\n');
+    final raw = File('assets/l10n/en-US.json').readAsStringSync();
+    final parsed = jsonDecode(raw) as Map<String, dynamic>;
+    installTables(
+      table: {
+        for (final e in parsed.entries)
+          if (!e.key.startsWith('_') && e.value is String) e.key: e.value as String,
+      },
+      locale: 'en-US',
+    );
+    addTearDown(() {
+      // 装回基准语言，别把英文表留给后面的测试
+      final zhRaw = File('assets/l10n/zh-CN.json').readAsStringSync();
+      final zhParsed = jsonDecode(zhRaw) as Map<String, dynamic>;
+      installTables(table: {
+        for (final e in zhParsed.entries)
+          if (!e.key.startsWith('_') && e.value is String) e.key: e.value as String,
+      });
+    });
+
+    tester.view.physicalSize = const Size(576, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.runAsync(() async {
+      await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsPage())));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // ⚠️ 必须滚到那两个下拉的位置再断言：`ListView` 是**懒加载**的，不滚到那一带
+    // 那两行根本不 build，溢出也就不会发生 —— 第一版没滚动，320 宽都「通过」，
+    // 是条假护栏。反向验证过：把两个下拉改回并排 Row，这条会红。
+    await tester.scrollUntilVisible(
+      find.text(t('settings.conflict.rename')),
+      120,
+      // 页面里不止一个 Scrollable（输入框内部也有），不指定外层就会
+      // `Bad state: Too many elements`。取第一个 = 最外层 ListView。
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull,
+        reason: '真机 576 宽 + 英文曾溢出 40px —— 别把并排改回来，也别去掉 isExpanded');
   });
 }
