@@ -79,13 +79,13 @@
 |---|---|---|
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
 | `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
-| `extract` | `path`, `dest?`, `password?`, `force?`, `cover?`, `extract?`, `drill?`, `ask?`, `select?`, `encoding?` | 解压单个目标；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`ask:true` 表示前端能处理 `ASK_USER`（不写 = 限额命中直接失败）；**`select` = 文件级挑选**（v0.9.24 起）：字符串表达式（`all` / `1,3,5` / `*.exe` / `目录/**` / `required`）或正整数数组（序号，与 `PREVIEW_READY` 的 `index` 一致），不传 = 全解，非法表达式回 `BAD_PARAM`（**不会**静默全解）；`encoding` = 文件名代码页（`gbk` / `big5` / `sjis` / `utf-8`，`auto` 等同不传） |
+| `extract` | `path`, `dest?`, `password?`, `force?`, `verify_only?`, `cover?`, `extract?`, `drill?`, `ask?`, `select?`, `encoding?` | 解压单个目标；**`verify_only:true` = 只测不写**（＝CLI `--test`、界面「只检查」）：完整解码 + 校验，**一个字节都不落盘**。开着它时前端要自己把 `cover` 关掉（切封面是另一条真写盘的路径），并且结果里的 `entries_done` / `bytes_written` 是**解码量、不是落盘量**、`dest` 只是回显（目录不会存在）—— 别拿它当产物路径去摆「打开目录」；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`ask:true` 表示前端能处理 `ASK_USER`（不写 = 限额命中直接失败）；**`select` = 文件级挑选**（v0.9.24 起）：字符串表达式（`all` / `1,3,5` / `*.exe` / `目录/**` / `required`）或正整数数组（序号，与 `PREVIEW_READY` 的 `index` 一致），不传 = 全解，非法表达式回 `BAD_PARAM`（**不会**静默全解）；`encoding` = 文件名代码页（`gbk` / `big5` / `sjis` / `utf-8`，`auto` 等同不传） |
 | `pack` | `inputs[]`, `out`, `cover?`, `sfx?`, `password?`, `tail?`, `mode?`, `split?`, `checksum?`, `readme?`, `level?`, `decoy?`, `decoy_size?`, `decoy_signatures?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装（老行为）；**`cover` = 外壳文件的绝对路径，伪装模式必填，任意类型**（引擎按文件头决定布局：MP4 走 free 原子，其他走尾部追加）；**`sfx:true` = 生成 Windows 自解压 exe**（输出必须 `.exe`，与 `cover`/`split`/`password` 互斥）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode；**`level` = 压缩级别 0-9**（0 = 仅存储最快、9 = 压缩最小，默认 6，结果里回显实际用的 `level`，越界回 `BAD_PARAM`） |
 | `cancel` | — | 取消当前任务（整批停） |
 | `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
 | `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |
 | `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` / **`candidates[]`** / **`seek` / `seek_label`** |
-| `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `ask?`, `select?`, `encoding?` | 顺序批量解压，返回逐项结果；`ask` / `select` / `encoding` 与 `extract` 同规则（同一次批量里所有包都按这个挑选） |
+| `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `verify_only?`, `ask?`, `select?`, `encoding?` | 顺序批量解压，返回逐项结果；`ask` / `select` / `encoding` / `verify_only` 与 `extract` 同规则（同一次批量里所有包都按这个挑选） |
 | `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
 | `rescue` | `path`, `dest?`, `list_only?`, `encoding?` | **救援**（＝CLI `--rescue`）：中央目录坏了也按 local header 重建清单并抢救数据。`list_only:true` 只重建清单、**一个字节都不落盘**（界面可以先说「能救回 N 个」再动手）；不给 `dest` 时落到 `<包名>.rescue`；只认 ZIP 家族，认不出回 `NOT_ARCHIVE`（**不许**折成 `DATA_LOST`，否则用户会去重下好包）。结果带 `entries_total` / `entries_done` / `dest` / `files[]` / `skipped[]` / `rebuilt[]` |
 | `bulk` 以外的新命令 | — | **只加不删**，前端忽略不认识的 |
