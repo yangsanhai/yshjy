@@ -682,6 +682,11 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         cover: 外壳字节,
         cover_ext: 扩展名.clone(),
         format: 格式,
+        // 防炸链（T18-3）：默认关；开了就抖条目时间戳（zip / tar 都支持）
+        tweak_time: 参数
+            .get("tweak_time")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         ..Default::default()
     };
     // 压缩级别（P23-4）：0=仅存储（最快）/ 1-9 越大越小越慢，默认 6。

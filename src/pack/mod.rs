@@ -114,6 +114,11 @@ pub struct PackOptions {
     pub level: u32,
     /// 归档格式（`Zip` 默认；tar 系只给普通压缩用，见 [`PackFormat`]）
     pub format: PackFormat,
+    /// 防炸链：给条目时间戳加随机偏移（T18-3 / CLI `--tweak-time` / 协议 `pack.tweak_time`）
+    ///
+    /// 网盘按内容哈希判重，同一份东西反复上传会秒传 / 炸链。时间戳是 ZIP/tar 头里的
+    /// 字段，改了它整包字节就变 —— 哈希也变，网盘当成新文件。**默认关**（DESIGN §14.2）。
+    pub tweak_time: bool,
 }
 
 impl Default for PackOptions {
@@ -127,6 +132,7 @@ impl Default for PackOptions {
             pad_range: (64, 256),
             level: 6,
             format: PackFormat::Zip,
+            tweak_time: false,
         }
     }
 }
@@ -560,6 +566,13 @@ fn write_tar(
     let file = fs::File::create(tmp)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("create tmp: {e}")))?;
     let buf = std::io::BufWriter::new(file);
+    // 防炸链（T18-3）：与 ZIP 侧同一个约定 —— 开着才抖，关着一律用文件真实 mtime
+    let 抖种子 = opts.tweak_time.then(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x5EED)
+    });
 
     // 两个分支只差「外面套什么」，里面都是 tar::Builder
     let count;
@@ -567,7 +580,7 @@ fn write_tar(
         PackFormat::TarGz => {
             let enc = flate2::write::GzEncoder::new(buf, flate2::Compression::new(opts.level));
             let mut tb = tar::Builder::new(enc);
-            count = 加tar条目(&mut tb, inputs, 进度)?;
+            count = 加tar条目(&mut tb, inputs, 抖种子, 进度)?;
             let enc = tb
                 .into_inner()
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tar 收尾: {e}")))?;
@@ -584,7 +597,7 @@ fn write_tar(
             let enc = zstd::stream::write::Encoder::new(buf, 级)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zstd 初始化: {e}")))?;
             let mut tb = tar::Builder::new(enc);
-            count = 加tar条目(&mut tb, inputs, 进度)?;
+            count = 加tar条目(&mut tb, inputs, 抖种子, 进度)?;
             let enc = tb
                 .into_inner()
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("tar 收尾: {e}")))?;
@@ -603,6 +616,7 @@ fn write_tar(
 fn 加tar条目<W: Write>(
     tb: &mut tar::Builder<W>,
     inputs: &[PathBuf],
+    抖种子: Option<u64>,
     进度: &mut dyn FnMut(PackTick),
 ) -> Result<usize> {
     let mut count = 0usize;
@@ -614,16 +628,49 @@ fn 加tar条目<W: Write>(
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("item"));
         if meta.is_dir() {
-            count += tar走目录(tb, input, &base, 进度)?;
+            count += tar走目录(tb, input, &base, 抖种子, 进度)?;
         } else {
-            tb.append_path_with_name(input, &base).map_err(|e| {
-                Error::new(ErrorCode::Internal).context(format!("tar 加入 {input:?}: {e}"))
-            })?;
+            tar加文件(tb, input, &base, &meta, 抖种子)?;
             count += 1;
             进度(PackTick::Wrote(meta.len(), Some(base.to_string_lossy().to_string())));
         }
     }
     Ok(count)
+}
+
+/// 往 tar 里加一个文件（T18-3：开了防炸链就手动造 header 改 mtime）
+///
+/// 为什么不能一直用 `append_path_with_name`：它自己读文件的 mtime，
+/// 没法改 —— 而「防炸链」要改的正是这个。所以开着时手动造 header：
+/// `set_metadata` 把权限/uid 等照抄文件，`set_mtime` 换成抖过的值，再 `set_cksum`。
+fn tar加文件<W: Write>(
+    tb: &mut tar::Builder<W>,
+    src: &Path,
+    arc: &Path,
+    meta: &fs::Metadata,
+    抖种子: Option<u64>,
+) -> Result<()> {
+    let Some(种子) = 抖种子 else {
+        // 没开防炸链：老行为，tar crate 按文件真实时间写
+        return tb.append_path_with_name(src, arc).map_err(|e| {
+            Error::new(ErrorCode::Internal).context(format!("tar 加入 {src:?}: {e}"))
+        });
+    };
+    let mut header = tar::Header::new_gnu();
+    header.set_metadata(meta);
+    if let Some(t) = 抖动时间(meta.modified().ok(), 种子, &arc.to_string_lossy()) {
+        if let Ok(d) = t.duration_since(std::time::UNIX_EPOCH) {
+            header.set_mtime(d.as_secs());
+        }
+    }
+    header.set_cksum();
+    let mut f = fs::File::open(src).map_err(|e| {
+        Error::new(ErrorCode::Internal).context(format!("open {src:?}: {e}"))
+    })?;
+    tb.append_data(&mut header, arc, &mut f).map_err(|e| {
+        Error::new(ErrorCode::Internal).context(format!("tar 加入 {src:?}: {e}"))
+    })?;
+    Ok(())
 }
 
 /// tar 的目录递归
@@ -634,6 +681,7 @@ fn tar走目录<W: Write>(
     tb: &mut tar::Builder<W>,
     dir: &Path,
     prefix: &Path,
+    抖种子: Option<u64>,
     进度: &mut dyn FnMut(PackTick),
 ) -> Result<usize> {
     tb.append_dir(prefix, dir)
@@ -653,11 +701,9 @@ fn tar走目录<W: Write>(
             .metadata()
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?;
         if meta.is_dir() {
-            n += tar走目录(tb, &p, &arc, 进度)?;
+            n += tar走目录(tb, &p, &arc, 抖种子, 进度)?;
         } else {
-            tb.append_path_with_name(&p, &arc).map_err(|e| {
-                Error::new(ErrorCode::Internal).context(format!("tar 加入 {p:?}: {e}"))
-            })?;
+            tar加文件(tb, &p, &arc, &meta, 抖种子)?;
             n += 1;
             进度(PackTick::Wrote(meta.len(), Some(arc.to_string_lossy().to_string())));
         }
@@ -685,6 +731,14 @@ fn write_zip(
     // （共用会让所有条目都变成 ZIP 格式起点 1980-01-01 —— 实测踩到过）
     let pw = opts.password.as_deref();
 
+    // 防炸链（T18-3）：种子每次打包都换（系统时间）—— 这种功能的目的就是每次都不同
+    let 抖种子 = opts.tweak_time.then(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x5EED)
+    });
+
     let mut count = 0usize;
     for input in inputs {
         let meta = fs::metadata(input)
@@ -695,13 +749,18 @@ fn write_zip(
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "dir".into());
-            count += add_dir(&mut zw, input, &base_name, method, opts.level as i64, pw, 进度)?;
+            count += add_dir(&mut zw, input, &base_name, method, opts.level as i64, pw, 抖种子, 进度)?;
         } else {
             let name = input
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "file".into());
-            let fopt = 条目选项(method, opts.level as i64, meta.modified().ok(), pw)?;
+            let 原时间 = meta.modified().ok();
+            let 时间 = match 抖种子 {
+                Some(s) => 抖动时间(原时间, s, &name),
+                None => 原时间,
+            };
+            let fopt = 条目选项(method, opts.level as i64, 时间, pw)?;
             zw.start_file(&name, fopt)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
             let mut f = fs::File::open(input).map_err(|e| {
@@ -773,6 +832,41 @@ fn 系统时间转_zip_时间(t: std::time::SystemTime) -> Option<zip::DateTime>
     zip::DateTime::from_date_and_time(y as u16, m as u8, d as u8, hh as u8, mm as u8, ss as u8).ok()
 }
 
+/// 「防炸链」：按「条目路径 + 本次种子」派生一个时间戳（T18-3）
+///
+/// 网盘按内容哈希判重 —— 同一份东西反复上传会秒传 / 炸链。时间戳是 ZIP / tar 头里的
+/// 字段，改了它整包字节就变、哈希也变，网盘当成新文件。
+///
+/// 三个刻意的选择：
+/// 1. **不是「全改成现在」**：几十个条目时间一模一样反而一眼假，看着就像程序造的。
+///    这里落在 [5 年前, 现在] 之间，像一份正常的旧备份；
+/// 2. **按「路径 + 种子」派生，不调全局随机**：同一包里不同文件不会撞成同一秒，
+///    而且同一次打包里同一个文件的时间是稳定的（否则自检/复算对不上）；
+/// 3. **每次打包换种子**（系统时间）—— 防炸链的目的就是每次不一样。所以开着它时
+///    「同一份输入两次打包逐字节一致」**不再成立**；没开时那条约定照旧（别混）。
+///
+/// 永远不出 1970 / 1980：区间下限是「现在 - 5 年」，且秒数被 `max(0)` 兜住。
+fn 抖动时间(原: Option<std::time::SystemTime>, 种子: u64, 路径: &str) -> Option<std::time::SystemTime> {
+    use std::time::{Duration, UNIX_EPOCH};
+    let _ = 原; // 开着抖动时一律用派生值，原来的 mtime 不参与（它正是要被打乱的东西）
+    let 现在 = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_secs() as i64;
+    let 最早 = (现在 - 5 * 365 * 86_400).max(0);
+    // FNV 式混入路径，再 xorshift 打散 —— 不引 rand（依赖最小原则）
+    let mut x = 种子 ^ 0x9E37_79B9_7F4A_7C15;
+    for b in 路径.as_bytes() {
+        x = x.wrapping_mul(0x100_0000_01b3).wrapping_add(*b as u64);
+    }
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    let 跨度 = (现在 - 最早).max(1) as u64;
+    let 秒 = 最早 + (x % 跨度) as i64;
+    Some(UNIX_EPOCH + Duration::from_secs(秒.max(0) as u64))
+}
+
 fn add_dir<W: Write + Seek>(
     zw: &mut zip::ZipWriter<W>,
     dir: &Path,
@@ -780,6 +874,7 @@ fn add_dir<W: Write + Seek>(
     method: zip::CompressionMethod,
     level: i64,
     pw: Option<&str>,
+    抖种子: Option<u64>,
     进度: &mut dyn FnMut(PackTick),
 ) -> Result<usize> {
     let mut n = 0usize;
@@ -795,9 +890,14 @@ fn add_dir<W: Write + Seek>(
             .metadata()
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("meta: {e}")))?;
         if meta.is_dir() {
-            n += add_dir(zw, &p, &arc, method, level, pw, 进度)?;
+            n += add_dir(zw, &p, &arc, method, level, pw, 抖种子, 进度)?;
         } else {
-            let fopt = 条目选项(method, level, meta.modified().ok(), pw)?;
+            let 原时间 = meta.modified().ok();
+            let 时间 = match 抖种子 {
+                Some(s) => 抖动时间(原时间, s, &arc),
+                None => 原时间,
+            };
+            let fopt = 条目选项(method, level, 时间, pw)?;
             zw.start_file(&arc, fopt)
                 .map_err(|e| Error::new(ErrorCode::Internal).context(format!("zip start: {e}")))?;
             let mut f = fs::File::open(&p)

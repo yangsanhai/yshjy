@@ -707,6 +707,7 @@ fn main() -> ExitCode {
             layout: &layout_o,
             cover: &cover_o,
             format: &format_o,
+            tweak_time: has("--tweak-time"),
             // 第 23 批：--sfx-linux 生成 .sh；--sfx 生成 Windows exe
             sfx: if has("--sfx-linux") {
                 Some("linux")
@@ -2464,6 +2465,8 @@ struct 打包参数<'a> {
     cover: &'a Option<String>,
     /// `--format zip|tar.gz|tar.zst`：一给就走「普通压缩」（不加外壳），不给＝伪装包
     format: &'a Option<String>,
+    /// `--tweak-time`（T18-3）：抖条目时间戳防网盘炸链，默认关
+    tweak_time: bool,
     /// `--sfx` / `--sfx-linux`：自解压种类（第 23 批）
     sfx: Option<&'static str>,
     /// `--level 0-9`：压缩级别（P23-4）
@@ -2487,6 +2490,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         layout,
         cover,
         format,
+        tweak_time,
         sfx,
         level,
         decoy,
@@ -2602,6 +2606,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         password: password.clone(),
         cover_ext: 扩展名,
         format: 格式,
+        tweak_time,
         ..Default::default()
     };
     // 压缩级别（P23-4）：0=仅存储（最快）/ 1-9 越大越小越慢
