@@ -227,7 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _pickDir() async {
     try {
-      final dir = await getDirectoryPath(confirmButtonText: '就用这个目录');
+      final dir = await getDirectoryPath(confirmButtonText: t('settings.pickDirConfirm'));
       if (dir != null && mounted) {
         setState(() => _outDirCtrl.text = dir);
       }

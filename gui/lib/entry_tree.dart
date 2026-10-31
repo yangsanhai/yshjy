@@ -11,6 +11,7 @@
 //     `packed` 只要有一个子项未知就整体记 null（别拿 0 冒充「压得很小」）。
 
 import 'engine.dart';
+import 'l10n.dart';
 
 /// 勾选三态：文件只有 `all` / `none`，目录多一个 `some`（半选，画横线）
 enum PickState { none, some, all }
@@ -131,7 +132,7 @@ class CrumbItem {
 
 /// 面包屑：`[根, 一级, 二级…]`；`crumb` 为空时只有根
 List<CrumbItem> breadcrumbs(String crumb) {
-  final out = <CrumbItem>[const CrumbItem('全部', '')];
+  final out = <CrumbItem>[CrumbItem(t('common.all'), '')];
   final segs = crumb.split('/').where((s) => s.isNotEmpty).toList();
   var acc = '';
   for (final s in segs) {
