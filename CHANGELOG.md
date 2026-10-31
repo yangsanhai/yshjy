@@ -2,6 +2,47 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.42] · 2026-11-01 凌晨（T18-1 · 打包布局 L4「插在视频中间」）
+
+- **是什么**：打包时把 ZIP **插进视频数据中间**（`mdat` 的两条 chunk 之间），视频照常能播
+  —— DESIGN §15.1 矩阵里的 L4「✨ 技术亮点」。命令行 `--layout L4`，协议 `pack.layout: "mid"`，
+  界面打包页那个「不改封面」开关改成三档下拉（free 原子 / 接在文件末尾 / 插在视频中间）。
+- **为什么它难**（`refs/analysis/05-压缩布局验证.md` §4 的对照实验，2026-10-16 现造现测）：
+  必须**同时**做三件事，缺一条视频就坏，而且坏法不一样 ——
+  · 只插不改 → `ffmpeg rc=183` 打不开；
+  · 只改 `mdat` size → **rc=0 但 stderr 满屏 `Decoding error`**（有坏帧）；
+  · 只补 `stco` → rc=183（走不到 moov）；
+  · 插在 chunk 内部 + 两边都改 → rc=0 但 `marker does not match f_code`（画面损坏）；
+  · **插在 chunk 边界 + 两边都改 → rc=0 且 stderr 为空**（干净）。
+  ★ 由此钉死一条验收铁律：**`ffmpeg rc=0` 不等于画面没坏**，探针判的是「rc==0 且 stderr 空」。
+- **实现**：新模块 `src/pack/mp4.rs`（只做这一件事，`#[deny]` 不 panic：封面是用户随便挑的
+  文件，坏结构只能返回错误）。插点从**所有轨 chunk 起点的并集**里取中位 —— 不解析 `stsz`/`stsc`
+  的理由写在模块头（MP4 规范不允许 chunk 数据互相重叠，交错写入时一条 chunk 的终点就是下一条的
+  起点；2026-10-31 用 stsz+stsc 把三个真实封面的每条 chunk 区间算出来核过：零重叠、插点跨越 0 条）。
+- **不做的事（三条，都有测试守着）**：
+  · 封面不是 MP4 → **降级**成「尾部追加」并说明（`warnings` + 界面结果卡红字）；
+  · MP4 但解析不出 `stco`/`co64`（分片 MP4 用 `moof`+`trun`）→ 降级成 free 原子；
+  · 包大到让 32 位 `stco` 偏移 / `mdat` size 溢出（>4 GiB）→ **直接拒绝**，
+    不写一个 size 溢出、解不回来的包。
+- **两条互斥**：L4 + `--decoy`（干扰数据）→ 拒绝 —— 噪声不管写在 ZIP 前面还是后面都落在视频
+  数据中间，会把某条 chunk 切成两段；`--tail` 与 `--layout` 说不同的话 → USAGE(2)（`--tail`
+  就是 `--layout L1` 的别名，两套优先级说不清谁赢）。
+- **内存**：`准备插槽` 只返回「补好的封面 + 插点」，ZIP 走流式拷贝 —— 打 2 GB 的包不会吃 2 GB 内存。
+- **代价（如实写进界面与文档）**：ZIP 的 EOCD 离文件尾远（后半段视频的长度），unzip /
+  Windows 资源管理器 / 手机解压器只在文件尾 64 KiB 找 EOCD → **多半认不出**；
+  7-Zip（从文件头扫）和本工具一定行。实测：90 KB 封面时尾部只有 44 KB → unzip 会警告但能解；
+  498 KB 封面时 unzip 彻底找不到。所以它不是「更隐蔽的默认」，是**高级选项**。
+- **证据**：
+  · 探针 `tests/l4_proto.py` **19/19**（已挂 `all.sh`）：真打进真封面 → ffmpeg 干净 /
+    `--list` 认得出且明说「包藏在文件中间」/ 解出 sha256 逐一相等 / 7z 也能找到 /
+    图片外壳降级且能解 / L4+decoy 拒绝 / L5 L6 拒绝、L3 L7 L8 报未实现 / `--tail` 冲突 /
+    协议 `layout=mid` 回 `MidChunk`、乱写回 `BAD_PARAM`、`tail:true`+`mid` 也被拦；
+  · `cargo test` **392 + 31 + 2**（新增 mp4 模块 9 条）；`clippy -D warnings` 干净；
+  · `flutter analyze` No issues、`flutter test` **188 过**（`pack_tail_widget_test` 升级成
+    `pack_layout_widget_test` 7 条：默认传 free 绝不传 tail / 两档都真传 / 引擎降级要红字 / 图片外壳 mid 灰掉）；
+  · `bash tests/all.sh` **52 通过 / 1 失败（cli_spec_match，补全没同步）→ 重跑生成器后 7/7** / 267 秒；
+  · 真机证据：`screenshots/t18-1-*.png`（等用户点过再补）。
+
 ## [0.9.41] · 2026-10-31 深夜（T18-2 自定义显示名）
 
 - **是什么**：打包时能自己起产物名 —— 伪装成 `电影.2026.1080p.mp4` 这种（DESIGN §14.2
