@@ -1,5 +1,33 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 · T18-1 收尾：L8「MKV 附件轨」做完 → T18-1 四项全齐**
+>
+> - **做了什么**：产物是**真 MKV** —— 借系统 `ffmpeg` 把封面视频**重封装**
+>   （`-i 封面 -attach payload.zip -c copy`，不转码），ZIP 原文进
+>   `Attachments/AttachedFile/FileData`（`mimetype=application/zip`、`filename=payload.zip`）。
+>   CLI `--layout L8`、协议 `pack.layout:"mkv"`、结果回 `MkvAttachment`。
+> - **三条规矩（各有一条探针断言钉着）**：
+>   ① 判据是「**解码 rc=0 且 stderr 为空**」——封装返回 0 不代表能播（L3 那次假绿的教训）；
+>   ② `-fflags +bitexact -flags:v/a +bitexact` **必须写在输出侧**，否则 mkv 复用器写随机
+>      `SegmentUID`/`TrackUID`，两次打包不一样。**反向验证做过**：删掉 → 探针第 ⑩ 条立红；
+>   ③ 后缀必须 `.mkv`（内容是 MKV 却叫 `.mp4` 是骗人）：`-o x.mp4` → USAGE(2) 零产物，
+>      `-o 裸名` → 自动补 `.mkv`。
+> - **没装 ffmpeg → 如实降级**（MP4 封面→free 原子、其它→tail 追加）并在结果里说
+>   「没装 ffmpeg」，**绝不写假 MKV**。探针第 ⑭ 条把 PATH 指到空目录专门验这个。
+> - **代价（反向断言钉死）**：`unzip` / 资源管理器 / 手机解压器**找不到**（EOCD 离文件尾
+>   89,121 B，超出它们 64 KiB 窗口）；7-Zip 能（`Offset=540`），本工具能。
+> - **取回三条路都实测通**：本工具 `--list`、本工具解压（sha256 一致）、
+>   `ffmpeg -dump_attachment:t:0`（★ 它是**输入侧**选项，必须写在 `-i` 之前）。
+> - **实现要点**：`封装成mkv附件` 先写封面到临时文件，封完核 EBML 魔数 `1a 45 df a3`，
+>   再用「ZIP 前 32 字节指纹」在 MKV 里找附件起点 —— `locate()` 在这儿用不了
+>   （它只在文件尾 64 KiB 找 EOCD，而 L8 的 ZIP 在文件头）。
+> - **验证**：`tests/l8_proto.py` **18/18**（已挂 `all.sh`，没 ffmpeg 自动 skip）、
+>   `cargo test` 399+31+2、`clippy -D warnings` 干净、`cli_spec_match` 7/7、
+>   L3 26/26 / L7 22/22 回归不动。
+> - **下一批**：**界面接线**（L3 / L7 / L8 三档 + T18-4/5/6 攒一轮做，只开一次界面），
+>   然后发 0.9.43。L8 的 ffmpeg 依赖必须写进 README **和**界面说明
+>   （用户对「用别人的必须明示来源与许可证」这条很在意）。
+
 ## ★ 铁律：`tests/all.sh` 跑着的时候，不要动代码、不要编译、不要并行跑测试
 
 2026-11-01 连撞两次，两次都是**假失败**，白查半天：
