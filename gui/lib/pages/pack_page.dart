@@ -112,7 +112,11 @@ class _PackPageState extends State<PackPage> {
   //   tail = 封面一个字节都不改，数据接在最后（最保险）
   //   head = 放进文件头部（T18-1 的 L3）：ZIP 包成 free 原子塞在 ftyp 后面
   //   mid  = 插进视频数据中间（T18-1 的 L4）：视频照常能播，包藏得比尾巴深
+  //   two  = 一个文件里放两个包（T18-1 的 L7）：封面 + 本次输入 + 第二个现成 zip
   String _layout = 'free';
+  /// L7 的第二个包（现成 zip 的绝对路径）。只在这一档用，切走不清空 ——
+  /// 用户切来切去别把辛苦挑的文件弄丢。
+  String? _secondPath;
   /// 本次打包「请求的」布局（结果页拿它和引擎实际用的对账，降级了要告诉用户）
   String? _askedLayout;
   /// 没有封面就谈不上布局（普通压缩、自解压）
@@ -229,6 +233,17 @@ class _PackPageState extends State<PackPage> {
           : (_coverExt.isEmpty ? 'mp4' : _coverExt));
 
 
+  /// 挑「第二个包」（L7）：只收 .zip。
+  ///
+  /// 界面按扩展名先筛一道，让用户在选文件时就看得出「这里要的是压缩包」；
+  /// 真正的判断在引擎（读文件头 `PK\x03\x04`）—— 扩展名可以骗人，文件头不行。
+  Future<void> _pickSecond() async {
+    final group = XTypeGroup(label: t('pack.filter.zip'), extensions: const ['zip']);
+    final f = await openFile(acceptedTypeGroups: [group]);
+    if (f == null) return;
+    setState(() => _secondPath = f.path);
+  }
+
   /// 挑伪装文件：任意类型都行（不设白名单）。
   ///
   /// 用户选什么，产物就是「这个文件的完整内容 + 尾部压缩数据」。
@@ -314,6 +329,7 @@ class _PackPageState extends State<PackPage> {
   /// 错误码 → 人话（界面不糊 code；引擎码查 `humanize.dart`，界面自己的码在这补）
   String _errorText(String code) => switch (code) {
         'NO_COVER' => t('pack.err.needCover'),
+        'NO_SECOND' => t('pack.err.needSecond'),
         'SPLIT_SIZE_INVALID' => t('pack.err.badVolume'),
         'BAD_NAME' => t('pack.err.badName'),
         _ => errorText(code),
@@ -331,6 +347,11 @@ class _PackPageState extends State<PackPage> {
     final isSfx = _mode == 'disguise' && _sfx;
     if (!isSfx && _mode == 'disguise' && _coverPath == null) {
       setState(() => _error = 'NO_COVER');
+      return;
+    }
+    // L7：选了「两个包」却没挑第二个包 —— 引擎会拒（BAD_PARAM），但在这里拦能立刻红字
+    if (_canTail && _layout == 'two' && (_secondPath == null || _secondPath!.isEmpty)) {
+      setState(() => _error = 'NO_SECOND');
       return;
     }
     final splitErr = _splitSizeError;
@@ -374,9 +395,11 @@ class _PackPageState extends State<PackPage> {
         // mode:"plain"、sfx 互斥（回 BAD_PARAM），不做「点了才报错」的假开关。
         decoy: _canDecoy && _decoy ? _decoySegments : null,
         decoySignatures: _canDecoy && _decoy && _decoySignatures,
-        // 数据藏在哪（E2 的「不改封面」是这里的一档；T18-1 又加了「插在视频中间」）。
+        // 数据藏在哪（E2 的「不改封面」是这里的一档；T18-1 又加了 head / mid / two）。
         // 不传 = 老行为：引擎按封面文件头自己选。
         layout: _canTail ? _layout : null,
+        // L7 的第二个包：只在「两个包」那一档才传（别的档传了引擎会拒）
+        second: _layout == 'two' ? _secondPath : null,
         checksum: _checksum,
         // 防炸链（T18-3）：默认关，开着才传
         tweakTime: _tweakTime,
@@ -767,9 +790,11 @@ class _PackPageState extends State<PackPage> {
                       ? t('pack.layout.append.desc')
                       : _layout == 'head'
                           ? t('pack.layout.head.desc')
-                          : _layout == 'mid'
-                              ? t('pack.layout.mid.desc')
-                              : t('pack.layout.free'),
+                          : _layout == 'two'
+                              ? t('pack.layout.two.desc')
+                              : _layout == 'mid'
+                                  ? t('pack.layout.mid.desc')
+                                  : t('pack.layout.free'),
               style: const TextStyle(fontSize: 11),
             ),
             trailing: DropdownButton<String>(
@@ -800,9 +825,51 @@ class _PackPageState extends State<PackPage> {
                   enabled: _canMid,
                   child: Text(t('pack.layout.choice.mid')),
                 ),
+                // L7 不挑封面类型（只是把两个包接在封面后面），有封面就能选
+                DropdownMenuItem(
+                  value: 'two',
+                  child: Text(t('pack.layout.choice.two')),
+                ),
               ],
             ),
           ),
+          // L7（一个文件两个包）：第二个包必须是**现成的** zip，只在这一档出现。
+          // 这里不做「必须选」的强校验（打包按钮那关会拦），免得用户还在挑文件就被红字催。
+          if (_canTail && _layout == 'two')
+            ListTile(
+              key: const ValueKey('second-package'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.library_add_outlined, size: 20),
+              title: Text(
+                t('pack.layout.two.pick'),
+                style: const TextStyle(fontSize: 13),
+              ),
+              subtitle: Text(
+                _secondPath == null
+                    ? t('pack.layout.two.none')
+                    : '${baseName(_secondPath!)} · ${_size(File(_secondPath!).lengthSync())}',
+                style: const TextStyle(fontSize: 11),
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    key: const ValueKey('second-pick'),
+                    onPressed: _busy ? null : _pickSecond,
+                    child: Text(t('pack.layout.two.choose')),
+                  ),
+                  if (_secondPath != null)
+                    IconButton(
+                      key: const ValueKey('second-clear'),
+                      tooltip: t('pack.layout.two.clear'),
+                      onPressed: _busy ? null : () => setState(() => _secondPath = null),
+                      icon: const Icon(Icons.close, size: 18),
+                    ),
+                ],
+              ),
+            ),
           // 防网盘扫描（E1 / 协议 pack.decoy*）：往包里撒几段乱码，
           // 让网盘/在线扫描把它当普通视频，而不是「带 ZIP 尾巴的可疑文件」。
           //
@@ -1004,9 +1071,11 @@ class _PackPageState extends State<PackPage> {
                         ? t('pack.layout.free.name')
                         : layout == 'HeadFreeAtom'
                             ? t('pack.layout.head.name')
-                            : layout == 'MidChunk'
-                                ? t('pack.layout.mid.name')
-                                : t('pack.layout.append.name'),
+                            : layout == 'TwoPackages'
+                                ? t('pack.layout.two.name')
+                                : layout == 'MidChunk'
+                                    ? t('pack.layout.mid.name')
+                                    : t('pack.layout.append.name'),
                     'cover': coverName == null
                         ? ''
                         : t('pack.result.coverLine', {'name': coverName}),
