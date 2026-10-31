@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../l10n.dart';
 import '../notify.dart';
 import '../platform_paths.dart';
 import '../theme_mode.dart';
@@ -32,6 +33,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String _onDone = 'keep';
   /// 主题：auto（跟随系统）/ light / dark
   String _theme = 'auto';
+  /// 界面语言：`system`（跟随系统）或 supportedLocales 里的某个 code（T14）
+  String _uiLocale = 'system';
   /// 处理完成后是否发桌面通知
   bool _notify = true;
   /// 解压完成后是否自动打开输出目录（默认关：批量解压会弹一堆窗口）
@@ -74,6 +77,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _conflict = out['conflict'] ?? 'rename';
         _onDone = out['on_done'] ?? 'keep';
         _theme = gen['theme'] ?? 'auto';
+        // 界面语言：认不出的值一律当「跟随系统」（配置被手改错不该让语言变未知状态）
+        final uiLang = gen['ui_language'] ?? 'system';
+        _uiLocale = supportedLocales.contains(uiLang) ? uiLang : 'system';
         _notify = (gen['notify'] ?? 'on') != 'off';
         _openAfter = (gen['open_after'] ?? 'off') == 'on';
         // 默认开（引擎默认也是 true）；只有明确写 off/false 才算关。
@@ -185,6 +191,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
       updated = _upsertSection(updated, 'general', {
         'theme': _theme,
+        'ui_language': _uiLocale,
         'notify': _notify ? 'on' : 'off',
         'open_after': _openAfter ? 'on' : 'off',
         'close_action': _closeAction,
@@ -206,12 +213,12 @@ class _SettingsPageState extends State<SettingsPage> {
       themeMode.value = parseThemeMode(_theme);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存，下次处理就生效（不用重启）')),
+        SnackBar(content: Text(t('settings.saved'))),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$e')),
+        SnackBar(content: Text(t('settings.saveFailed', {'reason': '$e'}))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -238,42 +245,65 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('设置', style: Theme.of(context).textTheme.titleLarge),
+        Text(t('settings.title'), style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
         Text(
-          '改完点保存，下次处理就生效（不用重启）',
+          t('settings.subtitle'),
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 18),
-        _section('外观', cs),
+        _section(t('settings.section.appearance'), cs),
         DropdownButtonFormField<String>(
           initialValue: _theme,
-          decoration: const InputDecoration(
-            labelText: '主题',
+          decoration: InputDecoration(
+            labelText: t('settings.theme'),
             isDense: true,
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
-          items: const [
-            DropdownMenuItem(value: 'auto', child: Text('跟随系统（推荐）')),
-            DropdownMenuItem(value: 'light', child: Text('浅色')),
-            DropdownMenuItem(value: 'dark', child: Text('深色')),
+          items: [
+            DropdownMenuItem(value: 'auto', child: Text(t('settings.theme.auto'))),
+            DropdownMenuItem(value: 'light', child: Text(t('settings.theme.light'))),
+            DropdownMenuItem(value: 'dark', child: Text(t('settings.theme.dark'))),
           ],
           onChanged: (v) => setState(() => _theme = v ?? 'auto'),
         ),
+        const SizedBox(height: 12),
+        // 界面语言（T14）：选完**立刻生效**（不用等「保存」），保存只是记住选择。
+        // 每种语言用**它自己语言里的名字**（localeNames），不翻译 —— 否则界面变成
+        // 看不懂的语言之后，用户连「怎么切回中文」都找不到。
+        DropdownButtonFormField<String>(
+          initialValue: _uiLocale,
+          decoration: InputDecoration(
+            labelText: t('settings.language'),
+            helperText: t('settings.language.help'),
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(value: 'system', child: Text(t('settings.theme.auto'))),
+            for (final code in supportedLocales)
+              DropdownMenuItem(value: code, child: Text(localeNames[code] ?? code)),
+          ],
+          onChanged: (v) async {
+            final picked = v ?? 'system';
+            setState(() => _uiLocale = picked);
+            await switchLocale(picked);
+          },
+        ),
         const SizedBox(height: 18),
-        _section('解压输出', cs),
+        _section(t('settings.section.output'), cs),
         const SizedBox(height: 6),
         TextField(
           controller: _outDirCtrl,
           decoration: InputDecoration(
-            labelText: '默认输出目录（留空 = 解到包旁边）',
-            hintText: '例如 /home/你/下载/解压结果',
+            labelText: t('settings.output.dir'),
+            hintText: t('settings.output.dirHint'),
             isDense: true,
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.folder_outlined, size: 18),
             suffixIcon: TextButton(
               onPressed: _pickDir,
-              child: const Text('选择…'),
+              child: Text(t('settings.pick')),
             ),
           ),
         ),
@@ -283,16 +313,15 @@ class _SettingsPageState extends State<SettingsPage> {
             Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue: _conflict,
-                decoration: const InputDecoration(
-                  labelText: '遇到同名文件',
+                decoration: InputDecoration(
+                  labelText: t('settings.output.conflict'),
                   isDense: true,
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'rename', child: Text('自动改名（推荐）')),
-                  DropdownMenuItem(value: 'skip', child: Text('跳过已有的')),
-                  DropdownMenuItem(value: 'replace', child: Text('覆盖'),
-                  ),
+                items: [
+                  DropdownMenuItem(value: 'rename', child: Text(t('settings.conflict.rename'))),
+                  DropdownMenuItem(value: 'skip', child: Text(t('settings.conflict.skip'))),
+                  DropdownMenuItem(value: 'replace', child: Text(t('settings.conflict.replace'))),
                 ],
                 onChanged: (v) => setState(() => _conflict = v ?? 'rename'),
               ),
@@ -301,14 +330,14 @@ class _SettingsPageState extends State<SettingsPage> {
             Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue: _onDone,
-                decoration: const InputDecoration(
-                  labelText: '解压完原包',
+                decoration: InputDecoration(
+                  labelText: t('settings.output.onDone'),
                   isDense: true,
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'keep', child: Text('保留（推荐）')),
-                  DropdownMenuItem(value: 'trash', child: Text('移入回收站')),
+                items: [
+                  DropdownMenuItem(value: 'keep', child: Text(t('settings.onDone.keep'))),
+                  DropdownMenuItem(value: 'trash', child: Text(t('settings.onDone.trash'))),
                 ],
                 onChanged: (v) => setState(() => _onDone = v ?? 'keep'),
               ),
@@ -317,15 +346,15 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 6),
         Text(
-          '「移入回收站」只放进系统回收站（可还原），本工具从不永久删除文件。',
+          t('settings.onDone.hint'),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text('处理完成后发桌面通知'),
+          title: Text(t('settings.notify')),
           subtitle: Text(
-            '解压/打包结束、或解压失败时给一条系统通知（需要系统有 notify-send）',
+            t('settings.notify.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _notify,
@@ -334,10 +363,9 @@ class _SettingsPageState extends State<SettingsPage> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text('解压完自动打开输出目录'),
+          title: Text(t('settings.openAfter')),
           subtitle: Text(
-            '默认关闭。批量解一堆包时不要开（会一个包弹一个窗口）；只解一个包想看结果时再打开，'
-            '或者直接用完成页的「打开输出目录」按钮。',
+            t('settings.openAfter.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _openAfter,
@@ -346,12 +374,9 @@ class _SettingsPageState extends State<SettingsPage> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text('解压到U盘/移动硬盘时，等数据真正写完再报成功'),
+          title: Text(t('settings.flush')),
           subtitle: Text(
-            '默认关闭。打开后：目标在U盘/移动硬盘上时，解完会多一步「正在检验落盘」，'
-            '把数据真正写进设备才算完成——中途会显示「请勿拔出设备」。'
-            '本机硬盘不受影响，一秒都不多等。\n'
-            '注意：慢速U盘上可能要等几分钟（这块盘写 300MB 约 5 分钟）。',
+            t('settings.flush.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _flushMovable,
@@ -360,10 +385,9 @@ class _SettingsPageState extends State<SettingsPage> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text('自动从「说明.txt」里找解压码'),
+          title: Text(t('settings.autoNotes')),
           subtitle: Text(
-            '默认关闭。打开后，程序才会去包旁边的说明文件里找现成的码（只读文本，不联网）。'
-            '不想让程序翻包旁边的文本，就一直关着。',
+            t('settings.autoNotes.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _autoFromNotes,
@@ -372,10 +396,9 @@ class _SettingsPageState extends State<SettingsPage> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text('自动试「密码本」里的解压码'),
+          title: Text(t('settings.autoBook')),
           subtitle: Text(
-            '默认关闭。打开后，程序才会用你在「密码本」里亲手记的常用码去试。'
-            '本工具只试你记过的和说明文件里写明的，不做字典、不做爆破。',
+            t('settings.autoBook.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _autoFromBook,
@@ -383,27 +406,27 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 6),
         Text(
-          '关着的时候也会提醒「拔盘前请先安全弹出」——提醒不花时间，但能救命。',
+          t('settings.flush.note'),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
         ),
         DropdownButtonFormField<String>(
           initialValue: _closeAction,
-          decoration: const InputDecoration(
-            labelText: '关窗口时（正忙的话）',
+          decoration: InputDecoration(
+            labelText: t('settings.closeAction'),
             isDense: true,
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
-          items: const [
-            DropdownMenuItem(value: 'tray', child: Text('缩到托盘（后台跑完）')),
-            DropdownMenuItem(value: 'exit', child: Text('直接退出')),
+          items: [
+            DropdownMenuItem(value: 'tray', child: Text(t('settings.closeAction.tray'))),
+            DropdownMenuItem(value: 'exit', child: Text(t('settings.closeAction.exit'))),
           ],
           onChanged: (v) => setState(() => _closeAction = v ?? 'exit'),
         ),
         const SizedBox(height: 6),
         Text(
-          Platform.isWindows
-              ? '默认「直接退出」。选「缩到托盘」后，正忙时点关闭会藏进托盘继续跑，从托盘图标随时回来。'
-              : '默认「缩到托盘」。正忙时点关闭会藏进托盘继续跑，从托盘菜单随时回来；空闲时照旧直接退出。',
+          t(Platform.isWindows
+              ? 'settings.closeAction.hintWindows'
+              : 'settings.closeAction.hintDefault'),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
@@ -412,51 +435,50 @@ class _SettingsPageState extends State<SettingsPage> {
           child: FilledButton.icon(
             onPressed: _saving || !_loaded ? null : _save,
             icon: const Icon(Icons.save_outlined, size: 18),
-            label: Text(_saving ? '保存中…' : '保存'),
+            label: Text(_saving ? t('settings.saving') : t('settings.save')),
           ),
         ),
         const SizedBox(height: 20),
-        _section('位置', cs),
+        _section(t('settings.section.paths'), cs),
         _row(
           icon: Icons.settings_outlined,
-          title: '配置文件',
+          title: t('settings.paths.config'),
           subtitle: _configPath,
           action: TextButton(
             onPressed: () => _open(_configDir),
-            child: const Text('打开目录'),
+            child: Text(t('settings.openDir')),
           ),
         ),
         _row(
           icon: Icons.key_outlined,
-          title: '密码本',
-          subtitle: '$_configDir/passwords.txt（一行一个，导入时自动去重）',
+          title: t('settings.paths.book'),
+          subtitle: t('settings.paths.bookHint', {'path': '$_configDir/passwords.txt'}),
           action: TextButton(
             onPressed: () => _open(_configDir),
-            child: const Text('打开目录'),
+            child: Text(t('settings.openDir')),
           ),
         ),
         _row(
           icon: Icons.bug_report_outlined,
-          title: '状态目录',
-          subtitle: '$_stateDir（崩溃日志、历史记录）',
+          title: t('settings.paths.state'),
+          subtitle: t('settings.paths.stateHint', {'path': _stateDir}),
           action: TextButton(
             onPressed: () => _open(_stateDir),
-            child: const Text('打开目录'),
+            child: Text(t('settings.openDir')),
           ),
         ),
         const SizedBox(height: 18),
-        _section('各格式能力（问引擎要的，不是写死的）', cs),
+        _section(t('settings.section.caps'), cs),
         const _CapsTable(),
         const SizedBox(height: 18),
-        _section('其它（改 config.toml）', cs),
+        _section(t('settings.section.misc'), cs),
         // T7-P5：以前这里并列写着 7 个语言代码，看着像「改 config.toml 就能切界面语言」，
         // 实际界面文案全是硬编码中文。直接说实话，别骗人。
-        _kv('界面语言', '目前只有中文（引擎支持 7 种语言，界面文案还没抽成语言包）'),
-        _kv('并行任务数', 'jobs = 1（机械盘建议 1）'),
-        _kv('压缩比上限', 'zip_bomb_ratio = 100（防炸弹）'),
-        _kv('可执行提醒', 'warn_executables = true'),
+        _kv(t('settings.misc.jobs'), t('settings.misc.jobsValue')),
+        _kv(t('settings.misc.ratio'), t('settings.misc.ratioValue')),
+        _kv(t('settings.misc.warn'), 'warn_executables = true'),
         const SizedBox(height: 18),
-        _section('还没做的（我不装样子）', cs),
+        _section(t('settings.section.todo'), cs),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -464,8 +486,7 @@ class _SettingsPageState extends State<SettingsPage> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            '· 界面多语言切换（要先把界面里 401 处硬编码中文抽成语言包，工作量大）\n'
-            '· 主题切换（现在跟随系统深/浅色）',
+            t('settings.todo.body'),
             style: TextStyle(fontSize: 12, height: 1.7, color: cs.onSurfaceVariant),
           ),
         ),
@@ -553,7 +574,7 @@ class _CapsTableState extends State<_CapsTable> {
       if (raw is! List) {
         // 老引擎（还没有 hello.formats）—— 如实说读不到，别假装是空表
         setState(() {
-          _err = '这个引擎版本太旧（hello 里没有 formats），升级引擎后就能看';
+          _err = t('settings.caps.tooOld');
           _rows = null;
         });
         return;
@@ -577,12 +598,12 @@ class _CapsTableState extends State<_CapsTable> {
         children: [
           TextButton(
             onPressed: _loading ? null : _load,
-            child: Text(_loading ? '读取中…' : '读取各格式能力'),
+            child: Text(_loading ? t('settings.caps.reading') : t('settings.caps.read')),
           ),
           if (_err != null)
             Expanded(
               child: Text(
-                '读不到能力表：$_err',
+                t('settings.caps.error', {'reason': '$_err'}),
                 style: TextStyle(fontSize: 12, color: cs.error),
               ),
             ),
@@ -590,13 +611,13 @@ class _CapsTableState extends State<_CapsTable> {
       );
     }
     // ⚠️ Dart 的标识符只能是 ASCII —— 中文变量名编译不过（Rust 可以，Dart 不行）
-    const capsLabels = <String, String>{
-      'encrypted': '带密码',
-      'encrypted_names': '密文件名',
-      'split_volumes': '分卷',
-      'selective': '可选解',
-      'restores_mtime': '还原时间',
-      'can_create': '可打包',
+    final capsLabels = <String, String>{
+      'encrypted': t('settings.caps.encrypted'),
+      'encrypted_names': t('settings.caps.encryptedNames'),
+      'split_volumes': t('settings.caps.splitVolumes'),
+      'selective': t('settings.caps.selective'),
+      'restores_mtime': t('settings.caps.restoresMtime'),
+      'can_create': t('settings.caps.canCreate'),
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,7 +632,9 @@ class _CapsTableState extends State<_CapsTable> {
                   width: 96,
                   child: Text(
                     // format / shape 都是机器标识（zip / volumes…），展示名在这里拼
-                    r['shape'] == 'volumes' ? '${r['format']}（分卷）' : '${r['format']}',
+                    r['shape'] == 'volumes'
+                        ? '${r['format']}${t('settings.caps.volumesSuffix')}'
+                        : '${r['format']}',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ),
