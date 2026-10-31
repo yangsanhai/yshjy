@@ -112,6 +112,11 @@
   （用户自己改过名字就不动他的），说明里写明「要装 ffmpeg、unzip 找不到包」。
   7 语言各 3 条新文案（`pack.layout.mkv.choice/desc/name`，语言包 514 键）。
   README 补了 ffmpeg 的依赖与许可证说明（用户对「用别人的必须明示来源」要求很硬）。
+- **0.9.43 已发并装机**：`dist/yshjy-0.9.43` / `yshjy-full-0.9.43` tar.gz +
+  `yshjy_0.9.43_amd64.deb`；`test-packages.sh` **37/37**；`sudo apt install` 后
+  `yshjy --version` = 0.9.43、`/usr/lib/yshjy/gui/yshjy_gui` 时间戳 22:47（新界面）。
+  **真人验收通过**：下拉六项齐（含 MKV 附件）、选中后说明文案正确、
+  输出名自动从 `杨三海解压 体验包.mp4` 变成 `杨三海解压 体验包.mkv`。
 
 ## [0.9.42] · 2026-11-01 凌晨（T18-1 · 打包布局 L4「插在视频中间」）
 
