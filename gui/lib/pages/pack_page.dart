@@ -82,6 +82,15 @@ class _PackPageState extends State<PackPage> {
   /// 引擎里 decoy 与 `mode:"plain"`、`sfx` 互斥，会回 BAD_PARAM ——
   /// 所以这里直接禁用并说明，而不是做一个点了才报错的假开关。
   bool get _canDecoy => _mode == 'disguise' && !_sfx;
+
+  // ── 强制尾部追加（E2 / 协议 pack.tail）──
+  // 默认交给引擎按封面文件头决定：MP4 尽量塞进 free 原子（视频还能正常播），
+  // 图片/文本/认不出的只能接在文件末尾。打开这个 = **封面一个字节都不改**，
+  // 数据直接接在最后。什么时要开：封面是「动过的 MP4」（个别播放器对 free 原子敏感），
+  // 或者就想「原文件字节完全不动」求个保险。
+  bool _tail = false;
+  /// 没有封面就谈不上布局（普通压缩、自解压）
+  bool get _canTail => _mode == 'disguise' && !_sfx;
   final _splitCtrl = TextEditingController(text: '2G');
   bool _busy = false;
   String? _error;
@@ -274,6 +283,8 @@ class _PackPageState extends State<PackPage> {
         // mode:"plain"、sfx 互斥（回 BAD_PARAM），不做「点了才报错」的假开关。
         decoy: _canDecoy && _decoy ? _decoySegments : null,
         decoySignatures: _canDecoy && _decoy && _decoySignatures,
+        // E2：强制尾部追加（封面一个字节都不改）
+        tailLayout: _canTail && _tail,
         checksum: _checksum,
         // 普通压缩不写「这不是视频」的说明书（用户验收 2026-10-17）；自解压也不需要
         readme: _mode == 'disguise' && !isSfx ? _readme : false,
@@ -593,6 +604,33 @@ class _PackPageState extends State<PackPage> {
                 DropdownMenuItem(value: 9, child: Text('最小体积（最慢）')),
               ],
               onChanged: _busy ? null : (v) => setState(() => _level = v ?? 6),
+            ),
+          ),
+          // 不改封面（E2 / 协议 pack.tail）：默认引擎按封面文件头自动选布局 ——
+          // MP4 尽量塞进 free 原子（视频还能正常播），图片/文本只能接在末尾。
+          // 打开 = 封面一个字节都不动，数据直接接在文件最后。
+          SwitchListTile(
+            key: const ValueKey('tail-toggle'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _tail && _canTail,
+            onChanged: (_busy || !_canTail)
+                ? null
+                : (v) => setState(() => _tail = v),
+            secondary: const Icon(Icons.merge_type, size: 20),
+            title: Text(
+              _canTail
+                  ? '不改封面，接在文件末尾（更保险）'
+                  : '不改封面（只有伪装成文件时可用）',
+              style: const TextStyle(fontSize: 13),
+            ),
+            subtitle: Text(
+              _canTail
+                  ? (_tail
+                      ? '数据接在封面最后，封面文件一个字节都不动'
+                      : '默认让封面的视频结构装数据，视频还能正常播（多数情况选这个）')
+                  : '普通压缩 / 自解压没有封面，不涉及布局',
+              style: const TextStyle(fontSize: 11),
             ),
           ),
           // 防网盘扫描（E1 / 协议 pack.decoy*）：往包里撒几段乱码，

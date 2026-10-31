@@ -83,7 +83,10 @@ void main() {
     expect(find.byKey(decoy), findsOneWidget);
     expect(switchEnabled(tester, decoy), isFalse,
         reason: '普通 ZIP 模式下引擎会回 BAD_PARAM，能点就是假开关');
-    expect(find.textContaining('只有伪装成文件时可用'), findsOneWidget);
+    final title =
+        (tester.widget<SwitchListTile>(find.byKey(decoy)).title as Text).data ?? '';
+    expect(title, contains('只有伪装成文件时可用'),
+        reason: 'E2 的不改封面开关也用同一句文案，所以按 key 取标题，别按文案数个数');
     expect(find.byKey(decoySig), findsNothing,
         reason: '总开关都没开，子开关不该出现');
   });
