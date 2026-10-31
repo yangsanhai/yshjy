@@ -111,6 +111,13 @@ class HomePage extends StatefulWidget {
   /// 少了它，「已暂停时按钮翻成继续 + 出现状态说明」就验不到。
   final bool debugPaused;
 
+  /// 测试用：首帧之后按顺序喂给事件处理器的事件（模拟引擎推过来的 PAUSED 等）
+  ///
+  /// 和 `debugPaused` 的区别：那个只摆初始状态，这个能验**状态转移** ——
+  /// 「恢复」时到底有没有把「已暂停」那句清掉，只能靠喂一条 `PAUSED{paused:false}`
+  /// 才测得到（这是用户真机验收抓到的 bug）。
+  final List<EngineEvent>? debugEvents;
+
   const HomePage({
     super.key,
     this.initialFile,
@@ -124,6 +131,7 @@ class HomePage extends StatefulWidget {
     this.debugOutDir,
     this.debugBatchCount,
     this.debugPaused = false,
+    this.debugEvents,
   });
 
   @override
@@ -303,6 +311,20 @@ class _HomePageState extends State<HomePage> {
     if (f != null && f.isNotEmpty && pv0 == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _open(f));
     }
+    // 测试注入口：首帧之后按顺序喂事件（模拟引擎推过来的 PAUSED 等）
+    //
+    // 为什么要这个口子：「恢复后必须把『已暂停』清掉」这条只有事件能驱动 ——
+    // 这正是用户真机验收抓到的 bug（进度在涨、状态栏还挂着已暂停）。
+    // 没有它，回归测试只能验「暂停时显示了对的字」，验不到「恢复后把字清了」。
+    final preEvents = widget.debugEvents;
+    if (preEvents != null && preEvents.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        for (final e in preEvents) {
+          _onEvent(e);
+        }
+      });
+    }
   }
 
   @override
@@ -393,7 +415,14 @@ class _HomePageState extends State<HomePage> {
           _paused = paused;
           if (paused) _pauseRequested = false;
         });
-        if (paused) widget.onStatus?.call(t('home.pausedNote'));
+        if (paused) {
+          widget.onStatus?.call(t('home.pausedNote'));
+        } else {
+          // 恢复时必须把「已暂停」那句**清掉** —— 用户真机验收时抓到：
+          // 点了「继续」、进度已经在涨（331.8 MB / 1.38 GB），底部状态栏却还挂着
+          // 「已暂停，点「继续」接着跑」，界面在撒谎。改成回到「正在解压…」。
+          widget.onStatus?.call(t('home.extracting'));
+        }
       case 'PASSWORD_TRY':
         setState(() {
           _pwTry = (e.data['index'] as num?)?.toInt() ?? 0;
@@ -736,6 +765,12 @@ class _HomePageState extends State<HomePage> {
         }
         _batch = r;
         _phase = Phase.done;
+        // T18-4 同类问题（顺藤摸出来的）：批量结束必须把暂停标志一起复位。
+        // 否则「pause 请求发出去了、但任务在到达挂起点之前就解完了」会让
+        // _pauseRequested 永远停在 true —— 下一轮进来按钮直接是灰的、点不动。
+        // 规矩：凡是按钮状态标志，都要有「任务结束」这个终点复位。
+        _paused = false;
+        _pauseRequested = false;
       });
       final ok = (r['ok'] as num?)?.toInt() ?? 0;
       final failed = (r['failed'] as num?)?.toInt() ?? 0;
@@ -3053,6 +3088,9 @@ class _HomePageState extends State<HomePage> {
 
   /// 「 · 12.3 MB/s · 剩 41 秒」；速度未知就返回空串
   String _etaText(Progress p) {
+    // 暂停时不报速度：用户真机验收抓到暂停画面上还挂着「1.04 GB/s · 剩 0 秒」——
+    // 停都停了还显示速度，看着像没停住。恢复后下一帧进度事件会把速度算回来。
+    if (_paused) return '';
     if (_speed <= 0 || p.totalBytes <= 0) return '';
     final left = p.totalBytes - p.doneBytes;
     if (left <= 0) return '';
