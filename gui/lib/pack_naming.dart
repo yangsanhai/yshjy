@@ -109,6 +109,44 @@ String reExt(String path, String ext) {
   return withExt(path, ext);
 }
 
+/// 按**文件头魔数**认外壳类型 —— 与 Rust `pack::外壳类型` 同一套规则，返回规范后缀或 null
+///
+/// 为什么不看文件名：用户把截图存成 `封面.dat` 很常见，而产物后缀必须跟**内容**一致
+/// （PNG 内容叫 .mp4，看图软件一认魔数就判坏文件）。
+String? shellExtFromHead(List<int> h) {
+  bool starts(List<int> sig, [int at = 0]) {
+    if (h.length < at + sig.length) return false;
+    for (var i = 0; i < sig.length; i++) {
+      if (h[at + i] != sig[i]) return false;
+    }
+    return true;
+  }
+
+  if (starts([0x89, 0x50, 0x4E, 0x47])) return 'png';
+  if (starts([0xFF, 0xD8, 0xFF])) return 'jpg';
+  if (starts([0x47, 0x49, 0x46, 0x38])) return 'gif'; // GIF8x
+  if (h.length > 12 && starts([0x52, 0x49, 0x46, 0x46])) {
+    // RIFF....
+    final t = String.fromCharCodes(h.sublist(8, 12));
+    if (t == 'WEBP') return 'webp';
+    if (t == 'WAVE') return 'wav';
+    if (t == 'AVI ') return 'avi';
+    return null;
+  }
+  if (h.length > 8 && String.fromCharCodes(h.sublist(4, 8)) == 'ftyp') return 'mp4';
+  if (starts([0x1A, 0x45, 0xDF, 0xA3])) return 'mkv';
+  if (starts([0x25, 0x50, 0x44, 0x46])) return 'pdf'; // %PDF
+  if (starts([0x50, 0x4B, 0x03, 0x04])) return 'zip';
+  if (starts([0x52, 0x61, 0x72, 0x21])) return 'rar'; // Rar!
+  if (starts([0x37, 0x7A, 0xBC, 0xAF])) return '7z';
+  if (starts([0x4D, 0x5A])) return 'exe'; // MZ
+  if (starts([0x49, 0x44, 0x33]) || starts([0xFF, 0xFB])) return 'mp3';
+  if (starts([0x66, 0x4C, 0x61, 0x43])) return 'flac'; // fLaC
+  if (starts([0x4F, 0x67, 0x67, 0x53])) return 'ogg'; // OggS
+  // 认不出就返回 null（调用方退回文件名扩展名），别猜一个
+  return null;
+}
+
 /// 显示名校验 —— 与 Rust 侧 `pack::校验显示名` **同一套规则**
 ///
 /// 只返回错误码（文案走语言包）：`null` = 合法。

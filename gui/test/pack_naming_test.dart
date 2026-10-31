@@ -130,6 +130,31 @@ void main() {
     });
   });
 
+  group('shellExtFromHead：按魔数认外壳类型（文件名不可信）', () {
+    test('常见类型', () {
+      expect(shellExtFromHead(const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]), 'png');
+      expect(shellExtFromHead(const [0xFF, 0xD8, 0xFF, 0xE0]), 'jpg');
+      expect(shellExtFromHead('GIF89a'.codeUnits), 'gif');
+      expect(
+          shellExtFromHead(<int>[0, 0, 0, 0x18, ...'ftyp'.codeUnits, ...'mp42'.codeUnits]),
+          'mp4');
+      expect(shellExtFromHead('RIFF0000WEBPVP8 '.codeUnits), 'webp');
+      expect(shellExtFromHead('%PDF-1.7'.codeUnits), 'pdf');
+      expect(shellExtFromHead(const [0x50, 0x4B, 0x03, 0x04, 1, 2]), 'zip');
+      expect(shellExtFromHead(const [0x1A, 0x45, 0xDF, 0xA3, 0, 0]), 'mkv');
+      expect(shellExtFromHead(const [0x4D, 0x5A, 0x90]), 'exe');
+    });
+    test('认不出就返回 null（不猜）', () {
+      expect(shellExtFromHead('随便一段文字'.codeUnits), isNull);
+      expect(shellExtFromHead(const []), isNull);
+    });
+    test('PNG 存成 .dat 也认得出（用户 2026-10-31 提的场景）', () {
+      expect(
+          shellExtFromHead(const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+          'png');
+    });
+  });
+
   group('nameError：与引擎 pack::校验显示名 同一套规则', () {
     test('正常名字放行', () {
       for (final n in [

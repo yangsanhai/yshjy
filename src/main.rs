@@ -2568,33 +2568,68 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "packed".into());
-    let 默认后缀 = if 普通压缩 {
+    // 外壳后缀的优先级：**文件头魔数** → 文件名扩展名 → 内置视频素材（mp4）。
+    // 用户把截图存成「封面.dat」也照样认得出是 PNG —— 不该靠名字猜（2026-10-31 用户提的）。
+    // 只读前 64 字节：视频外壳可能几百 MB，别整个读进来。
+    let 外壳后缀: Option<String> = cover.as_deref().and_then(|c| {
+        let 魔数 = {
+            let mut buf = [0u8; 64];
+            std::fs::File::open(c)
+                .and_then(|mut f| std::io::Read::read(&mut f, &mut buf))
+                .ok()
+                .filter(|n| *n > 0)
+                .and_then(|n| yshjy::pack::外壳类型(&buf[..n]))
+                .map(str::to_string)
+        };
+        魔数.or_else(|| {
+            std::path::Path::new(c)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_ascii_lowercase())
+                .filter(|e| !e.is_empty())
+        })
+    });
+    let 默认后缀: &str = if 普通压缩 {
         // `--format` 默认名跟着格式走：a.txt → a.txt.tar.gz
         格式.名字()
     } else {
         match sfx {
             Some("linux") => "sh",
             Some(_) => "exe",
-            None => "mp4",
+            None => 外壳后缀.as_deref().unwrap_or("mp4"),
         }
     };
 
     // 显示名 → 定死的产物文件名。
-    // - 普通压缩 / 自解压：后缀必须与模式一致（`.zip` / `.tar.gz` / `.exe`），
-    //   写了别的就明确报错 —— 名字是 .zip 内容却是 tar.gz 的包会骗人；
-    // - 伪装：后缀决定外壳素材，**只认常见外壳扩展名**；`电影.2026.1080p` 里的
+    // - 普通压缩 / 自解压 / 带外壳的伪装：后缀必须与模式（或外壳）一致，写了别的就明确报错
+    //   —— 名字是 .zip 内容却是 tar.gz、名字是 .mp4 封面却是 PNG，都会骗人；
+    // - 没带外壳的伪装：后缀决定内置素材，**只认常见外壳扩展名**；`电影.2026.1080p` 里的
     //   `1080p` 不是扩展名，补成 `.mp4`（否则产出双击播不了的「视频」）。
     let 定名 = |n: &str| -> std::result::Result<String, String> {
         let 已有 = std::path::Path::new(n).extension().and_then(|e| e.to_str());
-        if 普通压缩 || sfx.is_some() {
-            return match 已有 {
-                Some(e) if e.eq_ignore_ascii_case(默认后缀) => Ok(n.to_string()),
-                Some(e) => Err(format!(
-                    "扩展名要跟当前模式一致（.{默认后缀}），现在是 .{e}；或者不写扩展名，自动补齐"
-                )),
-                None => Ok(format!("{n}.{默认后缀}")),
-            };
+        if 普通压缩 || sfx.is_some() || 外壳后缀.is_some() {
+            // 后缀被模式或外壳定死：已经对齐就原样（用 ends_with 比较，
+            // `备份.tar.gz` 的 Path::extension 只给 "gz"，比字符串会误判成不一致）
+            if n.to_ascii_lowercase().ends_with(&format!(".{默认后缀}")) {
+                return Ok(n.to_string());
+            }
+            // 用户写的是另一种**认得出的**外壳后缀（mp4 / png / zip…）→ 与要求冲突，明确报错
+            if let Some(e) = 已有
+                && yshjy::pack::是外壳扩展名(e)
+            {
+                return Err(format!(
+                    "扩展名要跟{}一致（.{默认后缀}），现在是 .{e}；或者不写扩展名，自动补齐",
+                    if 外壳后缀.is_some() {
+                        "外壳文件"
+                    } else {
+                        "当前模式"
+                    }
+                ));
+            }
+            // 其余（没写后缀，或写的是 `1080p` 这种不是扩展名的东西）→ 补上
+            return Ok(format!("{n}.{默认后缀}"));
         }
+        // 没带外壳的伪装：用户写的常见外壳后缀就用它（决定内置素材），否则补 .mp4
         match 已有 {
             Some(e) if yshjy::pack::是外壳扩展名(e) => Ok(n.to_string()),
             _ => Ok(format!("{n}.{默认后缀}")),

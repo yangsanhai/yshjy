@@ -169,6 +169,44 @@ def main() -> int:
         else:
             bad(f"--name 的值被误当输入：rc={rc} work 里={only}")
 
+        # ── 12. 伪装包的后缀要跟外壳（--cover）一致 ────────────────
+        # 用户 2026-10-31 指出：外壳是 PNG，产物却补 .mp4 = 内容与后缀不符，
+        # 看图/播放器一认文件头就判「坏文件」。界面早就是跟外壳走，命令行漏了。
+        cover = tmp / "封面.png"
+        cover.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+        rc, out, err = run(["ys", src_rel, "--cover", str(cover), "--name", "电影.2026.1080p"], work)
+        want12 = work / "电影.2026.1080p.png"
+        if rc == 0 and want12.exists():
+            ok("--cover 图.png + --name 电影.2026.1080p → 补成 .png（跟外壳走，不是死板 mp4）")
+        else:
+            bad(f"外壳后缀没跟上：rc={rc} 产物={[p.name for p in work.iterdir()]} err={err.strip()[:120]}")
+
+        # ── 13. 名字后缀与外壳不一致 → 拒绝（不做「名字 mp4、封面 png」的骗人包）──
+        rc, out, err = run(["ys", src_rel, "--cover", str(cover), "--name", "电影.mp4"], work)
+        if rc == USAGE and "外壳" in err:
+            ok("--cover 图.png 配 --name 电影.mp4 → USAGE(2) 并说清要跟外壳一致")
+        else:
+            bad(f"后缀与外壳不一致没被拒：rc={rc} err={err.strip()[:120]}")
+
+        # ── 14. 只给 -o 目录 + 外壳 → 默认名也用外壳后缀 ────────────
+        (tmp / "outdir3").mkdir()
+        rc, out, err = run(["ys", src_rel, "--cover", str(cover), "-o", str(tmp / "outdir3")], work)
+        want14 = tmp / "outdir3" / "内容.png"
+        if rc == 0 and want14.exists():
+            ok("-o <目录> + --cover 图.png → 目录/内容.png（默认名跟着外壳）")
+        else:
+            bad(f"默认名没跟外壳：rc={rc} err={err.strip()[:120]}")
+
+        # ── 15. 名字不可信：封面叫 .dat，内容是 PNG → 后缀跟着内容走 ──
+        fake = tmp / "封面.dat"
+        fake.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+        rc, out, err = run(["ys", src_rel, "--cover", str(fake), "--name", "电影.2026"], work)
+        want15 = work / "电影.2026.png"
+        if rc == 0 and want15.exists():
+            ok("覆盖名是 .dat、内容是 PNG → 产物补成 .png（按魔数认，不迷信文件名）")
+        else:
+            bad(f"魔数没生效：rc={rc} 产物={[p.name for p in work.iterdir()]} err={err.strip()[:120]}")
+
         shutil.rmtree(tmp, ignore_errors=True)
     finally:
         print(f"\n结果：{n_pass} 通过 / {n_fail} 失败")
