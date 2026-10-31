@@ -50,6 +50,11 @@
 {"id": 4, "cmd": "pack", "inputs": ["/home/me/我的游戏"],
  "out": "/home/me/我的游戏.mp4", "password": null, "tail": false}
 
+// 打包成普通归档（不加外壳）：format 只能是 zip / tar.gz / tar.zst，且必须 mode:"plain"
+// （tar 系不支持 password / split / sfx / decoy，给了回 BAD_PARAM）
+{"id": 11, "cmd": "pack", "inputs": ["/home/me/照片"], "out": "/home/me/照片.tar.zst",
+ "mode": "plain", "format": "tar.zst", "level": 6}
+
 // 取消当前任务（立即返回，真正停下要等引擎看到取消标志）
 {"id": 5, "cmd": "cancel"}
 
@@ -80,7 +85,7 @@
 | `hello` | — | 握手：协议版本、引擎版本、可用命令、事件种类、语言 |
 | `list` | `path`, `password?` | 只列内容，不解压；有封面区时结果带 `cover`（大小/类型，不落盘） |
 | `extract` | `path`, `dest?`, `password?`, `force?`, `verify_only?`, `smart_dir?`, `cover?`, `extract?`, `drill?`, `ask?`, `select?`, `encoding?` | 解压单个目标；**`smart_dir`（默认 `true`）＝智能解压**：包里只有一个顶层目录 / 只有一个文件时不额外套层，一堆散文件才建同名文件夹（＝CLI 默认）；**传 `false` 就永远多套一层「包名」文件夹**（＝CLI `--no-smart-dir`）。⚠️ 只有**不给 `dest`** 时才有区别 —— 给了 `dest` 两种模式都直接产物铺在 `dest` 下（历史行为，别指望它替你建子目录）；**`verify_only:true` = 只测不写**（＝CLI `--test`、界面「只检查」）：完整解码 + 校验，**一个字节都不落盘**。开着它时前端要自己把 `cover` 关掉（切封面是另一条真写盘的路径），并且结果里的 `entries_done` / `bytes_written` 是**解码量、不是落盘量**、`dest` 只是回显（目录不会存在）—— 别拿它当产物路径去摆「打开目录」；`cover:false` 不提封面，`extract:false` 只提封面；`drill:true` 解完后自动再解**一层**内层包（结果带 `nested`）；`ask:true` 表示前端能处理 `ASK_USER`（不写 = 限额命中直接失败）；**`select` = 文件级挑选**（v0.9.24 起）：字符串表达式（`all` / `1,3,5` / `*.exe` / `目录/**` / `required`）或正整数数组（序号，与 `PREVIEW_READY` 的 `index` 一致），不传 = 全解，非法表达式回 `BAD_PARAM`（**不会**静默全解）；`encoding` = 文件名代码页（`gbk` / `big5` / `sjis` / `utf-8`，`auto` 等同不传） |
-| `pack` | `inputs[]`, `out`, `cover?`, `sfx?`, `password?`, `tail?`, `mode?`, `split?`, `checksum?`, `readme?`, `level?`, `decoy?`, `decoy_size?`, `decoy_signatures?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装（老行为）；**`cover` = 外壳文件的绝对路径，伪装模式必填，任意类型**（引擎按文件头决定布局：MP4 走 free 原子，其他走尾部追加）；**`sfx:true` = 生成 Windows 自解压 exe**（输出必须 `.exe`，与 `cover`/`split`/`password` 互斥）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode；**`level` = 压缩级别 0-9**（0 = 仅存储最快、9 = 压缩最小，默认 6，结果里回显实际用的 `level`，越界回 `BAD_PARAM`） |
+| `pack` | `inputs[]`, `out`, `cover?`, `sfx?`, `password?`, `tail?`, `mode?`, `format?`, `split?`, `checksum?`, `readme?`, `level?`, `decoy?`, `decoy_size?`, `decoy_signatures?` | 打包；`mode:"plain"` = 普通 ZIP（无封面、无隐写，默认不写说明书），不传或 `"disguise"` = 伪装（老行为）；**`cover` = 外壳文件的绝对路径，伪装模式必填，任意类型**（引擎按文件头决定布局：MP4 走 free 原子，其他走尾部追加）；**`sfx:true` = 生成 Windows 自解压 exe**（输出必须 `.exe`，与 `cover`/`split`/`password` 互斥）；`split` 分卷字节数，`checksum` 默认 true，`readme` 默认跟随 mode；**`level` = 压缩级别 0-9**（0 = 仅存储最快、9 = 压缩最小，默认 6，结果里回显实际用的 `level`，越界回 `BAD_PARAM`）；**`format` = 归档格式（v0.9.40 起，T17-4）**：`zip`（默认）/ `tar.gz` / `tar.zst`，**只有 `mode:"plain"` 能用** —— 伪装包只能是 zip（封面 + tar 系的包定位不出来：解压侧靠 ZIP 的 EOCD 认，2026-10-31 三种都探针实测过，界面会拒）。tar 系**不支持** `password`（加密）/ `split`（分卷）/ `sfx`（自解压）/ `decoy`（干扰数据），给了回 `BAD_PARAM` 并说明原因，**绝不静默忽略**。结果里的 `format` 回显实际用的格式（界面据此显示「打成 tar.gz」）；普通压缩时 `layout` / `cover_size` 无意义（`zip_offset` 为 0），前端别拿它当封面包裹的证据 |
 | `cancel` | — | 取消当前任务（整批停） |
 | `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
 | `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |
