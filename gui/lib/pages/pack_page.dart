@@ -107,14 +107,25 @@ class _PackPageState extends State<PackPage> {
   /// 引擎里 decoy 与 `mode:"plain"`、`sfx` 互斥，会回 BAD_PARAM ——
   /// 所以这里直接禁用并说明，而不是做一个点了才报错的假开关。
   bool get _canDecoy => _mode == 'disguise' && !_sfx;
-  // ── 强制尾部追加（E2 / 协议 pack.tail）──
-  // 默认交给引擎按封面文件头决定：MP4 尽量塞进 free 原子（视频还能正常播），
-  // 图片/文本/认不出的只能接在文件末尾。打开这个 = **封面一个字节都不改**，
-  // 数据直接接在最后。什么时要开：封面是「动过的 MP4」（个别播放器对 free 原子敏感），
-  // 或者就想「原文件字节完全不动」求个保险。
-  bool _tail = false;
+  // ── 数据藏在哪（协议 `pack.layout`；`tail` 就是老写法 `pack.tail` 的那一档）──
+  //   free = 藏进封面的 free 原子（默认：视频能播，8 种工具全通）
+  //   tail = 封面一个字节都不改，数据接在最后（最保险）
+  //   mid  = 插进视频数据中间（T18-1 的 L4）：视频照常能播，包藏得比尾巴深
+  String _layout = 'free';
+  /// 本次打包「请求的」布局（结果页拿它和引擎实际用的对账，降级了要告诉用户）
+  String? _askedLayout;
   /// 没有封面就谈不上布局（普通压缩、自解压）
   bool get _canTail => _mode == 'disguise' && !_sfx;
+  /// 「插在视频中间」只对视频外壳成立。
+  ///
+  /// `_coverExt` 是**按文件头魔数**认出来的（选封面时 `shellExtFromHead`），
+  /// 不是看用户起的名字 —— 把 PNG 改名成 .mp4 也骗不过去。
+  /// 引擎那边还会再核一次，认不出就降级（结果页会说明）。
+  bool get _canMid {
+    if (!_canTail) return false;
+    final e = _coverExt.isEmpty ? 'mp4' : _coverExt;
+    return e == 'mp4' || e == 'mov' || e == 'm4v';
+  }
   final _splitCtrl = TextEditingController(text: '2G');
   bool _busy = false;
   String? _error;
@@ -332,6 +343,9 @@ class _PackPageState extends State<PackPage> {
       _result = null;
       _progress = null;
       _current = null;
+      // 记下「这次要的是哪种布局」—— 引擎可能降级（封面根本插不进中间），
+      // 结果页拿这个和返回值对账，降级了要明说，不能让用户以为选中的生效了
+      _askedLayout = _canTail ? _layout : null;
     });
     widget.onStatus?.call(t('pack.busy'));
     try {
@@ -359,8 +373,9 @@ class _PackPageState extends State<PackPage> {
         // mode:"plain"、sfx 互斥（回 BAD_PARAM），不做「点了才报错」的假开关。
         decoy: _canDecoy && _decoy ? _decoySegments : null,
         decoySignatures: _canDecoy && _decoy && _decoySignatures,
-        // E2：强制尾部追加（封面一个字节都不改）
-        tailLayout: _canTail && _tail,
+        // 数据藏在哪（E2 的「不改封面」是这里的一档；T18-1 又加了「插在视频中间」）。
+        // 不传 = 老行为：引擎按封面文件头自己选。
+        layout: _canTail ? _layout : null,
         checksum: _checksum,
         // 防炸链（T18-3）：默认关，开着才传
         tweakTime: _tweakTime,
@@ -730,31 +745,54 @@ class _PackPageState extends State<PackPage> {
               onChanged: _busy ? null : (v) => setState(() => _level = v ?? 6),
             ),
           ),
-          // 不改封面（E2 / 协议 pack.tail）：默认引擎按封面文件头自动选布局 ——
-          // MP4 尽量塞进 free 原子（视频还能正常播），图片/文本只能接在末尾。
-          // 打开 = 封面一个字节都不动，数据直接接在文件最后。
-          SwitchListTile(
-            key: const ValueKey('tail-toggle'),
+          // 数据藏在哪（E2 的 `pack.tail` / T18-1 的 L4，统一成一个下拉）：
+          //   free = 藏进封面的 free 原子（默认，视频能播）
+          //   tail = 封面一个字节都不改，数据接在最后（最保险）
+          //   mid  = 插进视频数据中间（T18-1 · L4）—— 视频照常能播，包藏得比尾巴深
+          // 三档只在这一处选：开关 + 下拉并存就是两套优先级，说不清谁赢。
+          ListTile(
+            key: const ValueKey('layout-select'),
             dense: true,
             contentPadding: EdgeInsets.zero,
-            value: _tail && _canTail,
-            onChanged: (_busy || !_canTail)
-                ? null
-                : (v) => setState(() => _tail = v),
-            secondary: const Icon(Icons.merge_type, size: 20),
+            leading: const Icon(Icons.merge_type, size: 20),
             title: Text(
-              _canTail
-                  ? t('pack.layout.append')
-                  : t('pack.layout.append.short'),
+              _canTail ? t('pack.layout.title') : t('pack.layout.append.short'),
               style: const TextStyle(fontSize: 13),
             ),
             subtitle: Text(
-              _canTail
-                  ? (_tail
+              !_canTail
+                  ? t('pack.layout.none')
+                  : _layout == 'tail'
                       ? t('pack.layout.append.desc')
-                      : t('pack.layout.free'))
-                  : t('pack.layout.none'),
+                      : _layout == 'mid'
+                          ? t('pack.layout.mid.desc')
+                          : t('pack.layout.free'),
               style: const TextStyle(fontSize: 11),
+            ),
+            trailing: DropdownButton<String>(
+              key: const ValueKey('layout-dropdown'),
+              value: _layout,
+              isDense: true,
+              style: const TextStyle(fontSize: 12),
+              onChanged: (_busy || !_canTail)
+                  ? null
+                  : (v) => setState(() => _layout = v ?? 'free'),
+              items: [
+                DropdownMenuItem(
+                  value: 'free',
+                  child: Text(t('pack.layout.choice.free')),
+                ),
+                DropdownMenuItem(
+                  value: 'tail',
+                  child: Text(t('pack.layout.choice.tail')),
+                ),
+                // 封面不是视频时这一档点不了（引擎按魔数再核一次，认不出会降级）
+                DropdownMenuItem(
+                  value: 'mid',
+                  enabled: _canMid,
+                  child: Text(t('pack.layout.choice.mid')),
+                ),
+              ],
             ),
           ),
           // 防网盘扫描（E1 / 协议 pack.decoy*）：往包里撒几段乱码，
@@ -956,13 +994,25 @@ class _PackPageState extends State<PackPage> {
                     'entries': '$entries',
                     'layout': layout == 'FreeAtom'
                         ? t('pack.layout.free.name')
-                        : t('pack.layout.append.name'),
+                        : layout == 'MidChunk'
+                            ? t('pack.layout.mid.name')
+                            : t('pack.layout.append.name'),
                     'cover': coverName == null
                         ? ''
                         : t('pack.result.coverLine', {'name': coverName}),
                   }),
             style: const TextStyle(fontSize: 12, height: 1.5),
           ),
+          // 用户选了「插在视频中间」但引擎做不到（封面不是标准 MP4 / 没有 chunk 表 /
+          // 包太大溢出）→ 引擎会降级成别的布局。这里必须明说，
+          // 否则用户以为选中的那一档生效了，实际拿到的是另一种包。
+          if (_askedLayout == 'mid' && layout != 'MidChunk') ...[
+            const SizedBox(height: 6),
+            Text(
+              t('pack.layout.mid.failed'),
+              style: TextStyle(fontSize: 12, color: cs.error),
+            ),
+          ],
           // 用户 2026-10-30 报「显示输出位置但打开没看到文件」：
           // 之前卡片只说「完成」，不告诉人文件在哪，也没有一键打开 —— 补上。
           if (outPath != null && outPath.isNotEmpty) ...[
