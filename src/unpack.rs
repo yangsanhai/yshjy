@@ -676,7 +676,10 @@ impl InArchive for TarStreamUnpacker {
             split_volumes: false,
             selective: true,
             restores_mtime: true, // tar 头里有 mtime，v0.8 接的
-            can_create: false,
+            // T17-4 起能反向打包，但**只出 tar.gz / tar.zst 两种包装**（tar 本身不压缩，
+            // 裸 .tar 没意义也没做）。能力位是粗粒度的，按格式名只能到这里 ——
+            // 细节由界面下拉的三项和 `--format` 的取值表达。
+            can_create: true,
         }
     }
 

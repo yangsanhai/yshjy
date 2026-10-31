@@ -73,6 +73,7 @@ COMMON OPTIONS:
   --keep                          keep the intermediate ZIP when packing
   --trash-source                  Move the source archive to Trash after extracting (recoverable)
   --delete-source                 Permanently delete the source archive after extracting (cannot be undone; asks once, refuses when non-interactive)
+  --format <fmt>                  Pack a plain archive (no cover): zip / tar.gz / tar.zst. Given = plain packing; omitted = disguise as before
   --level 0-9                     pack compression level: 0 = store (fastest), 9 = smallest (default 6)
   --sfx / --sfx-linux             pack a self-extracting archive (.exe / .sh) that unpacks on double-click; cannot be used with --split, --cover not needed, no .说明.txt written
   --decoy <N>                     Scatter N decoy segments into the pack (max 64, default 0 = off)
@@ -197,6 +198,8 @@ pack_layout_tail = "tail append"
 pack_layout_free = "free atom"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ Self-check passed (the file plays, and we can unpack it back)"
+pack_done_archive = "✅ Wrote {total}, {entries} entries ({format}, plain archive, no cover)"
+pack_selfcheck_ok_archive = "   ✅ Self-check passed ({entries} entries readable)"
 pack_selfcheck_bad = "   ❌ Self-check failed: {err}"
 pack_decoy = "   🎭 Decoy data: {count} segment(s), {total} in total ({size} each, fake signatures: {sig})"
 pack_decoy_sig_on = "on"

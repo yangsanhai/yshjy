@@ -639,6 +639,8 @@ fn main() -> ExitCode {
         let split_o = val_of("--split");
         let layout_o = val_of("--layout");
         let cover_o = val_of("--cover");
+        // 归档格式（T17-4）：一给就走普通压缩（不加外壳）
+        let format_o = val_of("--format");
         // 压缩级别（P23-4）：不给就用引擎默认（6）；给了就必须是 0-9，越界报错不静默
         let level = match val_of("--level") {
             None => None,
@@ -697,9 +699,14 @@ fn main() -> ExitCode {
             quiet,
             split: &split_o,
             checksum: !has("--no-checksum"),
-            readme: !has("--no-readme") && !has("--sfx") && !has("--sfx-linux"),
+            // `--format` 走普通压缩：说明书那套（「不是视频是压缩包」）对 tar 没意义，一并关掉
+            readme: !has("--no-readme")
+                && !has("--sfx")
+                && !has("--sfx-linux")
+                && format_o.is_none(),
             layout: &layout_o,
             cover: &cover_o,
+            format: &format_o,
             // 第 23 批：--sfx-linux 生成 .sh；--sfx 生成 Windows exe
             sfx: if has("--sfx-linux") {
                 Some("linux")
@@ -2455,6 +2462,8 @@ struct 打包参数<'a> {
     layout: &'a Option<String>,
     /// `--cover <文件>`
     cover: &'a Option<String>,
+    /// `--format zip|tar.gz|tar.zst`：一给就走「普通压缩」（不加外壳），不给＝伪装包
+    format: &'a Option<String>,
     /// `--sfx` / `--sfx-linux`：自解压种类（第 23 批）
     sfx: Option<&'static str>,
     /// `--level 0-9`：压缩级别（P23-4）
@@ -2477,6 +2486,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         readme,
         layout,
         cover,
+        format,
         sfx,
         level,
         decoy,
@@ -2486,6 +2496,43 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
     // 搬过来的 —— 那句以前在引擎里拼死中文，换个界面语言也变不过来。
     let 语 = 文案();
     let inputs: Vec<PathBuf> = targets.iter().map(PathBuf::from).collect();
+
+    // 打包格式（T17-4）：`--format` 一给就走「普通压缩」（不加外壳），不给就是原来的伪装包
+    // —— 老行为一个字都不变（这条是「只加不删」）。
+    let 格式 = match format.as_deref() {
+        None => yshjy::pack::PackFormat::Zip,
+        Some(s) => match yshjy::pack::PackFormat::解析(s) {
+            Some(f) => f,
+            None => {
+                eprintln!("❌ --format 只认 zip / tar.gz / tar.zst（收到 {s}）");
+                return ExitCode::from(code::USAGE);
+            }
+        },
+    };
+    let 普通压缩 = format.is_some();
+    if 格式.是tar() {
+        if password.is_some() {
+            eprintln!("❌ tar 格式不支持加密 —— 想设密码请用 zip");
+            return ExitCode::from(code::USAGE);
+        }
+        if split.is_some() {
+            eprintln!("❌ tar 格式不支持分卷 —— 分卷只有 zip 能做");
+            return ExitCode::from(code::USAGE);
+        }
+        if sfx.is_some() {
+            eprintln!("❌ tar 格式不能做自解压 —— 自解压包装的是 zip");
+            return ExitCode::from(code::USAGE);
+        }
+        if decoy.is_on() {
+            eprintln!("❌ tar 格式不支持干扰数据 —— 那套是给伪装包用的");
+            return ExitCode::from(code::USAGE);
+        }
+        if cover.is_some() {
+            eprintln!("❌ --format 走普通压缩，不加外壳（--cover 只对伪装包有意义）");
+            return ExitCode::from(code::USAGE);
+        }
+    }
+
     for i in &inputs {
         if !i.exists() {
             eprintln!(
@@ -2502,10 +2549,15 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "packed".into());
-            let 后缀 = match sfx {
-                Some("linux") => "sh",
-                Some(_) => "exe",
-                None => "mp4",
+            let 后缀 = if 普通压缩 {
+                // `--format` 默认名跟着格式走：a.txt → a.txt.tar.gz
+                格式.名字()
+            } else {
+                match sfx {
+                    Some("linux") => "sh",
+                    Some(_) => "exe",
+                    None => "mp4",
+                }
             };
             PathBuf::from(format!("{base}.{后缀}"))
         }
@@ -2549,6 +2601,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
         inputs: inputs.clone(),
         password: password.clone(),
         cover_ext: 扩展名,
+        format: 格式,
         ..Default::default()
     };
     // 压缩级别（P23-4）：0=仅存储（最快）/ 1-9 越大越小越慢
@@ -2644,6 +2697,8 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
     let 打包结果 = match sfx {
         Some("linux") => yshjy::pack::build_sfx_sh_ctx(&opts, &mut bw, &mut 报),
         Some(_) => yshjy::pack::build_sfx_ctx(&opts, &mut bw, &mut 报),
+        // `--format` = 普通压缩（标准 zip / tar.gz / tar.zst，没有外壳）
+        None if 普通压缩 => yshjy::pack::build_plain_ctx(&opts, &mut bw, &mut 报),
         None => yshjy::pack::build_ctx_decoy(&opts, &decoy, &mut bw, &mut 报),
     };
     // 收尾补一条终态，保证终端/脚本看到的进度是最终值
@@ -2664,6 +2719,20 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
             }
             if quiet {
                 println!("{}", out.display());
+            } else if 普通压缩 {
+                // 普通压缩没有封面、也没有布局 —— 别硬套伪装包那句
+                // （套上去就会说「封面 0 B … 布局 尾部追加」，用户看着糊涂）
+                println!(
+                    "{}",
+                    语.t(
+                        "cli.pack_done_archive",
+                        &[
+                            ("total", &人类可读(rep.total_size)),
+                            ("entries", &rep.entries.to_string()),
+                            ("format", 格式.名字()),
+                        ]
+                    )
+                );
             } else {
                 let 布局 = match rep.layout {
                     yshjy::pack::PackLayout::TailAppend => 语.t("cli.pack_layout_tail", &[]),
@@ -2779,16 +2848,30 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 }
             }
             // 自检 —— 不能"以为成功就完事"
-            match yshjy::pack::self_check_at(
-                &out,
-                rep.entries,
-                Some(rep.zip_offset),
-                rep.noise_size,
-            ) {
+            //
+            // 分派：普通压缩的 tar 系没有 EOCD，走 tar 自己那份索引数条目；
+            // ZIP 那条把「有没有封面」如实传下去 —— 普通压缩 zip_offset 就是 0，
+            // 传 Some(0) 会被自己的「ZIP 起点为 0，封面没包住数据」误报（T17-4 前没暴露，
+            // 因为 CLI 当时根本没有普通压缩这条路）。
+            let 自检结果 = if 普通压缩 && 格式.是tar() {
+                yshjy::pack::self_check_tar(&out, 格式, rep.entries)
+            } else {
+                let 起点 = (rep.zip_offset > 0).then_some(rep.zip_offset);
+                yshjy::pack::self_check_at(&out, rep.entries, 起点, rep.noise_size)
+            };
+            match 自检结果 {
                 Ok(warns) if warns.is_empty() => {
                     if !quiet {
                         if sfx.is_some() {
                             println!("   ✅ 自检通过（存根能找到尾部数据）");
+                        } else if 普通压缩 {
+                            println!(
+                                "{}",
+                                语.t(
+                                    "cli.pack_selfcheck_ok_archive",
+                                    &[("entries", &rep.entries.to_string())]
+                                )
+                            );
                         } else {
                             println!("{}", 语.t("cli.pack_selfcheck_ok", &[]));
                         }

@@ -31,6 +31,7 @@ for bin in yshjy yshys
     complete -c $bin -l trash-source -d '解完把原包移进回收站（能还原）'
     complete -c $bin -l delete-source -d '解完永久删除原包（不可恢复；会先问一次，非交互直接拒绝）'
     complete -c $bin -l split -x -d '打包时分卷（如 2G / 500M，也认纯字节数）'
+    complete -c $bin -l format -x -a 'zip tar.gz tar.zst' -d '打包成普通归档（不加外壳）：zip / tar.gz / tar.zst。给了就是普通压缩，不给还是伪装包'
     complete -c $bin -l level -x
     complete -c $bin -l layout -x -a 'L1 L2'
     complete -c $bin -l decoy -x -d '打包时撒 N 段干扰数据（最多 64 段，默认 0 = 不打）'

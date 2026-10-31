@@ -70,6 +70,7 @@ yshjy（楊三海解圧） —— 「動画のふりをした圧縮ファイル�
   --keep                          パック時の一時 ZIP を残す（調査用）
   --trash-source                  解凍後に元のアーカイブをゴミ箱へ移動（復元できます）
   --delete-source                 解凍後に元のアーカイブを完全削除（元に戻せません。1 回確認し、非対話では拒否します）
+  --format <形式>                 通常アーカイブとして固める（カバーなし）：zip / tar.gz / tar.zst。指定すると通常圧縮、未指定なら従来どおり偽装パッケージ
   --level 0-9                     パック時の圧縮レベル：0 = 無圧縮（最速）、9 = 最小サイズ（既定 6）
   --sfx / --sfx-linux             自己解凍アーカイブ（.exe / .sh）。--split とは併用不可、--cover 不要、説明.txt は作りません
   --decoy <N>                     パックにダミーデータを N 個入れる（最大 64、既定 0 = なし）
@@ -194,6 +195,8 @@ pack_layout_tail = "末尾追加"
 pack_layout_free = "free アトム"
 pack_warn = "   ⚠ {warn}"
 pack_selfcheck_ok = "   ✅ セルフチェック合格（再生でき、元に戻せます）"
+pack_done_archive = "✅ {total} を書き出しました（{entries} エントリ、{format} の通常アーカイブ、カバーなし）"
+pack_selfcheck_ok_archive = "   ✅ 自己チェック合格（{entries} エントリすべて読み戻せます）"
 pack_selfcheck_bad = "   ❌ セルフチェック失敗：{err}"
 pack_decoy = "   🎭 ダミーデータ：{count} 個、合計 {total}（各 {size}、偽シグネチャ：{sig}）"
 pack_decoy_sig_on = "あり"

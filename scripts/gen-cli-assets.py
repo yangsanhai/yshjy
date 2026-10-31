@@ -37,6 +37,7 @@ VALUE_ACTIONS = {
     "--password": ("none", None),               # 密码不补全（也不该进 history）
     "--select": ("none", None),                 # 序号 / 通配 / required，无候选
     "--split": ("none", None),                  # 如 2G / 500M，无候选
+    "--format": ("words", ["zip", "tar.gz", "tar.zst"]),  # T17-4 打包格式
     "--level": ("none", None),                  # 0-9
     "--jobs": ("words", ["1", "2", "4", "8"]),
     "--layout": ("words", ["L1", "L2"]),
