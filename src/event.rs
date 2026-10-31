@@ -295,6 +295,17 @@ pub enum Event {
         /// 上次已经解完的条目数
         done: u64,
     },
+    /// 队列被暂停 / 已恢复（T18-4 队列「全部暂停」）
+    ///
+    /// 这是**状态事件不是进度事件**：`paused = true` 表示「引擎真的停下来了」
+    /// （当前这个文件已经解完、现在卡在条目边界），不是「暂停请求刚收到」——
+    /// 界面据此把按钮从「暂停」翻成「继续」，用户不会看到「点了没反应」。
+    Paused {
+        /// 任务号
+        job: u64,
+        /// true = 已暂停 / false = 已恢复
+        paused: bool,
+    },
     /// 诊断提醒（不打断流程）
     Diagnostic {
         /// 任务号
@@ -349,6 +360,7 @@ impl Event {
             | Event::SpaceShortage { job, .. }
             | Event::AskUser { job, .. }
             | Event::Resumed { job, .. }
+            | Event::Paused { job, .. }
             | Event::Diagnostic { job, .. }
             | Event::FlushProgress { job, .. }
             | Event::FlushFinished { job, .. } => *job,
@@ -385,6 +397,7 @@ impl Event {
             Event::SpaceShortage { .. } => "SPACE_SHORTAGE",
             Event::AskUser { .. } => "ASK_USER",
             Event::Resumed { .. } => "RESUMED",
+            Event::Paused { .. } => "PAUSED",
             Event::Diagnostic { .. } => "DIAGNOSTIC",
             Event::FlushProgress { .. } => "FLUSH_PROGRESS",
             Event::FlushFinished { .. } => "FLUSH_FINISHED",
@@ -393,6 +406,26 @@ impl Event {
 }
 
 // ───────────────────────────── 事件出口 ─────────────────────────────
+
+/// 遇到「队列暂停」就**原地等**，并在真的停住 / 恢复时各发一条 [`Event::Paused`]
+///
+/// T18-4 的两个挂起点（`ctx::UnpackCtx::entry_done` 的条目边界、`batch` 循环的
+/// 任务之间）都调这一个函数 —— 一处定义两处同步，不会出现「条目边界报了 PAUSED、
+/// 任务之间不报」这种界面看得懂一半的状态。
+///
+/// 语义细节：
+/// - 没暂停时**立刻返回**（热路径上每条目都调，不能有等待）
+/// - 暂停中被取消则不再发「已恢复」，让上层直接走取消收尾
+pub fn 等暂停(sink: &Arc<dyn EventSink>, cancel: &crate::progress::CancelToken, job: u64) {
+    if !cancel.is_paused() {
+        return;
+    }
+    sink.emit(&Event::Paused { job, paused: true });
+    cancel.wait_while_paused();
+    if !cancel.is_cancelled() {
+        sink.emit(&Event::Paused { job, paused: false });
+    }
+}
 
 /// 事件出口（外壳实现）
 ///

@@ -89,6 +89,8 @@
 | `cancel` | — | 取消当前任务（整批停） |
 | `answer` | `value` | 回答 `ASK_USER`：`continue` / `skip` / `cancel`；返回 `{answered, value}` |
 | `skip` | — | 批量里只跳过**当前这一项**，下一个继续；返回 `{skipped}` |
+| `pause` | — | **队列暂停**（T18-4，v0.9.44 起）：软停 —— **不打断**正在解的那个文件，在**下一个条目解完**时停住（已解完的条目一条不丢、也不会重解）。挂起点在 `ctx.entry_done`（所有格式共用）与批量循环的任务之间。返回 `{paused, delivered}`：`delivered:false` = 当时没有任务在跑（前端该把按钮复位）。⚠️ **回执只代表「请求送到」**，真停下来时引擎发 `PAUSED` 事件 —— 前端必须按事件翻按钮，否则就是「点了没反应」 |
+| `resume` | — | **队列继续**：从暂停处接着跑（不重解已完成的条目）；返回同 `pause`。暂停中被 `cancel` 也能立刻退出（条件变量会被唤醒） |
 | `scan` | `paths[]` | 批量探测：`kind` / `volumes` / `looks_like` / `mime` / **`candidates[]`** / **`seek` / `seek_label`** |
 | `batch` | `paths[]`, `dest?`, `password?`, `smart_dir?`, `verify_only?`, `ask?`, `select?`, `encoding?` | 顺序批量解压，返回逐项结果；`ask` / `select` / `encoding` / `verify_only` 与 `extract` 同规则（同一次批量里所有包都按这个挑选） |
 | `report` | `path?`, `no_paths?`, `out_dir?` | 生成诊断 zip，返回落盘路径 |
@@ -179,6 +181,7 @@
 | `PASSWORD_NEEDED` | 需要密码 | 弹密码框（S4） |
 | `SPACE_SHORTAGE` | 空间可能不够 | 提示（S5） |
 | `RESUMED` | 这次是**接着上次没解完的**往下解（断点续传） | 提示一句「接着上次的进度来（已完成 N 项）」；否则用户会以为「一上来就有一大截进度、前面文件没动」是 bug |
+| `PAUSED` | 队列暂停**真的停住了**（`paused:true`）/ 已恢复（`false`） | `true` 时把按钮从「暂停」翻成「继续」，并显示一句「已暂停」；`false` 时清掉那句。★ 别拿 `pause` 命令的回执当这个用 —— 回执到达时当前文件还在解 |
 | `DIAGNOSTIC` | 不打断的提醒 | 小提示条（如 `RISKY_ENTRY` = 解出可执行文件） |
 | `ASK_USER` | 限额命中、需要用户决定 | 弹窗三选一（继续 / 跳过 / 取消），用 `answer` 回答；**60 秒不答按跳过** |
 | `PACK_PROGRESS` | 打包中 | 打包页进度条（打几 GB 的包时界面不能是死的） |
@@ -198,8 +201,8 @@
 
 `hello`：
 ```json
-{"protocol": 1, "engine": "0.9.43",
- "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip"],
+{"protocol": 1, "engine": "0.9.44",
+ "features": ["hello","cancel","report","scan","list","extract","pack","batch","answer","skip","pause","resume"],
  "event_kinds": ["JOB_STARTED", "STAGE_STARTED", "STAGE_FINISHED", "...", "ASK_USER"],
  "languages": ["zh-CN", "..."]}
 ```
@@ -329,7 +332,7 @@ JS 安全整数，统一成字符串最省心；前端按需转换（`int.tryPar
 
 ```
 → {"id":1,"cmd":"hello"}
-← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.43", ...}}
+← {"id":1,"ok":true,"result":{"protocol":1,"engine":"0.9.44", ...}}
 → {"id":2,"cmd":"list","path":"/home/me/游戏.mp4"}
 ← {"type":"event","kind":"STAGE_STARTED","event":{"StageStarted":{"job":2,"stage":"Locate"}}}
 ← {"type":"event","kind":"PREVIEW_READY","event":{"PreviewReady":{...}}}

@@ -474,6 +474,9 @@ where
             out.push(skipped(job, "skipped by user (before start)"));
             continue;
         }
+        // T18-4：队列暂停 → 任务之间就在这里等（不然当前这项解完，循环会
+        // 马上启动下一项，用户看到的就是「点了暂停还在一个个接着跑」）
+        crate::event::等暂停(sink, cancel, job.id);
         if cancel.is_cancelled() {
             out.push(skipped(job, "cancelled before start"));
             continue;
@@ -551,6 +554,8 @@ where
                             local.push(skipped(job, "cancelled before start"));
                             continue;
                         }
+                        // T18-4：队列暂停 → 任务之间等（并行时每个线程各等各的）
+                        crate::event::等暂停(sink, cancel, job.id);
                         if let Some(prev_fail) = local
                             .iter()
                             .find(|r: &&JobOutcome| r.outcome.is_failure())

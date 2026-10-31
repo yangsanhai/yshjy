@@ -98,6 +98,19 @@ class HomePage extends StatefulWidget {
   /// 不给口子这条「禁用 + 说明」就永远没人验，下一轮很容易被改回一个点了没反应的开关。
   final String? debugOutDir;
 
+  /// 测试用：直接进「批量解压中」这一屏，并造 N 个排队路径（生产代码永远 null）
+  ///
+  /// 为什么要这个口子：「全部暂停」按钮只在批量跑的时候出现，而真跑批量要起
+  /// 真引擎 —— widget 测试里跑不起来。没有它，「按钮该出现的时候出现了、
+  /// 不该出现的时候没出现」这两条都只能靠手点。
+  final int? debugBatchCount;
+
+  /// 测试用：把界面置成「引擎已确认暂停」（生产代码永远 false）
+  ///
+  /// 单独一个口子的理由：真实暂停要等引擎发 `PAUSED` 事件，测试里没有引擎；
+  /// 少了它，「已暂停时按钮翻成继续 + 出现状态说明」就验不到。
+  final bool debugPaused;
+
   const HomePage({
     super.key,
     this.initialFile,
@@ -109,6 +122,8 @@ class HomePage extends StatefulWidget {
     this.debugErrorDetail,
     this.debugScanItems,
     this.debugOutDir,
+    this.debugBatchCount,
+    this.debugPaused = false,
   });
 
   @override
@@ -163,6 +178,14 @@ class _HomePageState extends State<HomePage> {
   /// 用户在界面上单独取消掉的任务号（D5）——
   /// 批量结果回来时要保住「已取消」这个状态，别被「失败」覆盖掉
   final Set<int> _cancelled = {};
+
+  /// 队列「全部暂停」（T18-4）
+  ///
+  /// 两个状态必须分开，不然界面会撒谎：
+  /// - `_pauseRequested` = 请求已发出，**引擎还没停**（当前文件还在解）
+  /// - `_paused` = 引擎发来的 `PAUSED` 事件确认了「真的停住了」
+  bool _pauseRequested = false;
+  bool _paused = false;
 
   /// 这一轮扫的是几个文件夹（D6：拖文件夹进来要明说「会自动展开」）
   int _foldersScanned = 0;
@@ -252,6 +275,14 @@ class _HomePageState extends State<HomePage> {
     }
     // 测试注入口：预设「输出到指定目录」（与 debugPreview 同理，只影响测试）
     if (widget.debugOutDir != null) _outDir = widget.debugOutDir;
+    // 测试注入口：直接进「批量解压中」（与 debugPreview 同理，只影响测试）
+    final bc0 = widget.debugBatchCount;
+    if (bc0 != null && bc0 > 0) {
+      _batchOrder = List.generate(bc0, (i) => '/tmp/第${i + 1}个.zip');
+      _phase = Phase.extracting;
+      _stage = 'EXTRACT';
+      _paused = widget.debugPaused;
+    }
     // 测试注入口：直接进失败态（与 debugPreview 同样只影响测试）
     final ec0 = widget.debugErrorCode;
     if (ec0 != null && ec0.isNotEmpty) {
@@ -353,6 +384,16 @@ class _HomePageState extends State<HomePage> {
         final done = (e.data['done'] as num?)?.toInt() ?? 0;
         final text = t('home.resumeFromLast', {'done': '$done'});
         if (!_notes.contains(text)) setState(() => _notes.add(text));
+      case 'PAUSED':
+        // T18-4：引擎确认「真停住了 / 已恢复」。
+        // 注意这**不是** pause 命令的回执（那个只说明请求送到了）——
+        // 按钮必须等这个事件才翻，否则用户点了会以为没反应。
+        final paused = e.data['paused'] == true;
+        setState(() {
+          _paused = paused;
+          if (paused) _pauseRequested = false;
+        });
+        if (paused) widget.onStatus?.call(t('home.pausedNote'));
       case 'PASSWORD_TRY':
         setState(() {
           _pwTry = (e.data['index'] as num?)?.toInt() ?? 0;
@@ -659,6 +700,10 @@ class _HomePageState extends State<HomePage> {
       _progress = null;
       _current = null;
       _cancelled.clear();
+      // 新一轮批量：暂停状态必须归零 —— 否则上一轮残留的「已暂停」
+      // 会让这一轮一进来就显示「继续」，实际引擎在跑
+      _paused = false;
+      _pauseRequested = false;
       for (final q in ready) {
         q.status = 'pending';
         q.jobNo = null;
@@ -1255,6 +1300,30 @@ class _HomePageState extends State<HomePage> {
       // 引擎刚好已经切到下一项时 skip 会返回 skipped:false —— 不算错误
     }
     if (mounted) widget.onStatus?.call(t('home.itemSkippedShort'));
+  }
+
+  /// 队列「全部暂停 / 继续」（T18-4）
+  ///
+  /// 暂停是**软停**：引擎不会打断正在解的那个文件，而是在它解完那一刻停住
+  /// （已解完的条目一条不丢、也不会重解）。所以点下去先显示「正在暂停…」，
+  /// 等引擎发 `PAUSED` 事件才翻成「继续」—— 别让用户以为点了没反应。
+  Future<void> _pauseOrResume() async {
+    if (_paused) {
+      setState(() => _pauseRequested = false);
+      await _client.resumeQueue();
+      return;
+    }
+    if (_pauseRequested) return; // 已经在等它停，重复发没意义
+    setState(() => _pauseRequested = true);
+    final r = await _client.pauseQueue();
+    if (!mounted) return;
+    if (r['delivered'] != true) {
+      // 引擎那边已经没有任务在跑了（刚好结束 / 还没开始）：老实复位，不假装
+      setState(() {
+        _pauseRequested = false;
+        _paused = false;
+      });
+    }
   }
 
   // ───────────────────────── 界面 ─────────────────────────
@@ -2332,6 +2401,16 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(fontSize: 12, color: cs.primary),
                 ),
               ),
+            // T18-4：暂停中 / 已暂停，都在这一行说清楚「现在是什么状态」
+            // （按钮点下去到真停之间有间隔，不说清楚就像卡住了）
+            if (_pauseRequested || _paused)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  _paused ? t('home.pausedNote') : t('home.pausing'),
+                  style: TextStyle(fontSize: 12, color: cs.primary),
+                ),
+              ),
             Text(
               _stage == 'LOCATE'
                   ? t('home.step1')
@@ -2344,6 +2423,18 @@ class _HomePageState extends State<HomePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // T18-4：批量才给「全部暂停」—— 单个文件暂停没意义
+                // （它本来就快跑完了，暂停只会让用户以为卡住）
+                if (_batchOrder.length > 1) ...[
+                  OutlinedButton.icon(
+                    onPressed: _pauseRequested ? null : _pauseOrResume,
+                    icon: Icon(_paused
+                        ? Icons.play_arrow_outlined
+                        : Icons.pause_circle_outline),
+                    label: Text(_paused ? t('home.resumeQueue') : t('home.pauseQueue')),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 // 批量里跳过当前这一个（组 B 的 skip 语义：不是整批取消）
                 if (_batchOrder.length > 1) ...[
                   OutlinedButton.icon(

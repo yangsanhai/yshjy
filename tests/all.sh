@@ -192,6 +192,9 @@ if [ -n "$BIN" ]; then
     skip "布局 L8 MKV 附件（l8_proto.py）" "本机没有 ffmpeg/ffprobe"
   fi
   run "协议 report.out_dir（report_outdir_proto.py）" python3 tests/report_outdir_proto.py "$BIN"
+  # T18-4 队列「全部暂停 / 继续」：★ 只认 PAUSED 事件 + 文件数不再增长，
+  # 不认 pause 的回执（回执只代表请求送到）；产物逐文件 sha256 与不暂停那次对齐
+  run "队列暂停继续（t18_4_pause.py）" python3 tests/t18_4_pause.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
     run "7z 头加密（head_encrypted.sh）" bash tests/head_encrypted.sh "$BIN"
