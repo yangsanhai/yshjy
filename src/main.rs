@@ -2720,7 +2720,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
     if tail || !素材.is_video() {
         opts.layout = yshjy::pack::PackLayout::TailAppend;
     }
-    // `--layout`：显式指定优先（L1 尾部追加 / L2 free 原子 / L4 插在视频中间）
+    // `--layout`：显式指定优先（L1 尾部追加 / L2 free 原子 / L3 文件头部 / L4 插在视频中间）
     if let Some(l) = layout {
         match l.trim().to_ascii_lowercase().as_str() {
             // L5 / L6 是**实测判死**的：前者 7-Zip 只解出 1/4，后者视频直接播不了
@@ -2731,9 +2731,9 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 );
                 return ExitCode::from(code::USAGE);
             }
-            // L3 / L7 / L8 是 T18-1 的另外三项，本轮只做了 L4
-            "l3" | "l7" | "l8" => {
-                eprintln!("❌ --layout {l} 还没实现（本轮做的是 L4 插在视频中间）");
+            // L7 / L8 是 T18-1 剩下的两项，还没做
+            "l7" | "l8" => {
+                eprintln!("❌ --layout {l} 还没实现（现在有 L1 / L2 / L3 / L4）");
                 return ExitCode::from(code::USAGE);
             }
             _ => match yshjy::pack::PackLayout::解析(l) {
@@ -2748,8 +2748,8 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 }
                 None => {
                     eprintln!(
-                        "❌ --layout 只认 L1（尾部追加）/ L2（free 原子）/ L4（插在视频中间），\
-                         收到 {l}"
+                        "❌ --layout 只认 L1（尾部追加）/ L2（free 原子）/ \
+                         L3（放在文件头部）/ L4（插在视频中间），收到 {l}"
                     );
                     return ExitCode::from(code::USAGE);
                 }
@@ -2859,6 +2859,7 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 let 布局 = match rep.layout {
                     yshjy::pack::PackLayout::TailAppend => 语.t("cli.pack_layout_tail", &[]),
                     yshjy::pack::PackLayout::FreeAtom => 语.t("cli.pack_layout_free", &[]),
+                    yshjy::pack::PackLayout::HeadFreeAtom => 语.t("cli.pack_layout_head", &[]),
                     yshjy::pack::PackLayout::MidChunk => 语.t("cli.pack_layout_mid", &[]),
                 };
                 println!(
@@ -2980,7 +2981,17 @@ fn do_pack(a: 打包参数<'_>) -> ExitCode {
                 yshjy::pack::self_check_tar(&out, 格式, rep.entries)
             } else {
                 let 起点 = (rep.zip_offset > 0).then_some(rep.zip_offset);
-                yshjy::pack::self_check_at(&out, rep.entries, 起点, rep.noise_size)
+                // 「噪声字节数」这条自检的语义是**噪声写在 ZIP 起点之前**（L1 / L2），
+                // 用来发现「噪声压到了压缩数据上」。L3 的噪声在整份产物之后（插点在
+                // 文件头部），拿它去比起点必然误报（36 < 65536），所以传 0 跳过这一条；
+                // L3 的噪声由 `tests/l3_proto.py` 用「产物大小 = 基础 + 噪声」和
+                // 「解出来 sha256 一致」两条实测盯着。
+                let 噪声 = if rep.layout == yshjy::pack::PackLayout::HeadFreeAtom {
+                    0
+                } else {
+                    rep.noise_size
+                };
+                yshjy::pack::self_check_at(&out, rep.entries, 起点, 噪声)
             };
             match 自检结果 {
                 Ok(warns) if warns.is_empty() => {

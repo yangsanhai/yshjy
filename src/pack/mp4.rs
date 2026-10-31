@@ -187,6 +187,28 @@ impl 不能插 {
             不能插::尺寸超出32位 => "包太大：视频数据段装不下（超过 4 GiB），这种布局装不下",
         }
     }
+
+    /// 同 [`不能插::说明`]，但用于 L3「放在文件头部」的降级提示
+    ///
+    /// 为什么不能复用上面那句：那里写的是「插在视频中间」，而 L3 根本不往 `mdat` 里插，
+    /// 照抄会让用户看到一句与自己所选布局不符的话（T18-1 的教训：降级必须说出来，且说对）。
+    pub fn 头部说明(self) -> &'static str {
+        match self {
+            // mdat 在 L3 里只是个「跟着一起后移的盒子」，没有它也能插；
+            // 但真正决定能不能插的是 moov 里的偏移表，所以这条只在 moov/mdat 都缺时才走到
+            不能插::不是MP4 => "封面不是 MP4，没法把数据放在文件头部",
+            不能插::没有MDAT => "封面里找不到视频数据段（mdat），没法放在文件头部",
+            不能插::没有MOOV => "封面里找不到索引段（moov），没法放在文件头部",
+            不能插::没有chunk表 => {
+                "封面里没有 chunk 偏移表（分片 MP4？），没法放在文件头部"
+            }
+            不能插::mdat里没有chunk起点 => "视频数据段里找不到可用的插入点，没法放在文件头部",
+            不能插::偏移超出32位 => {
+                "包太大：整体后移会让播放位置超出 4 GiB 上限，这种布局装不下"
+            }
+            不能插::尺寸超出32位 => "包太大：视频数据段装不下（超过 4 GiB），这种布局装不下",
+        }
+    }
 }
 
 /// 「可以往这儿插」的封面：字节已经改好（`mdat.size` + 偏移表），长度不变
@@ -303,6 +325,80 @@ pub fn 准备插槽(封面: &[u8], 插入长度: u64) -> Result<中间插槽, �
         封面: 补,
         插点,
     })
+}
+
+/// L3「放在文件头部」：把 ZIP 包成 `free` 原子插在 `ftyp` 之后
+///
+/// 与 [`准备插槽`]（L4 插在视频中间）的三处差别：
+/// - **插点固定** = `ftyp` 末尾（不挑 chunk 边界：这里根本没往 `mdat` 里插）
+/// - **`mdat.size` 一个字节都不改**（`mdat` 自己跟着整块后移，长度没变）
+/// - **每条 `stco`/`co64` 都要 +增量**（后面所有字节整体后移，不是只补 `>= 插点` 那部分）
+///
+/// 依据：`refs/analysis/05-压缩布局验证.md` §3「L3」—— 隐写者模式 B 的修正版。
+/// 隐写者原版逐原子插噪声并只补 `free` 长度 → `ffmpeg rc=183`（视频报废）；本函数
+/// 不碰任何视频字节，只整体后移 + 全表补偿，实测 `rc=0` 且 stderr 空。
+///
+/// **代价（界面必须如实说）**：ZIP 在文件头部，EOCD 距文件尾极远 → 只靠「尾部 64 KiB
+/// 窗口扫描」的工具（`unzip` / Windows 资源管理器 / 手机自带解压器）全都找不到；
+/// 7-Zip 会从文件头一路往前扫，照旧能解。
+pub fn 准备头部插槽(封面: &[u8], 插入长度: u64) -> Result<中间插槽, 不能插> {
+    if 封面.len() < 8 || &封面[4..8] != b"ftyp" {
+        return Err(不能插::不是MP4);
+    }
+    let 顶层 = 顶层盒子(封面);
+    let ftyp = 顶层
+        .iter()
+        .find(|b| &b.类型 == b"ftyp")
+        .copied()
+        .ok_or(不能插::不是MP4)?;
+    let 插点 = ftyp.末尾();
+    if 插点 > 封面.len() {
+        return Err(不能插::不是MP4);
+    }
+    // 必须先有可改的偏移表 —— 没有表就没法把后移量补回去，插了就是坏视频
+    let moov = 顶层
+        .iter()
+        .find(|b| &b.类型 == b"moov")
+        .copied()
+        .ok_or(不能插::没有MOOV)?;
+    let 表 = 找chunk表(封面, moov);
+    if 表.is_empty() {
+        return Err(不能插::没有chunk表);
+    }
+
+    let 增量 = 插入长度;
+    if 增量 == 0 {
+        return Ok(中间插槽 {
+            封面: 封面.to_vec(),
+            插点,
+        });
+    }
+
+    // stco 是 32 位绝对偏移：插点在头部 → 绝大多数条目都要加，溢出检查必须全表做
+    for t in &表 {
+        if t.宽 != 4 {
+            continue;
+        }
+        for i in 0..t.数量 {
+            let v = 读偏移(封面, t.条目区 + i * t.宽, 4).ok_or(不能插::没有chunk表)?;
+            if v >= 插点 as u64 && v + 增量 > u32::MAX as u64 {
+                return Err(不能插::偏移超出32位);
+            }
+        }
+    }
+
+    // 副本上打补丁（位置按原封面算：副本里还没插入东西，拼装时整块后移，值不用再动）
+    let mut 补: Vec<u8> = 封面.to_vec();
+    for t in &表 {
+        for i in 0..t.数量 {
+            let o = t.条目区 + i * t.宽;
+            let v = 读偏移(&补, o, t.宽).ok_or(不能插::没有chunk表)?;
+            if v >= 插点 as u64 {
+                写偏移(&mut 补, o, t.宽, v + 增量);
+            }
+        }
+    }
+    Ok(中间插槽 { 封面: 补, 插点 })
 }
 
 /// 把 `插入` 塞进封面 MP4 的 `mdat` 中间，返回拼好的整个文件（测试与一次性场景用）
@@ -647,5 +743,157 @@ mod 测试 {
         // 长度字段瞎写的假文件
         let 乱 = b"\x00\x00\x00\x08ftyp\xff\xff\xff\xffmdat";
         let _ = 插在中间(乱, b"xyz");
+    }
+
+    // ── L3「放在文件头部」───────────────────────────────────────────────
+    // 这几条盯的是 L3 与 L4 的**三处差别**：插点固定在 ftyp 末尾、mdat.size 不动、
+    // 全表偏移都 +增量。漏一条就会打出「能解但视频坏」或「视频好但包错位」的包。
+
+    /// 造一个合法的 `free` 原子（size + 'free' + 载荷）—— L3 正式路径插的就是这个
+    fn free原子(载荷: &[u8]) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(&((8 + 载荷.len()) as u32).to_be_bytes());
+        v.extend_from_slice(b"free");
+        v.extend_from_slice(载荷);
+        v
+    }
+
+    /// 按插槽把插入物拼起来（L3 的正式路径是流式写，测试里直接拼）
+    fn 拼头部(封面: &[u8], 插入: &[u8]) -> Vec<u8> {
+        let 槽 = 准备头部插槽(封面, 插入.len() as u64).unwrap();
+        let mut 产物 = Vec::with_capacity(封面.len() + 插入.len());
+        产物.extend_from_slice(&槽.封面[..槽.插点]);
+        产物.extend_from_slice(插入);
+        产物.extend_from_slice(&槽.封面[槽.插点..]);
+        产物
+    }
+
+    #[test]
+    fn l3_插点就是ftyp末尾且mdat一个字节不动() {
+        let 载荷 = vec![0u8; 100];
+        let 低 = 36u32;
+        let c = 造mp4(&载荷, &[低, 低 + 30, 低 + 60], false);
+        let ftyp末尾 = 28usize;
+        let 插入 = free原子(&[0xCDu8; 32]); // 总长 40
+
+        let 槽 = 准备头部插槽(&c, 插入.len() as u64).unwrap();
+        assert_eq!(槽.插点, ftyp末尾, "L3 的插点必须正好是 ftyp 的末尾");
+
+        let 产物 = 拼头部(&c, &插入);
+        assert_eq!(产物.len(), c.len() + 40);
+        // 插进 ftyp 末尾的是「8 字节 free 头 + 32 字节载荷」
+        assert_eq!(&产物[ftyp末尾..ftyp末尾 + 4], &40u32.to_be_bytes(), "free 原子头要带对的长度");
+        assert_eq!(&产物[ftyp末尾 + 4..ftyp末尾 + 8], b"free");
+        assert!(
+            产物[ftyp末尾 + 8..ftyp末尾 + 40].iter().all(|b| *b == 0xCD),
+            "载荷要正好落在插点之后"
+        );
+        assert_eq!(&产物[0..4], &28u32.to_be_bytes(), "ftyp 自己不该被改");
+
+        // ★ mdat.size 必须原封不动（L4 才改它）
+        let 顶层 = 顶层盒子(&产物);
+        let mdat = 顶层.iter().find(|b| &b.类型 == b"mdat").copied().unwrap();
+        assert_eq!(mdat.大小, 108, "L3 不往 mdat 里插，size 不能变");
+        // 顶层盒子首尾相接
+        let mut 起 = 0usize;
+        for b in &顶层 {
+            assert_eq!(b.偏移, 起, "盒子要首尾相接");
+            起 = b.末尾();
+        }
+        assert_eq!(起, 产物.len());
+    }
+
+    #[test]
+    fn l3_每一条偏移都要加上插入长度() {
+        let 载荷 = vec![0u8; 128];
+        let 低 = 36u32;
+        let 原条目 = [低, 低 + 40, 低 + 80];
+        let c = 造mp4(&载荷, &原条目, false);
+        let 插入 = free原子(&[0u8; 56]); // 总长 64
+        let 产物 = 拼头部(&c, &插入);
+
+        let 顶层 = 顶层盒子(&产物);
+        let moov = 顶层.iter().find(|b| &b.类型 == b"moov").copied().unwrap();
+        let 表 = 找chunk表(&产物, moov);
+        assert_eq!(表.len(), 1);
+        for (i, 旧) in 原条目.iter().enumerate() {
+            let 新 = 读偏移(&产物, 表[0].条目区 + i * 4, 4).unwrap();
+            assert_eq!(新, *旧 as u64 + 64, "第 {i} 条必须 +插入长度（全表都要补）");
+        }
+    }
+
+    #[test]
+    fn l3_faststart形态也能对() {
+        // ftyp + moov + mdat：moov 在插点之后，整块后移，表里的绝对偏移仍要 +增量
+        let 载荷 = vec![0u8; 64];
+        let mdat偏移 = 28 + 造moov(&[0]).len();
+        let 载荷起点 = (mdat偏移 + 8) as u32;
+        let (c, _) = 造faststart(&载荷, &[载荷起点]);
+        let 插入 = free原子(&[0u8; 16]); // 总长 24
+        let 产物 = 拼头部(&c, &插入);
+        assert_eq!(产物.len(), c.len() + 24);
+
+        let 顶层 = 顶层盒子(&产物);
+        let moov = 顶层.iter().find(|b| &b.类型 == b"moov").copied().unwrap();
+        let 表 = 找chunk表(&产物, moov);
+        assert_eq!(读偏移(&产物, 表[0].条目区, 4).unwrap(), 载荷起点 as u64 + 24);
+        // mdat size 写的是 0（一直到文件尾）—— 插在前面仍然成立，不能改成具体值
+        let mdat = 顶层.iter().find(|b| &b.类型 == b"mdat").copied().unwrap();
+        assert_eq!(读偏移(&产物, mdat.偏移, 4).unwrap(), 0);
+    }
+
+    #[test]
+    fn l3_没有moov或没有表就拒绝() {
+        // 只有 ftyp + free（没有 moov）→ 没法补偏移，必须拒
+        let mut 只有ftyp = 造ftyp();
+        只有ftyp.extend_from_slice(&8u32.to_be_bytes());
+        只有ftyp.extend_from_slice(b"free");
+        assert_eq!(准备头部插槽(&只有ftyp, 16), Err(不能插::没有MOOV));
+
+        // 有 moov 但没有 stco/co64（分片 MP4 的形态）→ 同样拒
+        let mut 无表 = 造ftyp();
+        无表.extend_from_slice(&8u32.to_be_bytes());
+        无表.extend_from_slice(b"moov");
+        assert_eq!(准备头部插槽(&无表, 16), Err(不能插::没有chunk表));
+
+        // 不是 MP4
+        assert_eq!(准备头部插槽(b"hello world", 16), Err(不能插::不是MP4));
+    }
+
+    #[test]
+    fn l3_偏移溢出要拒绝() {
+        let 载荷 = vec![0u8; 64];
+        let c = 造mp4(&载荷, &[36, u32::MAX - 4], false);
+        assert_eq!(准备头部插槽(&c, 32), Err(不能插::偏移超出32位));
+    }
+
+    #[test]
+    fn l3_坏结构也不恐慌() {
+        let c = 素材("cover5.mp4");
+        for 截 in [0usize, 4, 8, 28, 36, 100, c.len() / 2] {
+            let _ = 准备头部插槽(&c[..截.min(c.len())], 128);
+        }
+        let _ = 准备头部插槽(b"\x00\x00\x00\x08ftyp\xff\xff\xff\xffmdat", 128);
+    }
+
+    #[test]
+    fn l3_真实封面插完结构自洽() {
+        for 名 in ["cover5.mp4", "cover5_fast.mp4", "cover5_vonly.mp4"] {
+            let c = 素材(名);
+            let 产物 = 拼头部(&c, &free原子(&[0x5Au8; 89])); // 总长 97
+            // 顶层盒子首尾相接、最后一个正好到文件尾（长度字段被我们改过的话这里会炸）
+            let 顶层 = 顶层盒子(&产物);
+            let mut 起 = 0usize;
+            for b in &顶层 {
+                assert_eq!(b.偏移, 起, "{名}：盒子要首尾相接");
+                起 = b.末尾();
+            }
+            assert_eq!(起, 产物.len(), "{名}：最后一个盒子要正好到文件尾");
+            // mdat 的 size 一个都没变
+            let 原 = 顶层盒子(&c);
+            let 原mdat = 原.iter().find(|b| &b.类型 == b"mdat").unwrap();
+            let 新mdat = 顶层.iter().find(|b| &b.类型 == b"mdat").unwrap();
+            assert_eq!(新mdat.大小, 原mdat.大小, "{名}：mdat size 不该变");
+        }
     }
 }

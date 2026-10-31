@@ -707,7 +707,8 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
     {
         opts.layout = crate::pack::PackLayout::TailAppend;
     }
-    // 打包布局（T18-1 · L4 插在视频中间）：`layout` = tail / free / mid（也认 L1/L2/L4）。
+    // 打包布局（T18-1）：`layout` = tail / free / head / mid（也认 L1/L2/L3/L4）。
+    // `head` = L3 放在文件头部（ZIP 包成 free 原子插在 ftyp 之后）。
     // 不传 = 老行为（默认 free 原子，非 MP4 封面由引擎自动降级）。
     //
     // 为什么与 `tail:true` 一起给要拒：`tail` 就是「布局 = tail」的老写法，
@@ -716,7 +717,7 @@ pub fn 打包(参数: &Value, 事件: &Arc<dyn EventSink>) -> Result<Value, Valu
         let 要求 = crate::pack::PackLayout::解析(v).ok_or_else(|| {
             错误值(
                 "BAD_PARAM",
-                &format!("layout 只能是 tail / free / mid（也认 L1 / L2 / L4，收到 {v}）"),
+                &format!("layout 只能是 tail / free / head / mid（也认 L1 / L2 / L3 / L4，收到 {v}）"),
             )
         })?;
         let 说过尾巴 = 参数.get("tail").and_then(|x| x.as_bool()) == Some(true);

@@ -39,6 +39,15 @@ pub enum PackLayout {
     /// 藏进尾部 `free` 原子（推荐）
     #[default]
     FreeAtom,
+    /// 放在**文件头部**（L3）—— ZIP 包成 `free` 原子插在 `ftyp` 之后
+    ///
+    /// 做法见 [`mp4::准备头部插槽`]：插点固定 `ftyp` 末尾，后面所有字节整体后移 →
+    /// 每条 `stco`/`co64` 都 `+= 插入长度`；**`mdat.size` 不改**（没往它里面插东西）。
+    ///
+    /// **代价**：ZIP 的 EOCD 离文件尾极远（实测 118,902 B）→ `unzip` / Windows
+    /// 资源管理器 / 手机自带解压器**全都找不到包**，只有 7-Zip（从文件头扫）和本工具
+    /// 能开。所以是高级选项，界面必须写明「请用 7-Zip 或本工具」。
+    HeadFreeAtom,
     /// 插进视频数据中间（L4）—— ZIP 夹在 `mdat` 的两条 chunk 之间，视频照常能播
     ///
     /// 做法见 [`mp4::准备插槽`]：`mdat.size += 插入长度`，所有 `>= 插点` 的
@@ -56,19 +65,21 @@ impl PackLayout {
         match self {
             PackLayout::TailAppend => "尾部追加",
             PackLayout::FreeAtom => "free 原子",
+            PackLayout::HeadFreeAtom => "放在文件头部",
             PackLayout::MidChunk => "插在视频中间",
         }
     }
 
     /// 从协议 / 命令行传来的字符串名解析（大小写不敏感）
     ///
-    /// 收两套写法：上位名（tail / free / mid）和实测报告里的编号（L1 / L2 / L4）。
+    /// 收两套写法：上位名（tail / free / head / mid）和实测报告里的编号（L1 / L2 / L3 / L4）。
     /// L5（分散多段）/ L6（前后加垃圾）**故意不认** —— 实测前者 7-Zip 只解出 1/4、
     /// 后者视频直接播不了，属于「看着更隐蔽、实际把用户坑了」。
     pub fn 解析(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
             "tail" | "l1" | "append" => Some(Self::TailAppend),
             "free" | "l2" => Some(Self::FreeAtom),
+            "head" | "front" | "l3" => Some(Self::HeadFreeAtom),
             "mid" | "middle" | "l4" => Some(Self::MidChunk),
             _ => None,
         }
@@ -548,6 +559,30 @@ pub fn build_ctx_decoy<W: Write>(
         }
     }
 
+    // L3（放在文件头部）：同样先算插槽。这里**不检查 mdat** —— 插点在 `ftyp` 末尾，
+    // 整个 `mdat` 只是跟着后移，改的是 `moov` 里的偏移表。
+    if layout == PackLayout::HeadFreeAtom {
+        // ★ 插入长度 = ZIP 大小 + `free` 头（8 或 16 字节），不是 ZIP 一个。
+        //   少算头长 → 所有 chunk 偏移偏 8 字节 → 产物能打开但解码器一路报错
+        //   （`ffmpeg rc=0` 且 stderr 不空，最典型的假绿）。
+        let 插入长度 = zip_size + free原子头长(zip_size);
+        match mp4::准备头部插槽(&cover, 插入长度) {
+            Ok(s) => 槽 = Some(s),
+            Err(原因) => {
+                layout = if 封面是mp4 {
+                    PackLayout::FreeAtom
+                } else {
+                    PackLayout::TailAppend
+                };
+                warnings.push(format!(
+                    "{}；已自动改用「{}」布局",
+                    原因.头部说明(),
+                    layout.名字()
+                ));
+            }
+        }
+    }
+
     // 封面怎么落地：L4 得拆两段写（中间夹 ZIP），别的布局就是一整块（后段为空）
     let (封面前, 封面后): (&[u8], &[u8]) = match &槽 {
         Some(s) => (&s.封面[..s.插点], &s.封面[s.插点..]),
@@ -565,7 +600,7 @@ pub fn build_ctx_decoy<W: Write>(
     进度(PackTick::TotalHint(zip_size + 噪声总量));
 
     let mut atom_overhead = 0u64;
-    let noise_size;
+    let mut noise_size;
     let mut pad_len = 0u64;
     match layout {
         PackLayout::TailAppend => {
@@ -591,6 +626,14 @@ pub fn build_ctx_decoy<W: Write>(
             noise_size = 写噪声带进度(out, decoy, 噪声种子, 进度)?;
             拷贝带进度(&tmp, out, 进度)?;
         }
+        PackLayout::HeadFreeAtom => {
+            // L3：ZIP 包成 `free` 原子，紧跟在 `ftyp` 后面（插点在封面内部）。
+            // 噪声**不写在这里**：插点在文件头部，噪声一律落到文件末尾（见下面那段），
+            // 不然会把 ZIP 的 EOCD 支得更远、等于往视频头上塞垃圾。
+            atom_overhead = write_free_atom_header(out, zip_size)?;
+            拷贝带进度(&tmp, out, 进度)?;
+            noise_size = 0;
+        }
         PackLayout::MidChunk => {
             // L4：ZIP 直接接在「前半段视频」后面，后面再补封面的后半段。
             // 这里没有噪声 —— 见函数开头的互斥检查。
@@ -598,13 +641,23 @@ pub fn build_ctx_decoy<W: Write>(
             noise_size = 0;
         }
     }
-    // 封面的后半段（只有 L4 有内容；别的布局这里是空的）
+    // 封面的后半段（L3 / L4 有内容；别的布局这里是空的）
     out.write_all(封面后)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover tail: {e}")))?;
+
+    // L3 的干扰数据写在**文件末尾**（T18-1 三个不做之一的口径，3a 用户拍板）：
+    // 插点在头部，末尾噪声不影响任何偏移，视频照常能播；顺带让文件尾巴看起来
+    // 像「有脏数据」，比裸 ZIP 结尾更像正常视频。
+    if layout == PackLayout::HeadFreeAtom {
+        noise_size = 写噪声带进度(out, decoy, 噪声种子, 进度)?;
+    }
     // ZIP 起点：自检要拿它核对「噪声确实全在压缩数据之外」
     let zip_offset = match layout {
         // 插点在封面内部，封面从产物第 0 字节开始 → 插点就是 ZIP 的起点
         PackLayout::MidChunk => 槽.as_ref().map_or(0, |s| s.插点 as u64),
+        // L3：插点（`ftyp` 末尾）后面先是 `free` 头，ZIP 紧跟其后。
+        // 这里的噪声在**文件末尾**，绝不能套用下面那行的公式（会把噪声错算进偏移）。
+        PackLayout::HeadFreeAtom => 槽.as_ref().map_or(0, |s| s.插点 as u64) + atom_overhead,
         _ => cover_size + atom_overhead + pad_len + noise_size,
     };
 
@@ -740,12 +793,26 @@ fn 写噪声带进度<W: Write>(
     Ok(n)
 }
 
-/// 写 `free` 原子头，返回写入的字节数
+/// `free` 原子头有多长：4 字节 size + `'free'` = 8；超过 4 GiB 时用 64 位形式 = 16
 ///
-/// MP4 规范：`size(4, 大端) + type(4)`；`size` 为 1 时表示后面跟 8 字节真实长度。
-fn write_free_atom_header<W: Write>(out: &mut W, payload_len: u64) -> Result<u64> {
+/// ★ 这条规则**必须**与 [`write_free_atom_header`] 用同一个阈值。插槽算偏移时要用它：
+/// 少算 8 字节会让所有 chunk 偏移偏 8 字节 —— 产物 `ffmpeg rc=0` 但满屏解码错误
+/// （L3 第一次实现就是这么翻车的，`tests/l3_proto.py` 的「stderr 空」断言抓到的）。
+fn free原子头长(payload_len: u64) -> u64 {
     const LARGE_THRESHOLD: u64 = u32::MAX as u64 - 16;
     if payload_len > LARGE_THRESHOLD {
+        16
+    } else {
+        8
+    }
+}
+
+/// 写 `free` 原子头，返回写入的字节数
+///
+/// MP4 规范：`size(4, 大端) + type(4)`；`size` 为 1 时表示后面跟 8 字节真实大小。
+fn write_free_atom_header<W: Write>(out: &mut W, payload_len: u64) -> Result<u64> {
+    let 头长 = free原子头长(payload_len);
+    if 头长 == 16 {
         // 64 位形式：size=1 + 'free' + 8 字节真实大小
         out.write_all(&1u32.to_be_bytes())
             .and_then(|_| out.write_all(b"free"))

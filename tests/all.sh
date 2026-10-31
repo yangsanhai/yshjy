@@ -178,6 +178,9 @@ if [ -n "$BIN" ]; then
   # T18-1 布局 L4（插在视频中间）：核心断言是「ffmpeg rc=0 且 stderr 空」——
   # 只看 rc 会让「改了 mdat size 没改 stco」那种满是坏帧的包也过验收
   run "布局 L4 插在视频中间（l4_proto.py）" python3 tests/l4_proto.py "$BIN"
+  # T18-1 布局 L3（放在文件头部）：插点在 ftyp 末尾、mdat.size 不动、全表偏移 +增量。
+  # ★ 头长少算 8 字节同样表现为「rc=0 但 stderr 满屏 AAC 错」—— 也是靠 stderr 空守住
+  run "布局 L3 放在文件头部（l3_proto.py）" python3 tests/l3_proto.py "$BIN"
   run "协议 report.out_dir（report_outdir_proto.py）" python3 tests/report_outdir_proto.py "$BIN"
   # 7z 头加密（-mhe=on）：连清单都读不到时必须单独说，另含 --list 密码丢失的回归
   if command -v 7z >/dev/null 2>&1; then
