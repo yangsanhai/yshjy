@@ -1,5 +1,39 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-10-31 晚 · T14 做完（界面多语言七种全上），已发版并装机 0.9.39**
+>
+> - **规模**：479 条文案 × 7 种语言（简体 / 繁體 / English / 日本語 / 한국어 / Español / Русский）。
+>   `gui/lib/l10n.dart` 的 `availableLocales` 列全 7 种；没翻完的语言不进下拉（这条规矩是
+>   真 bug 逼出来的，见下）。界面上已扫不到硬编码中文，`flutter test` **158 条**。
+> - **翻译怎么来的**：繁體用 `opencc -c s2twp.json` + 手工对齐引擎 `locales/zh-TW.toml` 术语
+>   （壓縮檔/解壓密碼/影片/資料夾/網路/預設/儲存，品牌名「楊三海解壓」）；日韩西俄用 DeepSeek
+>   批量脚本（50 条一批、逐批校验键与占位符），全程约 12 万 token ≈ 一毛六。脚本在
+>   `~/.hermes/cache/scratch/translate.py`（已跑完）。格式名用确定性映射
+>   （video→動画 / image→画像 / audio→音声 / document→文書 / stream→ストリーム /
+>   executable→実行ファイル / archive→アーカイブ），第一次让模型自由发挥，日语 49 条直接抄了英文。
+> - **★ 两个真机才暴露的坑（测试全绿也发现不了）**：
+>   1. `const HistoryPage()` / `const SettingsPage()` —— 父级 rebuild 时 Flutter 判定「同一个
+>      const 实例 = 没变化」，**跳过子树重建**，页面停在首帧语言。症状：英文界面下导航栏是
+>      Extract/Pack/History，历史页正文还是「历史记录 0条 / 还没处理过文件」，同一窗口半英半中。
+>   2. `String _status = t('shell.status.ready')` 是字段初始化，只在 State 创建时算一次 →
+>      底部状态栏永远「就绪」。
+>   两条都补了护栏（`test/locale_switch_rebuild_test.dart`：换表后标题必须变 History +
+>   源码级禁止 `const XxxPage(` 与字段级 `t('shell.status.ready')`）。
+> - **★ 发版顺序的坑**：`scripts/build-deb.sh` 只把**现成的** release bundle 打进包，**不会自编**。
+>   这次只跑了 `flutter build linux --debug` 就打包 → deb 里是 13:31 的旧界面（无语言包），
+>   装上去下拉只有两种。**正确顺序**：`cd gui && flutter build linux --release` →
+>   `scripts/release.sh` → `scripts/build-deb.sh` → `scripts/test-packages.sh` → 装机 →
+>   `dpkg -L yshjy | grep 'l10n/.*json'` 应列出 7 个（一个都没有 = 打了旧 GUI）。
+> - **测试/验收证据**：`flutter test` 158 过、`flutter analyze` No issues；deb 自测 37 项全绿；
+>   装机五项：dpkg 版本 / `--version` / 系统里 7 个语言包 / 真打包解压逐字节一致 / 菜单与
+>   Nautilus 右键。真机由用户切语言逐页点过。
+> - **还欠着**：Windows 的 `Platform.localeName` 行为无法在 Linux 验证 —— 留给 Windows 打包
+>   那轮（见 `docs/TODO.md` 表尾）。「界面文案多语言」这项已无残留。
+> - 相关提交：`b7959fd`（设置页）→ `736a21a`（英文溢出修）→ `29fb1a4`（没翻完的语言不下拉）→
+>   `a344cf4`（打包页）→ `bdfa92b`（外壳+历史）→ `263d78a` / `03b695f` / `36924ae`（首页三批）→
+>   T14 收官 → `05856d0`（文档）→ `d2cfb66`（切语言不跟手的真机 bug）→
+>   `adde2d8`（版本号 0.9.39）→ `fb35ac1`（删过期说明）。
+
 > **2026-10-31 午 · T7 做完（5 / 5），已发版并装机 0.9.38**
 >
 > 用户口径「t7」→「按照你的想法做就行」。T7 = 引擎/协议早就有、界面一个参数都没传的那批，
