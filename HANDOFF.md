@@ -1,5 +1,22 @@
 # yshjy 交接文档（重开对话先读这个）
 
+## ★ 铁律：`tests/all.sh` 跑着的时候，不要动代码、不要编译、不要并行跑测试
+
+2026-11-01 连撞两次，两次都是**假失败**，白查半天：
+
+1. **边跑 all.sh 边改 `src/`** → all.sh 里的 `cargo clippy` / `cargo test` 拿到的是
+   改到一半的代码，报出「这个 if 能合并」这种你十分钟前就修好的错。
+2. **边跑 all.sh 边 `cargo build --release`** → 文档测试报
+   `extern location for yshjy does not exist: target/release/deps/libyshjy.rlib`
+   —— 不是断言失败，是那一刻 rlib 正被替换掉。
+3. **两个 all.sh 同时在跑**（或 all.sh 跑着的同时我又单独跑 `flutter test`）→
+   `settings_switch_widget_test.dart` 偶发挂「期望写回 off、实际还是 on」，
+   单独复跑 3/3 全过。
+
+做法：**启动 all.sh 之前把代码改完、编译完**；它跑的那 5 分钟只准看日志、写文档
+（不碰 `src/`、`gui/lib/`，不跑 cargo / flutter）。要并行验证就先等它结束。
+判红之前先看日志时间戳，跟自己的改动时间对一对 —— 比改代码便宜得多。
+
 > **2026-11-01 · T18-1 的 L7「一个文件里放两个包」做完**
 >
 > - **做了什么**：封面 → ZIP1（本次输入压出来的）→ ZIP2（用户给的**现成** zip），两个包各自
