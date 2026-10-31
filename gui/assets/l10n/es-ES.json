@@ -186,6 +186,8 @@
   "pack.volumeSize": "Tamaño de cada volumen",
   "pack.sha": "Generar suma de comprobación SHA-256",
   "pack.sha.desc": "La otra persona puede usar sha256sum -c para comprobar que no se ha descargado mal",
+  "pack.tweak": "Evitar duplicados en la nube (aleatorizar fechas)",
+  "pack.tweak.desc": "Mezcla las fechas en cada empaquetado para que la nube no lo tome como el mismo archivo; las fechas guardadas ya no serán las reales",
   "pack.notes": "Generar 说明.txt (léeme)",
   "pack.notes.desc": "Le dice a la otra persona que no es un vídeo y cómo abrirlo (si hay contraseña, se incluye)",
   "pack.flush.progress": "Comprobando el guardado en disco: quedan unos {size} por escribir · esperando {secs} s · ⚠️ no desconectes el dispositivo",

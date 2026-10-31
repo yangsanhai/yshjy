@@ -191,6 +191,8 @@
   "pack.volumeSize": "Volume size",
   "pack.sha": "Write a SHA-256 checksum",
   "pack.sha.desc": "The recipient can run sha256sum -c to verify the download",
+  "pack.tweak": "Avoid cloud dedup (randomize timestamps)",
+  "pack.tweak.desc": "Shuffle file timestamps on every pack so cloud drives don't treat it as the same file; stored times are no longer the real mtimes",
   "pack.notes": "Write 说明.txt (readme)",
   "pack.notes.desc": "Tells the recipient it isn't really a video and how to open it (the password goes in too)",
   "pack.flush.progress": "Flushing to disk: about {size} left · waited {secs}s · ⚠️ do not unplug the device",

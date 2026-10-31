@@ -186,6 +186,8 @@
   "pack.volumeSize": "볼륨 크기",
   "pack.sha": "SHA-256 체크섬 생성",
   "pack.sha.desc": "상대방이 sha256sum -c 로 다운로드가 깨지지 않았는지 확인할 수 있어요",
+  "pack.tweak": "클라우드 중복 판정 회피(시간 무작위)",
+  "pack.tweak.desc": "압축할 때마다 파일 시간을 흐트러뜨려 클라우드가 같은 파일로 보지 않게 합니다. 대신 기록된 시간은 실제 수정 시간이 아닙니다",
   "pack.notes": "설명.txt 생성",
   "pack.notes.desc": "상대방에게 이건 동영상이 아니고 어떻게 여는지 알려줘요 (암호가 있으면 함께 적혀요)",
   "pack.flush.progress": "디스크에 기록 확인 중: 약 {size} 남음 · {secs}초 기다림 · ⚠️ 장치를 빼지 마세요",

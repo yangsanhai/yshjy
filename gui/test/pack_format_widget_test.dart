@@ -145,6 +145,40 @@ void main() {
     expect(find.byKey(kFormatKey), findsNothing,
         reason: '伪装包的定位靠 ZIP 的 EOCD，tar 系打出来自己也解不开');
   });
+
+  // ── T18-3 防炸链 ────────────────────────────────────────────────
+  const tweak = ValueKey('tweak-time-toggle');
+
+  testWidgets('防炸链默认关：请求里不出现 tweak_time', (tester) async {
+    await pumpPack(tester, ready: true);
+
+    expect(tester.widget<SwitchListTile>(find.byKey(tweak)).value, isFalse,
+        reason: '默认必须关 —— 自己备份时真实时间戳是有用的，别默默改掉');
+
+    await tester.tap(find.text('开始压缩'));
+    await pumpFrames(tester);
+
+    final cmd = fake!.lastCmd('pack');
+    expect(cmd, isNotNull);
+    expect(cmd!.containsKey('tweak_time'), isFalse,
+        reason: '没开就不该传，传了会让「两次打包一致」这条约定莫名其妙地失效');
+  });
+
+  testWidgets('勾上防炸链：请求带 tweak_time: true', (tester) async {
+    await pumpPack(tester, ready: true);
+
+    await tester.tap(find.byKey(tweak));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(find.byKey(tweak)).value, isTrue);
+
+    await tester.tap(find.text('开始压缩'));
+    await pumpFrames(tester);
+
+    final cmd = fake!.lastCmd('pack');
+    expect(cmd, isNotNull);
+    expect(cmd!['tweak_time'], isTrue,
+        reason: '开关是假的就没意义 —— 用户勾了，引擎必须收到');
+  });
 }
 
 class _FakeEngine implements EngineTransport {

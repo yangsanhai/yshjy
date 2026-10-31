@@ -498,6 +498,8 @@ class EngineClient {
     int? decoySize,
     /// 每段里夹一枚假特征码（协议 `pack.decoy_signatures`，默认关）
     bool decoySignatures = false,
+    /// 防炸链（T18-3 / 协议 `pack.tweak_time`）：抖条目时间戳，让网盘判不成同一个文件
+    bool tweakTime = false,
     /// 强制「尾部追加」布局（E2 / 协议 `pack.tail`）
     ///
     /// 默认（false）引擎按封面文件头自动选：MP4 走 `free` 原子（视频还能正常播），
@@ -525,6 +527,8 @@ class EngineClient {
       // 强制尾部追加布局（E2）：只在用户打开时才传 true，默认交给引擎按封面类型判断
       if (tailLayout) 'tail': true,
       'checksum': checksum,
+      // 防炸链（T18-3）：默认关，开着才传
+      if (tweakTime) 'tweak_time': true,
       'readme': readme,
     }, timeout: const Duration(hours: 2));
     return _unwrap(r);

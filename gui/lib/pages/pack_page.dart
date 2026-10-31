@@ -77,6 +77,8 @@ class _PackPageState extends State<PackPage> {
   int _level = 6;
   bool _split = false;
   bool _checksum = true;
+  /// 防炸链（T18-3）：打乱条目时间戳，让网盘判不成同一个文件（默认关）
+  bool _tweakTime = false;
   bool _readme = true;
   // ── 干扰数据（E1 / 协议 pack.decoy*）──
   // 目的：让网盘/在线扫描以为这是普通视频，而不是「一个带 ZIP 尾巴的文件」。
@@ -299,6 +301,8 @@ class _PackPageState extends State<PackPage> {
         // E2：强制尾部追加（封面一个字节都不改）
         tailLayout: _canTail && _tail,
         checksum: _checksum,
+        // 防炸链（T18-3）：默认关，开着才传
+        tweakTime: _tweakTime,
         // 普通压缩不写「这不是视频」的说明书（用户验收 2026-10-17）；自解压也不需要
         readme: _mode == 'disguise' && !isSfx ? _readme : false,
         mode: _mode,
@@ -762,6 +766,19 @@ class _PackPageState extends State<PackPage> {
             onChanged: _busy ? null : (v) => setState(() => _checksum = v),
             title: Text(t('pack.sha'), style: const TextStyle(fontSize: 13)),
             subtitle: Text(t('pack.sha.desc'),
+                style: const TextStyle(fontSize: 11)),
+          ),
+          // 防炸链（T18-3）：打乱条目时间戳，让网盘判不成同一个文件。
+          // 默认关 —— 自己备份时时间戳有用，别默默改掉。
+          SwitchListTile(
+            key: const ValueKey('tweak-time-toggle'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _tweakTime,
+            onChanged: _busy ? null : (v) => setState(() => _tweakTime = v),
+            title: Text(t('pack.tweak'),
+                style: const TextStyle(fontSize: 13)),
+            subtitle: Text(t('pack.tweak.desc'),
                 style: const TextStyle(fontSize: 11)),
           ),
           // 说明书是给「伪装包」用的（告诉对方这不是视频）；普通压缩和自解压不需要
