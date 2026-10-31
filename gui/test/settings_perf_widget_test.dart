@@ -72,10 +72,18 @@ bool _warnValue(WidgetTester tester) {
   return tester.widget<SwitchListTile>(f).value;
 }
 
-Future<void> _tapSave(WidgetTester tester) async {
+Future<void> _tapSave(WidgetTester tester, {String expect = ''}) async {
   await tester.runAsync(() async {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    // 轮询到「文件里真的出现了预期内容」，不睡固定毫秒（并发跑时固定等待会假红）
+    for (var i = 0; i < 120; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      final f = File(_cfgPath);
+      if (expect.isNotEmpty && f.existsSync() && f.readAsStringSync().contains(expect)) {
+        break;
+      }
+      if (expect.isEmpty && i >= 12) break; // 没给期望：等 300ms 兜底
+    }
   });
   await tester.pump();
 }
@@ -131,7 +139,7 @@ void main() {
       await tester.tap(find.text('2').last);
       await tester.pumpAndSettle();
 
-      await _tapSave(tester);
+      await _tapSave(tester, expect: 'jobs = 2');
 
       final text = File(_cfgPath).readAsStringSync();
       expect(text, contains('jobs = 2'),
@@ -167,7 +175,7 @@ void main() {
       await tester.pump();
       expect(_warnValue(tester), isFalse);
 
-      await _tapSave(tester);
+      await _tapSave(tester, expect: 'warn_executables = "off"');
 
       final text = File(_cfgPath).readAsStringSync();
       expect(text, contains('warn_executables = "off"'));
@@ -199,6 +207,21 @@ void main() {
       fake!.helloResult = h;
       await _pump(tester);
       expect(find.text('本机磁盘类型没探到 —— 保守起见保持 1'), findsOneWidget);
+    });
+
+    testWidgets('冷启动第一次 hello 失败 → 重试一次就拿到（真机那个「没探到」的回归）',
+        (tester) async {
+      // 用户 2026-11-01 截图：设置页写「本机磁盘类型没探到」，而状态栏/格式表都正常。
+      // 根因是启动瞬间三个人同时要 hello，最靠前那次打在还没预热的引擎上失败了。
+      fake!.failHelloOnce = true;
+      await _pump(tester);
+      // 页面内部 300ms 后重试一次 —— 等它跑完
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+      });
+      await tester.pump();
+      expect(find.text('本机磁盘：机械硬盘 —— 建议保持 1'), findsOneWidget,
+          reason: '第一次失败必须能自愈，不许一直显示「没探到」');
     });
   });
 

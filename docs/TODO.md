@@ -15,8 +15,9 @@ T18-7 `--keep` 整条链删除（含 7 语言 `--help` 里那行）· P2-2 诊�
 验证：`cargo test` **403+31+2**、`flutter test` **210**（+17）、`clippy -D warnings` 干净、
 `flutter analyze` 干净、`cli_spec_match` **7/7**、7 语言 **530 键**、
 `bash tests/all.sh` **58 通过 / 0 失败 / 5 跳过 / 252 秒**。
-包：`dist/yshjy_0.9.46_amd64.deb`（11M，`test-packages.sh` **37/37**）+ 两档 tar.gz。
-**下一步：用户 `sudo apt install ./dist/yshjy_0.9.46_amd64.deb` → 真机验收（设置页 / 历史页 / 关于页）。**
+包：`dist/yshjy_0.9.47_amd64.deb`（11M，`test-packages.sh` **37/37**）+ 两档 tar.gz。
+**下一步：用户 `sudo apt install ./dist/yshjy_0.9.47_amd64.deb` → 真机验收（设置页 / 历史页 / 关于页）。**
+（0.9.47 是补丁版：修用户真机点出来的「本机磁盘类型没探到」——`hello` 已改 Single-flight。）
 执行顺序：这批已完 → 下一批（T15 覆盖率 / T11 无障碍 / T9 真截图 / P2-1 版本号一条命令 / P2-5 拆 home_page）。
 > 上一批：2026-11-01（**T18-4 队列「暂停 / 继续」已做完 → 0.9.44**。执行顺序：T18-4（✅ 完成）→ 下一批「界面攒一批」。
 **T18-4 是什么**：批量解压能整体暂停再继续。★ 软停不是打断 —— 挂起点在

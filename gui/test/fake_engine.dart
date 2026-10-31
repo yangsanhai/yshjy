@@ -44,6 +44,9 @@ class FakeEngine implements EngineTransport {
   /// 收到了哪些命令（断言「界面到底发没发」用）
   final List<Map<String, dynamic>> sent = [];
 
+  /// 让**下一次** hello 失败一次（模拟「引擎刚 fork、还没预热」的真机冷启动）
+  bool failHelloOnce = false;
+
   /// `hello` 的返回值。默认给一份有 `formats` + `disk` 的最小表：
   /// 格式表要能出两行、磁盘建议要能说「机械硬盘」。
   Map<String, dynamic> helloResult = {
@@ -101,6 +104,15 @@ class FakeEngine implements EngineTransport {
     final m = (jsonDecode(line) as Map).cast<String, dynamic>();
     sent.add(m);
     if (m['cmd'] == 'hello') {
+      if (failHelloOnce) {
+        failHelloOnce = false;
+        _out.add(jsonEncode({
+          'id': m['id'],
+          'ok': false,
+          'error': {'code': 'ENGINE_EXITED', 'note': '模拟冷启动失败'},
+        }));
+        return;
+      }
       _out.add(jsonEncode({'id': m['id'], 'ok': true, 'result': helloResult}));
     }
   }
