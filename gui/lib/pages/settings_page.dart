@@ -474,24 +474,13 @@ class _SettingsPageState extends State<SettingsPage> {
         const _CapsTable(),
         const SizedBox(height: 18),
         _section(t('settings.section.misc'), cs),
-        // T7-P5：以前这里并列写着 7 个语言代码，看着像「改 config.toml 就能切界面语言」，
-        // 实际界面文案全是硬编码中文。直接说实话，别骗人。
+        // 以前这里还并列写着 7 个语言代码（像在暗示「改 config.toml 就能切界面语言」，
+        // 而当时文案全是硬编码中文），后来界面语言进了「外观」下拉，那行就删掉了。
+        // 再下面原本还有一段「还没做的（我不装样子）」—— T14 把 479 条文案搬完、
+        // 七种语言全部上线之后它就成了过期话，一并删掉。
         _kv(t('settings.misc.jobs'), t('settings.misc.jobsValue')),
         _kv(t('settings.misc.ratio'), t('settings.misc.ratioValue')),
         _kv(t('settings.misc.warn'), 'warn_executables = true'),
-        const SizedBox(height: 18),
-        _section(t('settings.section.todo'), cs),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            t('settings.todo.body'),
-            style: TextStyle(fontSize: 12, height: 1.7, color: cs.onSurfaceVariant),
-          ),
-        ),
       ],
     );
   }

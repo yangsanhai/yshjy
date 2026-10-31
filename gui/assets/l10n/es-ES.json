@@ -123,8 +123,6 @@
   "settings.misc.ratio": "Límite de compresión",
   "settings.misc.ratioValue": "zip_bomb_ratio = 100 (protección contra bombas zip)",
   "settings.misc.warn": "Avisar de ejecutables",
-  "settings.section.todo": "Lo que aún no está hecho (no me hago el tonto)",
-  "settings.todo.body": "· Los textos de la interfaz aún se están conectando página a página: la página Acerca de y todos los mensajes de error ya están, Ajustes está en proceso, Empaquetar / Inicio aún faltan\n· El cambio de idioma de la interfaz ya funciona (mira arriba en «Apariencia → Idioma de la interfaz»)",
   "pack.filter.any": "Cualquier archivo",
   "pack.filter.all": "Todos los archivos",
   "pack.size.hint": "Pon un tamaño, por ejemplo 2G",
