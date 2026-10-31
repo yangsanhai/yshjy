@@ -11,6 +11,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yshjy_gui/engine.dart' show EngineEvent;
 import 'package:yshjy_gui/pages/home_page.dart';
 
 Future<void> pumpHome(WidgetTester tester, HomePage page) async {
@@ -52,6 +53,50 @@ void main() {
     testWidgets('首页空态不出现暂停按钮', (tester) async {
       await pumpHome(tester, const HomePage(autoStart: false));
       expect(find.text('全部暂停'), findsNothing);
+      expect(find.text('继续'), findsNothing);
+    });
+  });
+
+  // ── 下面两条守的是**用户真机验收抓到的 bug**（2026-11-01）──
+  // 他点「继续」后进度明明在涨（331.8 MB / 1.38 GB），底部状态栏却还挂着
+  // 「已暂停，点「继续」接着跑」—— 界面在撒谎。原因：`PAUSED{paused:false}`
+  // 那条分支只处理了 true，没把 false 对应的文案清掉。
+  group('T18-4 暂停状态转移：文案必须跟着引擎走', () {
+    testWidgets('引擎确认暂停 → 状态栏出现「已暂停」', (tester) async {
+      final statuses = <String>[];
+      await pumpHome(
+        tester,
+        HomePage(
+          autoStart: false,
+          debugBatchCount: 2,
+          onStatus: statuses.add,
+          debugEvents: [EngineEvent('PAUSED', {'paused': true})],
+        ),
+      );
+      await tester.pump(); // 让首帧后的注入事件跑完
+      expect(statuses.any((s) => s.contains('已暂停')), isTrue,
+          reason: '真停住了却不告诉用户，他会以为卡死');
+      expect(find.text('继续'), findsOneWidget);
+    });
+
+    testWidgets('引擎说已恢复 → 状态栏不许再挂「已暂停」', (tester) async {
+      final statuses = <String>[];
+      await pumpHome(
+        tester,
+        HomePage(
+          autoStart: false,
+          debugBatchCount: 2,
+          debugPaused: true,               // 先摆在「已暂停」这一屏
+          onStatus: statuses.add,
+          debugEvents: [EngineEvent('PAUSED', {'paused': false})],  // 再喂「已恢复」
+        ),
+      );
+      await tester.pump();
+      expect(statuses, isNotEmpty, reason: '恢复时至少得推一条状态出去（清掉旧文案）');
+      expect(statuses.last.contains('已暂停'), isFalse,
+          reason: '进度在涨、状态栏还写「已暂停」，这就是用户抓到的那条 bug');
+      // 按钮也得跟着翻回去，不然用户没法再暂停
+      expect(find.text('全部暂停'), findsOneWidget);
       expect(find.text('继续'), findsNothing);
     });
   });
