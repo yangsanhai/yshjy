@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.9.43] · 2026-11-01（T18-1 · 打包布局 L3「放在文件头部」+ L7「两个包」）
+## [0.9.43] · 2026-11-01（T18-1 · 打包布局 L3「放在文件头部」+ L7「两个包」+ L8「MKV 附件」）
 
 - **是什么**：打包时把 ZIP **包成 `free` 原子插在 `ftyp` 之后**，视频照常能播
   —— DESIGN §15.1 的 L3（「放在文件头部（抗尾部扫描）」）。命令行 `--layout L3`，
@@ -75,6 +75,39 @@
     协议 `second_offset` = 封面 + ZIP1、`second_size` 对得上 / 两次打包逐字节一致；
   · `cargo test` 399 + 31 + **430**（新增长选项总数 53 的同步）；`clippy -D warnings` 干净；
   · `flutter test` 全过、`flutter analyze` No issues；7 个语言包都是 511 键。
+
+### T18-1 第四项 · L8「MKV 附件轨」（T18-1 到此收尾）
+
+- **是什么**：产物是个**真的 MKV** —— 借系统 `ffmpeg` 把封面视频**重封装**（`-c copy`，
+  不转码），ZIP 原文塞进 MKV 的 `Attachments/AttachedFile/FileData`
+  （`mimetype=application/zip`、`filename=payload.zip`）。CLI `--layout L8`，
+  协议 `pack.layout:"mkv"`。配方与实测见 `refs/analysis/05-压缩布局验证.md` §3 L8。
+- **为什么是「借 ffmpeg」**：自己写 MP4→MKV 是几千行的活，而 `cover_extract` 早就有
+  `try_remux_with_ffmpeg` 的先例。没装 ffmpeg → **如实降级**（改 free 原子 / 尾部追加）
+  并在结果里说「没装 ffmpeg」，**绝不写一个假 MKV**。
+- **★ 三条关键规矩**（每条都有对应的探针断言）：
+  · **判据是「解码 rc=0 **且** stderr 为空」** —— 封装返回 0 不代表能播；
+    L3 那次「rc=0 但 AAC 全坏」就是只看返回码漏的。
+  · **`-fflags +bitexact` 必须写在输出侧** —— 不写的话 mkv 复用器会写随机的
+    `SegmentUID`/`TrackUID`，「同一份输入两次打包逐字节一致」直接挂。
+    反向验证做过：把这组参数删掉 → 探针第 ⑩ 条立刻变红。
+  · **后缀必须 `.mkv`** —— 内容是 MKV 却叫 `.mp4` 是骗人（播放器、网盘都按扩展名判）。
+    `-o x.mp4` → USAGE(2) 且**零产物**；`-o 裸名` → 自动补 `.mkv`。
+- **代价（探针反向断言钉死）**：`unzip` / Windows 资源管理器 / 手机解压器**全都找不到**
+  （ZIP 的 EOCD 离文件尾 89,121 B，超出它们 64 KiB 的搜索窗）。7-Zip 能（`Offset=540`），
+  本工具能。这条是 L8 的定位，必须写进界面。
+- **三个不做**：L8 + `--decoy` → USAGE(2) 零产物（噪声会写坏 EBML 结构）；
+  协议层同样拒；干扰数据在引擎侧再守一道（防绕开 CLI 直接调库）。
+- **取回路径实测三条都通**：本工具 `--list` / 本工具解压（sha256 一致）/
+  `ffmpeg -dump_attachment:t:0`（取出的就是原 ZIP，成员对得上）。
+  ★ `-dump_attachment` 是**输入侧**选项，必须写在 `-i` 之前（写后面会报
+  「you are trying to apply an input option to an output file」——踩过）。
+- **实现要点**：`封装成mkv附件` 里先写封面到临时文件（ffmpeg 要路径），封完读回来核
+  EBML 魔数 `1a 45 df a3`，再用「ZIP 前 32 字节指纹」在 MKV 里找附件起点
+  （`locate()` 在这儿用不了：它只在文件尾 64 KiB 找 EOCD，而 L8 的 ZIP 在文件头）。
+- **证据**：探针 `tests/l8_proto.py` **18/18**（已挂 `all.sh`，本机没 ffmpeg 时自动 skip）；
+  `cargo test` 399 + 31 + 2、`clippy -D warnings` 干净、`cli_spec_match` 7/7；
+  L3 26/26、L7 22/22 不动（回归）。
 
 ## [0.9.42] · 2026-11-01 凌晨（T18-1 · 打包布局 L4「插在视频中间」）
 
