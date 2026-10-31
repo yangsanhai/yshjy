@@ -334,8 +334,8 @@ class _HomePageState extends State<HomePage> {
         final ms = (e.data['millis'] as num?)?.toInt() ?? 0;
         final secs = (ms / 1000).toStringAsFixed(1);
         final text = switch (outcome) {
-          'DONE' => '✅ 落盘检验通过（$secs 秒）：数据已写入设备，可以安全拔出',
-          'CANCELLED' => '⚠️ 落盘检验被取消（$secs 秒）：数据可能还没写完，拔盘前请先「安全弹出」',
+          'DONE' => t('home.flushOk', {'secs': secs}),
+          'CANCELLED' => t('home.flushCancelled', {'secs': secs}),
           _ => t('home.flushNoCheck'),
         };
         setState(() {
@@ -351,7 +351,7 @@ class _HomePageState extends State<HomePage> {
         // 断点续传：上次没解完，这次接着来。
         // 必须给用户一句话，否则「一上来就有一大截进度、前面那堆文件没动」会被当成 bug。
         final done = (e.data['done'] as num?)?.toInt() ?? 0;
-        final text = '接着上次没解完的来（上次已完成 $done 项）';
+        final text = t('home.resumeFromLast', {'done': '$done'});
         if (!_notes.contains(text)) setState(() => _notes.add(text));
       case 'PASSWORD_TRY':
         setState(() {
@@ -404,8 +404,10 @@ class _HomePageState extends State<HomePage> {
             Text(why, style: const TextStyle(fontSize: 13, height: 1.5)),
             const SizedBox(height: 10),
             Text(
-              '已经写出 ${_size(written)}'
-              '${limit > 0 ? '，限额 ${_size(limit)}' : ''}',
+              t('home.writtenLimit', {
+                'written': _size(written),
+                'cap': limit > 0 ? t('home.writtenCap', {'size': _size(limit)}) : '',
+              }),
               style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
@@ -520,7 +522,7 @@ class _HomePageState extends State<HomePage> {
         _applyScanItems(items);
         _phase = Phase.queue;
       });
-      widget.onStatus?.call('找到 ${_queue.where((q) => q.archive).length} 个可解包');
+      widget.onStatus?.call(t('home.foundArchives', {'n': '${_queue.where((q) => q.archive).length}'}));
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
@@ -583,7 +585,7 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() => q.status = 'running');
       widget.onStatus?.call(
-          '正在试第 ${k + 1}/${order.length} 处（${c.offsetText}）…');
+          t('home.tryingSpot', {'k': '${k + 1}', 'total': '${order.length}', 'offset': c.offsetText}));
       try {
         final r = await _client.extract(
           q.path,
@@ -598,10 +600,10 @@ class _HomePageState extends State<HomePage> {
           _result = r;
           _phase = Phase.done;
         });
-        widget.onStatus?.call('第 ${k + 1} 处解开了：${r.entriesDone} 个文件');
+        widget.onStatus?.call(t('home.spotOpened', {'k': '${k + 1}', 'entries': '${r.entriesDone}'}));
         Notifier.send(
           t('home.done'),
-          '第 ${k + 1}/${order.length} 处 · ${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
+          t('home.spotResult', {'k': '${k + 1}', 'total': '${order.length}', 'entries': '${r.entriesDone}', 'size': _size(r.bytesWritten)}),
         );
         await HistoryStore.add(HistoryEntry(
           time: DateTime.now().toIso8601String(),
@@ -663,7 +665,7 @@ class _HomePageState extends State<HomePage> {
       }
       _batchOrder = ready.map((q) => q.path).toList();
     });
-    widget.onStatus?.call('正在批量解压 ${ready.length} 个…');
+    widget.onStatus?.call(t('home.batchRunning', {'n': '${ready.length}'}));
     try {
       final r = await _client.batch(
         paths: _batchOrder,
@@ -692,7 +694,7 @@ class _HomePageState extends State<HomePage> {
       });
       final ok = (r['ok'] as num?)?.toInt() ?? 0;
       final failed = (r['failed'] as num?)?.toInt() ?? 0;
-      widget.onStatus?.call('批量完成：$ok 成功 / $failed 失败');
+      widget.onStatus?.call(t('home.batchDone', {'ok': '$ok', 'failed': '$failed'}));
       // 设置里开了「解完自动打开」才开，且只开第一个有产物的目录（不逐个弹窗口）
       final firstDest = jobs
           .cast<Map>()
@@ -779,7 +781,7 @@ class _HomePageState extends State<HomePage> {
           ..addAll(allDirPaths(_tree));
         _crumb = '';
       });
-      widget.onStatus?.call('已识别：${pv.fileCount} 个文件');
+      widget.onStatus?.call(t('home.identified', {'files': '${pv.fileCount}'}));
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
     }
@@ -833,16 +835,16 @@ class _HomePageState extends State<HomePage> {
         _phase = Phase.done;
       });
       widget.onStatus?.call(verifyOnly
-          ? (r.ok ? '校验通过：${r.entriesDone} 个文件' : t('home.verifyProblem'))
-          : (r.ok ? '完成：${r.entriesDone} 个文件' : t('home.partialDone')));
+          ? (r.ok ? t('home.verifyPassed', {'entries': '${r.entriesDone}'}) : t('home.verifyProblem'))
+          : (r.ok ? t('home.doneEntries', {'entries': '${r.entriesDone}'}) : t('home.partialDone')));
       // 解压完发桌面通知：切到别的窗口也知道；发不出不影响主流程
       Notifier.send(
         verifyOnly
             ? (r.ok ? t('home.verifyOk') : t('home.verifyProblem'))
             : (r.ok ? t('home.done') : t('home.extractPartial')),
         verifyOnly
-            ? '${r.entriesDone} 个文件 · 没写任何文件'
-            : '${r.entriesDone} 个文件 · ${_size(r.bytesWritten)}',
+            ? t('home.doneNoWrite', {'entries': '${r.entriesDone}'})
+            : t('home.doneWithSize', {'entries': '${r.entriesDone}', 'size': _size(r.bytesWritten)}),
       );
       // 「只检查」到此为止：没有产物、没有目录、也没有历史。
       // 这三样都别做 —— 否则历史页会多一条指向不存在目录的记录，
@@ -876,10 +878,10 @@ class _HomePageState extends State<HomePage> {
     if (order.isEmpty) return;
 
     setState(() => _switching = true);
-    widget.onStatus?.call('换个地方试，共 ${order.length} 处…');
+    widget.onStatus?.call(t('home.tryAllSpots', {'n': '${order.length}'}));
     for (var k = 0; k < order.length; k++) {
       if (!mounted) return;
-      widget.onStatus?.call('正在试第 ${k + 1}/${order.length} 处（${order[k].offsetText}）…');
+      widget.onStatus?.call(t('home.tryingSpot', {'k': '${k + 1}', 'total': '${order.length}', 'offset': order[k].offsetText}));
       await _extract(candidate: order[k].offset);
       if (!mounted) return;
       // 解开了就停（_extract 成功会把 phase 设成 done）
@@ -921,8 +923,8 @@ class _HomePageState extends State<HomePage> {
         _phase = Phase.done;
       });
       final savedCount = (r['files'] as List?)?.length ?? 0;
-      widget.onStatus?.call('救援完成：救回 $savedCount 个文件');
-      Notifier.send(t('home.rescueDone'), '救回 $savedCount 个文件');
+      widget.onStatus?.call(t('home.rescueSaved2', {'n': '$savedCount'}));
+      Notifier.send(t('home.rescueDone'), t('home.rescueSaved', {'n': '$savedCount'}));
       await _maybeOpenAfterDone(r['dest'] as String?);
       await HistoryStore.add(HistoryEntry(
         time: DateTime.now().toIso8601String(),
@@ -1089,7 +1091,7 @@ class _HomePageState extends State<HomePage> {
       final name = p.split(Platform.pathSeparator).last;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('诊断包已存到「${prettyPath(dir)}」：$name\n把它发给我就行'),
+          content: Text(t('home.diagSaved', {'path': prettyPath(dir), 'name': name})),
           duration: const Duration(seconds: 12),
           action: SnackBarAction(
             label: t('home.openFolder'),
@@ -1100,7 +1102,7 @@ class _HomePageState extends State<HomePage> {
     } on EngineError catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('生成失败：${_errText(e.code)}')));
+          .showSnackBar(SnackBar(content: Text(t('home.diagFailed', {'reason': _errText(e.code)}))));
     }
   }
 
@@ -1215,20 +1217,20 @@ class _HomePageState extends State<HomePage> {
     if (e.extMismatch) {
       final extName = '.${e.ext ?? ''}';
       if (e.looksKind == 'archive') {
-        return (text: '名字写的是$extName，内容其实是$kind$sizeText —— 这很可能就是伪装包', warn: false);
+        return (text: t('home.guiseLikely', {'ext': extName, 'kind': kind, 'size': sizeText}), warn: false);
       }
       if (e.looksKind == 'program') {
-        return (text: '⚠ 名字写的是$extName，内容其实是$kind$sizeText —— 来路不明的程序别运行', warn: true);
+        return (text: t('home.guiseProgram', {'ext': extName, 'kind': kind, 'size': sizeText}), warn: true);
       }
-      return (text: '名字写的是$extName，内容其实是$kind$sizeText —— 可能被改过名', warn: false);
+      return (text: t('home.guiseRenamed', {'ext': extName, 'kind': kind, 'size': sizeText}), warn: false);
     }
     if (e.looksKind == 'program') {
-      return (text: '⚠ 这其实是一个$kind$sizeText —— 来路不明的程序别运行', warn: true);
+      return (text: t('home.guiseReal', {'kind': kind, 'size': sizeText}), warn: true);
     }
     if ((e.looksLike ?? '') == 'unknown') {
-      return (text: '认不出这是什么文件$sizeText —— 可能被加密过，或者文件头坏了', warn: false);
+      return (text: t('home.unknownFile', {'size': sizeText}), warn: false);
     }
-    return (text: '这个文件看起来是：$kind$sizeText', warn: false);
+    return (text: t('home.fileLooksLike', {'kind': kind, 'size': sizeText}), warn: false);
   }
 
   Future<void> _openFolder(String? dir) async {
@@ -1237,7 +1239,7 @@ class _HomePageState extends State<HomePage> {
     if (!ok) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('打不开文件管理器：$dir')));
+          .showSnackBar(SnackBar(content: Text(t('home.cantOpenFM', {'dir': dir}))));
     }
   }
 
@@ -1342,12 +1344,12 @@ class _HomePageState extends State<HomePage> {
       children: [
         Row(
           children: [
-            Text('找到 $ready 个可解包',
+            Text(t('home.foundArchives', {'n': '$ready'}),
                 style: Theme.of(context).textTheme.titleMedium),
             if (_queue.length > ready)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: Text('（跳过 ${_queue.length - ready} 个无关文件）',
+                child: Text(t('home.skippedUnrelated', {'n': '${_queue.length - ready}'}),
                     style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
               ),
             const Spacer(),
@@ -1417,7 +1419,7 @@ class _HomePageState extends State<HomePage> {
                             color: cs.secondaryContainer,
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text('分卷 ${q.volumes}',
+                          child: Text(t('home.volumeBadge', {'n': '${q.volumes}'}),
                               style: TextStyle(
                                   fontSize: 10, color: cs.onSecondaryContainer)),
                         ),
@@ -1430,7 +1432,7 @@ class _HomePageState extends State<HomePage> {
                       Text(
                         q.archive
                             ? '${q.kind.toUpperCase()} · ${_size(q.size)}'
-                            : '看起来不是压缩包 · ${_size(q.size)}',
+                            : t('home.notArchive', {'size': _size(q.size)}),
                         style: const TextStyle(fontSize: 11),
                       ),
                       // S10 多候选：一个文件里好几处都像藏着东西
@@ -1498,7 +1500,7 @@ class _HomePageState extends State<HomePage> {
         FilledButton.icon(
           onPressed: ready == 0 ? null : _startQueue,
           icon: const Icon(Icons.play_arrow),
-          label: Text(ready == 0 ? t('home.nothingToExtract') : '开始解压全部（$ready 个）'),
+          label: Text(ready == 0 ? t('home.nothingToExtract') : t('home.startAll', {'n': '$ready'})),
           style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14)),
         ),
@@ -1577,11 +1579,13 @@ class _HomePageState extends State<HomePage> {
             style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 6),
         Text(
-          '$ok 成功'
-          '${partial > 0 ? ' · $partial 部分' : ''}'
-          '${failed > 0 ? ' · $failed 失败' : ''}'
-          ' · 用时 ${(ms / 1000).toStringAsFixed(1)} 秒'
-          ' · 写出 ${_size(bytes)}',
+          t('home.batchSummary', {
+            'ok': '$ok',
+            'partial': partial > 0 ? t('home.batchPartial', {'n': '$partial'}) : '',
+            'failed': failed > 0 ? t('home.batchFailed', {'n': '$failed'}) : '',
+            'secs': (ms / 1000).toStringAsFixed(1),
+            'size': _size(bytes),
+          }),
           textAlign: TextAlign.center,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
         ),
@@ -1771,12 +1775,12 @@ class _HomePageState extends State<HomePage> {
               visualDensity: VisualDensity.compact,
             ),
             const SizedBox(width: 8),
-            Text('${pv.fileCount} 个文件 · ${_size(pv.totalSize)}'),
+            Text(t('home.fileCountSize', {'files': '${pv.fileCount}', 'size': _size(pv.totalSize)})),
             const Spacer(),
             if (pv.encryptedCount > 0)
               Chip(
                 avatar: const Icon(Icons.lock_outline, size: 16),
-                label: Text('${pv.encryptedCount} 个加密'),
+                label: Text(t('home.encryptedCount', {'n': '${pv.encryptedCount}'})),
                 visualDensity: VisualDensity.compact,
               ),
           ],
@@ -1835,7 +1839,7 @@ class _HomePageState extends State<HomePage> {
               _password = t.isEmpty ? null : t;
             },
             decoration: InputDecoration(
-              labelText: '解压码（这个包有 ${pv.encryptedCount} 个文件加密）',
+              labelText: t('home.pwForEncrypted', {'n': '${pv.encryptedCount}'}),
               hintText: t('home.pwEmptyHint'),
               isDense: true,
               border: const OutlineInputBorder(),
@@ -1907,8 +1911,10 @@ class _HomePageState extends State<HomePage> {
                   onChanged: (v) => setState(() => _wantCover = v ?? false),
                   secondary: const Icon(Icons.movie_outlined, size: 20),
                   title: Text(
-                    '伪装封面（${_size((pv.cover!['size'] as num?)?.toInt() ?? 0)}'
-                    '${pv.cover!['ext'] != null ? ' · ${pv.cover!['ext']}' : ''}）',
+                    t('home.coverLabel', {
+                      'size': _size((pv.cover!['size'] as num?)?.toInt() ?? 0),
+                      'ext': pv.cover!['ext'] != null ? ' · ${pv.cover!['ext']}' : '',
+                    }),
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                   subtitle: Text(
@@ -1923,7 +1929,7 @@ class _HomePageState extends State<HomePage> {
                 onChanged: (v) => setState(() => _wantExtract = v ?? false),
                 secondary: const Icon(Icons.folder_zip_outlined, size: 20),
                 title: Text(
-                  '压缩包内容（${pv.fileCount} 个文件 · ${_size(pv.totalSize)}）',
+                  t('home.contentsTitle', {'files': '${pv.fileCount}', 'size': _size(pv.totalSize)}),
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 subtitle: Text(
@@ -1944,7 +1950,7 @@ class _HomePageState extends State<HomePage> {
         Row(
           children: [
             Text(
-              '已选 ${_picked.length} / ${pv.fileCount} 个文件 · ${_size(_pickedBytes(pv))}',
+              t('home.pickedCount', {'picked': '${_picked.length}', 'total': '${pv.fileCount}', 'size': _size(_pickedBytes(pv))}),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             _miniBtn(t('home.selectAll'), () => setState(() {
@@ -1961,8 +1967,10 @@ class _HomePageState extends State<HomePage> {
               icon: _treeView ? Icons.view_list_outlined : Icons.account_tree_outlined,
             ),
             _miniBtn(
-              '高级：${_outDir == null ? '包旁边' : t('home.viewCustom')} · '
-              '${_encoding == 'auto' ? t('home.encodingAutoName') : _encoding.toUpperCase()}',
+              t('home.advancedSummary', {
+                'place': _outDir == null ? t('home.nextToArchive') : t('home.viewCustom'),
+                'enc': _encoding == 'auto' ? t('home.encodingAutoName') : _encoding.toUpperCase(),
+              }),
               _showAdvanced,
               icon: Icons.tune,
             ),
@@ -2002,8 +2010,8 @@ class _HomePageState extends State<HomePage> {
               label: Text(
                 _wantExtract
                     ? ((pv.hasCover && _wantCover)
-                        ? '开始解压 ${_picked.length} 个 + 提取封面'
-                        : '开始解压（${_picked.length} 个文件）')
+                        ? t('home.startPickedCover', {'n': '${_picked.length}'})
+                        : t('home.startPicked', {'n': '${_picked.length}'}))
                     : (pv.hasCover && _wantCover ? t('home.extractCoverOnly') : t('home.mustPickSomething')),
               ),
               style: FilledButton.styleFrom(
@@ -2214,7 +2222,7 @@ class _HomePageState extends State<HomePage> {
       // 目录带一行「N 个文件」；窄窗口省掉（把高度让给列表）
       subtitle: (tree && n.isDir && wide)
           ? Text(
-              n.isEmptyDir ? t('home.emptyDir') : '${n.fileCount} 个文件',
+              n.isEmptyDir ? t('home.emptyDir') : t('home.nFiles', {'n': '${n.fileCount}'}),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             )
           : null,
@@ -2312,7 +2320,7 @@ class _HomePageState extends State<HomePage> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
-                  '🔑 正在试第 $_pwTry/$_pwTotal 个解压码…',
+                  t('home.pwTrying', {'cur': '$_pwTry', 'total': '$_pwTotal'}),
                   style: TextStyle(fontSize: 12, color: cs.primary),
                 ),
               ),
@@ -2320,7 +2328,7 @@ class _HomePageState extends State<HomePage> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
-                  '🔍 正在扫大文件：${_size(_scanDone)} / ${_size(_scanTotal)}',
+                  t('home.scanning', {'done': _size(_scanDone), 'total': _size(_scanTotal)}),
                   style: TextStyle(fontSize: 12, color: cs.primary),
                 ),
               ),
@@ -2392,12 +2400,12 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Expanded(
                   child: Text(
-                    '还剩约 ${_size(_flushPending)} 待写入',
+                    t('home.flushRemaining', {'size': _size(_flushPending)}),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
                 Text(
-                  '已等 $_flushSecs 秒',
+                  t('home.flushWaited', {'secs': '$_flushSecs'}),
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -2448,21 +2456,21 @@ class _HomePageState extends State<HomePage> {
             _verifyMode
                 // 别写「解开了 N 个文件」：一个字节都没写，目录也不存在
                 ? (ok
-                    ? '校验通过：${r.entriesDone} 个文件都完好'
-                    : '有文件校验不过（${r.entriesDone}/${r.entriesTotal}）')
+                    ? t('home.verifyAllGood', {'entries': '${r.entriesDone}'})
+                    : t('home.verifySomeBad', {'done': '${r.entriesDone}', 'total': '${r.entriesTotal}'}))
                 : (ok
                     ? (onlyCover
                         ? t('home.coverExtracted')
-                        : '解开了 ${r.entriesDone} 个文件')
-                    : '只解出了一部分（${r.entriesDone}/${r.entriesTotal}）'),
+                        : t('home.extractedN', {'entries': '${r.entriesDone}'}))
+                    : t('home.extractedPartialN', {'done': '${r.entriesDone}', 'total': '${r.entriesTotal}'})),
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
           Text(
             // 校验时 bytesWritten 是「解码过的字节」，不是写进硬盘的量 —— 不能拿来当产物大小
             _verifyMode
-                ? '用时 $seconds 秒 · 没写任何文件，包还在原地'
-                : '用时 $seconds 秒 · ${_size(r.bytesWritten)}',
+                ? t('home.timeNoWrite', {'secs': seconds})
+                : t('home.timeWithSize', {'secs': seconds, 'size': _size(r.bytesWritten)}),
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
           if (!_verifyMode && r.dest != null) ...[
@@ -2489,7 +2497,7 @@ class _HomePageState extends State<HomePage> {
                       size: 16, color: cs.onSecondaryContainer),
                   const SizedBox(width: 8),
                   Text(
-                    '里面还有 ${_nestedArchives.length} 个压缩包',
+                    t('home.nestedCount', {'n': '${_nestedArchives.length}'}),
                     style: TextStyle(fontSize: 12, color: cs.onSecondaryContainer),
                   ),
                   TextButton(
@@ -2504,8 +2512,10 @@ class _HomePageState extends State<HomePage> {
           if (r.cover != null) ...[
             const SizedBox(height: 10),
             Text(
-              '🎬 视频已分离：${(r.cover!['path'] as String).split('/').last}'
-              '（${_size((r.cover!['size'] as num?)?.toInt() ?? 0)}）',
+              t('home.coverSeparated', {
+                'name': (r.cover!['path'] as String).split('/').last,
+                'size': _size((r.cover!['size'] as num?)?.toInt() ?? 0),
+              }),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             TextButton.icon(
@@ -2525,7 +2535,7 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '接下来点这个：$hint',
+                t('home.nextClickThis', {'hint': hint}),
                 style: const TextStyle(fontSize: 13),
               ),
             ),
@@ -2557,7 +2567,7 @@ class _HomePageState extends State<HomePage> {
                   final name = (_file ?? '').split('/').last;
                   final pw = (_password == null || _password!.isEmpty)
                       ? ''
-                      : '解压码：$_password\n';
+                      : t('home.pwLine', {'pw': '$_password'});
                   Clipboard.setData(ClipboardData(
                     text: t('home.copyHowto', {'name': name, 'pw': pw}),
                   ));
@@ -2672,7 +2682,7 @@ class _HomePageState extends State<HomePage> {
       return t('home.freeSpaceHint');
     }
     final short = need > avail ? need - avail : 0;
-    return '需要 ${_size(need)} / 目标盘只有 ${_size(avail)} / 还差 ${_size(short)}';
+    return t('home.noSpaceDetail', {'need': _size(need), 'avail': _size(avail), 'short': _size(short)});
   }
 
   /// 换个位置再解一次（S5 第一个按钮）
@@ -2740,7 +2750,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Text(
                       (_errorDetail?['missing'] as String?) != null
-                          ? '缺这一块：${_errorDetail!['missing']}'
+                          ? t('home.missingPart', {'name': '${_errorDetail!['missing']}'})
                           : t('home.volumesIncomplete'),
                       style: TextStyle(
                         fontSize: 13,
@@ -2906,9 +2916,9 @@ class _HomePageState extends State<HomePage> {
     final roots = files.map((e) => e.path.split('/').first).toSet();
     final allNested = files.every((e) => e.path.contains('/'));
     if (roots.length == 1 && allNested) {
-      return '会解到「${roots.first}/」里（包里本来就有这个目录，不会多套一层）';
+      return t('home.willExtractInto', {'root': roots.first});
     }
-    return '会新建一个同名文件夹，把 ${files.length} 个文件放进去（散文件）';
+    return t('home.willCreateFolder', {'n': '${files.length}'});
   }
 
   /// 读密码本，给密码框做「常用解压码」chips（只读，不回写）
@@ -2956,8 +2966,10 @@ class _HomePageState extends State<HomePage> {
     final left = p.totalBytes - p.doneBytes;
     if (left <= 0) return '';
     final sec = (left / _speed).round();
-    final eta = sec >= 60 ? '${sec ~/ 60} 分 ${sec % 60} 秒' : '$sec 秒';
-    return ' · ${_size(_speed.round())}/s · 剩 $eta';
+    final eta = sec >= 60
+        ? t('home.durMinSec', {'min': '${sec ~/ 60}', 'sec': '${sec % 60}'})
+        : t('home.durSec', {'sec': '$sec'});
+    return t('home.speedEta', {'speed': _size(_speed.round()), 'eta': eta});
   }
 
   String _size(int bytes) {

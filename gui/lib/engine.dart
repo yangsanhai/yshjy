@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'transport/engine_transport.dart';
+import 'l10n.dart';
 
 // ───────────────────────── 数据模型 ─────────────────────────
 
@@ -330,7 +331,7 @@ class EngineClient {
       if (!c.isCompleted) {
         c.complete({
           'ok': false,
-          'error': {'code': 'ENGINE_EXITED', 'note': '引擎进程已退出'},
+          'error': {'code': 'ENGINE_EXITED', 'note': t('engine.noteExited')},
         });
       }
     }
@@ -356,7 +357,7 @@ class EngineClient {
       timeout,
       onTimeout: () => {
         'ok': false,
-        'error': {'code': 'TIMEOUT', 'note': '引擎太久没回应'},
+        'error': {'code': 'TIMEOUT', 'note': t('engine.noteTimeout')},
       },
     );
   }
@@ -658,17 +659,19 @@ class ArchiveCandidate {
 
   /// 可信度的人话（S10 稿：「可信度高」/「可能是误报」）
   String get confidenceText => switch (confidence) {
-        'high' => '可信度高',
-        'medium' => '还算靠得住',
-        _ => '可能是误报',
+        'high' => t('engine.confHigh'),
+        'medium' => t('engine.confMedium'),
+        _ => t('engine.confLow'),
       };
 
   /// 位置的人话：字节偏移对新手没意义，换成「从文件开头算第 X MB 处」
   String get offsetText {
-    if (offset <= 0) return '文件开头';
+    if (offset <= 0) return t('engine.atStart');
     const mb = 1024 * 1024;
-    if (offset >= mb) return '从开头算 ${(offset / mb).toStringAsFixed(1)} MB 处';
+    if (offset >= mb) {
+      return t('engine.atMb', {'mb': (offset / mb).toStringAsFixed(1)});
+    }
     final kb = offset / 1024;
-    return '从开头算 ${kb.toStringAsFixed(0)} KB 处';
+    return t('engine.atKb', {'kb': kb.toStringAsFixed(0)});
   }
 }
