@@ -66,10 +66,17 @@ pub fn 执行(
         "batch" => 批量(参数, 事件, 取消, ask),
         "rescue" => 救援(参数, 事件, 取消),
         "report" => 诊断(参数, 事件),
-        // 这几条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令
-        "answer" | "skip" | "pause" | "resume" => Err(错误值(
+        // 这几条是**传输层状态机**（要挂起等待 / 改当前任务），不属于单次命令。
+        //
+        // ★ `cancel` 也在这一组（2026-11-01 T19 测试抓出来的）：
+        //   它要动「**当前正在跑的那个任务**」，而 `执行()` 只拿得到本次请求自己的取消令牌。
+        //   管道（`serve.rs:190`）和 FFI（`ffi/src/lib.rs:264`）都是**在调本函数之前**
+        //   拦下 cancel 并操作真任务的句柄。走到这里的调用方必须被告知「这个入口不支持」——
+        //   以前它落到 `other` 分支报 UNKNOWN_COMMAND（"没这条命令"），会让人以为是命令名拼错了，
+        //   而 `hello.features` 里明明声明着 cancel。
+        "cancel" | "answer" | "skip" | "pause" | "resume" => Err(错误值(
             "UNSUPPORTED",
-            "answer / skip / pause / resume 需要交互式传输（--serve），C ABI 请直接取消",
+            "cancel / answer / skip / pause / resume 需要交互式传输（--serve）或 FFI 任务句柄；一次性调用请直接丢弃任务",
         )),
         other => Err(错误值("UNKNOWN_COMMAND", &format!("不认识的 cmd: {other}"))),
     }
@@ -1296,4 +1303,313 @@ pub fn 结果json(out: &crate::batch::JobOutcome) -> Value {
             }))
             .collect::<Vec<_>>(),
     })
+}
+
+#[cfg(test)]
+mod 参数契约 {
+    //! T19：协议层的**单元边界**测试（2026-11-01 起）。
+    //!
+    //! 为什么非要这一层：界面、命令行、FFI 三方**都**从 `执行()` 进来（`docs/ARCHITECTURE.md`
+    //! 里「命令语义只有一份」）。这里少一个 `?`、错误码写错一个字母、或者某个字段名读错，
+    //! 三个入口一起坏，而三个入口各自的测试都可能是绿的。
+    //! 0.9.47 那个「界面把 jobs 写成字符串 → 引擎 `as_integer()` 读不到 → 静默退回 1 → 假开关」
+    //! 就是缺这层断言的结果 —— 当时只能靠人肉真机才发现。
+    //!
+    //! 三类断言（每条带参数的命今都要有）：
+    //!   ① 最小合法请求（不崩、字段形状对）
+    //!   ② 缺字段 → `BAD_PARAM`
+    //!   ③ 类型错 / 非法值 → `BAD_PARAM`，且 `note` 说清怎么改
+    //!
+    //! ⚠️ 坏参数测试**一律不能碰文件**：它们全部在参数解析阶段返回（解压/打包的
+    //!    `run_job`、写盘都在参数校验之后）。所以这里的路径都是不存在的假路径，
+    //!    跑测试不会在磁盘上留下任何东西。
+
+    use super::*;
+
+    fn 跑(命令: &str, 参数: Value) -> Result<Value, Value> {
+        let 事件: Arc<dyn EventSink> = Arc::new(crate::event::NullSink);
+        let 取消 = CancelToken::new();
+        执行(命令, &参数, &事件, &取消, None)
+    }
+
+    fn 取错(r: Result<Value, Value>) -> Value {
+        match r {
+            Ok(v) => panic!("期待报错，实际成功返回：{v}"),
+            Err(e) => e,
+        }
+    }
+
+    fn 码(r: Result<Value, Value>) -> String {
+        取错(r)["code"].as_str().unwrap_or("<没有 code>").to_string()
+    }
+
+    fn 备注(e: &Value) -> String {
+        e["note"].as_str().unwrap_or("").to_string()
+    }
+
+    // ───────────── 分发层 ─────────────
+
+    #[test]
+    fn 未知命令报_unknown_command_并带上命令名() {
+        let e = 取错(跑("没有这条命令", json!({})));
+        assert_eq!(e["code"], "UNKNOWN_COMMAND");
+        assert!(备注(&e).contains("没有这条命令"), "note 里要有原命令名，方便排查：{e}");
+        // detail 必须是对象：前端一律 `detail['x']` 取值，给 null 会直接崩
+        assert!(e["detail"].is_object(), "detail 必须是对象：{e}");
+    }
+
+    #[test]
+    fn 交互式命令经_c_abi_入口要明确说不支持() {
+        // answer / skip / pause / resume 是**传输层状态机**，不是单次命令。
+        // 它们必须报 UNSUPPORTED（"这个入口不支持"），不能报 UNKNOWN_COMMAND
+        // （"没这条命令"）—— 后者会让 FFI 侧以为是自己拼错了命令名。
+        //
+        // ★ cancel 同理，而且它是 T19 这条测试**真抓出来的缺口**（2026-11-01）：
+        //   `hello.features` 声明了 cancel，但 `执行()` 里没有它的分支，于是走了
+        //   兜底的 UNKNOWN_COMMAND。管道和 FFI 都自己在调 `执行()` 之前拦下 cancel，
+        //   所以真机没坏 —— 但任何第三方/新入口直接调 `执行("cancel")` 都会拿到
+        //   「没这条命令」这种误导性答案。
+        for 命令 in ["cancel", "answer", "skip", "pause", "resume"] {
+            let e = 取错(跑(命令, json!({})));
+            assert_eq!(e["code"], "UNSUPPORTED", "{命令} 的错误码不对：{e}");
+        }
+    }
+
+    #[test]
+    fn 命令表里每条命令都真的接在分发上() {
+        // 防「hello 声明了、分发漏了」：前端完全按 `hello.features` 决定显示什么功能，
+        // 声明了却调不动 = 界面上出现一个点了没反应的按钮。
+        // 空参数下每种命令都该报参数错或不支持，绝不能落到 UNKNOWN_COMMAND。
+        for 命令 in 命令列表 {
+            if *命令 == "hello" {
+                continue; // 不带参数也成功
+            }
+            if *命令 == "report" {
+                // 诊断包**没有必填参数**，会真生成文件 → 不在参数契约里测（归 report.rs 的测试）
+                continue;
+            }
+            let r = 跑(命令, json!({}));
+            let c = 码(r);
+            assert_ne!(c, "UNKNOWN_COMMAND", "{命令} 在 hello 里声明了却没接分发");
+            assert!(
+                c == "BAD_PARAM" || c == "UNSUPPORTED",
+                "{命令} 空参数的错误码应该是 BAD_PARAM / UNSUPPORTED，实际 {c}"
+            );
+        }
+    }
+
+    // ───────────── scan ─────────────
+
+    #[test]
+    fn scan_缺_paths_或类型错都要报_bad_param() {
+        for 参数 in [
+            json!({}),
+            json!({"paths": null}),
+            json!({"paths": "一个字符串不是数组"}),
+            json!({"paths": []}),
+            // 数组里全是非字符串 → 解析后为空，同样是"没给路径"
+            json!({"paths": [123, true, null]}),
+        ] {
+            assert_eq!(码(跑("scan", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    #[test]
+    fn scan_不存在的路径不报错_而是如实回_unknown() {
+        // 最小合法请求：界面拖进一个我们不认识的破文件时，必须拿到一条 item
+        // 而不是错误 —— 否则队列整批挂掉，用户以为程序坏了。
+        let v = match 跑("scan", json!({"paths": ["/nonexistent/yshjy-t19-不存在.zip"]})) {
+            Ok(v) => v,
+            Err(e) => panic!("不存在的路径不该报错：{e}"),
+        };
+        let item = &v["items"][0];
+        assert_eq!(item["kind"], "UNKNOWN");
+        assert_eq!(item["archive"], false);
+        assert_eq!(v["given"], 1);
+        // 字段形状是协议契约（界面按这些键取值）
+        for 键 in ["path", "name", "size", "kind", "volumes", "looks_like", "mime", "candidates", "seek"] {
+            assert!(!item[键].is_null(), "scan 结果少了 {键} 字段：{item}");
+        }
+    }
+
+    // ───────────── list ─────────────
+
+    #[test]
+    fn list_缺_path_或类型错都要报_bad_param() {
+        for 参数 in [json!({}), json!({"path": 123}), json!({"path": null})] {
+            assert_eq!(码(跑("list", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    #[test]
+    fn list_文件不存在时参数层要让路_报的是引擎错误() {
+        // 参数层通过之后才是引擎干活。这条防的是「把 FILE_MISSING 之类的引擎错误
+        // 在参数层兜成 BAD_PARAM」—— 那样界面会说"你参数写错了"，而其实是文件没了。
+        let e = 取错(跑("list", json!({"path": "/nonexistent/yshjy-t19-没有这个包.zip"})));
+        let c = e["code"].as_str().unwrap_or("");
+        assert_ne!(c, "BAD_PARAM", "文件不存在不该是参数错：{e}");
+        assert!(!c.is_empty(), "错误必须带机器码：{e}");
+        assert!(e["detail"].is_object(), "错误必须带 detail 对象（前端靠它说人话）：{e}");
+    }
+
+    // ───────────── extract ─────────────
+
+    #[test]
+    fn extract_缺_path_报_bad_param() {
+        for 参数 in [json!({}), json!({"path": 42}), json!({"path": null})] {
+            assert_eq!(码(跑("extract", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    #[test]
+    fn extract_select_表达式看不懂时报错而不是静默全解() {
+        // D20 同类教训：静默全解会让用户以为"只解了主程序"，实际解了 16 GB。
+        let e = 取错(跑("extract", json!({"path": "/tmp/yshjy-t19.zip", "select": "这是什么？？"})));
+        assert_eq!(e["code"], "BAD_PARAM");
+        assert!(备注(&e).contains("select"), "note 要说清是哪一项错了：{e}");
+        // note 里要给写法举例 —— 报错得能教人改，不能只说"错了"
+        assert!(备注(&e).contains("all"), "note 要带合法写法举例：{e}");
+    }
+
+    #[test]
+    fn extract_select_数组只收正整数序号() {
+        for 坏 in [json!([0]), json!([-1]), json!(["1"]), json!([1.5]), json!([null])] {
+            let e = 取错(跑("extract", json!({"path": "/tmp/yshjy-t19.zip", "select": 坏.clone()})));
+            assert_eq!(e["code"], "BAD_PARAM", "select={坏} 应该报 BAD_PARAM");
+        }
+        // 反向：空数组 = 没指定 = 全解（老前端行为不能变）→ 不该在这里报错
+        // （用缺 path 之外的合法请求无法避免真解压，所以只验参数层：空数组不报 BAD_PARAM 由下面的 candidate 用例覆盖）
+    }
+
+    #[test]
+    fn extract_candidate_必须是数字偏移() {
+        let e = 取错(跑("extract", json!({"path": "/tmp/yshjy-t19.zip", "candidate": "第2处"})));
+        assert_eq!(e["code"], "BAD_PARAM");
+        assert!(备注(&e).contains("candidate"), "note 要指出是哪一项：{e}");
+
+        let e = 取错(跑("extract", json!({"path": "/tmp/yshjy-t19.zip", "candidate": -5})));
+        assert_eq!(e["code"], "BAD_PARAM", "负偏移也不是合法候选起点：{e}");
+    }
+
+    // ───────────── pack ─────────────
+
+    #[test]
+    fn pack_缺输入或缺输出都要报_bad_param() {
+        for 参数 in [
+            json!({}),
+            json!({"inputs": []}),
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"]}),          // 缺 out
+            json!({"out": "/tmp/yshjy-t19-包.zip"}),               // 缺 inputs
+            json!({"inputs": "不是数组", "out": "/tmp/yshjy-t19-包.zip"}),
+        ] {
+            assert_eq!(码(跑("pack", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    #[test]
+    fn pack_格式名写错要列出三种合法值() {
+        let e = 取错(跑(
+            "pack",
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.zip", "format": "rar"}),
+        ));
+        assert_eq!(e["code"], "BAD_PARAM");
+        let n = 备注(&e);
+        assert!(n.contains("zip") && n.contains("tar.gz"), "note 要列出合法格式：{e}");
+    }
+
+    #[test]
+    fn pack_自解压的后缀必须对得上种类() {
+        // Windows 存根是 exe、Linux 是 sh —— 后缀不对用户双击不会执行
+        let e = 取错(跑(
+            "pack",
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.zip", "sfx": "windows"}),
+        ));
+        assert_eq!(e["code"], "BAD_PARAM");
+        assert!(备注(&e).contains(".exe"), "note 要说清要改成 .exe：{e}");
+
+        let e = 取错(跑(
+            "pack",
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.exe", "sfx": "linux"}),
+        ));
+        assert_eq!(e["code"], "BAD_PARAM");
+        assert!(备注(&e).contains(".sh"), "note 要说清要改成 .sh：{e}");
+    }
+
+    #[test]
+    fn pack_互斥开关要在写文件之前就拒绝() {
+        // 每条都是「用户勾了两个矛盾的选项」：必须在建目录/写盘之前报错，
+        // 否则用户会看到一个空包或者半个文件。
+        for 参数 in [
+            // 普通压缩 + 自解压
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.exe",
+                   "sfx": "windows", "mode": "plain"}),
+            // 自解压 + 分卷（双击要是一个完整文件）
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.exe",
+                   "sfx": "windows", "split": 1048576}),
+            // 自解压 + 外壳文件（存根本身就是外壳）
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.exe",
+                   "sfx": "windows", "cover": "/tmp/yshjy-t19-封面.mp4"}),
+            // 普通压缩 + 干扰数据（会让别人的 unzip 报警告）
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.zip",
+                   "mode": "plain", "decoy": 4}),
+            // 假签名单独用没有意义
+            json!({"inputs": ["/tmp/yshjy-t19-源.txt"], "out": "/tmp/yshjy-t19-包.zip",
+                   "decoy_signatures": true}),
+        ] {
+            assert_eq!(码(跑("pack", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    #[test]
+    fn pack_输出不能覆盖源文件() {
+        // 覆盖源文件 = 用户拿到的"包"其实是空的，而原文件已经没了
+        let e = 取错(跑(
+            "pack",
+            json!({"inputs": ["/tmp/yshjy-t19-同名.bin"], "out": "/tmp/yshjy-t19-同名.bin"}),
+        ));
+        assert_eq!(e["code"], "BAD_PARAM");
+        assert!(备注(&e).contains("覆盖"), "note 要说清是覆盖源文件：{e}");
+    }
+
+    // ───────────── batch / rescue ─────────────
+
+    #[test]
+    fn batch_缺_paths_或_select_非法都报_bad_param() {
+        for 参数 in [
+            json!({}),
+            json!({"paths": []}),
+            json!({"paths": "不是数组"}),
+            json!({"paths": ["/tmp/yshjy-t19.zip"], "select": "@@ 看不懂"}),
+        ] {
+            assert_eq!(码(跑("batch", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    #[test]
+    fn rescue_缺_path_报_bad_param() {
+        for 参数 in [json!({}), json!({"path": 7}), json!({"path": null})] {
+            assert_eq!(码(跑("rescue", 参数.clone())), "BAD_PARAM", "参数 {参数} 应该报 BAD_PARAM");
+        }
+    }
+
+    // ───────────── 错误对象形状（前端全部依赖这个） ─────────────
+
+    #[test]
+    fn 所有参数错误的形状一致_code_note_detail() {
+        for (命令, 参数) in [
+            ("scan", json!({})),
+            ("list", json!({})),
+            ("extract", json!({})),
+            ("pack", json!({})),
+            ("batch", json!({})),
+            ("rescue", json!({})),
+            ("没有这条命令", json!({})),
+        ] {
+            let e = 取错(跑(命令, 参数));
+            assert!(e["code"].is_string(), "{命令} 的 code 必须是字符串：{e}");
+            assert!(e["note"].is_string(), "{命令} 的 note 必须是字符串：{e}");
+            assert!(!备注(&e).is_empty(), "{命令} 的 note 不能空（排查全靠它）：{e}");
+            assert!(e["detail"].is_object(), "{命令} 的 detail 必须是对象：{e}");
+        }
+    }
 }

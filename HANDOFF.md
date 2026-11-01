@@ -1,5 +1,34 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · T19 第一块完成：`api.rs` 协议参数契约测试（19 条）+ 抓到 1 个真缺口**
+>
+> - **做了什么**：`src/api.rs` 末尾新增 `#[cfg(test)] mod 参数契约`，**19 条测试**。
+>   三类断言按 T19 的验收标准来：① 最小合法请求（`scan` 给不存在路径必须回 `kind=UNKNOWN` 条目而不是报错）
+>   ② 缺字段 → `BAD_PARAM` ③ 类型错/非法值 → `BAD_PARAM` 且 `note` 教人怎么改。
+>   覆盖命令：`scan` / `list` / `extract` / `pack` / `batch` / `rescue` + 分发层（未知命令、
+>   交互式命令、命令表**每条都真的接在分发上**、错误对象形状 `code/note/detail` 一致）。
+> - **★ 测试当场抓到一个真缺口（`cancel`）**：`hello.features` 里声明着 `cancel`，
+>   但 `执行()`（C ABI 入口）的 match **没有 cancel 分支** → 落到兜底的 `UNKNOWN_COMMAND`
+>   （"没这条命令"）。管道（`serve.rs:190`）和 FFI（`ffi/src/lib.rs:264`）都自己在调 `执行()`
+>   **之前**拦下 cancel，所以真机没坏 —— 但任何新入口/第三方壳直接调 `执行("cancel")`
+>   都会拿到误导性答案。已把 `cancel` 并入 `answer/skip/pause/resume` 那一组，统一报
+>   `UNSUPPORTED` + 说明「需要 --serve 或 FFI 任务句柄」。**这是本批唯一的行为改动，只改错误码。**
+> - **★ 顺藤抓到一个既存 clippy 错误**：`src/cli_spec.rs:239` 的文档注释用了全角 `−` 当列表项，
+>   clippy 的 `doc_lazy_continuation` 判它「续行没缩进」。**只有 `cargo clippy --all-targets`
+>   才报**（那行在 `#[cfg(test)]` 模块里，默认 clippy 不编测试目标）——
+>   所以以前的「clippy 干净」是口径偏窄。改成 `- ` 后 `--all-targets` 现在真干净（exit 0）。
+> - **覆盖率（`cargo llvm-cov` + `scripts/cov_by_file.py`）**：
+>   总计 **13547/20431 = 66.3%**（T15 基线 13092/20249 = 64.7%，+455 行 / +1.6pp）。
+>   `api.rs` **8.4% → 46.8%**。★**口径别夸**：可执行行从 926 涨到 1108，多出来的 182 行是
+>   **测试模块自己被插桩**，所以业务部分实际约 **36%**（336/926），不是"翻了五倍"。
+>   仍裸的：`pick.rs` 0% · `serve.rs` 24.8% · `report.rs` 36.6% · `main.rs` 13.3%（统计口径）。
+> - **反向验证**：把 `scan` 的「缺少 paths」改成静默返回空列表 → **3 条红**
+>   （scan 缺参 / 命令表 / 错误形状），恢复后 19 条全绿。
+> - **全量**：`cargo test` **422 + 31 + 2** 全过（403 + 19 新增）、`cargo clippy --all-targets -D warnings` exit 0。
+>   装机版仍 0.9.48（本批没动引擎逻辑、没发版）。
+> - **T19 还没做的两块**：`serve.rs`（一次喂两条撞 BUSY / 一条命令 + 立刻 EOF 仍收完结果）、
+>   `report.rs`（每类采集项「键必须在 + 路径必须脱敏」）。
+
 > **2026-11-01 夜 · 批 7d 完成：文件挑选可注入（批 7 四步全部做完）**
 >
 > - **做了什么**：新文件 `gui/lib/pages/home_pick.dart` —— `PickOutcome` 枚举 + 纯函数
