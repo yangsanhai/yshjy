@@ -541,5 +541,6 @@
   "keys.extract": "开始解压整个包",
   "keys.selectAll": "全选包内所有文件",
   "keys.remove": "移出队列里选中的那一项",
-  "keys.note": "键位固定，不能改。按 Tab 可以在按钮之间移动。"
+  "keys.note": "键位固定，不能改。按 Tab 可以在按钮之间移动。",
+  "err.SAFETY_LIMIT": "解出来的体积超出安全上限（防压缩炸弹）—— 文件没坏，是限额拦的"
 }

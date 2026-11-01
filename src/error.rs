@@ -68,6 +68,18 @@ pub enum ErrorCode {
     PathTooLong,
     /// 目标位置是个文件，不是文件夹
     DestIsFile,
+    /// **安全限额**：解出来的体积超过压缩包的 N 倍（默认 100 倍），或总量超过单次上限
+    ///
+    /// ★ 这**不是**「包坏了」。以前这条和真正的数据损坏共用 `DataLost`，
+    /// 于是用户看到「中间有一段数据丢了」，跑去重新下载、换软件 —— 而包其实完好。
+    /// 实测：一个 100 MB 全零文件的普通 zip（`unzip` 解得很干净）压成 95 KB，
+    /// 压缩比约 1028:1，被这道闸拦下并报成数据损坏。
+    ///
+    /// 真实压缩炸弹是 **GB 级**；但大日志 / CSV / 稀疏磁盘镜像 / 数据库导出的
+    /// 压缩比轻松过百，也走这条，所以文案必须说清「这是限额，不是损坏」。
+    /// 参考：7-Zip / PeaZip / Ark / libarchive 都**没有**这道闸（只有磁盘空间预检），
+    /// 我们多这一层是为了防炸弹，代价就是必须解释清楚。
+    SafetyLimit,
 
     // ── 文件本身的问题 ──
     /// 需要密码
@@ -133,7 +145,7 @@ impl ErrorCode {
         use ErrorCode::*;
         match self {
             PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
-            | DestIsFile | Internal => 1,
+            | DestIsFile | SafetyLimit | Internal => 1,
             NeedPassword | WrongPassword | HeadEncrypted | NotArchive | Truncated | MissingVolume
             | DataLost | EncryptedUnbreakable | VideoUnplayable => 2,
             Cancelled => exit_code::CANCELLED,
@@ -145,7 +157,7 @@ impl ErrorCode {
         use ErrorCode::*;
         match self {
             PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
-            | DestIsFile | Internal => exit_code::ERROR,
+            | DestIsFile | SafetyLimit | Internal => exit_code::ERROR,
             NotArchive => exit_code::NOT_ARCHIVE,
             NeedPassword | WrongPassword | HeadEncrypted | EncryptedUnbreakable => exit_code::PASSWORD,
             Truncated | MissingVolume | DataLost | VideoUnplayable => exit_code::ERROR,
@@ -165,6 +177,7 @@ impl ErrorCode {
             PermissionDenied => "PERMISSION_DENIED",
             PathTooLong => "PATH_TOO_LONG",
             DestIsFile => "DEST_IS_FILE",
+            SafetyLimit => "SAFETY_LIMIT",
             NeedPassword => "NEED_PASSWORD",
             WrongPassword => "WRONG_PASSWORD",
             HeadEncrypted => "HEAD_ENCRYPTED",
@@ -300,6 +313,12 @@ pub enum ItemResult {
     CrcError,
     /// 数据坏了
     DataError,
+    /// **安全限额中止**（压缩比 / 单次总量）—— 文件本身没坏，是我们自己的闸拦的
+    ///
+    /// 为什么必须和 `DataError` 分开：CLI 每个失败条目都打一行
+    /// 「⚠ xxx 没解开（数据损坏）」，若限额也报这个，用户看到的就是
+    /// 「数据损坏」+「文件没坏」两句自相矛盾的话。
+    SafetyLimited,
     /// 这个条目加密了，没有（正确的）密码
     Encrypted,
     /// 因为前面的错误没轮到它
@@ -319,6 +338,7 @@ impl ItemResult {
             ItemResult::Skipped => "SKIPPED",
             ItemResult::CrcError => "CRC_ERROR",
             ItemResult::DataError => "DATA_ERROR",
+            ItemResult::SafetyLimited => "SAFETY_LIMITED",
             ItemResult::Encrypted => "ENCRYPTED",
             ItemResult::NotExtracted => "NOT_EXTRACTED",
         }
@@ -331,6 +351,7 @@ impl ItemResult {
             ItemResult::Skipped => "跳过",
             ItemResult::CrcError => "校验不过（内容坏了）",
             ItemResult::DataError => "数据损坏",
+            ItemResult::SafetyLimited => "超过安全限额",
             ItemResult::Encrypted => "加密，没解开",
             ItemResult::NotExtracted => "没解出来",
         }

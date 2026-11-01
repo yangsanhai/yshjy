@@ -314,14 +314,22 @@ impl ExtractBudget {
     /// - 取消 → 同上，但 reason 不同（外壳可区分文案）
     /// - 超时 / 前端断开 → 闸门返回「跳过」（`AskGate` 内部保证）
     fn 问用户(&mut self, 原因: &str, 上限: u64) -> Result<()> {
+        // ★ 这里以前两条分支都返回 `DataLost`（「中间有一段数据丢了」）——
+        //   用户以为包坏了，跑去重新下载。实际上包完好，只是**我们自己的安全限额**拦了。
+        //   实测证据：100 MB 全零文件的普通 zip（`unzip` 解得干干净净）压成 95 KB，
+        //   压缩比 1028:1 > 默认上限 100:1 → 被拦 → 报「数据损坏」。把上限调到 2000
+        //   同一个包立刻解开、文件 100,000,000 字节完整。
+        //   现在改成专门的 `SafetyLimit`：外壳能说清「这是限额，不是损坏」，并且
+        //   能把 ratio / limit 两个数字摆出来给用户看（参考 `NOT_ENOUGH_SPACE` 的处理方式）。
         let 硬失败 = |b: &Self| {
             if 原因 == "possible_zip_bomb" {
-                Error::new(ErrorCode::DataLost)
+                Error::new(ErrorCode::SafetyLimit)
                     .with("reason", 原因)
                     .with("ratio", (b.written / b.packed_total.max(1)).to_string())
+                    .with("written", b.written)
                     .with("limit", 上限)
             } else {
-                Error::new(ErrorCode::DataLost)
+                Error::new(ErrorCode::SafetyLimit)
                     .with("reason", 原因)
                     .with("written", b.written)
                     .with("limit", 上限)
@@ -512,5 +520,60 @@ mod tests {
             ),
             "只要一半可用空间就该放行"
         );
+    }
+
+    // ── 回归：安全限额 ≠ 数据损坏（2026-11-01 实测出来的真 bug）──
+    //
+    // 起因：一个普通 zip 里装 100MB 全零文件（压缩后 95KB，`unzip` 解得很干净），
+    // 被压缩比闸拦下后**报成「中间有一段数据丢了」**，用户会以为包坏了去重新下载。
+    // 实测边界精确在 67,108,864 字节（= RATIO_CHECK_MIN_WRITTEN），
+    // 把上限调到 2000:1 同一个包立刻解开、100,000,000 字节完整。
+    //
+    // 这条测试钉两件事：① 码必须是 SafetyLimit（不是 DataLost）
+    //                 ② 起检门槛之下不许拦（小包的比例没统计意义）
+
+    fn 预算(max_ratio: u64) -> ExtractBudget {
+        ExtractBudget::new(
+            Limits {
+                max_ratio,
+                max_extract_bytes: 0,
+                max_path_len: 512,
+                warn_executables: true,
+                ask: None,
+            },
+            95_000, // 压缩后 95KB
+        )
+    }
+
+    #[test]
+    fn 压缩比超限报安全限额_不报数据损坏() {
+        let mut b = 预算(100);
+        let e = b
+            .record(70 * 1024 * 1024) // 70MiB / 95KB ≈ 772:1 > 100
+            .expect_err("70MiB 配 95KB 的包必然超 100:1");
+        assert_eq!(
+            e.code,
+            ErrorCode::SafetyLimit,
+            "报成 {:?} 就是又回到「数据损坏」那条错路上了",
+            e.code
+        );
+        // 外壳要能直接摆出这两个数字给用户看
+        let d: std::collections::HashMap<_, _> = e.detail.iter().cloned().collect();
+        assert_eq!(d.get("limit").map(String::as_str), Some("100"));
+        assert!(d.get("ratio").is_some(), "必须带比例，否则用户不知道差多少");
+    }
+
+    #[test]
+    fn 门槛以下的写入不查比例_小包不该误报() {
+        // 只写了 1MiB（远低于 64MiB 起检线）—— 比例再高也不该拦
+        let mut b = 预算(100);
+        assert!(b.record(1024 * 1024).is_ok(), "小包的比例没有统计意义，不许拦");
+    }
+
+    #[test]
+    fn 上限设为零等于关掉这道闸() {
+        // 0 = 不检查（配置里能关），大包也不该拦
+        let mut b = 预算(0);
+        assert!(b.record(200 * 1024 * 1024).is_ok());
     }
 }

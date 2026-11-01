@@ -156,6 +156,7 @@ dest_is_file = "保存先がファイルになっています（フォルダー�
 truncated = "ファイルが不完全です（ダウンロード未完了など）"
 missing_volume = "分割ファイルが不足しています"
 data_lost = "途中のデータが欠落しています"
+safety_limit = "展開後のサイズが安全上限を超えました（圧縮爆弾対策）—— ファイルは壊れていません"
 encrypted_unbreakable = "暗号化されています。配布者のパスワードが必要です"
 video_unplayable = "カバー動画自体が壊れています"
 internal = "内部エラー"

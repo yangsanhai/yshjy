@@ -541,5 +541,6 @@
   "keys.extract": "開始解壓整個壓縮檔",
   "keys.selectAll": "全選壓縮檔內所有檔案",
   "keys.remove": "從佇列移除選取的那一項",
-  "keys.note": "鍵位固定，無法更改。按 Tab 可在按鈕之間移動。"
+  "keys.note": "鍵位固定，無法更改。按 Tab 可在按鈕之間移動。",
+  "err.SAFETY_LIMIT": "解出來的體積超出安全上限（防壓縮炸彈）—— 檔案沒壞，是限額攔的"
 }

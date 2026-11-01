@@ -1490,6 +1490,11 @@ fn outcome_from(res: Result<ExtractReport>, stats: &mut JobStats, ctx: &UnpackCt
                     // T9-P3：一个都没解出来，但原因是「写不进去」（只读目录 / 没空间 /
                     // 路径太长 / 目标是个文件）—— 这不是包坏了，别报「中间有一段数据丢了」
                     code
+                } else if rep.budget_hit {
+                    // ★ 安全限额拦下的（压缩比 / 单次总量）—— 包是好的，是我们自己的闸。
+                    //   以前这条落到下面的 `DataLost` 兜底，用户看到「中间有一段数据丢了」，
+                    //   以为包坏了去重新下载。实际把上限调大同一个包就解开了。
+                    ErrorCode::SafetyLimit
                 } else if rep.skipped.is_empty() {
                     ErrorCode::NotArchive
                 } else {

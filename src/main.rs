@@ -1927,6 +1927,7 @@ fn 失败文案(code: yshjy::error::ErrorCode) -> String {
         C::PermissionDenied => "error.permission_denied",
         C::PathTooLong => "error.path_too_long",
         C::DestIsFile => "error.dest_is_file",
+        C::SafetyLimit => "error.safety_limit",
         C::NeedPassword => "error.password_missing",
         C::WrongPassword => "error.password_wrong",
         C::HeadEncrypted => "error.head_encrypted",
