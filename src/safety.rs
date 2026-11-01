@@ -567,7 +567,7 @@ mod tests {
         // 外壳要能直接摆出这两个数字给用户看
         let d: std::collections::HashMap<_, _> = e.detail.iter().cloned().collect();
         assert_eq!(d.get("limit").map(String::as_str), Some("100"));
-        assert!(d.get("ratio").is_some(), "必须带比例，否则用户不知道差多少");
+        assert!(d.contains_key("ratio"), "必须带比例，否则用户不知道差多少");
     }
 
     #[test]

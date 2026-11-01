@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100×",
   "settings.safety.ratio2000": "2000×",
   "settings.safety.ratioOff": "Off (default)",
-  "settings.safety.ratio1000": "1000×"
+  "settings.safety.ratio1000": "1000×",
+  "home.pasteEmpty": "No path in the clipboard — copy a file or folder first, then press Ctrl+V",
+  "home.pasteNotFound": "That doesn't look like a file or folder we can open: {path}",
+  "home.pasteFailed": "Can't read the clipboard: {reason}",
+  "keys.paste": "Paste a path from the clipboard and open it",
+  "home.pasteHint": "Already copied a file? Press Ctrl+V to paste its path"
 }

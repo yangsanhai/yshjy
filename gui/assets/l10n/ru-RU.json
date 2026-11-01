@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100×",
   "settings.safety.ratio2000": "2000×",
   "settings.safety.ratioOff": "Не проверять (по умолчанию)",
-  "settings.safety.ratio1000": "1000×"
+  "settings.safety.ratio1000": "1000×",
+  "home.pasteEmpty": "В буфере обмена нет пути — сначала скопируйте файл или папку, затем нажмите Ctrl+V",
+  "home.pasteNotFound": "Это не похоже на файл или папку, которую можно открыть: {path}",
+  "home.pasteFailed": "Не удалось прочитать буфер обмена: {reason}",
+  "keys.paste": "Вставить путь из буфера обмена и открыть его",
+  "home.pasteHint": "Уже скопировали файл? Нажмите Ctrl+V, чтобы вставить путь"
 }

@@ -13,7 +13,11 @@ Future<Map<String, List<String>>> pumpEmpty(
   WidgetTester tester, {
   bool dragging = false,
 }) async {
-  final calls = <String, List<String>>{'pickFile': [], 'pickFolder': []};
+  final calls = <String, List<String>>{
+    'pickFile': [],
+    'pickFolder': [],
+    'pastePath': [],
+  };
   tester.view.physicalSize = const Size(1000, 1400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -23,6 +27,7 @@ Future<Map<String, List<String>>> pumpEmpty(
         dragging: dragging,
         onPickFile: () => calls['pickFile']!.add('-'),
         onPickFolder: () => calls['pickFolder']!.add('-'),
+        onPastePath: () => calls['pastePath']!.add('-'),
       ),
     ),
   ));
@@ -90,6 +95,22 @@ void main() {
     await tester.pump();
     expect(calls['pickFile'], hasLength(1));
     expect(calls['pickFolder'], isEmpty);
+  });
+
+  testWidgets('Ctrl+V = 粘贴路径（UI-SPEC §4b.6）', (tester) async {
+    final calls = await pumpEmpty(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(calls['pastePath'], hasLength(1),
+        reason: 'Ctrl+V 没接上，用户从文件管理器复制完按 Ctrl+V 完全没反应');
+    expect(calls['pickFile'], isEmpty, reason: 'Ctrl+V 不该顺带弹文件对话框');
+
+    // 不带 Ctrl 的 V 是普通打字，不许触发粘贴
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.pump();
+    expect(calls['pastePath'], hasLength(1), reason: '光按 V 就粘路径，太激进了');
   });
 
   testWidgets('小键盘 Enter 和主 Enter 等价（外接数字区很常见）', (tester) async {

@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100×",
   "settings.safety.ratio2000": "2000×",
   "settings.safety.ratioOff": "Sin comprobar (predeterminado)",
-  "settings.safety.ratio1000": "1000×"
+  "settings.safety.ratio1000": "1000×",
+  "home.pasteEmpty": "No hay ninguna ruta en el portapapeles: copia antes un archivo o una carpeta y pulsa Ctrl+V",
+  "home.pasteNotFound": "Esto no parece un archivo o una carpeta que podamos abrir: {path}",
+  "home.pasteFailed": "No se puede leer el portapapeles: {reason}",
+  "keys.paste": "Pega una ruta del portapapeles y la abre",
+  "home.pasteHint": "¿Ya has copiado un archivo? Pulsa Ctrl+V para pegar su ruta"
 }

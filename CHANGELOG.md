@@ -2,6 +2,82 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] —— T11 收尾：Ctrl+V 粘贴路径真的能用了
+
+### 假键盘：键位表写着「Ctrl+V 粘贴路径」，按下去什么都不发生
+
+清 T11 尾巴时按「不信文档、逐条 grep」核出来的：`keyboard.dart` 里
+`KeyAction.pastePath` 的动作、Ctrl+V 的映射、设置页那张表的注释全都写了，
+**但全仓没有任何一处消费它**（`grep -rn pastePath` 只命中 keyboard.dart 自己两行）。
+用户从文件管理器复制一个包、回窗口按 Ctrl+V —— 零反应，只会以为键盘功能坏了。
+
+**做了什么**
+
+- 新文件 `gui/lib/clipboard_path.dart` —— `pathsFromClipboardText` 纯函数。
+  只做「去壳」，一条都不猜：按行切（CRLF/CR/LF 都算）、去首尾空白、
+  去**成对**引号（`"…"` / `'…'` / `“…”` / `「…」`，不成对的不动 —— 那是文件名的一部分）、
+  `file://` 转本地路径（`%20` 解回来）、保序去重。
+  ★ 只认 `file://` 前缀判 URI：Windows 盘符路径 `C:\a\b.zip` 用 `Uri.tryParse`
+  会解析出 scheme `c`，按 scheme 判会把正常路径弄坏。
+- `home_pick.dart` 加 `readClipboardTextFromSystem()`（只读 `text/plain`）+
+  `ReadClipboardTextFn` 注入口。**只认纯文本**：文件管理器复制文件时同时给
+  `text/uri-list` / `x-special/gnome-copied-files` / 纯文本，三种都解析等于造三份真源、粘一次触发三次。
+- `home_page.dart` 加 `_pastePath()`：挑完之后走的路与「选择文件」**完全同一份**
+  （`pickOutcomeOf` + `_open` / `_scan`），不会有两套行为。
+  剪贴板里不是路径 / 路径不存在 → 弹一条 SnackBar 说明，**不静默**（静默 = 用户以为键坏了）。
+- `home_empty_view.dart` 接 `KeyAction.pastePath` + 界面就地写一行小字提示。
+- `keyboard.dart` 的 `keyHelpRows` 补 `Ctrl+V` 行（设置页那张表自动跟着变）——
+  这是「键位说明与代码同一份真相」那条规矩。
+
+**验证**
+
+- 新增 `test/clipboard_path_test.dart` **11 条**（空/null / 多行保序 / CRLF / 引号成对与不成对 /
+  file:// 解码 / Windows 盘符 / 去重 / 不去碰磁盘）。
+- 新增 `test/home_paste_path_test.dart` **5 条**（粘文件→发 list 进预览 / 粘目录→发 scan /
+  无关文本→有提示 / 不存在→有提示且不惊动引擎 / Enter 不受影响）。
+- `empty_drop_view_test.dart` 补一条「Ctrl+V 触发粘贴、光按 V 不触发」。
+- 界面测试 **403 → 420**，`flutter analyze` 干净。
+- 反向验证：把 `_pastePath` 里的解析结果换成空列表 → **4 条当场红**，还原后全绿。
+
+**★ 写这组 widget 测试踩到的两个真坑（记下来，下次别重踩）**
+
+1. `_open()` 里的 `await Directory(path).exists()` 是**真实磁盘 I/O**，
+   而 widget 测试跑在假时钟里 —— 这个 await 永远不完成，表现是
+   「按了没反应、一条命令都没发」。必须 `tester.runAsync()` 给真实事件循环让出时间。
+2. 之后**不能** `pumpAndSettle()`：「正在识别」那一屏是无限旋转的进度圈，
+   pumpAndSettle 会一直等到超时（`pumpAndSettle timed out`）。改用定次 `pump(Duration)`。
+
+**顺带核实销掉的两笔账**
+
+- 「`home_page` 自绘点击区没有语义」—— **过期账，不做**。全仓只有一处自绘点击区
+  （`preview_crumb_bar.dart` 的面包屑），早就包了 `Semantics(button + label + onTap)`
+  （还踩过 `excludeSemantics` 把点击动作一起排掉的坑）。首页用的是标准
+  `FilledButton` / `TextButton`，语义自带；拆 `home_page` 之后这块本来就不存在了。
+- 「历史页键位」—— **不是补键位，是要先加功能**：唯一的「清空」是一键删全部的危险操作，
+  接键位得先做「列表项选中 + Del 只删那一条」。属于扩功能，等用户拍板，本轮不动。
+
+7 语言文案 **546 → 551 键**（`home.pasteEmpty` / `home.pasteNotFound` / `home.pasteFailed` /
+`home.pasteHint` / `keys.paste`）。真机未验（界面改动，等下次发版一起验）。
+
+### 顺带修掉两条「账上说干净、实际不干净」的
+
+这两条都不是本批功能带的，是跑回归时当场撞出来的：
+
+**① `ask::tests::迟到答案不会污染下一次询问` 是 flaky 测试**
+全量 `cargo test` 偶发红（单独跑三次全绿，全量并行跑时红）。根因是测试靠
+`sleep(10ms)` 猜「新线程已经在等答案了」——8 个测试线程并行时调度延迟随时超过 10ms，
+于是「继续」落在新问题**清空残留缓冲之前**被丢掉，问超时返回「跳过」，断言失败。
+**这是测试写法的问题，不是实现的问题**：靠时间猜顺序的测试永远会 flaky。
+修法：`AskGate` 加一个 `等待中: AtomicBool`，在真正进入 `recv_timeout` 前置位、返回前复位；
+测试改成轮询这个标志（最多等 2 秒，超了就失败并说明实现有问题）。
+**两条用到 sleep 的测试一起改**。验证：全量 `cargo test` **连跑 3 轮全绿**（431 + 33 + 2）。
+
+**② `cargo clippy --all-targets -D warnings` 其实是红的（account 过时）**
+`safety.rs:570` 用了 `d.get("ratio").is_some()`，新版 clippy 报 `unnecessary_get_then_check`。
+之前 TODO 里记着「`clippy --all-targets` exit 0」，那是 clippy 版本还没加这条 lint 时的结论 ——
+**账上说干净 ≠ 现在干净**，跟 T19 那次 `doc_lazy_continuation` 是同一类。
+改成 `d.contains_key("ratio")`，现在 `--all-targets -D warnings` 真的 exit 0。
+
 ## [0.9.52] · 2026-11-02 —— 修三个「只在真跑时才暴露」的限额问题
 
 ### T20 深挖：三处「只在真跑时才暴露」的问题

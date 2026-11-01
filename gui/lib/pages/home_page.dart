@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_settings.dart';
+import '../clipboard_path.dart';
 import '../engine.dart';
 import '../entry_tree.dart';
 import '../history_store.dart';
@@ -72,6 +73,12 @@ class HomePage extends StatefulWidget {
   /// 挑文件夹的能力（同上）
   final PickFolderFn? pickFolder;
 
+  /// 读剪贴板纯文本的能力（**注入口**，T11 的 Ctrl+V）
+  ///
+  /// 生产不传 → `readClipboardTextFromSystem`（走平台通道）。
+  /// 测试传替身，就能验「粘进来的是路径 / 是目录 / 是一堆无关文本」三种走法。
+  final ReadClipboardTextFn? readClipboardText;
+
   /// 测试用：直接灌一份预览结果并进预览页（生产代码永远传 null）。
   ///
   /// 为什么留这个口子：预览树的交互（勾父 → 子全选、取消一子 → 父半选、面包屑下钻）
@@ -133,6 +140,7 @@ class HomePage extends StatefulWidget {
     this.engine,
     this.pickFiles,
     this.pickFolder,
+    this.readClipboardText,
     this.debugPreview,
     this.debugErrorCode,
     this.debugErrorNote,
@@ -578,6 +586,59 @@ class _HomePageState extends State<HomePage> {
     } on PlatformException catch (e) {
       _showError('FILE_PICKER', e.message ?? t('home.cantPickDir'));
     }
+  }
+
+  /// `Ctrl+V`：把剪贴板里的路径粘进来并自动识别（UI-SPEC §4b.6）
+  ///
+  /// 挑完之后走的路与「选择文件」**完全同一份**（`pickOutcomeOf` + `_open` / `_scan`），
+  /// 所以粘进来的行为和点对话框选出来的行为不可能有两套。
+  ///
+  /// 唯一的差别：剪贴板里可能是一堆无关文本（用户刚复制了一段话）。
+  /// 这时**必须给一句话** —— 按了没反应，用户只会以为键坏了，去翻设置页找键位。
+  Future<void> _pastePath() async {
+    String? text;
+    try {
+      text = await (widget.readClipboardText ?? readClipboardTextFromSystem)();
+    } on PlatformException catch (e) {
+      _toast(t('home.pasteFailed', {'reason': e.message ?? e.code}));
+      return;
+    }
+    final paths = pathsFromClipboardText(text);
+    if (paths.isEmpty) {
+      _toast(t('home.pasteEmpty'));
+      return;
+    }
+    // 存在性在这一层筛（纯函数不碰磁盘，见 clipboard_path.dart 顶部）
+    final found = paths.where(_pathExists).toList();
+    if (found.isEmpty) {
+      _toast(t('home.pasteNotFound', {'path': paths.first}));
+      return;
+    }
+    switch (pickOutcomeOf(found)) {
+      case PickOutcome.none:
+        return;
+      case PickOutcome.preview:
+        await _open(found.first);
+      case PickOutcome.queue:
+        await _scan(found);
+    }
+  }
+
+  /// 这个路径是文件或文件夹吗（粘进来的东西不一定）
+  bool _pathExists(String p) {
+    try {
+      return File(p).existsSync() || Directory(p).existsSync();
+    } on FileSystemException {
+      return false;
+    }
+  }
+
+  /// 轻量提示条（粘错东西不是解压失败，不该把人扔进错误页）
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+    );
   }
 
   /// 把 `scan` 的原始 items 变成队列行
@@ -1348,6 +1409,7 @@ class _HomePageState extends State<HomePage> {
         dragging: _dragging,
         onPickFile: _pick,
         onPickFolder: _pickFolder,
+        onPastePath: _pastePath,
       );
 
   Widget _busyView(String text) => BusyView(text: text);

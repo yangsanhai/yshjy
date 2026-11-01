@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100 倍",
   "settings.safety.ratio2000": "2000 倍",
   "settings.safety.ratioOff": "不檢查（預設）",
-  "settings.safety.ratio1000": "1000 倍"
+  "settings.safety.ratio1000": "1000 倍",
+  "home.pasteEmpty": "剪貼簿裡沒有路徑 —— 先在檔案管理器裡複製一個檔案或資料夾，再按 Ctrl+V",
+  "home.pasteNotFound": "剪貼簿裡這段不是一個能開啟的檔案或資料夾：{path}",
+  "home.pasteFailed": "讀不了剪貼簿：{reason}",
+  "keys.paste": "把剪貼簿裡的路徑貼進來並辨識",
+  "home.pasteHint": "已經把檔案複製到剪貼簿？按 Ctrl+V 直接貼進來"
 }
