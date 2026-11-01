@@ -418,7 +418,7 @@ pub enum Error {
 | 5a | `_crumbBar`（面包屑路径条） | 38 | 3 | ✅ **已拆** → `pages/preview_crumb_bar.dart`（`CrumbBar`）。★顺手修了「包名取法只认 `/`」的 Windows bug（改用 `baseName()`），补 5 条测试 |
 | 5b+5c | `_fileList` + `_entryRow`（清单 + 每行） | 77+116 | 6+4 | ✅ **已拆（两块合成一块）** → `pages/preview_file_list.dart`（`FileListView`）。**4 处 setState 改成 3 个回调，状态全留在父层** —— `_picked` 要传给引擎、`_crumb` 要算缩进基准和面包屑，下沉就变成两份真相。补 7 条交互测试 |
 | 5d-1 | `_miniBtn` + `_pickedBytes` + `_smartDirHint`（纯零件） | 19+8+11 | 3 | ✅ **已拆** → `pages/preview_parts.dart`（`MiniButton` / `pickedBytes` / `smartDirHint`）。★两个纯函数从「必须有整页才能测」变成 10 条单测就能钉死 |
-| 5d-2 | `_previewView` 主体 | 325 | 26 | ⬜ **下一块，也是这批最后一块，需要先设计**：17 个数据字段 + 控制器 + 8 个回调 = 25 个参数，直接搬就是参数地狱。要先定「把它们收成一个预览页状态对象（不可变数据 + 回调集合）」，是架构活 |
+| 5d-2 | `_previewView` 主体 | 325 | 26 | ✅ **已拆 4 段** → `preview_password_box.dart`（A 密码区）/ `preview_pick_card.dart`（B 勾选卡）/ `preview_header.dart`（C 备注 + D 摘要）。主体 **340 → 236 行**，剩下是组装层 + 多候选提示 / 智能解压预告 / 工具行 / 底部按钮。★「25 个参数」不用解决 —— 那是把整块当一个单位才有的问题，分段后自然消失 |
 | 6 | `_progressView` + `_flushView` | 121+65 | — | ⬜ |
 | 7 | `_doneView`（完成卡） | 169 | — | ⬜ |
 | 8 | `_errorView` + `_spaceShortageBlock` | 204+71 | 25 | ⬜ |

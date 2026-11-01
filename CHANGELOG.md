@@ -222,7 +222,49 @@ Dart 不允许类的花括号跨文件。`part` 只能放顶层内容 —— Loc
 
 **验证**：`flutter test` **253 条**全过（243 + 10）、`flutter analyze` 干净。
 
-**下一步（5d-2）**：`_previewView` 主体（325 行 / 26 引用）。**要先设计状态对象，不能直接搬。**
+---
+
+### 同批：第 5d-2 步 —— 预览页主体拆成 4 段（`home_page.dart` 2411 → 2378 行）
+
+`_previewView` 原来是 340 行的一个大 `build`。**别一次搬**：它 26 个引用里除了数据还有 4 个带
+`setState` 的异步方法，直接搬要传 25 个参数（参数地狱）。改成**按段抽**，每段只依赖 2–7 个东西：
+
+| 段 | 抽成 | 依赖 | 行数 |
+|---|---|---|---|
+| A 密码区 | `pages/preview_password_box.dart`（`PreviewPasswordBox`） | `encryptedCount` / controller / showPlain / recent / 2 回调 | 51 |
+| B 勾选卡 | `pages/preview_pick_card.dart`（`PreviewPickCard`） | `preview` / 2 个勾选值 / 2 回调 | 44 |
+| C 备注区 | `pages/preview_header.dart`（`PreviewNotes`） | `notes` 列表 | 20 |
+| D 摘要行 | 同上（`PreviewSummary`） | `preview` | 17 |
+
+`_previewView` 主体 **340 → 236 行**，剩下的是组装层 + 多候选提示 / 智能解压预告 / 工具行 / 底部按钮。
+**「25 个参数」这个问题根本不用解决** —— 它是「把整块当成一个单位」才出现的，分段之后自然消失。
+
+**三个「把判断收进组件」的处理**（父层少一层 `if`，就少一处能写反的地方）：
+- `PreviewPasswordBox`：`encryptedCount <= 0` 时返回 `SizedBox.shrink()`
+- `PreviewNotes`：`notes.isEmpty` 时返回 `SizedBox.shrink()`
+- `PreviewSummary`：`encryptedCount > 0` 才画锁 chip
+
+**11 条测试**，每条守一个「不该出现」或「必须出现」：
+没加密不许摆密码框 / 有加密标题要写几个 / 眼睛按钮只报名不自己改状态 / 输入 trim 后空串转 `null` /
+点常用码报给父层 / 没封面不许凭空多一行 / 勾选各自报父层 / 内容行写明文件数 / 没加密不许画锁 /
+备注空不许占位 / 备注每条都带图标。
+
+**反向验证三次**（每次都能红）：
+- 去掉 `v.trim()` → `Expected: 'abc123' / Actual: '  abc123  '`
+- `if (pv.hasCover)` → `if (true)` → 没封面时 `pv.cover!` 空断言直接炸
+- `if (pv.encryptedCount > 0)` → `if (true)` → 没加密也画出了锁
+
+**★ 自己抓到的一个疏漏（B 段）**：搬移时把块末尾那个 `const SizedBox(height: 12)` 一起吃掉了 ——
+`PreviewPickCard` 和下面的状态栏之间少了 12px 间距。**测试抓不到这个（没有测间距）**，
+是核对「被删范围的末行」时发现的（末行是 `SizedBox` 而不是 `),` 就说明多吃了）。
+后面 C+D 段特意把终点取在下一个 `SizedBox` **之前**。
+
+**★ 写测试时自己踩的两个坑（记下来）**：
+① 第二次 `pumpCard()` 的返回值没接，断言读的是上一个 `rec`（`Expected: true / Actual: <false>`）；
+② `Preview.fileCount` 是 **getter**（= `entries` 里非目录的个数）不是构造参数 —— 传个 `int` 不生效，
+必须真造 `entries`（否则「7 个文件」永远找不到）。
+
+**验证**：`flutter test` **269 条**全过、`flutter analyze` 干净。
 
 ---
 
