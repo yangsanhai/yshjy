@@ -72,10 +72,39 @@ class _KeyActionScopeState extends State<KeyActionScope> {
     final action = actionForEvent(event);
     if (action == null) return KeyEventResult.ignored;
     if (!widget.handlers.containsKey(action)) return KeyEventResult.ignored;
+    // ★ 正在输入框里打字时，Enter 属于输入框（提交 / 换行），不能被我们截走。
+    //   真实事故形态：用户在「输出文件名」里改个名字，按回车想确认 ——
+    //   结果整个打包被启动了（打包是重操作，几十秒还写盘）。
+    //   判定用「当前焦点是不是落在 EditableText 上（含祖先）」，
+    //   **不是**「这个页面有没有 TextField」—— 同一个页面既有输入框也有非输入状态，
+    //   按页面判会把正常状态一起废掉。
+    if (action == KeyAction.primary && _isEditingText()) {
+      return KeyEventResult.ignored;
+    }
     widget.handlers[action]?.call();
     // 有这一条就算「我管了」—— 即使值为 null（按钮禁用中）也要吞掉，
     // 否则禁用的主操作键会冒泡上去触发别的块，那就成了「按了没用的键干了别的事」
     return KeyEventResult.handled;
+  }
+
+  /// 焦点此刻是不是在某个文本输入框里
+  ///
+  /// TextField 真正持有焦点的是内部的 `EditableText`，所以先看当前节点自身，
+  /// 再顺着祖先链找 —— 有些场景（输入框里套了别的可聚焦件）焦点不在 EditableText 上，
+  /// 但祖先是它，选区的光标照样在闪。
+  bool _isEditingText() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    if (ctx.widget is EditableText) return true;
+    var editing = false;
+    ctx.visitAncestorElements((e) {
+      if (e.widget is EditableText) {
+        editing = true;
+        return false; // 找到就停
+      }
+      return true;
+    });
+    return editing;
   }
 
   @override

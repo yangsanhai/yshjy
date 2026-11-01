@@ -72,6 +72,9 @@ void main() {
           reason: '${r.keys} 这一行没显示出来');
     }
     expect(find.text(t('keys.note')), findsOneWidget);
+    // 保存按钮上也得有就地提示（T11 收尾：打包/设置两页接 Enter 时一起写的）
+    expect(find.byTooltip('Enter'), findsWidgets,
+        reason: '设置页保存按钮没标 Enter');
   });
 
   testWidgets('主按钮上有就地键位提示（悬停可见）', (tester) async {

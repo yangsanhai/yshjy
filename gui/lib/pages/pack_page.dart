@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../humanize.dart';
+import '../key_action_scope.dart';
+import '../keyboard.dart';
 import '../l10n.dart';
 import '../notify.dart';
 import '../pack_naming.dart';
@@ -445,8 +447,19 @@ class _PackPageState extends State<PackPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return KeyActionScope(
+      // ★ takeFocus 必须 false：这一页和首页在 IndexedStack 里同时挂着，
+      //   谁抢焦点谁出事 —— 它会静止地把首页那屏的 Enter 抢走。
+      //   代价是「刚切过来什么都没点、直接按 Enter」不生效；用户要打包必然
+      //   先在本页点过东西（焦点已在页内），正常流程不受影响。
+      takeFocus: false,
+      // 键位条件与按钮 onPressed **同一个表达式**，不做第二份判断：
+      // 按钮灰着按 Enter 也不该打包，按钮亮着按 Enter 就该打包。
+      handlers: {
+        KeyAction.primary: _busy || _inputs.isEmpty ? null : () => _pack(),
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(16),
       // 整页可滚动：伪装模式下光「外壳说明」就五六行，再加「防网盘扫描」两行，
       // 850x736 的默认窗口会 RenderFlex 溢出（真机截图里那条
       // BOTTOM OVERFLOWED BY 20 PIXELS 就是它）。列表改成受控高度的滚动区，
@@ -1037,8 +1050,11 @@ class _PackPageState extends State<PackPage> {
             ),
           if (_result != null) _resultCard(cs),
           const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: _busy || _inputs.isEmpty ? null : _pack,
+          // 键位就地提示（T11）：Enter = 开始打包（焦点不在输入框里时）
+          Tooltip(
+            message: 'Enter',
+            child: FilledButton.icon(
+              onPressed: _busy || _inputs.isEmpty ? null : _pack,
             icon: _busy
                 ? const SizedBox(
                     width: 16,
@@ -1055,8 +1071,10 @@ class _PackPageState extends State<PackPage> {
             ),
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
           ),
+          ),
           ],
         ),
+      ),
       ),
     );
   }
