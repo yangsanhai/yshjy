@@ -542,5 +542,11 @@
   "keys.selectAll": "Select every file in the archive",
   "keys.remove": "Remove the selected item from the queue",
   "keys.note": "Shortcuts are fixed. Use Tab to move between buttons.",
-  "err.SAFETY_LIMIT": "Extracted size exceeds the safety limit (zip-bomb guard) — the archive is NOT damaged"
+  "err.SAFETY_LIMIT": "Extracted size exceeds the safety limit (zip-bomb guard) — the archive is NOT damaged",
+  "settings.safety.ratio": "Maximum compression ratio",
+  "settings.safety.ratioHint": "How many times larger than the archive the extracted files may be. Very compressible files (big logs, disk images) need a higher value.",
+  "settings.safety.ratio100": "100× (default)",
+  "settings.safety.ratio500": "500×",
+  "settings.safety.ratio2000": "2000×",
+  "settings.safety.ratioOff": "No limit"
 }
