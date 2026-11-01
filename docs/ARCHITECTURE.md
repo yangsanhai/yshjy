@@ -478,8 +478,8 @@ LocalSend 那种「页面 + vm」的分离留到真需要时再说。
 | # | 步 | 内容 | 状态 |
 |---|---|---|---|
 | 7a | 地基 | `EngineApi` 接口 + `EngineClient implements` + `HomePage(engine:)` 注入；新增 `test/engine_api_inject_test.dart` 3 条（预览走注入对象 / 解压参数翻译 / 销毁 dispose） | ✅ **完成**（340 条测试全绿，反向验证：改回单例 → 3 条全红） |
-| 7b | 解压参数 | `_extract` 里 28 处判断 → 纯函数 `extractRequestFor(...)`；单测钉四类组合（只检查 / 换候选 / 全选 / 封面开关） | ⬜ 下一个 |
-| 7c | 预览状态 | `_open` 里「预览结果 → 界面状态」（默认全选、`wantCover=hasCover`、树全展开、换包清旧密码）→ 纯函数 | ⬜ |
+| 7b | 解压参数 | `_extract` 里 28 处判断 → 纯函数 `buildExtractRequest`（`gui/lib/pages/home_extract_request.dart`）；9 条单测钉四类组合（只检查 / 换候选 / 全选 / 封面开关）+ `send()` 字段一一对应 | ✅ **完成**（349 条测试全绿；反向验证：去掉「只检查强制关封面」→ 1 条立红） |
+| 7c | 预览状态 | `_open` 里「预览结果 → 界面状态」（默认全选、`wantCover=hasCover`、树全展开、换包清旧密码）→ 纯函数 | ⬜ 下一个 |
 | 7d | 文件挑选 | `_pick` / `_pickFolder` 的文件对话框改成可注入（函数类型），测「取消 / 单选走预览 / 多选走队列」 | ⬜ |
 
 > **不做的**：不引 Riverpod / refena；不把 `_HomePageState` 重写成 controller（337 条测试全绑在它上面）；

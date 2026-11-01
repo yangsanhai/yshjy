@@ -1,5 +1,27 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · 批 7b 完成：解压参数纯函数化（`buildExtractRequest`）**
+>
+> - **做了什么**：新文件 `gui/lib/pages/home_extract_request.dart` —— `ExtractRequest`（11 个字段，
+>   与 `EngineApi.extract` 一一对应）+ `send(api)`（页面只调这个方法，不手抄参数）+ 纯函数
+>   `buildExtractRequest(...)`。`_extract` 里那段 28 处判断的原代码 **整段删掉**，改成
+>   构造 `req` 一行 + `await req.send(_client)`。
+> - **四类判断的出处（每条都写进代码注释了）**：只检查时 `cover=false`（切封面是另一条写盘路径，
+>   CLI `--test` 实测零字节）、`dest=null`（给 dest 引擎可能建目录）、`wantExtract=true`（校验整包）；
+>   换候选时 `select=null`（另一段的条目跟当前预览可能完全不同）；全选 `select=null`；
+>   只提封面 `select=null`。
+> - **★ 故意没动的两处**：`_tryOtherCandidates`（队列换候选）和 `_retryWithPassword`（失败页重试）
+>   仍手写参数 —— 它们传的是**另一组**参数（都不传 `cover` / `wantExtract`，靠引擎默认 true），
+>   套进来会顺手改掉「重试时封面跟不跟界面勾选」这条行为。**要统一先补行为测试，别顺手合**。
+> - **9 条单测**（`gui/test/extract_request_test.dart`）：普通全选 / 只检查 / 只提封面 / 部分勾选 /
+>   换候选 / **目录不算全选分母** / 无清单按全选 / force 透传 / `send()` 字段一一对应。
+>   ★「目录不算分母」那条防的是：分母把目录算进去 → 永远凑不满 → 每次都多传 select。
+> - **反向验证**：把 `cover: verifyOnly ? false : wantCover` 改成 `cover: wantCover` →
+>   第 2 条立刻红（`+8 -1`），恢复后全绿。
+> - **当前状态**：`flutter analyze` 干净、`flutter test` **349 条**全过（340 + 9）、装机版仍 0.9.48。
+>   `verify_only_widget_test` 等老行为测试照旧全绿 —— 这就是「重构等价」的证据。
+> - **下一步**：7c 预览状态映射（`_open` 里「预览结果 → 界面状态」抽纯函数），然后 7d 文件挑选可注入。
+
 > **2026-11-01 夜 · 批 7a 完成：引擎客户端可注入（`EngineApi` 接口）**
 >
 > - **做了什么**：`gui/lib/engine.dart` 里新增 `abstract class EngineApi`（18 个成员：`events` /
