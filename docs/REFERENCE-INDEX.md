@@ -60,6 +60,8 @@
 | 主题 + 窗口尺寸记忆 | P10 | `analysis/07` §4.4、§7.3 | 跟随系统/深浅、记住尺寸 | `theme_mode.dart`（尺寸记忆未做） | ✅ 主题可切（`main.dart:69`，设置页可切）；**窗口尺寸记忆已做**（在 GTK runner `gui/linux/runner/my_application.cc` 里，状态文件 `~/.local/state/yshjy/gui-window.txt`，有 `tests/gui_window_state.sh` 守着）；**位置**记忆在 Wayland 下做不到（协议不许客户端给自己定位）—— 2026-10-30 核实 |
 | 新手引导 | P11 | `analysis/07` §5.1（隐写者 ①–⑪ 编号步骤） | 三步浮层 | — | ✅ 0.9.26 · `app_shell.dart:114` 三步引导（只弹一次，标记写在 state 目录） |
 | 历史页可点开文件 | — | `analysis/07` §130-131（别清空历史）、§135 | 条目可打开所在目录 | `history_page.dart:128` | ✅ 0.9.26 · `history_page.dart:128` onTap 定位到输出目录 |
+| **界面文件组织**（单类行数上限） | 本文档新增：`ARCHITECTURE.md`「GUI 文件组织规范」 | `refs/upstream/rustdesk/flutter/lib/desktop/pages/desktop_setting_page.dart:399-2344`（3376 行 **26 个类**，最大 759 行）· `refs/外部-归档软件/LocalSend/app/lib/widget/`（非生成代码最大 851 行，小部件各自成文件） | 一个大页面 = 壳 + **每块一个独立 widget 类**；目标 300–800 行/类；小部件进独立文件 | `gui/lib/pages/home_queue_view.dart`（第 1 块：`QueueItem` + `QueueView` + `_QueueStatusChip`）· `gui/lib/format.dart` | 🟡 **1 / 10 块**（清单见 ARCHITECTURE「进度」表） |
+| **键盘快捷键** | `docs/UI-SPEC.md` §4b.6（Enter 确认 / Del 删除 / Esc 取消 / Tab 遍历）+ §七「无障碍与细节」 | `refs/外部-归档软件/PeaZip/peazip-sources/res/share/lang/en.txt:1414`（`Ctrl+E (or F12) extracts the entire archive`） | Enter 确认主操作、Ctrl+E 解压、Del 删除、Esc 取消、Tab 遍历 | `home_queue_view.dart`（Enter / Ctrl+E 开始解压、Del 移出、↑↓ 移焦点） | 🟡 只有队列块接了；其余块随拆分补 |
 
 ---
 
