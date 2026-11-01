@@ -47,7 +47,41 @@ python3 scripts/bump-version.py --check     # 核对（11 处全表 + AppStream 
 最终 `git diff` 只剩 `ffi/Cargo.lock` 两行真修复（README 零残留，证明「改→改回」不留手尾）。
 `cargo metadata --manifest-path ffi/Cargo.toml` 认可改后的 lock（报 `yshjy-ffi = 0.9.47`，不重写）。
 
-**下一批**：6b T15 覆盖率基线（`cargo llvm-cov`）。
+---
+
+### 同批：T15 覆盖率基线（`cargo llvm-cov`）
+
+**做了什么**：`scripts/cov_by_file.py` 入库（`cargo llvm-cov --text` 只给逐行明细、没有按文件的
+汇总表，得自己解析），跑出第一份基线。
+
+```bash
+cargo llvm-cov --text --no-fail-fast > /tmp/cov.txt
+python3 scripts/cov_by_file.py /tmp/cov.txt --min-lines 30
+```
+
+**结论**：**13092 / 20249 行 = 64.7%**（51 个文件）。主力模块 74%–99%，是扎实的；
+**真正裸的是协议层 —— `src/api.rs` 926 行可执行代码只有 8.4% 被跑到，且一条单元测试都没有。**
+
+| 文件 | 覆盖率 | 可执行行 | `#[test]` | 为什么值得管 |
+|---|---|---|---|---|
+| `src/pick.rs` | 0.0% | 65 | 0 | 唯一零覆盖模块（`--pick` 交互式，要 tty） |
+| `src/api.rs` | **8.4%** | **926** | **0** | 界面 / CLI / FFI 三方共用的唯一命令语义层 |
+| `src/main.rs` | 13.3% | 2346 | 12 | **统计口径**（探针跑二进制不计入），不是「CLI 没测」 |
+| `src/serve.rs` | 24.8% | 250 | 5 | 协议主循环：BUSY / EOF 收尾 / 事件投递 |
+| `src/report.rs` | 36.6% | 347 | 6 | 诊断包 —— 用户出问题时唯一的求助材料 |
+
+**三条口径**（写进报告，否则数字会把人带偏）：
+① `main.rs` 的 13.3% 主要是统计口径 —— `cargo llvm-cov` 只统计**被插桩的 lib 测试进程**，
+`tests/*.sh` 和 `tests/*.py` 探针跑的是编好的二进制，一行都不计入；而 CLI 参数解析正好在 `main.rs`。
+② `ffi/src/lib.rs`（297 行 / 0 个 `#[test]`）**完全不在报告里** —— FFI 是独立 crate，没被插桩，
+它的覆盖是**未知**不是 0。
+③ 数字会漂，任何 Rust 改动后要重跑。
+
+**带出的新账记为 T19**（`docs/TODO.md`）：补协议层单测，顺序 `api.rs` → `serve.rs` → `report.rs`。
+活教材：0.9.47 那个「界面把 `jobs` 写成字符串 → 引擎静默退回默认 1 → 假开关」，
+正是缺这层单元边界测试的后果（当时靠人肉真机才发现）。
+
+**下一批**：6c P2-5 拆 `home_page.dart`（3117 行，纯搬移，210 条 `flutter test` 兜底）。
 
 ## [0.9.47] · 2026-11-01（真机抓出来的：设置页「本机磁盘类型没探到」）
 
