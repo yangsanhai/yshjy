@@ -541,5 +541,6 @@
   "keys.extract": "Extraer el paquete completo",
   "keys.selectAll": "Seleccionar todos los archivos del paquete",
   "keys.remove": "Quitar el elemento seleccionado de la cola",
-  "keys.note": "Los atajos son fijos. Usa Tab para moverte entre botones."
+  "keys.note": "Los atajos son fijos. Usa Tab para moverte entre botones.",
+  "err.SAFETY_LIMIT": "El tamaño extraído supera el límite de seguridad (protección antizombi) — el archivo NO está dañado"
 }

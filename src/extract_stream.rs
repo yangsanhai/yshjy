@@ -669,6 +669,8 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                         if e.is_cancelled() {
                             cancelled_now = true;
                         } else {
+                            // 同上：留下「是限额拦的」这个事实，别让上层猜成数据损坏
+                            report.budget_hit = true;
                             err = Some(format!("安全限额中止: {e}"));
                         }
                         break;

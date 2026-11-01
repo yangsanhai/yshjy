@@ -541,5 +541,6 @@
   "keys.extract": "Extract the whole archive",
   "keys.selectAll": "Select every file in the archive",
   "keys.remove": "Remove the selected item from the queue",
-  "keys.note": "Shortcuts are fixed. Use Tab to move between buttons."
+  "keys.note": "Shortcuts are fixed. Use Tab to move between buttons.",
+  "err.SAFETY_LIMIT": "Extracted size exceeds the safety limit (zip-bomb guard) — the archive is NOT damaged"
 }

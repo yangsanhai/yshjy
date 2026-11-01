@@ -657,6 +657,11 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                             if e.is_cancelled() {
                                 cancelled_now = true;
                             } else {
+                                // ★ 以前这里只写了一句人话到 read_err，**没有留下码**，
+                                //   于是上层兜底看不到真原因，把「安全限额」报成
+                                //   `DataLost`（「中间有一段数据丢了」）—— 用户以为包坏了。
+                                //   实测：100MB 全零文件的普通 zip 就这么被冤枉的。
+                                report.budget_hit = true;
                                 read_err = Some(format!("安全限额中止: {e}"));
                             }
                             break;
@@ -709,7 +714,14 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 report.skipped.push((name.clone(), msg));
                 // 清理半成品（对齐 unar「失败即删输出文件」的做法）：Drop 会把 part 删掉
                 drop(part);
-                ctx.entry_done(i as u64 + 1, &name, ItemResult::DataError, 0);
+                // 安全限额拦下的不能标成「数据损坏」——文件是好的，是我们的闸；
+                // 否则 CLI 会同时打出「数据损坏」和「文件没坏」两句自相矛盾的话。
+                let 条目标记 = if report.budget_hit {
+                    ItemResult::SafetyLimited
+                } else {
+                    ItemResult::DataError
+                };
+                ctx.entry_done(i as u64 + 1, &name, 条目标记, 0);
             }
             None => {
                 // 原子落地：改名成功之前，正式文件名还不存在
