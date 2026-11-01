@@ -27,9 +27,9 @@ void main() {
   tearDownAll(restoreRealTransport);
 
   test('keyHelpRows 每一行都能翻译成人话（不是把键名原样显示出来）', () {
-    // 表里 5 行，和 keyActionFor 支持的动作一一对应
+    // 表里 6 行，和 keyActionFor 支持的动作一一对应
     expect(keyHelpRows.map((r) => r.keys).toList(),
-        ['Enter', 'Esc', 'Ctrl+E', 'Ctrl+A', 'Del'],
+        ['Enter', 'Esc', 'Ctrl+E', 'Ctrl+A', 'Ctrl+V', 'Del'],
         reason: '键位表被改动时这条会红 —— 提醒你同步 UI-SPEC 和 CHANGELOG');
     for (final r in keyHelpRows) {
       final text = t(r.whatKey);
@@ -89,6 +89,7 @@ void main() {
           dragging: false,
           onPickFile: () {},
           onPickFolder: () {},
+          onPastePath: () {},
         ),
       ),
     ));

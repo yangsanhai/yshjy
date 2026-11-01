@@ -127,5 +127,6 @@ const List<KeyHelpRow> keyHelpRows = [
   KeyHelpRow('Esc', 'keys.cancel'),
   KeyHelpRow('Ctrl+E', 'keys.extract'),
   KeyHelpRow('Ctrl+A', 'keys.selectAll'),
+  KeyHelpRow('Ctrl+V', 'keys.paste'),
   KeyHelpRow('Del', 'keys.remove'),
 ];

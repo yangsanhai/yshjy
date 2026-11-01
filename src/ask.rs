@@ -49,6 +49,13 @@ pub struct AskGate {
     超时: Duration,
     事件: std::sync::Arc<dyn EventSink>,
     下一个: AtomicU64,
+    /// 此刻有没有一个「问」正卡在 `recv_timeout` 上
+    ///
+    /// 唯一用途是**让测试确定性地等**「新问题已经开始等」。
+    /// 为什么必须要有：原来的测试靠 `sleep(10ms)` 猜，全量并行跑（8 个测试线程）时
+    /// 线程调度一延迟，「继续」就落在新问题清空缓冲之前被丢掉 → 新问题超时返回「跳过」，
+    /// 测试偶发红（2026-11-02 全量跑时撞到）。靠时间猜顺序的测试永远会 flaky。
+    等待中: std::sync::atomic::AtomicBool,
 }
 
 impl std::fmt::Debug for AskGate {
@@ -68,6 +75,7 @@ impl AskGate {
             超时,
             事件,
             下一个: AtomicU64::new(1),
+            等待中: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -86,7 +94,12 @@ impl AskGate {
         // 先清掉可能残留的旧答案（上一次超时后才到的答复，不能算这一次）
         if let Ok(收) = self.收.lock() {
             while 收.try_recv().is_ok() {}
-            return 收.recv_timeout(self.超时).unwrap_or(答案::跳过);
+            // ★ 只在**真要开始等**的这一刻置位，返回前复位。
+            //   测试靠它确定「新问题已经在等了」，不再用 sleep 猜顺序。
+            self.等待中.store(true, Ordering::SeqCst);
+            let 结果 = 收.recv_timeout(self.超时);
+            self.等待中.store(false, Ordering::SeqCst);
+            return 结果.unwrap_or(答案::跳过);
         }
         答案::跳过
     }
@@ -102,12 +115,27 @@ mod tests {
     use super::*;
     use crate::event::NullSink;
 
+    /// 等有一句「问」真的卡在等答案上（最多 2 秒）
+    ///
+    /// 不用 `sleep`：并行跑测试时线程调度延迟随时超过固定 sleep，
+    /// 那样答案会落在「清空残留」之前被丢掉，测试偶发红。
+    fn 等进入等待(gate: &AskGate) {
+        let 截止 = std::time::Instant::now() + Duration::from_secs(2);
+        while !gate.等待中.load(Ordering::SeqCst) {
+            assert!(
+                std::time::Instant::now() < 截止,
+                "2 秒内都没有「问」进入等待，实现或线程启动有问题"
+            );
+            std::thread::yield_now();
+        }
+    }
+
     #[test]
     fn 收到答案就返回它() {
         let gate = AskGate::new(std::sync::Arc::new(NullSink), Duration::from_millis(200));
         let g2 = gate.clone();
         let t = std::thread::spawn(move || g2.问("possible_zip_bomb", 100, 10));
-        std::thread::sleep(Duration::from_millis(30));
+        等进入等待(&gate);
         assert!(gate.回答(答案::继续));
         assert_eq!(t.join().unwrap(), 答案::继续);
     }
@@ -125,7 +153,7 @@ mod tests {
         gate.回答(答案::取消); // 迟到
         let g2 = gate.clone();
         let t = std::thread::spawn(move || g2.问("x", 1, 1));
-        std::thread::sleep(Duration::from_millis(10));
+        等进入等待(&gate);
         gate.回答(答案::继续);
         assert_eq!(t.join().unwrap(), 答案::继续, "迟到的 cancel 不能算到下一次");
     }

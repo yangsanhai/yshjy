@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100 倍",
   "settings.safety.ratio2000": "2000 倍",
   "settings.safety.ratioOff": "不检查（默认）",
-  "settings.safety.ratio1000": "1000 倍"
+  "settings.safety.ratio1000": "1000 倍",
+  "home.pasteEmpty": "剪贴板里没有路径 —— 先在文件管理器里复制一个文件或文件夹，再按 Ctrl+V",
+  "home.pasteNotFound": "剪贴板里这段不是一个能打开的文件或文件夹：{path}",
+  "home.pasteFailed": "读不了剪贴板：{reason}",
+  "keys.paste": "把剪贴板里的路径粘进来并识别",
+  "home.pasteHint": "已经把文件复制到剪贴板？按 Ctrl+V 直接粘进来"
 }

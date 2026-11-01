@@ -21,6 +21,7 @@ class EmptyDropView extends StatelessWidget {
     required this.dragging,
     required this.onPickFile,
     required this.onPickFolder,
+    required this.onPastePath,
   });
 
   /// 有文件正拖在窗口上方（拖放高亮）
@@ -31,6 +32,9 @@ class EmptyDropView extends StatelessWidget {
 
   /// 次入口：选文件夹（批量）
   final VoidCallback onPickFolder;
+
+  /// `Ctrl+V`：把剪贴板里的路径粘进来并自动识别（UI-SPEC §4b.6）
+  final VoidCallback onPastePath;
 
   @override
   Widget build(BuildContext context) {
@@ -98,13 +102,24 @@ class EmptyDropView extends StatelessWidget {
             t('home.anyFormatHint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
+          const SizedBox(height: 4),
+          // 键位就地提示（T11）：设置页有完整表格，但没人会为了找一个键跑去设置页。
+          // Ctrl+V 尤其藏 —— 用户从文件管理器复制完，第一反应就是按 Ctrl+V。
+          Text(
+            t('home.pasteHint'),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
         ],
       ),
     );
     // Enter = 本屏主操作（UI-SPEC §4b.6「Enter 确认」）。第一屏的主操作就是「选文件」，
     // 也就是上面那个唯一的主按钮 —— 键盘和鼠标走同一个回调，不另开一条路。
+    // Ctrl+V = 粘贴路径（同一节）：剪贴板里有路径时不该逼用户去点对话框。
     return KeyActionScope(
-      handlers: {KeyAction.primary: onPickFile},
+      handlers: {
+        KeyAction.primary: onPickFile,
+        KeyAction.pastePath: onPastePath,
+      },
       child: content,
     );
   }

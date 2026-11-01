@@ -11,6 +11,7 @@
 //    名单一写死用户在对话框里就看不到它 —— 而拖拽却能拖进来，同一个文件两种行为，最难解释。
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n.dart';
 
@@ -42,6 +43,12 @@ typedef PickFilesFn = Future<List<String>> Function();
 /// 「挑一个文件夹」的能力（同上）
 typedef PickFolderFn = Future<String?> Function();
 
+/// 「读剪贴板纯文本」的能力（注入口用；测试塞替身，不碰真实剪贴板）
+///
+/// 为什么要注入：`Clipboard.getData` 走平台通道，widget 测试里默认返回 null，
+/// 想验「粘进来之后走预览还是走队列」就必须能塞一段假文本进来。
+typedef ReadClipboardTextFn = Future<String?> Function();
+
 /// 系统对话框的默认实现：返回所选文件的路径
 Future<List<String>> pickFilesFromSystem() async {
   final group = XTypeGroup(label: t('home.archiveOrCover'));
@@ -51,3 +58,14 @@ Future<List<String>> pickFilesFromSystem() async {
 
 /// 系统对话框的默认实现：返回所选文件夹路径（取消 = null）
 Future<String?> pickFolderFromSystem() => getDirectoryPath();
+
+/// 剪贴板的默认实现：读纯文本（没有内容 → null）
+///
+/// 只读 `text/plain`：文件管理器「复制文件」在 Linux 上同时提供
+/// `text/uri-list` 和 `x-special/gnome-copied-files`，但**也**给纯文本路径 ——
+/// 三种都解析会造出三份真源，粘一次触发三次。纯文本是三家（GNOME/KDE/Windows）
+/// 都有的那个最小公倍数。
+Future<String?> readClipboardTextFromSystem() async {
+  final data = await Clipboard.getData(Clipboard.kTextPlain);
+  return data?.text;
+}

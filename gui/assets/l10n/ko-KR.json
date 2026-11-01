@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100배",
   "settings.safety.ratio2000": "2000배",
   "settings.safety.ratioOff": "검사 안 함(기본)",
-  "settings.safety.ratio1000": "1000배"
+  "settings.safety.ratio1000": "1000배",
+  "home.pasteEmpty": "클립보드에 경로가 없습니다 — 먼저 파일이나 폴더를 복사한 뒤 Ctrl+V를 누르세요",
+  "home.pasteNotFound": "클립보드의 내용이 열 수 있는 파일이나 폴더가 아닙니다: {path}",
+  "home.pasteFailed": "클립보드를 읽을 수 없습니다: {reason}",
+  "keys.paste": "클립보드의 경로를 붙여 넣고 인식합니다",
+  "home.pasteHint": "파일을 복사해 두셨나요? Ctrl+V를 누르면 경로가 붙여집니다"
 }

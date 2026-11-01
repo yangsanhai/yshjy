@@ -548,5 +548,10 @@
   "settings.safety.ratio100": "100 倍",
   "settings.safety.ratio2000": "2000 倍",
   "settings.safety.ratioOff": "チェックしない（既定）",
-  "settings.safety.ratio1000": "1000 倍"
+  "settings.safety.ratio1000": "1000 倍",
+  "home.pasteEmpty": "クリップボードにパスがありません —— 先にファイルかフォルダーをコピーしてから Ctrl+V を押してください",
+  "home.pasteNotFound": "クリップボードの中身は開けるファイル／フォルダーではありません：{path}",
+  "home.pasteFailed": "クリップボードを読めません：{reason}",
+  "keys.paste": "クリップボードのパスを貼り付けて読み取る",
+  "home.pasteHint": "ファイルをコピー済みですか？Ctrl+V でパスを貼り付けられます"
 }
