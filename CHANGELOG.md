@@ -2,6 +2,53 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · 2026-11-01（P2-1 版本号一条命令）
+
+**做了什么**：新增 `scripts/bump-version.py` —— 一条命令把版本号改齐，第二个用法 `--check`
+只核对不改（提交前 / 发版前跑，不一致退出码 1）。
+
+```bash
+python3 scripts/bump-version.py 0.9.48      # 改到 0.9.48
+python3 scripts/bump-version.py --check     # 核对（11 处全表 + AppStream 落后提醒）
+```
+
+它管 11 处 / 6 个文件：`Cargo.toml`、`ffi/Cargo.toml`、`gui/pubspec.yaml`、
+`README.md`（徽章 + 「现在就能用」标题）、`docs/PROTOCOL.md` 两处示例回包、
+两个 `Cargo.lock` 的本地包条目、`docs/yshjy.1` 的版本行。
+**不碰** `CHANGELOG.md` / `HANDOFF.md` / `docs/TODO.md`（历史记录，改了就是假账）
+和 `dist/`（已发布快照）。
+
+**★ 建这个工具当场挖出两个真问题（都不是我编的，是跑出来的）**：
+
+1. **`ffi/Cargo.lock` 停在 `0.9.29`** —— 落后 18 个版本。那个子 crate（C FFI 库）
+   平时不编译，谁也不看它的 lock，所以一直没人发现。
+2. **同一个 lock 还缺 29 个依赖**（`trash` / `chrono` / `cc` / `iana-time-zone` …）
+   —— 都是 0.9.29 之后引擎陆续加的。`cargo metadata --offline` 报
+   `failed to download android_system_properties v0.1.6`，说明这份 lock 早就跟引擎对不上了：
+   从 0.9.29 往后，这个 FFI 子 crate 用现有 lock 是编不过的。
+
+顺带记一笔：`data/io.github.yangsanhai.yshjy.metainfo.xml` 的 `<releases>` 最新只到
+`0.9.34`，落后 13 个版本 —— 这是 T9（门面）的活，`--check` 现在会提醒，但不算不同步。
+
+**踩的坑（写进脚本注释了）**：第一版把 README 正文那条正则写成 `（v([0-9.]+)）`，
+只按「长得像版本号」匹配 → 一次命中 **4 处**，把三条**历史里程碑**
+「解压层…（v0.1.0）」一起改成了当前版本，等于篡改版本历史（`git checkout -- README.md`
+恢复的）。规则已收紧成 `## ✅ 现在就能用（v…）` 这种**锚定语义前缀**的写法。
+凡是「长得像版本号」的串（里程碑 / 示例 / 历史）都必须靠前缀区分开。
+
+**两个设计约束**（都是踩出来的）：
+- **原子性**：所有文件先读进内存、全部替换成功才写盘。任何一处正则 0 命中就一个文件都不写，
+  绝不留「改了一半」的工作区。
+- **lock 按包名锚定，不按旧版本号替换**：lock 里的旧值可能落后很多（`ffi` 那份是 0.9.29），
+  拿当前版本当 old 去找会一处都匹配不上。改成「`name = "x"` 后面那行 version 无条件设成新版」。
+
+**验证**：`--check` 报 2 处不同步（就是 ffi lock）→ `bump 0.9.48` 改 11 处 →
+`--check` 全绿 0.9.48 → `bump 0.9.47` 改回 → `--check` 全绿 0.9.47。
+最终 `git diff` 只剩 `ffi/Cargo.lock` 两行真修复（README 零残留，证明「改→改回」不留手尾）。
+`cargo metadata --manifest-path ffi/Cargo.toml` 认可改后的 lock（报 `yshjy-ffi = 0.9.47`，不重写）。
+
+**下一批**：6b T15 覆盖率基线（`cargo llvm-cov`）。
+
 ## [0.9.47] · 2026-11-01（真机抓出来的：设置页「本机磁盘类型没探到」）
 
 **这是用户截图点出来的，不是我测出来的**：0.9.46 装完，设置页那块小字写
