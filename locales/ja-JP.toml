@@ -118,12 +118,15 @@ password_hint = "   パスワード：隣の「説明.txt」を見るか yshjy -
 select_hint = "   一部だけ展開：yshjy --select \"1,3\" \"{input}\""
 risky = " ⚠実行可能"
 unknown_size = "—"
+size_suspect = "サイズ異常"
+total_note_suspect = "   （合計に「宣言サイズ」が不正な項目が {count} 件含まれます — この数字は信用しないでください）"
 
 [preview.hint]
 volumes_merged = "{count} 個の分割ファイルを検出 —— 展開時に自動で結合します"
 nested_archive = "中にもう一つ圧縮ファイルが入っています（{inner}）"
 needs_password = "{count} 件がロックされています —— パスワードが必要です"
 looks_truncated = "この圧縮ファイルは未完了の可能性があります（末尾のデータ欠落）"
+declared_size_suspect = "{count} 件の項目が実現不可能な解凍サイズを宣言しています（壊れた／偽造されたアーカイブ）— 実際のサイズは解凍結果で確認してください"
 hidden_at = "圧縮ファイルはファイルの途中にあります（オフセット {offset}）。実際の位置で特定しました"
 more_candidates = "ℹ このファイルには別の書庫も入っています（オフセット {offset}）— そちらを見るには --candidate {offset}"
 rebuilt_index = "インデックスが壊れていたため、ヘッダーから一覧を再構築しました"

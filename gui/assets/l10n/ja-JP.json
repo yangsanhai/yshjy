@@ -486,6 +486,7 @@
   "home.pwForEncrypted": "解凍パスワード（このファイルには暗号化されたファイルが{n}個あります）",
   "home.contentsTitle": "圧縮ファイルの中身（{files}個のファイル · {size}）",
   "home.pickedCount": "{total}個中{picked}個を選択 · {size}",
+  "home.sizeSuspect": "サイズ異常",
   "home.startPickedCover": "{n}個を解凍 + カバー画像を抽出",
   "home.startPicked": "解凍を開始（{n}個のファイル）",
   "home.nFiles": "{n}個のファイル",

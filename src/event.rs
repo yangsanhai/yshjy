@@ -124,6 +124,8 @@ pub struct EntryView {
     pub modified: Option<i64>,
     /// 是否可执行/脚本（安全提醒：解出来别乱点）
     pub is_risky: bool,
+    /// **声明的解压尺寸不可信**（审计 A-6）：真时界面显示「尺寸异常」而不是假 GB
+    pub size_suspect: bool,
 }
 
 /// 预览提示码（外壳渲染成 UI-SPEC 里那几句「ℹ️ 检测到 2 个分卷，会自动合并」）
@@ -155,6 +157,14 @@ pub enum PreviewHint {
     RebuiltIndex,
     /// 封面视频本身坏了，但里面的文件还能解
     VideoUnplayable,
+    /// 有条目**声明了不可能成立**的解压尺寸（审计 A-6）
+    ///
+    /// 判据见 `layout::zip::声明尺寸可疑`：DEFLATE 的极限是 1032:1，
+    /// 724 B 的坏包声明「1.17 GB」就是这一类。**不是**「压得特别好」的误报。
+    DeclaredSizeSuspect {
+        /// 可疑条目数
+        count: u64,
+    },
 }
 
 /// 引擎事件
@@ -702,6 +712,7 @@ mod tests {
                 is_dir: false,
                 modified: None,
                 is_risky: false,
+                size_suspect: false,
             }],
             hints: vec![PreviewHint::VolumesMerged { count: 2 }],
         };

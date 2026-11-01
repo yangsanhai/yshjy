@@ -486,6 +486,7 @@
   "home.pwForEncrypted": "解壓密碼（這個包有 {n} 個檔案加密）",
   "home.contentsTitle": "壓縮檔內容（{files} 個檔案 · {size}）",
   "home.pickedCount": "已選 {picked} / {total} 個檔案 · {size}",
+  "home.sizeSuspect": "尺寸異常",
   "home.startPickedCover": "開始解壓 {n} 個 + 提取封面",
   "home.startPicked": "開始解壓（{n} 個檔案）",
   "home.nFiles": "{n} 個檔案",

@@ -486,6 +486,7 @@
   "home.pwForEncrypted": "압축 비밀번호 (이 압축 파일에 암호화된 파일이 {n}개 있어요)",
   "home.contentsTitle": "압축 파일 내용 (파일 {files}개 · {size})",
   "home.pickedCount": "{picked} / {total}개 선택됨 · {size}",
+  "home.sizeSuspect": "크기 이상",
   "home.startPickedCover": "{n}개 압축 풀기 + 표지 추출",
   "home.startPicked": "압축 풀기 (파일 {n}개)",
   "home.nFiles": "파일 {n}개",

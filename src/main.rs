@@ -947,6 +947,10 @@ fn 预览提示文案(h: &yshjy::event::PreviewHint) -> String {
         ),
         H::RebuiltIndex => t.t("preview.hint.rebuilt_index", &[]),
         H::VideoUnplayable => t.t("preview.hint.video_unplayable", &[]),
+        H::DeclaredSizeSuspect { count } => t.t(
+            "preview.hint.declared_size_suspect",
+            &[("count", &count.to_string())],
+        ),
     }
 }
 
@@ -992,7 +996,10 @@ fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
         for e in pv.entries.iter().take(40) {
             let lock = if e.encrypted { "🔒" } else { "  " };
             let icon = if e.is_dir { "📁" } else { "  " };
-            let size = if e.size > 0 {
+            // 审计 A-6：声明尺寸不可信时**绝不显示那个数字**（它是包自己写的）
+            let size = if e.size_suspect {
+                语.t("preview.size_suspect", &[])
+            } else if e.size > 0 {
                 人类可读(e.size)
             } else {
                 语.t("preview.unknown_size", &[])
@@ -1039,6 +1046,17 @@ fn 打印预览(t: &str, pv: &yshjy::preview::Preview, quiet: bool) {
             ]
         )
     );
+    // 审计 A-6：合计里混着"声明尺寸不可信"的条目时，明说别当真
+    let 尺寸可疑数 = pv.entries.iter().filter(|e| e.size_suspect).count();
+    if 尺寸可疑数 > 0 {
+        println!(
+            "{}",
+            语.t(
+                "preview.total_note_suspect",
+                &[("count", &尺寸可疑数.to_string())]
+            )
+        );
+    }
     if pv.encrypted_count > 0 {
         println!("{}", 语.t("preview.password_hint", &[("input", t)]));
     }
@@ -1066,7 +1084,10 @@ fn 打印预览表格(pv: &yshjy::preview::Preview) {
     ]);
 
     for e in pv.entries.iter().take(40) {
-        let size = if e.size > 0 {
+        // 审计 A-6：声明尺寸不可信 → 显示「尺寸异常」，不摆假 GB
+        let size = if e.size_suspect {
+            语.t("preview.size_suspect", &[])
+        } else if e.size > 0 {
             人类可读(e.size)
         } else {
             语.t("preview.unknown_size", &[])

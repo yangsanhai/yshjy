@@ -118,12 +118,15 @@ password_hint = "   비밀번호: 옆의 '설명.txt'를 보거나 yshjy -p \"�
 select_hint = "   일부만 풀기: yshjy --select \"1,3\" \"{input}\""
 risky = " ⚠실행 파일"
 unknown_size = "—"
+size_suspect = "크기 이상"
+total_note_suspect = "   (합계에 선언된 크기를 믿을 수 없는 항목 {count}개 포함 — 이 숫자는 믿지 마세요)"
 
 [preview.hint]
 volumes_merged = "분할 파일 {count}개를 찾았습니다 —— 압축을 풀 때 자동으로 합칩니다"
 nested_archive = "안에 압축 파일이 하나 더 들어 있습니다 ({inner})"
 needs_password = "{count}개가 잠겨 있습니다 —— 비밀번호가 필요합니다"
 looks_truncated = "이 압축 파일은 완전하지 않을 수 있습니다 (끝부분 데이터 누락)"
+declared_size_suspect = "{count}개 항목이 불가능한 압축 해제 크기를 선언했습니다 (손상되었거나 위조된 압축 파일) — 실제 크기는 압축 해제 결과로 확인하세요"
 hidden_at = "압축 파일이 파일 중간에 있습니다 (오프셋 {offset}); 실제 위치로 찾았습니다"
 more_candidates = "ℹ 이 파일에는 다른 압축 파일도 있습니다(오프셋 {offset}) — 그쪽을 보려면 --candidate {offset}"
 rebuilt_index = "인덱스가 손상되어 헤더에서 목록을 다시 만들었습니다"

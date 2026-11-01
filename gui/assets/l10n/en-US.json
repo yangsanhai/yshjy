@@ -491,6 +491,7 @@
   "home.pwForEncrypted": "Password (this archive has {n} encrypted files)",
   "home.contentsTitle": "Archive contents ({files} files · {size})",
   "home.pickedCount": "Selected {picked} / {total} files · {size}",
+  "home.sizeSuspect": "size?",
   "home.startPickedCover": "Extract {n} + cover",
   "home.startPicked": "Extract ({n} files)",
   "home.nFiles": "{n} files",

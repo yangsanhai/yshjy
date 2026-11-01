@@ -121,12 +121,15 @@ password_hint = "   解压码：看旁边的「说明.txt」，或 yshjy -p \"�
 select_hint = "   只解一部分：yshjy --select \"1,3\" \"{input}\""
 risky = " ⚠可执行"
 unknown_size = "—"
+size_suspect = "尺寸异常"
+total_note_suspect = "   （合计里含 {count} 个「声明的尺寸」不可信的条目 —— 别把这个数字当真）"
 
 [preview.hint]
 volumes_merged = "检测到 {count} 个分卷，解压时会自动拼起来"
 nested_archive = "里面还套了一层压缩包（{inner}）"
 needs_password = "其中 {count} 个带锁 —— 解压需要解压码"
 looks_truncated = "这个包可能没下完（尾部数据缺失）"
+declared_size_suspect = "有 {count} 个条目声明的解压尺寸不可能成立（坏包或伪造）—— 实际大小以解压结果为准"
 hidden_at = "包藏在文件中间（偏移 {offset}），已按真实位置定位"
 more_candidates = "ℹ 这个文件里还有另一处包（偏移 {offset}）—— 想看那一处就加 --candidate {offset}"
 rebuilt_index = "索引坏了，清单是按文件头重建的"

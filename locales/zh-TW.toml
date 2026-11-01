@@ -118,12 +118,15 @@ password_hint = "   密碼：看旁邊的「說明.txt」，或 yshjy -p \"密�
 select_hint = "   只解一部分：yshjy --select \"1,3\" \"{input}\""
 risky = " ⚠可執行"
 unknown_size = "—"
+size_suspect = "尺寸異常"
+total_note_suspect = "   （合計裡含 {count} 個「宣告的尺寸」不可信的項目 —— 別把這個數字當真）"
 
 [preview.hint]
 volumes_merged = "偵測到 {count} 個分卷，解壓縮時會自動拼起來"
 nested_archive = "裡面還套了一層壓縮檔（{inner}）"
 needs_password = "其中 {count} 個有鎖 —— 解壓縮需要密碼"
 looks_truncated = "這個壓縮檔可能沒下載完（尾端資料缺失）"
+declared_size_suspect = "有 {count} 個項目宣告的解壓尺寸不可能成立（壞檔或偽造）—— 實際大小以解壓結果為準"
 hidden_at = "壓縮檔藏在檔案中間（偏移 {offset}），已按真實位置定位"
 more_candidates = "ℹ 這個檔案裡還有另一處包（偏移 {offset}）—— 想看那一處就加 --candidate {offset}"
 rebuilt_index = "索引壞了，清單是依檔案標頭重建的"

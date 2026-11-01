@@ -486,6 +486,7 @@
   "home.pwForEncrypted": "Contraseña (este archivo tiene {n} archivos cifrados)",
   "home.contentsTitle": "Contenido del archivo ({files} archivos · {size})",
   "home.pickedCount": "Seleccionados {picked} / {total} archivos · {size}",
+  "home.sizeSuspect": "tamaño raro",
   "home.startPickedCover": "Extraer {n} + sacar la portada",
   "home.startPicked": "Extraer ({n} archivos)",
   "home.nFiles": "{n} archivos",
