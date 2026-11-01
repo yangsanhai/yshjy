@@ -248,7 +248,7 @@ ls tests/*.sh tests/*.py | wc -l ; ls tests/contract/golden | wc -l            #
 ```
 </details>
 
-**当前状态**：装机上是 **0.9.52**（2026-11-02 22:0x 装机，`dpkg -l yshjy` 报 `ii 0.9.52`、`yshjy --version` 报 0.9.52，都实测过）。0.9.51 = T20 全套（错误码 + `--force` + 设置页下拉 + 默认不检查）。
+**当前状态**：装机上是 **0.9.52**（2026-11-02 22:0x 装机，`dpkg -l yshjy` 报 `ii 0.9.52`、`yshjy --version` 报 0.9.52，都实测过）。0.9.51 = T20 全套（错误码 + `--force` + 设置页下拉 + 默认不检查）；**0.9.52 = 顺藤深挖的三个真 bug**（`max(1)` 把 0 变 1 / tar 家族漏传 packed_hint 导致闸全哑 / xz 单流丢码）+ `tests/t20_ratio.sh` 回归。
 **装机后五项实测（2026-11-01 17:2x，本轮）**：① `dpkg` = 0.9.50 / `--version` = 0.9.50 ✔
 ② 菜单 `MimeType` 认领 **14 种格式** ✔ ③ `bash tests/pick.sh /usr/bin/yshjy` **11 通过 / 0 失败** ✔
 ④ 用装机版真打包再解压：4 个文件（中文名 + 两层嵌套 + 512KB 随机二进制）**sha256 逐一致** ✔
