@@ -58,18 +58,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('设置页有「压缩比上限」下拉，四档齐全，默认 100 倍', (tester) async {
+  testWidgets('设置页有「压缩比上限」下拉，四档齐全，默认不检查', (tester) async {
     await pumpSettings(tester);
 
     expect(find.byKey(const ValueKey('ratio-select')), findsOneWidget,
         reason: '引擎有这道闸，界面却没有任何入口 —— 用户只能手改配置文件');
-    expect(find.text(t('settings.safety.ratio100')), findsOneWidget,
-        reason: '默认必须显示「100 倍（默认）」，和引擎默认值一致');
+    expect(find.text(t('settings.safety.ratioOff')), findsOneWidget,
+        reason: '默认必须是「不检查」—— 和 7-Zip / PeaZip 一致（2026-11-02 拍板）');
 
     // 展开看四档
     await tester.tap(find.byKey(const ValueKey('ratio-select')));
     await tester.pumpAndSettle();
-    for (final k in ['ratio100', 'ratio500', 'ratio2000', 'ratioOff']) {
+    for (final k in ['ratioOff', 'ratio100', 'ratio1000', 'ratio2000']) {
       expect(find.text(t('settings.safety.$k')), findsWidgets,
           reason: '$k 这一档没在下拉里');
     }
@@ -107,13 +107,13 @@ void main() {
         reason: '带引号会变成字符串，引擎静默当没写');
   });
 
-  testWidgets('配置里手写了 300 这种非档位值 → 夹到 500，且不崩', (tester) async {
+  testWidgets('配置里手写了 300 这种非档位值 → 夹到 1000，且不崩', (tester) async {
     // 用户手改配置是很常见的事；下拉里塞一个 items 里没有的值会直接 assert 崩
     File('${tmp.path}/config.toml').writeAsStringSync(
         '[safety]\nzip_bomb_ratio = 300\n');
     await pumpSettings(tester);
 
-    expect(find.text(t('settings.safety.ratio500')), findsOneWidget,
-        reason: '300 应该往上取到 500（用户想放宽，不该被塞回 100）');
+    expect(find.text(t('settings.safety.ratio1000')), findsOneWidget,
+        reason: '300 应该往上取到 1000（用户想设限，不该被塞回 100）');
   });
 }

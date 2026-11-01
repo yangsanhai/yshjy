@@ -544,9 +544,9 @@
   "keys.note": "キーは固定で変更できません。Tab でボタン間を移動できます。",
   "err.SAFETY_LIMIT": "展開後のサイズが安全上限を超えました（圧縮爆弾対策）—— ファイルは壊れていません",
   "settings.safety.ratio": "圧縮率の上限",
-  "settings.safety.ratioHint": "展開後のサイズが圧縮ファイルの何倍まで許すか。大きなログやディスクイメージは圧縮率が高く、解けない時はここを上げてください。",
-  "settings.safety.ratio100": "100 倍（既定）",
-  "settings.safety.ratio500": "500 倍",
+  "settings.safety.ratioHint": "展開後のサイズが圧縮ファイルの何倍まで許すか。既定はチェックなし（7-Zip や PeaZip と同じ）。圧縮爆弾が心配なときだけ設定してください。",
+  "settings.safety.ratio100": "100 倍",
   "settings.safety.ratio2000": "2000 倍",
-  "settings.safety.ratioOff": "制限なし"
+  "settings.safety.ratioOff": "チェックしない（既定）",
+  "settings.safety.ratio1000": "1000 倍"
 }

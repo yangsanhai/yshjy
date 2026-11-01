@@ -48,7 +48,13 @@ impl Default for Limits {
 
 /// 压缩比检查的起检门槛：本次任务写出 ≥ 64 MiB 之后才判比例。
 ///
-/// 小包的比例没有统计意义（见 [`ExtractBudget::record`] 里的实测例子）。
+/// 小包的比例没有统计意义（见 [`ExtractBudget::record`] 里的实测例子：
+/// `a.txt`(11 B) + `b.bin`(5000 相同字节) 整包 40 B，比例 125:1 纯属误报）。
+///
+/// ★ 2026-11-02：默认倍数改成 0（不检查，和 7-Zip / PeaZip 一致）之后，
+///   这个门槛只在**用户主动设了档位**时才起作用 —— 那时他明确要这道闸，
+///   64 MiB 起判是他能接受的粒度。别把门槛抬到 1 GiB：那会让「设了 100 倍」
+///   在几百 MB 的文件上完全失效，等于一个假开关（实测踩过）。
 pub const RATIO_CHECK_MIN_WRITTEN: u64 = 64 * 1024 * 1024;
 
 /// 磁盘空间的检查结论
@@ -455,7 +461,7 @@ mod tests {
         // 起检门槛之前不判比例：小样本的比值没有统计意义
         assert!(b.record(500).is_ok());
         assert!(b.record(600).is_ok());
-        // 过了 64 MiB 门槛，累计/压缩总量远超 10 倍 → 必须拦
+        // 过了起检门槛（RATIO_CHECK_MIN_WRITTEN），累计/压缩总量远超 10 倍 → 必须拦
         assert!(b.record(RATIO_CHECK_MIN_WRITTEN).is_err());
     }
 
@@ -548,8 +554,9 @@ mod tests {
     #[test]
     fn 压缩比超限报安全限额_不报数据损坏() {
         let mut b = 预算(100);
+        // 起判门槛 64 MiB，70 MiB 已经过线；70MiB / 95KB ≈ 772:1 > 100
         let e = b
-            .record(70 * 1024 * 1024) // 70MiB / 95KB ≈ 772:1 > 100
+            .record(70 * 1024 * 1024)
             .expect_err("70MiB 配 95KB 的包必然超 100:1");
         assert_eq!(
             e.code,

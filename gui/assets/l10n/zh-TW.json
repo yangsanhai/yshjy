@@ -544,9 +544,9 @@
   "keys.note": "鍵位固定，無法更改。按 Tab 可在按鈕之間移動。",
   "err.SAFETY_LIMIT": "解出來的體積超出安全上限（防壓縮炸彈）—— 檔案沒壞，是限額攔的",
   "settings.safety.ratio": "壓縮比上限",
-  "settings.safety.ratioHint": "解開後的體積最多能是壓縮包的幾倍，超過就攔下（防壓縮炸彈）。大日誌、磁碟映像這類壓縮率很高，解不開時先把這一項調大。",
-  "settings.safety.ratio100": "100 倍（預設）",
-  "settings.safety.ratio500": "500 倍",
+  "settings.safety.ratioHint": "解開後的體積最多能是壓縮包的幾倍，超過就攔下。預設不檢查 —— 和 7-Zip、PeaZip 這些工具一致；只有擔心別人塞壓縮炸彈時才需要設。",
+  "settings.safety.ratio100": "100 倍",
   "settings.safety.ratio2000": "2000 倍",
-  "settings.safety.ratioOff": "不限（不攔）"
+  "settings.safety.ratioOff": "不檢查（預設）",
+  "settings.safety.ratio1000": "1000 倍"
 }

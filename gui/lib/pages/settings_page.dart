@@ -52,12 +52,12 @@ class _SettingsPageState extends State<SettingsPage> {
   String _closeAction = Platform.isWindows ? 'exit' : 'tray';
   /// 并行任务数（T17-2）：三档 **1 / 2 / 4**，默认 1（设计口径：机械盘不该被打成碎片）
   int _jobs = 1;
-  /// 压缩比上限（T20）：解开后的体积最多是压缩包的几倍，超过就拦（防压缩炸弹）。
+  /// 压缩比上限（T20）：解开后的体积最多是压缩包的几倍，超过就拦。
   ///
-  /// 四档：100（默认）/ 500 / 2000 / 0（不限）。0 是引擎认可的「不检查」。
-  /// 为什么给用户改：大日志、CSV、稀疏磁盘镜像的压缩比轻松过百，
-  /// 默认 100 会把它们当炸弹拦下（以前还会报成「数据损坏」，见 T20）。
-  int _ratioLimit = 100;
+  /// **0 = 不检查，也是默认值**（2026-11-02 拍板）：参考项目 7-Zip / PeaZip /
+  /// Ark / libarchive 都没有这道闸，只有「解压前算磁盘空间」那一道。
+  /// 想更严的人可以自己选档位（100 / 1000 / 2000 倍）。
+  int _ratioLimit = 0;
   /// 解出可执行文件时提醒（T17-2）：默认开，与引擎 config.rs 的 `warn_executables` 默认一致
   bool _warnExec = true;
   /// 本机写入盘类型：`solid` / `rotational` / `unknown`（引擎 hello.disk 真探测来的）
@@ -137,16 +137,15 @@ class _SettingsPageState extends State<SettingsPage> {
     return 1;
   }
 
-  /// 把配置里的 `zip_bomb_ratio` 夹到四档（100 / 500 / 2000 / 0）。
+  /// 把配置里的 `zip_bomb_ratio` 夹到四档（0 / 100 / 1000 / 2000）。
   ///
-  /// 0 原样保留（引擎认它 = 不检查）。其余往上取整到最近的档：
-  /// 用户手写 300 说明他想放宽，给 500 而不是硬塞回 100 —— 那等于把他的设置抹掉。
+  /// 0 原样保留（= 不检查，默认）。其余往上取整到最近的档：
+  /// 用户手写 300 说明他想设限，给 1000 而不是塞回 100 —— 那等于把设置抹掉。
   static int _normalizeRatio(String? v) {
-    final n = int.tryParse((v ?? '').trim()) ?? 100;
-    if (n <= 0) return 0; // 0 / 负数都按「不限」
-    if (n > 2000) return 2000;
-    if (n > 500) return 2000;
-    if (n > 100) return 500;
+    final n = int.tryParse((v ?? '').trim()) ?? 0;
+    if (n <= 0) return 0; // 没写 / 0 / 负数 = 不检查
+    if (n > 1000) return 2000;
+    if (n > 100) return 1000;
     return 100;
   }
 
@@ -636,13 +635,13 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           items: [
             DropdownMenuItem(
+                value: '0', child: Text(t('settings.safety.ratioOff'))),
+            DropdownMenuItem(
                 value: '100', child: Text(t('settings.safety.ratio100'))),
             DropdownMenuItem(
-                value: '500', child: Text(t('settings.safety.ratio500'))),
+                value: '1000', child: Text(t('settings.safety.ratio1000'))),
             DropdownMenuItem(
                 value: '2000', child: Text(t('settings.safety.ratio2000'))),
-            DropdownMenuItem(
-                value: '0', child: Text(t('settings.safety.ratioOff'))),
           ],
           onChanged: (v) => setState(() => _ratioLimit = _normalizeRatio(v)),
         ),

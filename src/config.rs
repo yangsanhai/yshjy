@@ -201,7 +201,18 @@ pub struct Safety {
 impl Default for Safety {
     fn default() -> Self {
         Self {
-            zip_bomb_ratio: 100,
+            // **默认 0 = 不检查**（2026-11-02 用户拍板）。
+            //
+            // 依据：参考项目 7-Zip / PeaZip / Ark / libarchive **都没有**压缩比闸，
+            // 只有「解压前算磁盘空间够不够」这一道。用户原话：「其他没有的我们也不设定了」。
+            //
+            // 那这道闸为什么还留着代码：它防的是真压缩炸弹（GB 级全零数据把盘写满），
+            // 而磁盘预检在「清单读不出来 / 大小估不准」时是放行的 —— 那时候这道闸是
+            // 唯一的兜底。想开的人在设置页选档位即可（100 / 1000 / 2000 倍）。
+            //
+            // 以前默认 100，害得 100MB 全零文件的普通 zip（1028:1）被拦、
+            // 还误报成「数据损坏」—— 宁可不设，也不给用户一个会冤枉正常文件的默认值。
+            zip_bomb_ratio: 0,
             warn_executables: true,
             flush_movable: false,
         }
@@ -586,7 +597,8 @@ mod tests {
     fn 没有配置文件时全用默认值() {
         let cfg = Config::load_from(Path::new("/绝对不存在的路径/config.toml"));
         assert_eq!(cfg.general.jobs, 1);
-        assert_eq!(cfg.safety.zip_bomb_ratio, 100);
+        // 压缩比闸默认 0 = 不检查（2026-11-02 拍板，和 7-Zip / PeaZip 一致）
+        assert_eq!(cfg.safety.zip_bomb_ratio, 0);
         assert!(cfg.general.language.is_none());
         assert!(cfg.output_dir().is_none());
     }
