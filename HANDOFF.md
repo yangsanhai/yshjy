@@ -6,7 +6,10 @@
 > 已修：新码 `SafetyLimit` + 新条目态 `SafetyLimited` + `extract.rs` 补 `budget_hit`
 > （zip 路径原来漏了这行，上层永远看不到原因）+ `job.rs` 兜底分支 + 7 语言文案（540 键）。
 > `cargo test` 426→429，反向验证把码改回 `DataLost` 当场红。
-> **还欠两步**：② CLI 放行开关（`--force` 只管磁盘预检）③ 设置页「压缩比上限」入口。
+> **还欠一步**：③ 设置页「压缩比上限」入口（用户只能手改配置文件）。
+> `--force` 已扩成「跳过解压前的安全预检」（磁盘 + 压缩比），7 语言 help/man/补全已重生成；
+> ★顺带修了协议侧第二个 bug：`api.rs` 的 limits 原来写死 `Default`（= 上限 100），
+> 配置里调的 `zip_bomb_ratio` 对界面完全无效 —— 现在 extract/batch 两处都读配置。
 > 详见 TODO 的 T20 行与 CHANGELOG 的 `[未发布]` 一节。
 >
 > **2026-11-01 夜 · T9 截图做完了，但卡在「仓库没远程」**

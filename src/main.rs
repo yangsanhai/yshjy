@@ -1362,7 +1362,14 @@ fn do_extract(a: 解压参数) -> ExitCode {
         encoding,
         verify_only,
         limits: yshjy::safety::Limits {
-            max_ratio: cfg.safety.zip_bomb_ratio,
+            // ★ `--force` 的语义从「跳过磁盘空间预检」扩成「跳过解压前的安全预检」——
+            //   磁盘空间 + 压缩比，一个开关管一件事，不给用户堆一排近似选项。
+            //   0 = 这道闸不检查（`ExtractBudget::record` 里就按 0 判的）。
+            //
+            //   为什么必须给一条出路：默认上限 100:1，而大日志 / CSV / 稀疏镜像的
+            //   压缩比轻松过百（实测 100MB 全零文件 = 1028:1）。没有这条开关，
+            //   用户只能去手改 config.toml —— 命令行里压根没提示。
+            max_ratio: if force { 0 } else { cfg.safety.zip_bomb_ratio },
             warn_executables: cfg.safety.warn_executables,
             ..Default::default()
         },

@@ -51,7 +51,7 @@ OPCIONES HABITUALES:
   --no-smart-dir                  desactivar la «extracción inteligente»: por defecto, si hay una sola
                                   carpeta de primer nivel, se extrae directamente en el destino
   -q, --quiet                     mostrar solo el resultado (para scripts)
-  --force saltar la comprobación de espacio en disco (si no alcanza, se rechaza el inicio)
+  --force                          Omitir las comprobaciones previas (espacio en disco y tasa de compresión)
   --test  Solo verificación: decodifica y comprueba sin escribir nada (para saber si el paquete está bien)
   --lang <idioma>                 cambiar el idioma (p. ej. zh-CN, en, ja, ko, ru)
   --show-config ver la configuración actual (dónde está el archivo y qué valores)
