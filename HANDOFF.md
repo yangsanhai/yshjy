@@ -1,5 +1,29 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · 批 7d 完成：文件挑选可注入（批 7 四步全部做完）**
+>
+> - **做了什么**：新文件 `gui/lib/pages/home_pick.dart` —— `PickOutcome` 枚举 + 纯函数
+>   `pickOutcomeOf(paths)`（空 → 什么都不做 / 1 个 → 预览 / 多个 → 队列）+ 两个 typedef
+>   （`PickFilesFn` / `PickFolderFn`）+ 系统对话框默认实现 `pickFilesFromSystem` /
+>   `pickFolderFromSystem`。`HomePage` 新增 `pickFiles` / `pickFolder` 两个注入参数，
+>   `_pick` / `_pickFolder` 改成「取路径 → `switch (pickOutcomeOf(...))`」；
+>   扩展名白名单不设的理由（伪装包外壳可能是 .pdf/.mp3）搬进了 `home_pick.dart` 的文件头。
+> - **7 条测试**（`gui/test/pick_outcome_test.dart`）：纯函数 5 条（取消 / 单选 / 多选 / 两个也是多选 /
+>   中文空格路径）+ 页面注入 2 条（多选真的走 `scan` 且队列出现两条；取消**一条命令都不发**、界面留在空态）。
+> - **反向验证**：删掉 `if (paths.isEmpty) return PickOutcome.none;` → **2 条红**
+>   （纯函数第 1 条 + 页面「取消」那条），恢复后全绿。
+> - **当前状态**：`flutter analyze` 干净、`flutter test` **362 条**全过（355 + 7）、
+>   `home_page.dart` 1793 → **1776 行**、装机版仍 0.9.48。
+> - **批 7（动作方法重构）四步全部完成**：7a 接口注入 → 7b 解压参数 → 7c 预览状态 → 7d 文件挑选。
+>   累计新增 **25 条测试**（3 + 9 + 6 + 7），337 → **362**，`flutter analyze` 全程干净，每步都做过反向验证。
+>   **本批零行为变化**：老的行为测试（`verify_only_widget_test` / `preview_tree_widget_test` /
+>   `widget_test` 等）全绿就是证据；没有动界面、没发版。
+> - **下一步（等你定）**：
+>   - **A. 发 0.9.49**：这批是纯重构，但发版流程照旧（`bump-version` → `release.sh` → `build-deb.sh` →
+>     `test-packages.sh` → 装机），装完你点一遍更稳。
+>   - **B. 回 6e（T9 真截图）**：门面收尾，`screenshots/` 已有真机图，缺 README 引用 + metainfo 段。
+>   - **C. T19 协议层单测**（`src/api.rs` 8.4% 覆盖）：跟本批同源 —— 都是「缺一层测试」的账。
+
 > **2026-11-01 夜 · 批 7c 完成：预览状态映射纯函数化（`previewUiState`）**
 >
 > - **做了什么**：新文件 `gui/lib/pages/home_preview_state.dart` —— `PreviewUiState`（5 个字段）+
