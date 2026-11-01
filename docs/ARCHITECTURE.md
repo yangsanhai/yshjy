@@ -422,11 +422,21 @@ pub enum Error {
 | 6 | `_progressView` + `_flushView` | 115+60 | 17+5 | ✅ **已拆** → `home_progress_view.dart`（`ExtractProgressBar` / `ExtractStatusLines` / `ExtractActionRow` + 顶层纯函数 `etaText`）+ `home_flush_view.dart`（`FlushView`）。`_progressView` 主体 115 → 50 行（组装层）。★`etaText` 原来读 `_paused` / `_speed` 两个 State 字段，改成带参数的纯函数后才可单测 |
 | 7 | `_doneView`（单个文件的完成屏） | 164 | 12 | ✅ **已拆** → `pages/home_done_view.dart`（`DoneView`，10 个参数：`result` / `verifyMode` / `nestedArchives` / `notes` / `fileName` / `password` / `entryHint` + 3 回调）。★**别和第 2 块的 `BatchDoneView` 混淆**：那个是整批总账，这个是单文件的一张卡。10 条测试钉住三个真机踩过的坑（校验模式不能给「打开目录」、只勾封面时解出 0 个文件是正常的、嵌套包不自动解） |
 | 8 | `_errorView` + `_spaceShortageBlock` | 200+62 | 16+3 | ✅ **已拆** → `home_space_shortage.dart`（`spaceShortageBlock` + 纯函数 `spaceLine`）+ `home_error_view.dart`（`ErrorHead` / `ErrorPasswordRetry`）。失败页 200 → **75 行组装层**。★错误页点常用码是「填入+立刻重试」，预览页只是填入 —— 两处别混 |
-| 9 | `_scaffold` + `_body` + `_miniBtn` | 41+13+24 | — | ⬜ |
-| 10 | 纯函数区（`_kindName` / `_etaText` / `_shortPath` / `_spaceLine` / `_smartDirHint` / `_typeHint` / `_entryHint` / `_pickedBytes`） | ~200 | 0（纯函数） | ⬜ 最便宜，随时可做 |
+| 9 | `_scaffold` + `_body` | 41+13 | — | ✅ **只抽 AppBar** → `pages/home_app_bar.dart`（`HomeAppBar`）。★**`_scaffold` / `_body` 故意不抽**：它们是骨架 + 相位分派（`_body` 一个 switch 调八个视图方法），抽出去只能变成「传八个 Widget 参数」的搬运机 —— 判据看引用成员数，不看行数 |
+| 10 | 纯函数区（`_kindName` / `_shortPath` / `_typeHint` / `_entryHint`） | ~85 | 0（纯函数） | ✅ **已拆** → `pages/home_hints.dart`（`kindName` / `typeHint` / `entryHint` / `shortPath`）。★顺手修了 `shortPath` 只认 `/` 的 Windows bug（改 `[/\\]`），和 5a 面包屑那个是同一类 |
 
 > 顺序按「引用成员数从小到大」，不按行数 —— 耦合少的好拆、好验。`_previewView` 放中间，
 > 因为它需要先决定「哪些状态留在 State、哪些下沉」，是唯一需要设计的一块。
+
+**★ 本批结果（13/13 全部拆完）**：`home_page.dart` **3117 → 1790 行（-42.6%）**、
+测试 **213 → 337 条**、`flutter analyze` 干净。新文件 12 个（`pages/` 下 11 个 + `pages/home_hints.dart`）。
+
+**没拆的两处（故意的，不是漏了）**：
+- `_body()` 的相位分派（8 个分支调 8 个视图方法）—— 抽出去就是「传 8 个 Widget 参数」；
+- `_miniBtn` 之类已经被更早的块吃掉（5d-1 的 `MiniButton`），表格里不再重复列。
+
+**下一批的入口**：`_pick` / `_open` / `_extract` / `_scan` 这些**动作方法**还没动（它们改状态、
+调引擎、跳相位），属于「逻辑」而不是「视图」，拆它们要先把引擎客户端抽成可注入的接口。
 
 ### 已做的第 1 块留下的两条经验
 
