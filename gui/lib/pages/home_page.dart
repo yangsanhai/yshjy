@@ -15,45 +15,12 @@ import '../humanize.dart';
 import '../notify.dart';
 import '../platform_paths.dart';
 import '../l10n.dart';
+import '../format.dart';
+
+import 'home_queue_view.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
-
-/// 队列里的一行（S13 批量队列）
-class _QueueItem {
-  final String path;
-  final String name;
-  final int size;
-  final String kind;
-  final int volumes;
-  final bool archive;
-
-  /// S10 多候选：这个文件里像是有几处藏着东西
-  ///
-  /// 正常包永远只有一条（`chosen`）—— `length >= 2` 才值得给用户看选择界面。
-  final List<ArchiveCandidate> candidates;
-
-  /// pending / running / ok / partial / failed / cancelled
-  String status = 'pending';
-
-  /// 引擎给这一行的任务号（`JOB_STARTED` 里带回来）；还没开始跑就是 null
-  ///
-  /// D5 用：单独取消某一行时要把这个号发给引擎，引擎才能只跳这一条。
-  int? jobNo;
-
-  _QueueItem({
-    required this.path,
-    required this.name,
-    required this.size,
-    required this.kind,
-    required this.volumes,
-    required this.archive,
-    this.candidates = const [],
-  });
-
-  /// 是不是「一个文件里好几处都像藏着东西」
-  bool get hasManyCandidates => candidates.length >= 2;
-}
 
 class HomePage extends StatefulWidget {
   /// 启动时要直接打开的文件（右键菜单传进来的），可能为空
@@ -180,7 +147,7 @@ class _HomePageState extends State<HomePage> {
   bool _dragging = false;
 
   /// 队列（S13）与批量结果
-  final List<_QueueItem> _queue = [];
+  final List<QueueItem> _queue = [];
   List<String> _batchOrder = [];
 
   /// 用户在界面上单独取消掉的任务号（D5）——
@@ -559,7 +526,7 @@ class _HomePageState extends State<HomePage> {
   void _applyScanItems(List items) {
     for (final raw in items) {
       final i = (raw as Map).cast<String, dynamic>();
-      _queue.add(_QueueItem(
+      _queue.add(QueueItem(
         path: i['path'] as String? ?? '',
         name: i['name'] as String? ?? '',
         size: (i['size'] as num?)?.toInt() ?? 0,
@@ -1439,219 +1406,17 @@ class _HomePageState extends State<HomePage> {
 
   // ───────────────────────── 批量队列（S13）─────────────────────────
 
-  Widget _queueView() {
-    final cs = Theme.of(context).colorScheme;
-    final ready = _queue.where((q) => q.archive).length;
-    return Column(
-      key: const ValueKey('queue'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Text(t('home.foundArchives', {'n': '$ready'}),
-                style: Theme.of(context).textTheme.titleMedium),
-            if (_queue.length > ready)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(t('home.skippedUnrelated', {'n': '${_queue.length - ready}'}),
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-              ),
-            const Spacer(),
-            TextButton(onPressed: _resetQueue, child: Text(t('home.clear'))),
-          ],
-        ),
-        // D6：拖/选的是文件夹 → 明说会怎么处理，别让人猜
-        if (_foldersScanned > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 4),
-            child: Text(
-              t('home.dirHint'),
-              style: TextStyle(fontSize: 11, height: 1.5, color: cs.primary),
-            ),
-          ),
-        // P2 智能解压：规则在引擎里（Bandizip 三规则），但要让用户知道会发生什么
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            t('home.smartDirRule'),
-            style: TextStyle(fontSize: 11, height: 1.5, color: cs.onSurfaceVariant),
-          ),
-        ),
-        const SizedBox(height: 0),
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: ListView.separated(
-              itemCount: _queue.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final q = _queue[i];
-                return Focus(
-                  autofocus: i == 0,
-                  // Del / Backspace 移出队列（D4：以前只能整队清空）
-                  onKeyEvent: (node, event) {
-                    if (event is KeyDownEvent &&
-                        (event.logicalKey == LogicalKeyboardKey.delete ||
-                            event.logicalKey == LogicalKeyboardKey.backspace)) {
-                      setState(() => _queue.removeAt(i));
-                      return KeyEventResult.handled;
-                    }
-                    return KeyEventResult.ignored;
-                  },
-                  child: ListTile(
-                  dense: true,
-                  // 多候选那行会多出一句话，普通两行装不下
-                  isThreeLine: q.hasManyCandidates,
-                  leading: Icon(
-                    q.archive ? Icons.inventory_2_outlined : Icons.help_outline,
-                    size: 20,
-                    color: q.archive ? cs.primary : cs.onSurfaceVariant,
-                  ),
-                  title: Row(
-                    children: [
-                      Flexible(
-                        child: Text(q.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13)),
-                      ),
-                      if (q.volumes > 1) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: cs.secondaryContainer,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(t('home.volumeBadge', {'n': '${q.volumes}'}),
-                              style: TextStyle(
-                                  fontSize: 10, color: cs.onSecondaryContainer)),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        q.archive
-                            ? '${q.kind.toUpperCase()} · ${_size(q.size)}'
-                            : t('home.notArchive', {'size': _size(q.size)}),
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                      // S10 多候选：一个文件里好几处都像藏着东西
-                      //
-                      // 不列「第1处/第2处」让用户自己挑 —— 新手面对
-                      // 「从开头算 5.2 MB 处」根本无从判断。只给一句话 +
-                      // 一个「换个地方试」，程序替他挨个试。
-                      if (q.hasManyCandidates)
-                        Row(
-                          children: [
-                            Icon(Icons.travel_explore,
-                                size: 13, color: cs.primary),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                t('home.candidateCount', {'n': '${q.candidates.length}'}),
-                                style:
-                                    TextStyle(fontSize: 11, color: cs.primary),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => _tryOtherCandidates(i),
-                              style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6),
-                              ),
-                              child: Text(t('home.tryElsewhere'),
-                                  style: const TextStyle(fontSize: 11)),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // D5：只取消这一行（其余任务照跑，和「停掉整批」不是一回事）
-                      if (q.archive &&
-                          (q.status == 'pending' || q.status == 'running'))
-                        IconButton(
-                          icon: const Icon(Icons.block, size: 16),
-                          tooltip: q.status == 'running'
-                              ? t('home.cancelItemRest')
-                              : t('home.dontRunItem'),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => _cancelRow(i),
-                        ),
-                      _queueStatusChip(q),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        tooltip: t('home.removeFromQueue'),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => setState(() => _queue.removeAt(i)),
-                      ),
-                    ],
-                  ),
-                ),
-                );
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: ready == 0 ? null : _startQueue,
-          icon: const Icon(Icons.play_arrow),
-          label: Text(ready == 0 ? t('home.nothingToExtract') : t('home.startAll', {'n': '$ready'})),
-          style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14)),
-        ),
-      ],
-    );
-  }
+  Widget _queueView() => QueueView(
+        queue: _queue,
+        foldersScanned: _foldersScanned,
+        onReset: _resetQueue,
+        // Del / Backspace 与那个 × 按钮改的是同一份队列，走同一个回调
+        onRemove: (i) => setState(() => _queue.removeAt(i)),
+        onCancelRow: _cancelRow,
+        onTryOtherCandidates: _tryOtherCandidates,
+        onStartAll: _startQueue,
+      );
 
-  Widget _queueStatusChip(_QueueItem q) {
-    final cs = Theme.of(context).colorScheme;
-    final (text, color) = switch (q.status) {
-      'running' => (t('home.st.processing'), cs.primary),
-      'ok' => (t('home.st.done'), cs.primary),
-      'partial' => (t('home.st.partial'), Colors.orange),
-      'failed' => (t('home.st.failed'), cs.error),
-      'cancelled' => (t('home.st.cancelled'), cs.onSurfaceVariant),
-      _ => (t('home.st.waiting'), cs.onSurfaceVariant),
-    };
-    if (q.status == 'pending' && !q.archive) {
-      return Text(t('home.st.skipped'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant));
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (q.status == 'running')
-          const SizedBox(
-            width: 12, height: 12,
-            child: CircularProgressIndicator(strokeWidth: 1.5),
-          )
-        else
-          Icon(
-            switch (q.status) {
-              'ok' => Icons.check_circle_outline,
-              'partial' => Icons.warning_amber_outlined,
-              'failed' => Icons.error_outline,
-              'cancelled' => Icons.block,
-              _ => Icons.schedule,
-            },
-            size: 14,
-            color: color,
-          ),
-        const SizedBox(width: 4),
-        Text(text, style: TextStyle(fontSize: 11, color: color)),
-      ],
-    );
-  }
-
-  /// 批量完成卡（Sunpack 三段式：结果标题 / 量化副标题 / 直达按钮）
   Widget _batchDoneView() {
     final cs = Theme.of(context).colorScheme;
     final r = _batch!;
@@ -3101,13 +2866,7 @@ class _HomePageState extends State<HomePage> {
     return t('home.speedEta', {'speed': _size(_speed.round()), 'eta': eta});
   }
 
-  String _size(int bytes) {
-    const k = 1024;
-    if (bytes >= k * k * k) return '${(bytes / (k * k * k)).toStringAsFixed(2)} GB';
-    if (bytes >= k * k) return '${(bytes / (k * k)).toStringAsFixed(1)} MB';
-    if (bytes >= k) return '${(bytes / k).toStringAsFixed(0)} KB';
-    return '$bytes B';
-  }
+  String _size(int bytes) => formatBytes(bytes);
 
   String _shortPath(String p) {
     final parts = p.split('/').where((s) => s.isNotEmpty).toList();
