@@ -24,6 +24,7 @@ import 'home_queue_view.dart';
 import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
 import 'preview_parts.dart';
+import 'preview_password_box.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
@@ -1529,54 +1530,20 @@ class _HomePageState extends State<HomePage> {
         // 预览阶段就把「解压码」摆出来（2026-10-30 用户真机反馈）：
         // 以前加密包非得点「开始解压」、失败一次，才在错误页见到输入框；
         // 可引擎在预览里早就给了 encryptedCount + enc_kind，没理由不提前问。
-        if (pv.encryptedCount > 0) ...[
-          const SizedBox(height: 10),
-          TextField(
-            controller: _pwCtrl,
-            obscureText: !_showPw,
-            onChanged: (v) {
-              final t = v.trim();
-              // 不用 setState：这个字段不影响本帧画面
-              _password = t.isEmpty ? null : t;
-            },
-            decoration: InputDecoration(
-              labelText: t('home.pwForEncrypted', {'n': '${pv.encryptedCount}'}),
-              hintText: t('home.pwEmptyHint'),
-              isDense: true,
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.key, size: 18),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _showPw ? Icons.visibility_off : Icons.visibility,
-                  size: 18,
-                ),
-                tooltip: _showPw ? t('home.pwHide') : t('home.pwShow'),
-                onPressed: () => setState(() => _showPw = !_showPw),
-              ),
-            ),
-          ),
-          if (_recentPw.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final pw in _recentPw)
-                    ActionChip(
-                      avatar: const Icon(Icons.history, size: 14),
-                      label: Text(pw, style: const TextStyle(fontSize: 12)),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () {
-                        _pwCtrl.text = pw;
-                        _password = pw;
-                        setState(() {});
-                      },
-                    ),
-                ],
-              ),
-            ),
-        ],
+        // 显示与否由组件自己判断（encryptedCount <= 0 时它返回 SizedBox.shrink）。
+        const SizedBox(height: 10),
+        PreviewPasswordBox(
+          encryptedCount: pv.encryptedCount,
+          controller: _pwCtrl,
+          showPlain: _showPw,
+          recent: _recentPw,
+          onToggleShowPlain: () => setState(() => _showPw = !_showPw),
+          onChanged: (pw) => _password = pw,
+          onPickRecent: (pw) => setState(() {
+            _pwCtrl.text = pw;
+            _password = pw;
+          }),
+        ),
         if (_notes.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
