@@ -22,6 +22,7 @@ import 'home_busy_view.dart';
 import 'home_empty_view.dart';
 import 'home_queue_view.dart';
 import 'preview_crumb_bar.dart';
+import 'preview_file_list.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
@@ -1765,199 +1766,25 @@ class _HomePageState extends State<HomePage> {
         onCrumbTap: (path) => setState(() => _crumb = path),
       );
 
-  /// 文件清单卡片（树 / 平铺共用同一块卡片与滚动条，滚动位置不丢）
-  Widget _fileList(Preview pv) {
-    final List<EntryNode> rows;
-    if (_treeView && _tree.isNotEmpty) {
-      rows = flattenTree(_tree, expanded: _expanded, crumb: _crumb);
-    } else {
-      // 平铺：把条目包成「没有子项的单层节点」，勾选/图标/大小走同一套渲染，
-      // 免得两套渲染以后各自长歪（状态栏的「已选」也必须两边一致）
-      rows = [
-        for (final e in pv.entries)
-          EntryNode(
-            name: e.name,
-            path: e.path,
-            level: 0,
-            isDir: e.isDir,
-            index: e.index,
-            size: e.size,
-            packed: e.packed,
-            fileCount: e.isDir ? 0 : 1,
-            encryptedCount: e.encrypted ? 1 : 0,
-            modified: e.modified,
-            risky: e.risky,
-            encrypted: e.encrypted,
-            children: const [],
-          ),
-      ];
-    }
-    // 缩进基准：面包屑停在哪一层，那一层的子项就不缩进
-    final base = _treeView ? depthOfPath(_crumb) + 1 : 0;
-    // 窄窗口不挤「压缩后」那一列（76+72+图标 ≈ 200px，窗口窄了文件名就没地方了）
-    final wide = MediaQuery.of(context).size.width >= 720;
-    // 列标题：PeaZip 有表头，两个数字光秃秃并排会看不懂哪个是「压缩后」
-    final hdr = TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 14, bottom: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              SizedBox(
-                width: 76,
-                child: Text(t('home.colSize'), textAlign: TextAlign.right, style: hdr),
-              ),
-              if (wide)
-                SizedBox(
-                  width: 72,
-                  child: Text(t('home.colCompressed'), textAlign: TextAlign.right, style: hdr),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            // 常显滚动条：列表比视口长时必须看得出来能滚（用户报过「滚轮没反应」，
-            // 至少要有能拖的条；Flutter 在 Linux 桌面默认不画滚动条）
-            child: Scrollbar(
-              controller: _listCtrl,
-              thumbVisibility: true,
-              child: ListView.separated(
-                controller: _listCtrl,
-                itemCount: rows.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final n = rows[i];
-                  final indent = (_treeView && n.level > base) ? n.level - base : 0;
-                  return _entryRow(n, indent: indent, tree: _treeView, wide: wide);
-                },
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 一行：三态复选框 + 图标 + 名字（+目录的文件数）+ 加密/风险 + 大小 + 压缩后
-  Widget _entryRow(
-    EntryNode n, {
-    required int indent,
-    required bool tree,
-    required bool wide,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final st = pickStateOf(n, _picked);
-    final hasFiles = n.fileCount > 0; // 空目录没有可勾的东西
-    final expanded = _expanded.contains(n.path);
-    final sizeText = (!n.isDir || hasFiles) ? _size(n.size) : '';
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.only(left: 6.0 + indent * 18.0, right: 12),
-      // 目录：点一行 = 展开/收起；文件：点一行 = 勾上/取消
-      onTap: n.isDir
-          ? (tree
-              ? () => setState(() {
-                    if (expanded) {
-                      _expanded.remove(n.path);
-                    } else {
-                      _expanded.add(n.path);
-                    }
-                  })
-              : null)
-          : () => setState(() => applyPick(n, _picked, st != PickState.all)),
-      leading: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 30,
-            child: hasFiles
-                ? Checkbox(
-                    tristate: n.isDir,
-                    value: n.isDir
-                        ? (st == PickState.all
-                            ? true
-                            : (st == PickState.some ? null : false))
-                        : (st == PickState.all),
-                    // 点一下：没全选就整棵选中，已经全选就整棵取消
-                    // （目录半选也走这里 —— 半选时点一下的直觉是「全选」）
-                    onChanged: (_) =>
-                        setState(() => applyPick(n, _picked, st != PickState.all)),
-                  )
-                : null,
-          ),
-          Icon(
-            n.isDir
-                ? (tree && expanded ? Icons.folder_open : Icons.folder_outlined)
-                : Icons.insert_drive_file_outlined,
-            size: 20,
-            color: n.isDir ? cs.primary : cs.onSurfaceVariant,
-          ),
-        ],
-      ),
-      title: Text(
-        tree ? n.name : n.path,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: n.isDir ? FontWeight.w500 : FontWeight.normal,
-        ),
-      ),
-      // 目录带一行「N 个文件」；窄窗口省掉（把高度让给列表）
-      subtitle: (tree && n.isDir && wide)
-          ? Text(
-              n.isEmptyDir ? t('home.emptyDir') : t('home.nFiles', {'n': '${n.fileCount}'}),
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-            )
-          : null,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 目录行的「只看这一层」入口：点它 = 面包屑下钻到该目录
-          // （点目录名是展开/收起；要「进去」得有个明确入口，否则面包屑只能回不能进）
-          if (tree && n.isDir && !n.isEmptyDir)
-            SizedBox(
-              width: 30,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                tooltip: t('home.onlyThisLevel'),
-                icon: const Icon(Icons.subdirectory_arrow_right, size: 16),
-                onPressed: () => setState(() => _crumb = n.path),
-              ),
-            ),
-          if (n.encrypted) const Icon(Icons.lock, size: 15),
-          if (n.risky)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(Icons.warning_amber_rounded, size: 16),
-            ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 76,
-            child: Text(
-              sizeText,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          // 压缩后大小（PeaZip 默认列，调研 07:632）：一眼看出哪个文件「压不动」
-          if (wide)
-            SizedBox(
-              width: 72,
-              child: Text(
-                (!n.isDir && n.packed != null) ? _size(n.packed!) : '',
-                textAlign: TextAlign.right,
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _fileList(Preview pv) => FileListView(
+        preview: pv,
+        treeView: _treeView,
+        tree: _tree,
+        expanded: _expanded,
+        crumb: _crumb,
+        picked: _picked,
+        scrollController: _listCtrl,
+        onToggleExpand: (path) => setState(() {
+          if (_expanded.contains(path)) {
+            _expanded.remove(path);
+          } else {
+            _expanded.add(path);
+          }
+        }),
+        onTogglePick: (n) => setState(
+            () => applyPick(n, _picked, pickStateOf(n, _picked) != PickState.all)),
+        onDrill: (path) => setState(() => _crumb = path),
+      );
 
   Widget _progressView() {
     // 检验落盘阶段单独一屏：这里最要紧的一句话是「请勿拔出设备」
