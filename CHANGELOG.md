@@ -81,7 +81,52 @@ python3 scripts/cov_by_file.py /tmp/cov.txt --min-lines 30
 活教材：0.9.47 那个「界面把 `jobs` 写成字符串 → 引擎静默退回默认 1 → 假开关」，
 正是缺这层单元边界测试的后果（当时靠人肉真机才发现）。
 
-**下一批**：6c P2-5 拆 `home_page.dart`（3117 行，纯搬移，210 条 `flutter test` 兜底）。
+---
+
+### 同批：拆 `home_page.dart` 第 1 块 —— 队列视图抽成独立 `QueueView`
+
+**做了什么**：`home_page.dart` **3117 → 2876 行**（减 241）。新增两个文件：
+
+| 文件 | 内容 |
+|---|---|
+| `gui/lib/pages/home_queue_view.dart` | `QueueItem`（原 `_QueueItem` 公开化）+ `QueueView`（原 `_queueView`）+ `_QueueStatusChip` |
+| `gui/lib/format.dart` | `formatBytes` —— 原来首页 / 打包页 / 历史页各写一份，这次只把首页那份接过来（另两处**故意不动**，免得一次改三处、出问题分不清） |
+
+搬移是**纯搬移**：只把对 State 的直连（`_queue` / `_foldersScanned` / `setState(…removeAt…)`）换成
+构造参数与回调，逻辑一字不改。搬完 **213 条原有测试全绿**，证明行为零变化。
+
+**键盘（T11 的第一笔）**：Enter / Ctrl+E 开始解压、Del 移出当前行、↑↓ 在行间移动焦点。
+
+**★ 键位不是自己拍的**（这条是被用户当场问出来的）：
+- **Enter** 来自项目自己的 `docs/UI-SPEC.md` §4b.6「Enter 确认」+ §七「无障碍与细节」；
+- **Ctrl+E** 对齐 PeaZip —— `refs/外部-归档软件/PeaZip/peazip-sources/res/share/lang/en.txt:1414`
+  原文 `keyboard shortcuts: Ctrl+E (or F12) extracts the entire archive`。
+
+第一版我拍的是 `Ctrl+Enter`，用户问「别的参考项目怎么做的你看过没有」之后才去查，**改成了 Enter + Ctrl+E**。
+教训：加任何快捷键前，先查 `UI-SPEC §4b.6` 和 `REFERENCE-INDEX.md` 的「键盘快捷键」行。
+
+**★ 方案也是被参考项目纠正的**：我原先判断「业界也就这样，RustDesk 自己都有 3376 行的文件，不拆也行」——
+只看了行数。实际查下去：
+
+| 项目 | 最大页面文件 | 里面几个类 | 最大单个类 |
+|---|---|---|---|
+| RustDesk `desktop_setting_page.dart` | 3376 行 | **26 个** | 759 行 |
+| LocalSend（非 `gen/` 生成代码） | 851 行 | 一个小部件一个文件 | 851 行 |
+| 本项目（改之前） | 3117 行 | **4 个** | **2976 行** |
+
+差距在**「一个类独占多少行」**，不在文件行数。所以改成「每块抽成一个独立 widget 类，目标 300–800 行」，
+与 RustDesk 的实际做法对齐。完整规范与剩余 9 块清单写进 `docs/ARCHITECTURE.md`「GUI 文件组织规范」。
+
+**`part` 为什么不用**：实测（拆 6 行 + 类闭合到另一个文件）→ **309 个 analyzer 错误**，
+Dart 不允许类的花括号跨文件。`part` 只能放顶层内容 —— LocalSend 也是这么用的
+（`app/lib/pages/about/packagers.dart` 里是 `const _packagers = {...}` 顶层数据）。
+
+**验证**：`flutter test` **219 条全过**（213 原有 + 6 新增）、`flutter analyze` 干净。
+**反向验证两次**：① 把 `isControlPressed` 换成 `isShiftPressed` → 键位测试变红；
+② 把 `isEnter || isCtrlE` 改成 `&&` → 两条键位测试同时变红（`Expected: length 1 / Actual: []`）。
+两次都改回并复跑全绿，`grep` 自检无 `isShiftPressed` / `isEnter && isCtrlE` 残留。
+
+**下一批**：6c 第 2 块 `_batchDoneView`（批量完成卡，92 行）；剩余清单见 `docs/ARCHITECTURE.md`。
 
 ## [0.9.47] · 2026-11-01（真机抓出来的：设置页「本机磁盘类型没探到」）
 

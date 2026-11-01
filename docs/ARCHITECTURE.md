@@ -368,3 +368,66 @@ pub enum Error {
 换来的是"前后端各自升级"的自由度 —— 这正是用户明确要的。
 
 契约细节见 `docs/PROTOCOL.md`；界面实现见 `gui/`。
+
+---
+
+## GUI 文件组织规范（2026-11-01 定，按块拆分）
+
+### 问题
+
+`gui/lib/pages/home_page.dart` 原本 **3117 行**，其中 **2976 行是同一个类** `_HomePageState`。
+改一处界面行为要在三千行里翻，而且字段、方法、UI 全耦合在一起。
+
+### 参照：业界怎么组织 Flutter 桌面界面（实测，不是印象）
+
+| 项目 | 最大页面文件 | 里面几个类 | 最大单个类 | 小部件放哪 |
+|---|---|---|---|---|
+| RustDesk（`flutter/lib/desktop/pages/desktop_setting_page.dart`） | 3376 行 | **26 个** | 759 行（`_SafetyState`） | `desktop/widgets/` |
+| LocalSend（`app/lib`，排除 `gen/` 生成代码） | 851 行 | 一个小部件一个文件 | 851 行 | `widget/`（20+ 个独立文件） |
+| **本项目（改之前）** | 3117 行 | **4 个** | **2976 行** | 全部塞在 State 里 |
+
+**结论**：差距不在「文件多少行」，在**「一个类独占多少行」**。RustDesk 那个 3376 行的设置页里，
+每个设置分组是一个独立 `StatefulWidget`（`_General` 600 行 / `_Safety` 759 行 / `_Display` 266 行 /
+`_Account` 85 行），壳本身只有 280 行。我们相当于把人家 5 个类塞成了一个。
+
+出处（补功能前先看这里）：
+- `refs/upstream/rustdesk/flutter/lib/desktop/pages/desktop_setting_page.dart:399-2344`
+- `refs/外部-归档软件/LocalSend/app/lib/widget/`（`big_button.dart` / `custom_progress_bar.dart` / `list_tile/`）
+
+### 规范（后续所有界面改动照这个走）
+
+1. **一个视图块 = 一个独立 widget 类**，目标体积 **300–800 行**（对齐 RustDesk 的实际值）。
+2. **只收它真正需要的**：构造参数 + 回调，不传整个 State。对照：`_previewView` 引用了 38 个不同成员，
+   这是下一块要解决的问题；`_queueView` 只用了 7 个，所以先拆它。
+3. **小部件进 `gui/lib/util/` 或独立文件**（如 `format.dart`），不重复实现 ——
+   `formatBytes` 原来在首页 / 打包页 / 历史页各写一份，现在首页那份已接到 `format.dart`。
+4. **不用 `part` 拆类**：实测（2026-11-01）Dart 的 analyzer **不允许类的花括号跨文件**
+   （试拆 `_shortPath` + 类闭合 → 309 个错误），`part` 只能放**顶层**内容
+   （LocalSend 也是这么用的：`pages/about/packagers.dart` 里是 `const _packagers = {...}` 顶层数据）。
+5. **每块独立提交、独立回滚**，验收 = `flutter analyze` 干净 + `flutter test` 全绿 +
+   **反向验证一次**（把功能改坏看测试是否变红）+ 用户真机点一遍。
+
+### 进度（20 块）
+
+| # | 块 | 原行数 | 引用成员数 | 状态 |
+|---|---|---|---|---|
+| 1 | `_queueView` + `_queueStatusChip` | 213 | 7 | ✅ **已拆** → `pages/home_queue_view.dart`（`QueueItem` / `QueueView` / `_QueueStatusChip`），键盘 Enter / Ctrl+E / Del / ↑↓ |
+| 2 | `_batchDoneView`（批量完成卡） | 92 | — | ⬜ 下一块 |
+| 3 | `_emptyView`（拖放区） | 62 | — | ⬜ |
+| 4 | `_busyView` | 13 | — | ⬜ |
+| 5 | `_previewView` + `_crumbBar` + `_fileList` + `_entryRow`（预览树，一块） | 314+40+78+116 | **38** | ⬜ 最难，要先把 38 个引用拆成「必要参数 / 可下沉到 controller」 |
+| 6 | `_progressView` + `_flushView` | 121+65 | — | ⬜ |
+| 7 | `_doneView`（完成卡） | 169 | — | ⬜ |
+| 8 | `_errorView` + `_spaceShortageBlock` | 204+71 | 25 | ⬜ |
+| 9 | `_scaffold` + `_body` + `_miniBtn` | 41+13+24 | — | ⬜ |
+| 10 | 纯函数区（`_kindName` / `_etaText` / `_shortPath` / `_spaceLine` / `_smartDirHint` / `_typeHint` / `_entryHint` / `_pickedBytes`） | ~200 | 0（纯函数） | ⬜ 最便宜，随时可做 |
+
+> 顺序按「引用成员数从小到大」，不按行数 —— 耦合少的好拆、好验。`_previewView` 放中间，
+> 因为它需要先决定「哪些状态留在 State、哪些下沉」，是唯一需要设计的一块。
+
+### 已做的第 1 块留下的两条经验
+
+- **抽出独立 widget 最大的好处是可测性**：`QueueView` 只依赖「一个列表 + 六个回调」，
+  测试里构造假队列 + 计数回调就能验键盘，**不用起假引擎、不碰文件 I/O**，也不会在假时钟里留 pending Timer。
+- **键位不要自己拍**：Enter 来自 `docs/UI-SPEC.md` §4b.6「Enter 确认」；`Ctrl+E` 对齐 PeaZip
+  （`refs/外部-归档软件/PeaZip/peazip-sources/res/share/lang/en.txt:1414`）。加任何新快捷键前先查这两处。
