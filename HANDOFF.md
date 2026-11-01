@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **9 / 13 块**（队列 / 批量完成卡 / 拖放区 / 等待页 / 面包屑 / 文件清单 / 三个纯零件 / 预览主体四段 / 解压进行屏；`home_page.dart` 2245 行，装机版仍 0.9.47）**
+> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **10 / 13 块**（队列 / 批量完成卡 / 拖放区 / 等待页 / 面包屑 / 文件清单 / 三个纯零件 / 预览主体四段 / 解压进行屏 / 单文件完成屏；`home_page.dart` 2100 行，装机版仍 0.9.47）**
 >
 > - **做了什么**：`home_page.dart` **3117 → 2876 行**。队列视图抽成独立文件
 >   `gui/lib/pages/home_queue_view.dart`（`QueueItem` + `QueueView` + `_QueueStatusChip`，212 行）；
@@ -55,13 +55,16 @@
 >   只切 2 行、方法体留在原地，报一串 `Undefined name 'onTap'`。已写进技能 `flutter-linux-desktop-gui`。
 > - **★ 另一个坑：块末尾的分隔 `SizedBox` 容易被一起吃进去**（B 段就丢了 12px 间距，测试抓不到，
 >   靠核对「被删范围末行」才发现）。切 build 片段时终点要取在下一个 `SizedBox` **之前**。
-> - **当前状态**：`flutter test` **293 条**全过、`flutter analyze` 干净、`home_page.dart` **2245 行**
->   （起点 3117，已减 28%）、装机版仍 0.9.47（本批未发版）。
-> - **第 6 块也做完了**：`_flushView` → `home_flush_view.dart`（6A）；`_progressView` 拆三段 →
->   `home_progress_view.dart`（6B，`ExtractProgressBar` / `ExtractStatusLines` / `ExtractActionRow`），
->   `_etaText` 变顶层纯函数 `etaText(p, paused:, speed:)`。进行屏 115 → 50 行组装层。
-> - **下一块（7）**：`_doneView` 完成卡（169 行）—— 注意**批量完成卡已经抽过了**（第 2 块
->   `home_batch_done_view.dart`），这里是**单个文件**的完成屏，别搞混。
+> - **当前状态**：`flutter test` **303 条**全过、`flutter analyze` 干净、`home_page.dart` **2100 行**
+>   （起点 3117，已减 33%）、装机版仍 0.9.47（本批未发版）。
+> - **★ 跑全量的正确命令（我忘过两次）**：
+>   `rm -rf /tmp/yshjy-test-config && mkdir -p /tmp/yshjy-test-config && XDG_CONFIG_HOME=/tmp/yshjy-test-config flutter test`
+>   —— `settings_perf_widget_test` 会真写 `config.toml`，直接 `flutter test` 时多个测试进程抢真实
+>   `~/.config/yshjy/`，会偶发红（`配置写 jobs = 4 → 下拉显示 4`），单跑又绿。别图省事。
+> - **第 7 块也做完了**：`_doneView`（单个文件的完成屏）→ `home_done_view.dart`（`DoneView`，10 个参数）。
+>   ★它和第 2 块的 `BatchDoneView` **不是一回事**（那个是整批总账）。三条测试对应真机坑：校验模式
+>   不能给「打开目录」（dest 是回显路径、目录没建）、只勾封面时解出 0 个文件是正常的、嵌套包不自动解。
+> - **下一块（8）**：`_errorView` + `_spaceShortageBlock`（204 + 71 行 / 25 引用）—— **这批最后一块硬骨头**。
 > - **✅ 真机验收（2026-11-01 15:30，release 编到 15:26）**：用户原话「**看完了没问题**」——
 >   普通包（02-几个文件.zip）的摘要行 / 勾选卡只有内容一行 / 面包屑显包名、加密包（05-带密码.zip，
 >   密码 123456）的密码框与眼睛图标、以及勾选卡与下方那行的 12px 间距，全部正常。

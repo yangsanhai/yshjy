@@ -420,7 +420,7 @@ pub enum Error {
 | 5d-1 | `_miniBtn` + `_pickedBytes` + `_smartDirHint`（纯零件） | 19+8+11 | 3 | ✅ **已拆** → `pages/preview_parts.dart`（`MiniButton` / `pickedBytes` / `smartDirHint`）。★两个纯函数从「必须有整页才能测」变成 10 条单测就能钉死 |
 | 5d-2 | `_previewView` 主体 | 325 | 26 | ✅ **已拆 4 段** → `preview_password_box.dart`（A 密码区）/ `preview_pick_card.dart`（B 勾选卡）/ `preview_header.dart`（C 备注 + D 摘要）。主体 **340 → 236 行**，剩下是组装层 + 多候选提示 / 智能解压预告 / 工具行 / 底部按钮。★「25 个参数」不用解决 —— 那是把整块当一个单位才有的问题，分段后自然消失 |
 | 6 | `_progressView` + `_flushView` | 115+60 | 17+5 | ✅ **已拆** → `home_progress_view.dart`（`ExtractProgressBar` / `ExtractStatusLines` / `ExtractActionRow` + 顶层纯函数 `etaText`）+ `home_flush_view.dart`（`FlushView`）。`_progressView` 主体 115 → 50 行（组装层）。★`etaText` 原来读 `_paused` / `_speed` 两个 State 字段，改成带参数的纯函数后才可单测 |
-| 7 | `_doneView`（完成卡） | 169 | — | ⬜ |
+| 7 | `_doneView`（单个文件的完成屏） | 164 | 12 | ✅ **已拆** → `pages/home_done_view.dart`（`DoneView`，10 个参数：`result` / `verifyMode` / `nestedArchives` / `notes` / `fileName` / `password` / `entryHint` + 3 回调）。★**别和第 2 块的 `BatchDoneView` 混淆**：那个是整批总账，这个是单文件的一张卡。10 条测试钉住三个真机踩过的坑（校验模式不能给「打开目录」、只勾封面时解出 0 个文件是正常的、嵌套包不自动解） |
 | 8 | `_errorView` + `_spaceShortageBlock` | 204+71 | 25 | ⬜ |
 | 9 | `_scaffold` + `_body` + `_miniBtn` | 41+13+24 | — | ⬜ |
 | 10 | 纯函数区（`_kindName` / `_etaText` / `_shortPath` / `_spaceLine` / `_smartDirHint` / `_typeHint` / `_entryHint` / `_pickedBytes`） | ~200 | 0（纯函数） | ⬜ 最便宜，随时可做 |
