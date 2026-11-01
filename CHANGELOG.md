@@ -2,6 +2,37 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.52] · 2026-11-02 —— 修三个「只在真跑时才暴露」的限额问题
+
+### T20 深挖：三处「只在真跑时才暴露」的问题
+
+按「顺藤查同类」把每条解压路径都真跑了一遍，又抓到三个 —— 每一个都能让
+「安全限额」这道闸变成假开关或误报源：
+
+**① 设置页选「不检查」会变成「1 倍上限」（最严重）**
+`config.rs` 解析 `zip_bomb_ratio` 写的是 `x.max(1)`，把 0 硬改成 1。
+所以用户在设置页选「不检查」保存、重开应用，实际生效的是「1 倍」——
+**任何解压体积大于压缩包的正常文件都会被拦，等于什么都解不开**。
+实测：配置写 `zip_bomb_ratio = 0`，100MB 零包照样报 `SafetyLimit`。改成 `x.max(0)`，
+新增 2 条回归（写 0 原样保留 / 负数按 0 处理）。
+
+**② tar.gz / tar.xz / tar.zst 的压缩比闸整条是哑的**
+`job.rs` 的 `if *is_tar` 分支**漏了 `uopts.packed_hint = *packed`**（只有 else 分支设了），
+于是 `packed_total` 恒为 0 → `safety.rs` 里 `packed_total > 0` 这个前置条件永远不成立。
+实测：100MB 全零文件打成 tar.xz（压缩后 15KB，6600:1），配 100 倍**照样解开**。
+
+**③ 纯 .xz 命中限额时报成「xz 解压失败」**
+xz 走 `std::io::Write`，签名只能是 `io::Result`，我们的错误码被压成 `io::Error`
+→ 归成 `NotArchive`，用户又以为包坏了（和 T20 开头一模一样的毛病）。给
+`BudgetWriter` 加 `budget_hit` 标记，调用方据此还原成 `SafetyLimit`。
+
+**新增回归脚本 `tests/t20_ratio.sh`**：三条路径（zip / 纯 xz / tar.xz）各验
+「设 100 倍必须报 SAFETY_LIMIT」+「默认必须解开」，**6 项全绿**。
+为什么必须是脚本而不是单测：单测只覆盖 `ExtractBudget` 本身，抓不到
+「调用方没把数传对」这类错 —— 上面这三处全是这种。
+
+`cargo test` 429 → **431**；反向验证：把 `x.max(0)` 改回 `max(1)` → 测试当场红。
+
 ## [0.9.51] · 2026-11-02 —— 安全限额不再误报「数据损坏」
 
 ### ★ 修掉一个会冤枉正常文件的 bug：安全限额 ≠ 数据损坏
@@ -94,35 +125,6 @@ libarchive 都没有压缩比闸**，只有「解压前算磁盘空间够不够�
 三态实测：默认（不写任何配置）→ 解开，文件 100,000,000 字节完整；
 设 100 倍 → 拦下并说「文件没坏，是限额拦的」；设 2000 倍 → 放行。
 验证：`cargo test` 429 + 33 + 2、界面 403 条、`flutter analyze` 干净。
-
-### T20 深挖：三处「只在真跑时才暴露」的问题（0.9.52）
-
-按「顺藤查同类」把每条解压路径都真跑了一遍，又抓到三个 —— 每一个都能让
-「安全限额」这道闸变成假开关或误报源：
-
-**① 设置页选「不检查」会变成「1 倍上限」（最严重）**
-`config.rs` 解析 `zip_bomb_ratio` 写的是 `x.max(1)`，把 0 硬改成 1。
-所以用户在设置页选「不检查」保存、重开应用，实际生效的是「1 倍」——
-**任何解压体积大于压缩包的正常文件都会被拦，等于什么都解不开**。
-实测：配置写 `zip_bomb_ratio = 0`，100MB 零包照样报 `SafetyLimit`。改成 `x.max(0)`，
-新增 2 条回归（写 0 原样保留 / 负数按 0 处理）。
-
-**② tar.gz / tar.xz / tar.zst 的压缩比闸整条是哑的**
-`job.rs` 的 `if *is_tar` 分支**漏了 `uopts.packed_hint = *packed`**（只有 else 分支设了），
-于是 `packed_total` 恒为 0 → `safety.rs` 里 `packed_total > 0` 这个前置条件永远不成立。
-实测：100MB 全零文件打成 tar.xz（压缩后 15KB，6600:1），配 100 倍**照样解开**。
-
-**③ 纯 .xz 命中限额时报成「xz 解压失败」**
-xz 走 `std::io::Write`，签名只能是 `io::Result`，我们的错误码被压成 `io::Error`
-→ 归成 `NotArchive`，用户又以为包坏了（和 T20 开头一模一样的毛病）。给
-`BudgetWriter` 加 `budget_hit` 标记，调用方据此还原成 `SafetyLimit`。
-
-**新增回归脚本 `tests/t20_ratio.sh`**：三条路径（zip / 纯 xz / tar.xz）各验
-「设 100 倍必须报 SAFETY_LIMIT」+「默认必须解开」，**6 项全绿**。
-为什么必须是脚本而不是单测：单测只覆盖 `ExtractBudget` 本身，抓不到
-「调用方没把数传对」这类错 —— 上面这三处全是这种。
-
-`cargo test` 429 → **431**；反向验证：把 `x.max(0)` 改回 `max(1)` → 测试当场红。
 
 ### T11 收尾：打包/设置两页接 Enter · 修「输入框里回车被截走」
 
@@ -1479,7 +1481,6 @@ Delete 那条同时红（`Expected: no matching candidates / Found 1 widget with
 - **真机证据**：`screenshots/auto-password-default-off.png` —— 设置页两个开关都是关（灰、滑块在左），
   文案是「默认关闭。打开后，程序才会…」。
 
-
 **要解决的事**：网盘资源里常见「一个视频里塞着不止一份包」的玩法。以前引擎的全文件扫描
 **本来就算出了所有像归档的位置**（`scan::ScanHit`：格式 / 偏移 / 置信度），但 `locate_zip`
 只取第一个就把其余**扔了**（只顺手拿去判 `Truncated` vs `NotArchive`）。所以用户遇到
@@ -1783,7 +1784,6 @@ Delete 那条同时红（`Expected: no matching candidates / Found 1 widget with
   > 并顺带修出「写死 `/` 导致 Windows 路径算错」的真 bug。`flutter test` 89 过。
 
 
-
 ## [0.9.32] · 2026-10-30（GUI「加密包是死路」修复 + Windows W1~W10 战役一起发版）
 
 > 仓库搬到 Windows 机器（`E:\yshjy-20261030`，与 Linux 机走移动硬盘同一份 `.git`）后的第一轮代码改动，
@@ -1853,7 +1853,6 @@ Delete 那条同时红（`Expected: no matching candidates / Found 1 widget with
 | 真打包 | `ys 目录 -o 伪装视频.mp4` → `file` 认成 `ISO Media, MP4` |
 | 真解压（带码） | AES 加密包 `-p 123456` 解开，**5 个文件 sha256 与源完全一致** |
 | `scripts/test-packages.sh` | **37 项全绿** |
-
 
 
 **Linux 侧实跑证据（2026-10-30）**：
@@ -2023,8 +2022,6 @@ Delete 那条同时红（`Expected: no matching candidates / Found 1 widget with
   设置页改「关窗口时」并保存、桌面通知气球。
 
 ## [实测记录] · 2026-10-29（实测：磁盘满预检 + 报成功后拔盘丢 300MB，**代码一行未改**）
-
-
 
 
 
