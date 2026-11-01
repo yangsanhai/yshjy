@@ -1,5 +1,33 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · 批 7a 完成：引擎客户端可注入（`EngineApi` 接口）**
+>
+> - **做了什么**：`gui/lib/engine.dart` 里新增 `abstract class EngineApi`（18 个成员：`events` /
+>   `busy` / `start` / `hello` / `list` / `extract` / `pack` / `scan` / `batch` / `answer` /
+>   `skipCurrent` / `report` / `rescue` / `cancel` / `cancelJob` / `pauseQueue` / `resumeQueue` / `dispose`），
+>   `EngineClient implements EngineApi`；`HomePage` 新增构造参数 `engine`（`EngineApi?`），
+>   `_HomePageState` 的 `_client` 从 `final EngineClient` 变成
+>   `late final EngineApi _client = widget.engine ?? EngineClient.instance;`。
+>   **生产传 null → 行为零变化**，340 条测试全绿。
+> - **为什么**：以前验一个动作方法只能让假引擎真收 JSON、回 JSON（`test/fake_engine.dart`），
+>   验的是**协议链路**不是界面判断逻辑 —— 于是 `_extract` 里 28 处「该不该传这个字段」一条断言都没有。
+> - **★ 接口里不能写默认值**（Dart 语法：抽象方法不许带默认值），所以接口的可选参数只写类型，
+>   **默认值的唯一出处是 `EngineClient`**；实现类覆盖时参数类型必须一致（写 `bool?` 会反过来
+>   报「实现比接口更窄」）。
+> - **★ 补 `@override` 踩的坑**：接口和实现有**一模一样的签名行**（`Future<ExtractResult> extract(`），
+>   全局正则必然双命中。批量插注释必须**从 `class EngineClient implements EngineApi {` 之后开始扫**，
+>   且每条正则要求恰好命中一次，否则一个字节都不写（`~/.hermes/cache/scratch/add_override.py`）。
+> - **★ 新测试的坑：真实文件 IO 必须 `tester.runAsync`**。`_open` 第一行是
+>   `await Directory(path).exists()` —— 假时钟下这个 Future 永不完成，`_open` 卡在第一行，
+>   症状是「假引擎一条命令都收不到」，看着像注入没生效。`test/engine_api_inject_test.dart` 里有注释。
+> - **新测试 3 条**（`gui/test/engine_api_inject_test.dart`）：预览路径调的是注入对象的 `list()` 且结果被渲染 /
+>   解压路径把界面状态翻译成 extract 参数（封面开、全选不带 select）/ 页面销毁会 dispose 注入对象。
+>   **反向验证过**：把 `_client` 改回 `EngineClient.instance` → 3 条全红。
+> - **当前状态**：`flutter analyze` 干净、`flutter test` **340 条**全过（337 + 3）、装机版仍 0.9.48
+>   （本批只是地基，没改行为、没发版）。
+> - **下一步**：**7b 解压参数纯函数化**（`_extract` 78 行 / 28 处判断 → 可单测的 `extractRequestFor`），
+>   然后 7c 预览状态映射、7d 文件挑选可注入。计划与判据见 `docs/ARCHITECTURE.md`「动作方法重构（批 7）」。
+
 > **2026-11-01 深夜 · 批 6c 完成（13/13 块）+ 已发版装机 0.9.48：`home_page.dart` 3117 → 1790 行（-42.6%）、测试 213 → 337 条全绿。本批只有一处界面变化（队列键盘），其余是结构搬移**
 >
 > - **做了什么**：`home_page.dart` **3117 → 2876 行**。队列视图抽成独立文件

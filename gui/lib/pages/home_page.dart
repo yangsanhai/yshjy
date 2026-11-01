@@ -48,6 +48,16 @@ class HomePage extends StatefulWidget {
   /// 是否自动拉起引擎（widget 测试里必须关掉）
   final bool autoStart;
 
+  /// 引擎客户端（**注入口**，批 7a）
+  ///
+  /// 生产永远不传 —— 默认用全局单例。测试传一个普通 Dart 对象（实现 `EngineApi`）：
+  /// 想验「界面到底发了哪条命令、参数对不对、拿到结果怎么变界面」时，
+  /// 不用再让假引擎真的收 JSON、回 JSON（那是 `test/fake_engine.dart` 验协议链路的活）。
+  ///
+  /// ⚠️ 注入的对象在页面销毁时**照样**会被 `dispose()`（保持与单例完全一样的行为）。
+  /// 多个页面共用一个假对象时别在 dispose 里关掉共享的流 —— 见 `engine_api_inject_test.dart`。
+  final EngineApi? engine;
+
   /// 测试用：直接灌一份预览结果并进预览页（生产代码永远传 null）。
   ///
   /// 为什么留这个口子：预览树的交互（勾父 → 子全选、取消一子 → 父半选、面包屑下钻）
@@ -106,6 +116,7 @@ class HomePage extends StatefulWidget {
     this.initialFile,
     this.onStatus,
     this.autoStart = true,
+    this.engine,
     this.debugPreview,
     this.debugErrorCode,
     this.debugErrorNote,
@@ -122,7 +133,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final EngineClient _client = EngineClient.instance;
+  /// 引擎客户端：测试可以注入，生产就是全局单例（批 7a）
+  ///
+  /// 用 `late final` 是为了能在字段初始化里读到 `widget.engine` —— 第一次访问发生在
+  /// `initState`（`_client.start()`），那时 `widget` 一定已经就绪。
+  late final EngineApi _client = widget.engine ?? EngineClient.instance;
   StreamSubscription<EngineEvent>? _sub;
 
   Phase _phase = Phase.empty;
