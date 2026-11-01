@@ -25,6 +25,7 @@ import 'home_error_view.dart';
 import 'home_extract_request.dart';
 import 'home_hints.dart';
 import 'home_empty_view.dart';
+import 'home_pick.dart';
 import 'home_flush_view.dart';
 import 'home_preview_state.dart';
 import 'home_progress_view.dart';
@@ -59,6 +60,15 @@ class HomePage extends StatefulWidget {
   /// ⚠️ 注入的对象在页面销毁时**照样**会被 `dispose()`（保持与单例完全一样的行为）。
   /// 多个页面共用一个假对象时别在 dispose 里关掉共享的流 —— 见 `engine_api_inject_test.dart`。
   final EngineApi? engine;
+
+  /// 挑文件的能力（**注入口**，批 7d）
+  ///
+  /// 生产不传 → 弹系统对话框（`home_pick.dart` 的 `pickFilesFromSystem`）。
+  /// 测试传替身，就能验「用户取消 / 单选 / 多选」三种走法而不用真弹对话框。
+  final PickFilesFn? pickFiles;
+
+  /// 挑文件夹的能力（同上）
+  final PickFolderFn? pickFolder;
 
   /// 测试用：直接灌一份预览结果并进预览页（生产代码永远传 null）。
   ///
@@ -119,6 +129,8 @@ class HomePage extends StatefulWidget {
     this.onStatus,
     this.autoStart = true,
     this.engine,
+    this.pickFiles,
+    this.pickFolder,
     this.debugPreview,
     this.debugErrorCode,
     this.debugErrorNote,
@@ -539,17 +551,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _pick() async {
-    // 不设扩展名白名单：伪装包的外壳可能是 .pdf / .docx / .mp3 / .exe 之类，
-    // 名单一写死用户在对话框里就看不到（拖拽却能用，行为不一致）。
-    final group = XTypeGroup(label: t('home.archiveOrCover'));
     try {
-      // 多选：一次挑一堆包是常态（网盘一次下 8 个）
-      final files = await openFiles(acceptedTypeGroups: [group]);
-      if (files.isEmpty) return;
-      if (files.length == 1) {
-        await _open(files.first.path);
-      } else {
-        await _scan(files.map((f) => f.path).toList());
+      // 弹对话框这一步可注入（批 7d）：测试塞替身就能验「取消 / 单选 / 多选」，
+      // 而「挑完之后干什么」的判断在纯函数 `pickOutcomeOf` 里（有单测）。
+      final paths = await (widget.pickFiles ?? pickFilesFromSystem)();
+      switch (pickOutcomeOf(paths)) {
+        case PickOutcome.none:
+          return; // 用户取消：什么都不做，别弹「出错了」
+        case PickOutcome.preview:
+          await _open(paths.first); // 单个包 → 直接看清单，省一次点击
+        case PickOutcome.queue:
+          await _scan(paths); // 一堆包（网盘一次下 8 个）→ 进队列批量
       }
     } on PlatformException catch (e) {
       _showError('FILE_PICKER', e.message ?? t('home.cantPickFile'));
@@ -559,7 +571,7 @@ class _HomePageState extends State<HomePage> {
   /// 选一个文件夹：目录里可能混着一堆无关文件，交给引擎筛
   Future<void> _pickFolder() async {
     try {
-      final dir = await getDirectoryPath();
+      final dir = await (widget.pickFolder ?? pickFolderFromSystem)();
       if (dir != null) await _scan([dir]);
     } on PlatformException catch (e) {
       _showError('FILE_PICKER', e.message ?? t('home.cantPickDir'));
