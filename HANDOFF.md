@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **8 / 13 块**（队列 / 批量完成卡 / 拖放区 / 等待页 / 面包屑 / 文件清单 / 三个纯零件 / 预览主体四段；`home_page.dart` 2378 行，装机版仍 0.9.47）**
+> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **9 / 13 块**（队列 / 批量完成卡 / 拖放区 / 等待页 / 面包屑 / 文件清单 / 三个纯零件 / 预览主体四段 / 解压进行屏；`home_page.dart` 2245 行，装机版仍 0.9.47）**
 >
 > - **做了什么**：`home_page.dart` **3117 → 2876 行**。队列视图抽成独立文件
 >   `gui/lib/pages/home_queue_view.dart`（`QueueItem` + `QueueView` + `_QueueStatusChip`，212 行）；
@@ -55,7 +55,13 @@
 >   只切 2 行、方法体留在原地，报一串 `Undefined name 'onTap'`。已写进技能 `flutter-linux-desktop-gui`。
 > - **★ 另一个坑：块末尾的分隔 `SizedBox` 容易被一起吃进去**（B 段就丢了 12px 间距，测试抓不到，
 >   靠核对「被删范围末行」才发现）。切 build 片段时终点要取在下一个 `SizedBox` **之前**。
-> - **当前状态**：`flutter test` **269 条**全过、`flutter analyze` 干净、`home_page.dart` **2378 行**、装机版仍 0.9.47（本批未发版）。
+> - **当前状态**：`flutter test` **293 条**全过、`flutter analyze` 干净、`home_page.dart` **2245 行**
+>   （起点 3117，已减 28%）、装机版仍 0.9.47（本批未发版）。
+> - **第 6 块也做完了**：`_flushView` → `home_flush_view.dart`（6A）；`_progressView` 拆三段 →
+>   `home_progress_view.dart`（6B，`ExtractProgressBar` / `ExtractStatusLines` / `ExtractActionRow`），
+>   `_etaText` 变顶层纯函数 `etaText(p, paused:, speed:)`。进行屏 115 → 50 行组装层。
+> - **下一块（7）**：`_doneView` 完成卡（169 行）—— 注意**批量完成卡已经抽过了**（第 2 块
+>   `home_batch_done_view.dart`），这里是**单个文件**的完成屏，别搞混。
 > - **✅ 真机验收（2026-11-01 15:30，release 编到 15:26）**：用户原话「**看完了没问题**」——
 >   普通包（02-几个文件.zip）的摘要行 / 勾选卡只有内容一行 / 面包屑显包名、加密包（05-带密码.zip，
 >   密码 123456）的密码框与眼睛图标、以及勾选卡与下方那行的 12px 间距，全部正常。
