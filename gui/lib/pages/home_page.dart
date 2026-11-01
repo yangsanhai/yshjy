@@ -17,10 +17,12 @@ import '../platform_paths.dart';
 import '../l10n.dart';
 import '../format.dart';
 
+import 'home_app_bar.dart';
 import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
 import 'home_done_view.dart';
 import 'home_error_view.dart';
+import 'home_hints.dart';
 import 'home_empty_view.dart';
 import 'home_flush_view.dart';
 import 'home_progress_view.dart';
@@ -1148,24 +1150,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 从清单里猜「接下来该点哪个」——解压出一堆文件后新手最迷茫的就是这个
-  String? _entryHint() {
-    final pv = _preview;
-    if (pv == null) return null;
-    bool looksLikeEntry(String n) {
-      final l = n.toLowerCase();
-      return l.contains('setup') ||
-          l.contains('install') ||
-          l.contains(t('home.launch')) ||
-          l.contains(t('home.startGame')) ||
-          l.endsWith('.bat') ||
-          l.endsWith('run.sh') ||
-          l.endsWith('.appimage') ||
-          l.endsWith('game.exe');
-    }
-
-    final hits = pv.entries.where((e) => !e.isDir && looksLikeEntry(e.path)).toList();
-    return hits.isEmpty ? null : hits.first.path;
-  }
 
   /// 这次失败是不是"缺解压码"（资源分享里最常见的情况）
   ///
@@ -1209,70 +1193,8 @@ class _HomePageState extends State<HomePage> {
   /// 文件类型 → 人话（与 CLI 同一张表；将来抽成语言包）
   ///
   /// ⚠ Dart 不支持非 ASCII 标识符，下面变量名一律英文。
-  String _kindName(String k) => switch (k) {
-        'mp4' => t('home.fmt.mp4'),
-        'mov' => t('home.fmt.mov'),
-        'mkv' => t('home.fmt.mkv'),
-        'webm' => t('home.fmt.webm'),
-        'avi' => t('home.fmt.avi'),
-        'flv' => t('home.fmt.flv'),
-        'ts' => t('home.fmt.ts'),
-        'png' => t('home.fmt.png'),
-        'jpeg' => t('home.fmt.jpg'),
-        'gif' => t('home.fmt.gif'),
-        'webp' => t('home.fmt.webp'),
-        'bmp' => t('home.fmt.bmp'),
-        'tiff' => t('home.fmt.tiff'),
-        'mp3' => t('home.fmt.mp3'),
-        'flac' => t('home.fmt.flac'),
-        'ogg' => t('home.fmt.ogg'),
-        'wav' => t('home.fmt.wav'),
-        'pdf' => t('home.fmt.pdf'),
-        'elf' => t('home.fmt.elf'),
-        'exe' => t('home.fmt.pe'),
-        'zip' => t('home.fmt.zip'),
-        '7z' => t('home.fmt.7z'),
-        'rar' => t('home.fmt.rar'),
-        'gzip' => t('home.fmt.gz'),
-        'xz' => t('home.fmt.xz'),
-        'zstd' => t('home.fmt.zst'),
-        'bzip2' => t('home.fmt.bz2'),
-        'lz4' => t('home.fmt.lz4'),
-        'text' => t('home.fmt.text'),
-        _ => t('home.fmt.unknown'),
-      };
 
   /// 失败时那句「这个文件其实是……」
-  ({String text, bool warn})? _typeHint() {
-    final e = _error;
-    if (e == null || e.detail.isEmpty) return null;
-    final size = e.size;
-    if (size != null && size == 0) {
-      return (
-        text: t('home.emptyFile'),
-        warn: false
-      );
-    }
-    final kind = _kindName(e.looksLike ?? 'unknown');
-    final sizeText = size == null ? '' : '，${_size(size)}';
-    if (e.extMismatch) {
-      final extName = '.${e.ext ?? ''}';
-      if (e.looksKind == 'archive') {
-        return (text: t('home.guiseLikely', {'ext': extName, 'kind': kind, 'size': sizeText}), warn: false);
-      }
-      if (e.looksKind == 'program') {
-        return (text: t('home.guiseProgram', {'ext': extName, 'kind': kind, 'size': sizeText}), warn: true);
-      }
-      return (text: t('home.guiseRenamed', {'ext': extName, 'kind': kind, 'size': sizeText}), warn: false);
-    }
-    if (e.looksKind == 'program') {
-      return (text: t('home.guiseReal', {'kind': kind, 'size': sizeText}), warn: true);
-    }
-    if ((e.looksLike ?? '') == 'unknown') {
-      return (text: t('home.unknownFile', {'size': sizeText}), warn: false);
-    }
-    return (text: t('home.fileLooksLike', {'kind': kind, 'size': sizeText}), warn: false);
-  }
 
   Future<void> _openFolder(String? dir) async {
     if (dir == null) return;
@@ -1346,30 +1268,10 @@ class _HomePageState extends State<HomePage> {
 
   Widget _scaffold() {
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.inventory_2_outlined, size: 22),
-            const SizedBox(width: 8),
-            Text(t('home.brandName')),
-            const SizedBox(width: 10),
-            if (_file != null)
-              Flexible(
-                child: Text(
-                  _shortPath(_file!),
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: _phase == Phase.extracting ? null : _pick,
-            icon: const Icon(Icons.folder_open),
-            tooltip: t('home.pickFile'),
-          ),
-        ],
+      appBar: HomeAppBar(
+        file: _file,
+        canPick: _phase != Phase.extracting,
+        onPick: _pick,
       ),
       body: Center(
         child: ConstrainedBox(
@@ -1728,7 +1630,7 @@ class _HomePageState extends State<HomePage> {
         notes: _notes,
         fileName: _file,
         password: _password,
-        entryHint: _entryHint(),
+        entryHint: entryHint(_preview),
         onScanNested: _scan,
         onOpenFolder: _openFolder,
         onReset: () => setState(() {
@@ -1764,7 +1666,7 @@ class _HomePageState extends State<HomePage> {
     // 跑去重新下载（2026-10-30 真机截图里就是这么显示的）。
     final hint = (_errorCode == 'MISSING_VOLUME' || _errorCode == 'NOT_ENOUGH_SPACE')
         ? null
-        : _typeHint();
+        : typeHint(_error);
     return Center(
       key: const ValueKey('error'),
       child: ConstrainedBox(
@@ -1885,9 +1787,4 @@ class _HomePageState extends State<HomePage> {
 
   String _size(int bytes) => formatBytes(bytes);
 
-  String _shortPath(String p) {
-    final parts = p.split('/').where((s) => s.isNotEmpty).toList();
-    if (parts.length <= 2) return p;
-    return '…/${parts.sublist(parts.length - 2).join('/')}';
-  }
 }
