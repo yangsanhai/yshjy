@@ -1304,6 +1304,13 @@ fn extract_target(
                 } else {
                     Some(*format)
                 };
+                // ★ 2026-11-02 补上：这里原来**漏了** `packed_hint`（只有下面的 else
+                //   分支设了），于是 tar.gz / tar.xz / tar.zst 的 `packed_total` 一直是 0
+                //   → `safety.rs` 里 `packed_total > 0` 这个前置条件永远不成立
+                //   → **压缩比闸对 tar 家族完全是哑的**（设了 100 倍也不拦）。
+                //   实测：100MB 全零文件打成 tar.xz（压缩后 15KB，比例 6600:1），
+                //   配 `zip_bomb_ratio = 100` 照样解开。补这行之后被正常拦下。
+                uopts.packed_hint = *packed;
                 走统一接口(
                     ctx,
                     &mut src,

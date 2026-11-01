@@ -312,7 +312,12 @@ impl Config {
         }
         if let Some(t) = v.get("safety") {
             if let Some(x) = t.get("zip_bomb_ratio").and_then(|x| x.as_integer()) {
-                cfg.safety.zip_bomb_ratio = x.max(1) as u64;
+                // ★ 0 是合法值 = 不检查（也是默认值）。以前这里写的是 `x.max(1)`，
+                //   把 0 硬改成 1 —— 结果用户在设置页选「不检查」保存，重开应用就变成
+                //   「1 倍上限」，**任何解压体积大于压缩包的正常文件都被拦**（什么都解不开）。
+                //   实测：`zip_bomb_ratio = 0` 的配置能让 100MB 零包报 SafetyLimit。
+                //   负数（手写 -1）一律按 0 处理，别让它绕成天文数字。
+                cfg.safety.zip_bomb_ratio = x.max(0) as u64;
             }
             if let Some(x) = 取开关(t.get("warn_executables")) {
                 cfg.safety.warn_executables = x;
@@ -629,6 +634,36 @@ mod tests {
         assert_eq!(c.safety.zip_bomb_ratio, 50, "别的字段不该被连累");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── T20 回归：0 必须原样保留 ──
+    //
+    // 0 是「不检查」（也是默认值）。以前解析时用 `.max(1)` 把 0 改成 1，
+    // 于是在设置页选「不检查」保存后，重开应用就变成「1 倍上限」——
+    // 任何解压体积大于压缩包的正常文件都会被拦，等于什么都解不开。
+    #[test]
+    fn 压缩比上限写零必须原样保留() {
+        let d = std::env::temp_dir().join(format!("yshjy-ratio0-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("config.toml");
+        std::fs::write(&f, "[safety]\nzip_bomb_ratio = 0\n").unwrap();
+        let c = Config::load_from(&f);
+        let _ = std::fs::remove_dir_all(&d);
+        assert_eq!(
+            c.safety.zip_bomb_ratio, 0,
+            "0 = 不检查；写成 1 会拦掉所有正常文件（界面选「不检查」就成了假开关）"
+        );
+    }
+
+    #[test]
+    fn 压缩比上限负数按不检查处理() {
+        let d = std::env::temp_dir().join(format!("yshjy-ratio-neg-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("config.toml");
+        std::fs::write(&f, "[safety]\nzip_bomb_ratio = -1\n").unwrap();
+        let c = Config::load_from(&f);
+        let _ = std::fs::remove_dir_all(&d);
+        assert_eq!(c.safety.zip_bomb_ratio, 0, "负数不该被 as u64 绕成天文数字");
     }
 
     // 关窗口动作（W9）：合法值收编、非法值丢弃（界面按平台默认走）
