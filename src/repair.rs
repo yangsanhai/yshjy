@@ -97,6 +97,81 @@ fn is_cd_at<R: Read + Seek>(r: &mut R, base: u64, off: u64) -> bool {
     matches!(read_up_to(r, &mut sig), Ok(4)) && sig == CD_SIG
 }
 
+/// 逐条扫中央目录，找出「扩展字段（extra）链坏掉」的条目。
+///
+/// 为什么需要这一条：EOCD 层面完全自洽（偏移、大小都对），但某个条目的
+/// extra 链里尺寸字段是坏的 —— `zip` crate 解析到就整包拒收
+/// （实测报 `invalid Zip archive: Extended timestamp field is empty`），
+/// 我们只好把它报成「不是压缩包」，而 7-Zip / unzip 都照解不误。
+///
+/// 返回 `(extra 区起点, 长度)`，都是**相对归档起点**的偏移；空 = 没坏。
+fn 坏extra区间<R: Read + Seek>(
+    r: &mut R,
+    base: u64,
+    cd_off: u64,
+    cd_size: u64,
+) -> Result<Vec<(u64, u64)>> {
+    if cd_size == 0 || cd_size > (8 << 20) {
+        return Ok(Vec::new()); // 离谱的 CD 大小不归这里管
+    }
+    r.seek(SeekFrom::Start(base + cd_off))?;
+    let mut buf = vec![0u8; cd_size as usize];
+    let n = read_up_to(r, &mut buf)?;
+    buf.truncate(n);
+
+    let mut out = Vec::new();
+    let mut p = 0usize;
+    while p + 46 <= buf.len() {
+        if buf[p..p + 4] != CD_SIG {
+            break;
+        }
+        let nlen = u16::from_le_bytes([buf[p + 28], buf[p + 29]]) as usize;
+        let elen = u16::from_le_bytes([buf[p + 30], buf[p + 31]]) as usize;
+        let clen = u16::from_le_bytes([buf[p + 32], buf[p + 33]]) as usize;
+        let extra_at = p + 46 + nlen;
+        if elen > 0
+            && extra_at + elen <= buf.len()
+            && extra链坏了(&buf[extra_at..extra_at + elen])
+        {
+            out.push((cd_off + extra_at as u64, elen as u64));
+        }
+        if extra_at + elen + clen <= p {
+            break; // 防死循环：长度字段全 0 的畸形条目
+        }
+        p = extra_at + elen + clen;
+    }
+    Ok(out)
+}
+
+/// extra 链是不是坏的：逐字段走，越界 / 空的时间戳字段 / 尾巴凑不满字段头，都算坏
+fn extra链坏了(extra: &[u8]) -> bool {
+    let mut pos = 0usize;
+    while pos + 4 <= extra.len() {
+        let tag = u16::from_le_bytes([extra[pos], extra[pos + 1]]);
+        let size = u16::from_le_bytes([extra[pos + 2], extra[pos + 3]]) as usize;
+        if pos + 4 + size > extra.len() {
+            return true; // 尺寸字段越界
+        }
+        if tag == 0x5455 && size == 0 {
+            return true; // 扩展时间戳声明 0 字节：zip crate 会因此拒收整包
+        }
+        pos += 4 + size;
+    }
+    pos < extra.len() // 尾巴剩几个字节凑不满一个字段头
+}
+
+/// 把一段 extra 抹成「若干未知 tag + size 0」的空字段，**长度不变**（不会让后续字段错位）
+fn 空字段填充(len: u64) -> Vec<u8> {
+    let mut out = Vec::with_capacity(len as usize);
+    let mut left = len as usize;
+    while left >= 4 {
+        out.extend_from_slice(&[0xFF, 0xFF, 0x00, 0x00]);
+        left -= 4;
+    }
+    out.extend(std::iter::repeat_n(0u8, left));
+    out
+}
+
 /// **分析一个包的索引是否自洽，不自洽时给出修复方案**
 ///
 /// 参数都相对归档起点：`len` 是归档数据长度（`base` 由调用方给出）。
@@ -109,6 +184,28 @@ pub fn analyze<R: Read + Seek>(r: &mut R, base: u64, len: u64) -> Result<RepairA
     // ① 自洽判断：CD 应该在 [cd_off, cd_off + cd_size)，且紧邻 EOCD
     let expected_end = cd_off.saturating_add(cd_size);
     if expected_end <= eocd_rel && is_cd_at(r, base, cd_off) {
+        // ★ EOCD 自洽 ≠ 包能打开：CD 条目里的 extra 链可能写坏了。
+        //   `zip` crate 一碰到坏 extra 就整包拒收（「Extended timestamp field is empty」），
+        //   于是好包被判成「不是压缩包」，而 7-Zip / unzip 照解不误。
+        //   这里把坏的 extra 区整块置空（长度不变，不会错位）后再重试。
+        let bad = 坏extra区间(r, base, cd_off, cd_size)?;
+        if !bad.is_empty() {
+            let mut patches = Vec::new();
+            let mut 位置 = Vec::new();
+            for (off, len) in &bad {
+                patches.push(Patch::new(*off, 空字段填充(*len)));
+                位置.push(format!("偏移 {off} 的 {len} 字节"));
+            }
+            return Ok(RepairAnalysis::Repairable(RepairPlan {
+                patches,
+                reason: format!(
+                    "中央目录里有 {} 个条目的扩展字段长度写坏了（{}），已把这些字段置空（内容里的文件名/大小不受影响）",
+                    bad.len(),
+                    位置.join("、")
+                ),
+                fixed_cd_offset: cd_off,
+            }));
+        }
         return Ok(RepairAnalysis::Ok);
     }
 

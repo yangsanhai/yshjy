@@ -20,6 +20,8 @@
   "about.stateDir": "打开状态目录（崩溃日志在这里）",
   "about.footer": "用 Flutter + Rust 做的 · 界面与引擎通过 docs/PROTOCOL.md 通信",
   "err.NOT_ARCHIVE": "这里面没找到压缩包 —— 可能不是伪装包，或者文件下坏了",
+  "err.UNSUPPORTED_METHOD": "这个包用了本程序不支持的压缩方法 —— 用 7-Zip 或 PeaZip 打开就能解",
+  "err.UNSAFE_PATH": "包里有不安全的名字（含控制字符之类）—— 已拒绝写出来，这是安全保护，不是包坏了",
   "err.MISSING_VOLUME": "分卷不齐 —— 缺了一块，把缺的那块也下回来再试",
   "err.TRUNCATED": "文件没下完（数据不完整）",
   "err.DATA_LOST": "文件坏了，只能救回一部分",

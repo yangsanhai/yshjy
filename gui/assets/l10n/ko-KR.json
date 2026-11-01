@@ -15,6 +15,8 @@
   "about.stateDir": "상태 폴더 열기 (충돌 로그가 여기에 있어요)",
   "about.footer": "Flutter + Rust로 만들었어요 · 화면과 엔진은 docs/PROTOCOL.md로 대화해요",
   "err.NOT_ARCHIVE": "여기서 압축 파일을 찾지 못했어요 — 위장 압축 파일이 아니거나, 파일이 잘못 내려받아졌을 수 있어요",
+  "err.UNSUPPORTED_METHOD": "이 압축 파일은 이 앱이 지원하지 않는 압축 방식을 사용합니다 — 7-Zip 또는 PeaZip으로 여세요",
+  "err.UNSAFE_PATH": "압축 파일에 안전하지 않은 이름(제어 문자 등)이 있습니다 — 쓰기를 거부했습니다. 안전 보호입니다",
   "err.MISSING_VOLUME": "분할 파일이 다 모이지 않았어요 — 빠진 조각이 있으니 그것도 내려받은 뒤 다시 시도해주세요",
   "err.TRUNCATED": "파일이 끝까지 내려받아지지 않았어요 (데이터가 불완전해요)",
   "err.DATA_LOST": "파일이 손상되어 일부만 복구할 수 있어요",

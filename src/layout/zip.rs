@@ -217,24 +217,37 @@ pub fn locate_with_window<R: Read + Seek>(
     let after_eocd = file_size - eocd_abs;
     let trailing_bytes = after_eocd.saturating_sub(EOCD_LEN + comment_len as u64);
 
-    // ── 判断是否 ZIP64：EOCD 之前 20 字节应是定位器 ──
-    let zip64 = if eocd_rel >= ZIP64_LOC_LEN as usize
+    // ── 判断是否 ZIP64 ──
+    // ★ 主判据必须是「EOCD 里记的字段是不是哨兵值」：ZIP64 存在的唯一理由就是
+    //   32/16 位字段装不下了。以前只要 EOCD 前 20 字节开头看着像定位器（`PK\x06\x07`）
+    //   就切 ZIP64 —— 而**文件名里碰巧含这串字节的普通包**会因此去找一个不存在的
+    //   ZIP64 EOCD，最后报「这不是压缩包」（审计 A-4，zip2 的
+    //   `zip64_magic_in_filename_1~5.zip`；7-Zip 全都能正常解）。
+    //   参考 zip2 `zip64_magic_in_filenames()`：不是看到签名就切，「只有真装不下才需要」。
+    let 哨兵 = u32le(eocd, 16) == 0xFFFF_FFFF || u32le(eocd, 12) == 0xFFFF_FFFF;
+    let 有定位器 = eocd_rel >= ZIP64_LOC_LEN as usize
         && &buf[eocd_rel - ZIP64_LOC_LEN as usize..eocd_rel - ZIP64_LOC_LEN as usize + 4]
-            == ZIP64_LOC_SIG
-    {
-        true
-    } else {
-        // 退一步：EOCD 里记录的偏移是 0xFFFFFFFF 也说明是 ZIP64
-        u32le(eocd, 16) == 0xFFFF_FFFF || u32le(eocd, 12) == 0xFFFF_FFFF
-    };
+            == ZIP64_LOC_SIG;
+    // 普通 EOCD 的读数（假定位器被证伪时用它兜底）
+    let 普通 = (
+        u32le(eocd, 12) as u64,
+        u32le(eocd, 16) as u64,
+        u16le(eocd, 10) as u64,
+    );
 
-    let (cd_size, cd_offset, entries_total) = if zip64 {
-        read_zip64(r, eocd_abs, &buf, eocd_rel, win_start)?
+    let (cd_size, cd_offset, entries_total, zip64) = if 哨兵 {
+        // 字段真是哨兵 → 必须是 ZIP64，读不出来就是真坏包
+        let v = read_zip64(r, eocd_abs, &buf, eocd_rel, win_start)?;
+        (v.0, v.1, v.2, true)
+    } else if 有定位器 {
+        // 定位器可能是文件名里的假签名：**真能读到 ZIP64 EOCD 才采信**，
+        // 读不到就按普通 EOCD 处理 —— 绝不因为一串碰巧的字节就把整包拒收
+        match read_zip64(r, eocd_abs, &buf, eocd_rel, win_start) {
+            Ok(v) => (v.0, v.1, v.2, true),
+            Err(_) => (普通.0, 普通.1, 普通.2, false),
+        }
     } else {
-        let cd_size = u32le(eocd, 12) as u64;
-        let cd_offset = u32le(eocd, 16) as u64;
-        let entries = u16le(eocd, 10) as u64;
-        (cd_size, cd_offset, entries)
+        (普通.0, 普通.1, 普通.2, false)
     };
 
     // ── 中央目录的实际位置 ──
