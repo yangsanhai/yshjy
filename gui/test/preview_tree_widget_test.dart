@@ -189,4 +189,45 @@ void main() {
     expect(checkOf('空目录'), findsNothing);
     expect(find.textContaining('已选 1 / 1 个文件'), findsOneWidget);
   });
+
+  testWidgets('声明的尺寸不可信 → 写「尺寸异常」，绝不摆包自己写的假 GB（A-6）',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: HomePage(
+          autoStart: false,
+          debugPreview: Preview(
+            format: 'zip',
+            complete: true,
+            // CD 里写的就是这个假数字（724 B 的样本声称 1.17 GiB）
+            totalSize: 1258686016,
+            encryptedCount: 0,
+            encKind: null,
+            entries: [
+              EntryItem(
+                index: 1,
+                path: '坏包里的.txt',
+                size: 1258686016,
+                isDir: false,
+                encrypted: false,
+                risky: false,
+                sizeSuspect: true,
+              ),
+            ],
+            hints: const [],
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('尺寸异常'), findsWidgets,
+        reason: '行里和状态栏都该写「尺寸异常」');
+    expect(find.textContaining('1.17 GB'), findsNothing,
+        reason: '包自己写的假数字不许出现在界面任何地方');
+    expect(find.textContaining('1.2 GB'), findsNothing, reason: '换个单位的同一个假数字也不行');
+  });
 }

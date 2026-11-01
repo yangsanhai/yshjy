@@ -486,6 +486,7 @@
   "home.pwForEncrypted": "Пароль (в этом архиве {n} зашифрованных файлов)",
   "home.contentsTitle": "Содержимое архива ({files} файлов · {size})",
   "home.pickedCount": "Выбрано {picked} / {total} файлов · {size}",
+  "home.sizeSuspect": "размер?",
   "home.startPickedCover": "Распаковать {n} + достать обложку",
   "home.startPicked": "Распаковать ({n} файлов)",
   "home.nFiles": "{n} файлов",

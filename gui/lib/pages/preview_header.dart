@@ -29,8 +29,11 @@ class PreviewSummary extends StatelessWidget {
           visualDensity: VisualDensity.compact,
         ),
         const SizedBox(width: 8),
-        Text(t('home.fileCountSize',
-            {'files': '${pv.fileCount}', 'size': formatBytes(pv.totalSize)})),
+        Text(t('home.fileCountSize', {
+          'files': '${pv.fileCount}',
+          // 审计 A-6：合计里混着"声明尺寸不可信"的条目 → 写「尺寸异常」，不摆假 GB
+          'size': pv.hasSizeSuspect ? t('home.sizeSuspect') : formatBytes(pv.totalSize),
+        })),
         const Spacer(),
         if (pv.encryptedCount > 0)
           Chip(

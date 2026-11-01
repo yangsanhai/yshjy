@@ -1552,7 +1552,14 @@ class _HomePageState extends State<HomePage> {
         Row(
           children: [
             Text(
-              t('home.pickedCount', {'picked': '${_picked.length}', 'total': '${pv.fileCount}', 'size': _size(pickedBytes(pv, _picked))}),
+              t('home.pickedCount', {
+                'picked': '${_picked.length}',
+                'total': '${pv.fileCount}',
+                // 审计 A-6：有声明尺寸不可信的条目时，合计是假的 → 改写字
+                'size': pickedHasSuspect(pv, _picked)
+                    ? t('home.sizeSuspect')
+                    : _size(pickedBytes(pv, _picked)),
+              }),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             MiniButton(t('home.selectAll'), () => setState(() {

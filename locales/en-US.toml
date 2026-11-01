@@ -121,12 +121,15 @@ password_hint = "   Password: check the readme beside it, or run yshjy -p \"the-
 select_hint = "   Extract only part: yshjy --select \"1,3\" \"{input}\""
 risky = " ⚠executable"
 unknown_size = "—"
+size_suspect = "size?"
+total_note_suspect = "   ({count} entries declare an impossible size — do not trust the total)"
 
 [preview.hint]
 volumes_merged = "{count} split volumes detected — they'll be joined automatically"
 nested_archive = "There's another archive nested inside ({inner})"
 needs_password = "{count} of them are locked — a password is required"
 looks_truncated = "This archive looks incomplete (data missing at the end)"
+declared_size_suspect = "{count} entries declare an impossible uncompressed size (corrupt or forged archive) — trust the extracted result instead"
 hidden_at = "The archive sits inside the file (offset {offset}); located at its real position"
 more_candidates = "ℹ This file holds another archive at offset {offset} — add --candidate {offset} to use that one"
 rebuilt_index = "The index was damaged — this listing was rebuilt from the file headers"

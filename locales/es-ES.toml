@@ -118,12 +118,15 @@ password_hint = "   Contraseña: mire el archivo de notas de al lado, o yshjy -p
 select_hint = "   Extraer solo una parte: yshjy --select \"1,3\" \"{input}\""
 risky = " ⚠ejecutable"
 unknown_size = "—"
+size_suspect = "tamaño raro"
+total_note_suspect = "   ({count} entradas declaran un tamaño imposible — no te fíes del total)"
 
 [preview.hint]
 volumes_merged = "Se detectaron {count} volúmenes — se unirán automáticamente"
 nested_archive = "Hay otro archivo comprimido dentro ({inner})"
 needs_password = "{count} de ellos están bloqueados — se necesita contraseña"
 looks_truncated = "Parece que este archivo está incompleto (faltan datos al final)"
+declared_size_suspect = "{count} entradas declaran un tamaño descomprimido imposible (archivo dañado o falsificado) — el tamaño real es el del resultado"
 hidden_at = "El archivo está dentro del fichero (desplazamiento {offset}); localizado en su posición real"
 more_candidates = "ℹ Este archivo contiene otro paquete en el desplazamiento {offset} — añade --candidate {offset} para usar ese"
 rebuilt_index = "El índice estaba dañado — este listado se reconstruyó desde las cabeceras"

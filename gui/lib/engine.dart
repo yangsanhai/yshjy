@@ -35,6 +35,11 @@ class EntryItem {
   final bool risky;
   final int? modified;
 
+  /// 引擎说这个条目**声明的解压尺寸不可信**（审计 A-6：724 B 的坏包声称有 1.17 GB）
+  ///
+  /// 为真时**不许**把 `size` 当真实大小显示 —— 那是包自己写的数字。
+  final bool sizeSuspect;
+
   EntryItem({
     required this.index,
     required this.path,
@@ -44,6 +49,7 @@ class EntryItem {
     required this.risky,
     this.packed,
     this.modified,
+    this.sizeSuspect = false,
   });
 
   factory EntryItem.fromJson(Map<String, dynamic> j) => EntryItem(
@@ -55,6 +61,7 @@ class EntryItem {
         encrypted: j['encrypted'] == true,
         risky: j['is_risky'] == true,
         modified: (j['modified'] as num?)?.toInt(),
+        sizeSuspect: j['size_suspect'] == true,
       );
 
   /// 只显示最后一段（列表里没必要把整条路径铺满）
@@ -97,6 +104,11 @@ class Preview {
 
   /// 一处文件里有好几处藏着东西（才值得给用户看选择入口）
   bool get hasManyCandidates => candidates.length >= 2;
+
+  /// 有没有条目声明了解压尺寸不可能成立（审计 A-6）
+  ///
+  /// 为真时**合计不许显示成真数字** —— 那个 GB 是包自己写的（724 B 的坏包能声称 1.17 GB）。
+  bool get hasSizeSuspect => entries.any((e) => e.sizeSuspect);
 
   /// 有封面区（= 这是个伪装包）
   bool get hasCover => cover != null;

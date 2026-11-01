@@ -32,6 +32,7 @@ class EntryNode {
     this.modified,
     this.risky = false,
     this.encrypted = false,
+    this.sizeSuspect = false,
   });
 
   /// 本层名字（显示用）
@@ -63,6 +64,9 @@ class EntryNode {
   final int? modified;
   final bool risky;
   final bool encrypted;
+
+  /// 自己（或子树里）有声明的尺寸不可信的条目（审计 A-6）→ 显示「尺寸异常」而不是假 GB
+  final bool sizeSuspect;
 
   final List<EntryNode> children;
 
@@ -257,6 +261,7 @@ class _Node {
   int? index;
   int ownSize = 0;
   int? ownPacked;
+  bool ownSizeSuspect = false;
   int? modified;
   bool risky = false;
   bool encrypted = false;
@@ -272,6 +277,7 @@ class _Node {
     index = e.index;
     ownSize = e.size;
     ownPacked = e.packed;
+    ownSizeSuspect = e.sizeSuspect;
     modified = e.modified;
     risky = e.risky;
     encrypted = e.encrypted;
@@ -295,6 +301,7 @@ class _Node {
         index: index,
         size: ownSize,
         packed: ownPacked,
+        sizeSuspect: ownSizeSuspect,
         fileCount: 1,
         encryptedCount: encrypted ? 1 : 0,
         modified: modified,
@@ -327,6 +334,8 @@ class _Node {
       index: index,
       size: size,
       packed: packedKnown ? packed : null,
+      // 目录：子树里只要有一个条目的声明尺寸不可信，整行也标出来（宁可提示，不摆假数字）
+      sizeSuspect: kids.any((k) => k.sizeSuspect),
       fileCount: files,
       encryptedCount: encs,
       modified: modified,

@@ -131,6 +131,13 @@ pub fn preview(
     if pv.entries.is_empty() && !pv.complete {
         pv.hints.push(PreviewHint::LooksTruncated);
     }
+    // 声明尺寸封顶（审计 A-6）：724 B 的坏包会声明「1.17 GB」。
+    // 引擎只发码，外壳负责别把这个数字当真的摆给用户看。
+    let 尺寸不可信 = pv.entries.iter().filter(|e| e.size_suspect).count() as u64;
+    if 尺寸不可信 > 0 {
+        pv.hints
+            .push(PreviewHint::DeclaredSizeSuspect { count: 尺寸不可信 });
+    }
 
     ctx.emit(&Event::PreviewReady {
         job: ctx.job,
@@ -304,6 +311,7 @@ pub(crate) fn preview_zip_reader<R: std::io::Read + std::io::Seek>(
         entries.push(EntryView {
             index: i as u64 + 1,
             is_risky: !e.is_dir && safety::is_risky_executable(&e.path),
+            size_suspect: e.size_suspect,
             path: e.path.clone(),
             size: e.size,
             packed: e.compressed_size,
@@ -397,6 +405,7 @@ pub(crate) fn preview_7z<R: std::io::Read + std::io::Seek>(
             is_dir,
             modified: None,
             is_risky: !is_dir && safety::is_risky_executable(f.name()),
+            size_suspect: false,
         });
     }
     Ok(Preview {
@@ -449,6 +458,7 @@ pub(crate) fn preview_rar<R: std::io::Read + std::io::Seek>(src: &mut R) -> Resu
         entries.push(EntryView {
             index: i as u64 + 1,
             is_risky: !is_dir && safety::is_risky_executable(&name),
+            size_suspect: false,
             path: name,
             // `rars` 公开的成员元数据里**没有大小**（size 要解析更深一层头才拿得到），
             // 所以 RAR 预览的条目大小报 0，并用 complete=false 如实说明
@@ -516,6 +526,7 @@ fn 预览自成员(members: &[rars::ArchiveMember]) -> Preview {
         entries.push(EntryView {
             index: i as u64 + 1,
             is_risky: !is_dir && safety::is_risky_executable(&name),
+            size_suspect: false,
             path: name,
             size: m.meta.unpacked_size,
             packed: Some(m.meta.packed_size),
@@ -557,6 +568,7 @@ pub(crate) fn preview_single_stream(
             is_dir: false,
             modified: None,
             is_risky: false,
+            size_suspect: false,
         }],
         hints: Vec::new(),
         total_size: 0,
@@ -685,6 +697,7 @@ mod tests {
                 is_dir: false,
                 modified: None,
                 is_risky: false,
+                size_suspect: false,
             }],
             ..Default::default()
         };
@@ -702,6 +715,7 @@ mod tests {
                     is_dir: false,
                     modified: None,
                     is_risky: false,
+                    size_suspect: false,
                 },
                 EntryView {
                     index: 1,
@@ -712,6 +726,7 @@ mod tests {
                     is_dir: false,
                     modified: None,
                     is_risky: false,
+                    size_suspect: false,
                 },
             ],
             ..Default::default()

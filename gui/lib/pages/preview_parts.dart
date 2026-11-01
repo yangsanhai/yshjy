@@ -51,10 +51,17 @@ class MiniButton extends StatelessWidget {
 int pickedBytes(Preview pv, Set<int> picked) {
   var n = 0;
   for (final e in pv.entries) {
-    if (!e.isDir && picked.contains(e.index)) n += e.size;
+    // 审计 A-6：声明的解压尺寸不可信的条目不进合计 —— 那是包自己写的假数字
+    if (!e.isDir && picked.contains(e.index) && !e.sizeSuspect) n += e.size;
   }
   return n;
 }
+
+/// 勾上的条目里有没有「声明尺寸不可信」的（审计 A-6）
+///
+/// 有的话状态栏就不写合计（会是个假 GB），改写「尺寸异常」。
+bool pickedHasSuspect(Preview pv, Set<int> picked) => pv.entries.any(
+    (e) => !e.isDir && picked.contains(e.index) && e.sizeSuspect);
 
 /// 「点开始解压之前，先告诉他会发生什么」—— 对应引擎智能解压的三条规则。
 ///

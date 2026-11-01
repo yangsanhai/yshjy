@@ -758,6 +758,9 @@ impl InArchive for TarStreamUnpacker {
                 is_dir,
                 modified: ent.header().mtime().ok().map(|s| s as i64),
                 is_risky: !is_dir && crate::safety::is_risky_executable(&name),
+                // tar 的尺寸就在头部且紧跟着数据，没有「压缩比」可用来判真假
+                // （外围 gzip 的比率也管不到单条）→ 不判，宁可漏报不误报
+                size_suspect: false,
             });
         }
         Ok(pv)

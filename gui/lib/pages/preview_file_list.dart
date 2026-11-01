@@ -81,6 +81,7 @@ class FileListView extends StatelessWidget {
             index: e.index,
             size: e.size,
             packed: e.packed,
+            sizeSuspect: e.sizeSuspect,
             fileCount: e.isDir ? 0 : 1,
             encryptedCount: e.encrypted ? 1 : 0,
             modified: e.modified,
@@ -154,7 +155,10 @@ class FileListView extends StatelessWidget {
     final st = pickStateOf(n, picked);
     final hasFiles = n.fileCount > 0; // 空目录没有可勾的东西
     final isExpanded = expanded.contains(n.path);
-    final sizeText = (!n.isDir || hasFiles) ? formatBytes(n.size) : '';
+    // 审计 A-6：声明尺寸不可信 → 显示「尺寸异常」，绝不把包自己写的 GB 摆出来
+    final sizeText = n.sizeSuspect
+        ? t('home.sizeSuspect')
+        : ((!n.isDir || hasFiles) ? formatBytes(n.size) : '');
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.only(left: 6.0 + indent * 18.0, right: 12),

@@ -775,6 +775,33 @@ fn aes_strength(extra: &[u8]) -> Option<u8> {
     None
 }
 
+/// DEFLATE 的理论极限压缩比：**1032 : 1**
+///
+/// 32 KiB 滑动窗口 + 最长匹配 258 字节 → 每 258 字节原文最少花 2 比特来编码
+/// （长度码 + 距离码各约 1 比特），所以 258 / (2/8) = 1032。这是算法本身的上限，
+/// 再好的编码器也突破不了 —— 用它当判据不会误伤「压得特别好的正常文件」
+/// （100 MB 全零文件压成 95 KB = 约 1050:1，那是**实测值**，接近但不超过上限；
+/// 这也是之前把压缩比闸的门槛定在 64 MiB 的原因，别把两者搞混）。
+const DEFLATE_MAX_RATIO: u64 = 1032;
+
+/// 声明的解压尺寸**不可能成立**吗？（审计 A-6）
+///
+/// 判据是硬的，不是「看着太大」：
+/// - 存储（method 0）：两个尺寸必须相等，不等就是假的
+/// - deflate / deflate64（8 / 9）：超过 1032:1 就是假的
+/// - 其它算法（bzip2 / LZMA / zstd …）：给不出同样硬的上限 → **不判**
+///   （宁可漏报，也不把正常的压缩包标成坏包）
+fn 声明尺寸可疑(method: u16, csize: u64, usize_: u64) -> bool {
+    if usize_ == 0 {
+        return false; // 目录 / 空文件：本来就该是 0
+    }
+    match method {
+        0 => csize != usize_,
+        8 | 9 => usize_ > csize.saturating_mul(DEFLATE_MAX_RATIO).saturating_add(1024),
+        _ => false,
+    }
+}
+
 /// 解析中央目录，列出条目（用于「解压前预览」）
 ///
 /// 返回的每条 [`EntryInfo`] 都带 `encrypted` 标志 —— 界面上的 🔒 徽标就读它。
@@ -884,6 +911,8 @@ pub fn list_entries_enc<R: Read + Seek>(
             },
             aes_strength: if method == 99 { aes_strength(&extra) } else { None },
             crc32: Some(crc),
+            // 审计 A-6：CD 里的尺寸是包自己写的，先验一遍「是不是能做到」
+            size_suspect: 声明尺寸可疑(method, csize, usize_),
         });
 
         remaining = remaining.saturating_sub(entry_len);
@@ -1203,6 +1232,77 @@ mod tests {
         assert!(
             names.iter().any(|n| n == "payload/random.bin"),
             "第一卷里跨卷边界的条目必须在: {names:?}"
+        );
+    }
+
+    // ───────────── 声明尺寸封顶（审计 A-6）─────────────
+    //
+    // 判据用的是**算法硬上限**，不是「看着太大」：
+    //   DEFLATE 理论极限 1032:1（32 KiB 窗口 + 最长匹配 258 字节）
+    // 这样才不会把「100 MB 全零文件压成 95 KB」（≈1050:1 的实测值，正常包）误判成坏包。
+
+    #[test]
+    fn 声明尺寸可疑只在数学上不可能时才成立() {
+        // 存储：两个尺寸必须相等
+        assert!(!声明尺寸可疑(0, 100, 100), "存储格式相等 → 正常");
+        assert!(声明尺寸可疑(0, 100, 999), "存储格式不等 → 不可能");
+        // deflate：1032:1 是极限，留 1 KB 余量给极小样本
+        assert!(!声明尺寸可疑(8, 100_000, 100_000_000), "1000:1 可能成立（全零文件就是这样）");
+        assert!(声明尺寸可疑(8, 400, 1_170_000_000), "724 B 声称 1.17 GB → 不可能");
+        assert!(声明尺寸可疑(9, 0, 1024 * 1024), "压缩后 0 字节却声称 1 MB → 不可能");
+        // 其它算法给不出硬上限 → 不判（宁可漏报不误报）
+        assert!(!声明尺寸可疑(12, 1_000, 100_000_000), "bzip2 不判");
+        assert!(!声明尺寸可疑(14, 1_000, 100_000_000), "LZMA 不判");
+        // 空文件 / 目录
+        assert!(!声明尺寸可疑(8, 0, 0), "0/0 正常");
+    }
+
+    #[test]
+    fn 坏包声明_1_17gb_会被标成尺寸异常() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/data/A6_declared_size_impossible.zip");
+        if !p.exists() {
+            eprintln!("样本不在，跳过（tests/data/A6_declared_size_impossible.zip）");
+            return;
+        }
+        // 样本来自 zip2（MIT）的 `raw_deflate64_index_out_of_bounds.zip`，原样收进来
+        let mut f = std::fs::File::open(&p).unwrap();
+        let size = f.metadata().unwrap().len();
+        let l = locate(&mut f, size).unwrap();
+        let entries = list_entries(&mut f, &l).unwrap();
+        assert_eq!(entries.len(), 1);
+        // CD 里写的就是这个假数字：`csize=394571` 却声称 `usize=1_258_686_016`（1.17 GiB），
+        // 换算成压缩比 ≈ 3190:1 —— 超过 DEFLATE 的 1032:1 极限，不可能成立
+        assert_eq!(entries[0].size, 1_258_686_016, "CD 里写的就是这个假数字");
+        assert!(
+            entries[0].size_suspect,
+            "724 字节的包不可能解出 1.17 GB —— 必须标成「声明尺寸不可信」"
+        );
+    }
+
+    #[test]
+    fn 正常包的尺寸不会被标成异常() {
+        // 用自家分卷样本里的条目（1200 字节文本、204800 字节二进制）验一遍：
+        // 正常包的 size_suspect 必须全是 false —— 这个判据不许误伤
+        let Some((z01, zip)) = 分卷样本() else { return };
+        let mut mf = crate::extract7z::MultiFile::open(&[z01, zip]).unwrap();
+        let total = mf.total();
+        let starts = mf.starts().to_vec();
+        let l = locate_volumes(&mut mf, total, &starts).unwrap();
+        let fix = 分卷索引补丁(&mut mf, total, &l, &starts).unwrap();
+        let mut pw =
+            crate::io::patch::PatchWindow::new(&mut mf, fix.base, fix.len, fix.patches).unwrap();
+        let l2 = locate(&mut pw, fix.len).unwrap();
+        let entries = list_entries(&mut pw, &l2).unwrap();
+        assert_eq!(entries.len(), 8);
+        assert!(
+            entries.iter().all(|e| !e.size_suspect),
+            "正常包一个都不许标: {:?}",
+            entries
+                .iter()
+                .filter(|e| e.size_suspect)
+                .map(|e| (&e.path, e.size))
+                .collect::<Vec<_>>()
         );
     }
 

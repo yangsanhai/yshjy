@@ -72,7 +72,12 @@ class PreviewPickCard extends StatelessWidget {
             secondary: const Icon(Icons.folder_zip_outlined, size: 20),
             title: Text(
               t('home.contentsTitle',
-                  {'files': '${pv.fileCount}', 'size': formatBytes(pv.totalSize)}),
+                  {
+                    'files': '${pv.fileCount}',
+                    'size': pv.hasSizeSuspect
+                        ? t('home.sizeSuspect')
+                        : formatBytes(pv.totalSize),
+                  }),
               style:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),

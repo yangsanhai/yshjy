@@ -491,6 +491,7 @@
   "home.pwForEncrypted": "解压码（这个包有 {n} 个文件加密）",
   "home.contentsTitle": "压缩包内容（{files} 个文件 · {size}）",
   "home.pickedCount": "已选 {picked} / {total} 个文件 · {size}",
+  "home.sizeSuspect": "尺寸异常",
   "home.startPickedCover": "开始解压 {n} 个 + 提取封面",
   "home.startPicked": "开始解压（{n} 个文件）",
   "home.nFiles": "{n} 个文件",

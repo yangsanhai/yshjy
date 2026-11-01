@@ -38,7 +38,8 @@
           "modified": "NoneType",
           "packed": "int",
           "path": "str",
-          "size": "int"
+          "size": "int",
+          "size_suspect": "bool"
         }
       ],
       "hints": [
