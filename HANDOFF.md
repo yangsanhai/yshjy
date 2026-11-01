@@ -1,5 +1,11 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · T9 截图做完了，但卡在「仓库没远程」**
+> 三张真截图（预览 / 完成 / 设置）已处理成 1366×768 放进 `data/screenshots/`，README 已挂。
+> **AppStream 只认 http(s) 绝对 URL**（相对路径和 `file://` 都实测报 `E: web-url-expected`），
+> 而 `git remote -v` 为空 → GitHub raw 是死链。metainfo 和 build-deb.sh 里都留了注释好的现成配置，
+> **用户明确「先不传」**，等推 GitHub 后取消注释即可（必须公开仓库，私有 raw 取不到）。
+>
 > **2026-11-01 傍晚 · T11 收尾（未发版）**：打包页 Enter=开始打包、设置页 Enter=保存；
 > 顺手修了一个会咬人的 bug（输入框里的 Enter 被 KeyActionScope 截走 → 在「输出文件名」
 > 里按回车会把整个打包启动）；历史页**故意不接**键位（唯一按钮是危险的「清空」）。
