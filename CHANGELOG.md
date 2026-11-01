@@ -53,8 +53,9 @@
   （`preview_crumb_bar.dart` 的面包屑），早就包了 `Semantics(button + label + onTap)`
   （还踩过 `excludeSemantics` 把点击动作一起排掉的坑）。首页用的是标准
   `FilledButton` / `TextButton`，语义自带；拆 `home_page` 之后这块本来就不存在了。
-- 「历史页键位」—— **不是补键位，是要先加功能**：唯一的「清空」是一键删全部的危险操作，
-  接键位得先做「列表项选中 + Del 只删那一条」。属于扩功能，等用户拍板，本轮不动。
+- 「历史页键位」—— **故意不接，用户已裁定，不许再当欠账提**：唯一的「清空」是一键删全部
+  的危险操作，要接键位得先做「列表项选中 + Del 只删那一条」。HANDOFF 一直写着「历史页
+  **故意不接**键位」——这是决定，不是尾巴。已钉进 TODO 顶部「⛔ 已裁定不做」。
 
 7 语言文案 **546 → 551 键**（`home.pasteEmpty` / `home.pasteNotFound` / `home.pasteFailed` /
 `home.pasteHint` / `keys.paste`）。真机未验（界面改动，等下次发版一起验）。
