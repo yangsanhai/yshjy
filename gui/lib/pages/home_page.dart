@@ -17,6 +17,7 @@ import '../platform_paths.dart';
 import '../l10n.dart';
 import '../format.dart';
 
+import 'home_batch_done_view.dart';
 import 'home_queue_view.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
@@ -1417,97 +1418,12 @@ class _HomePageState extends State<HomePage> {
         onStartAll: _startQueue,
       );
 
-  Widget _batchDoneView() {
-    final cs = Theme.of(context).colorScheme;
-    final r = _batch!;
-    final ok = (r['ok'] as num?)?.toInt() ?? 0;
-    final failed = (r['failed'] as num?)?.toInt() ?? 0;
-    final partial = (r['partial'] as num?)?.toInt() ?? 0;
-    final ms = (r['elapsed_ms'] as num?)?.toInt() ?? 0;
-    final bytes = (r['bytes'] as num?)?.toInt() ?? 0;
-    final jobs = (r['jobs'] as List?) ?? const [];
-    final failedJobs = jobs
-        .cast<Map>()
-        .where((j) => (j['outcome'] as String? ?? '') != 'ok')
-        .toList();
-    final firstDest = jobs
-        .cast<Map>()
-        .map((j) => j['dest'] as String?)
-        .firstWhere((d) => d != null, orElse: () => null);
-
-    return Column(
-      key: const ValueKey('batch-done'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 6),
-        Icon(failed == 0 ? Icons.check_circle : Icons.info_outline,
-            size: 44, color: failed == 0 ? cs.primary : Colors.orange),
-        const SizedBox(height: 8),
-        Text(t('home.done'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 6),
-        Text(
-          t('home.batchSummary', {
-            'ok': '$ok',
-            'partial': partial > 0 ? t('home.batchPartial', {'n': '$partial'}) : '',
-            'failed': failed > 0 ? t('home.batchFailed', {'n': '$failed'}) : '',
-            'secs': (ms / 1000).toStringAsFixed(1),
-            'size': _size(bytes),
-          }),
-          textAlign: TextAlign.center,
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-        ),
-        const SizedBox(height: 14),
-        if (failedJobs.isNotEmpty)
-          Expanded(
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: ListView.separated(
-                itemCount: failedJobs.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final j = failedJobs[i];
-                  final name = (j['path'] as String? ?? '').split('/').last;
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(Icons.error_outline, size: 18, color: cs.error),
-                    title: Text(name, style: const TextStyle(fontSize: 12)),
-                    subtitle: Text(_batchOutcomeText(j['outcome'] as String? ?? ''),
-                        style: const TextStyle(fontSize: 11)),
-                    // 失败项点一下在文件管理器里定位（调研 07:135：静默隔离是反面教材）
-                    onTap: () => _revealInFolder(j['path'] as String? ?? ''),
-                  );
-                },
-              ),
-            ),
-          )
-        else
-          const Spacer(),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            if (firstDest != null)
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => _openFolder(firstDest),
-                  icon: const Icon(Icons.folder_open, size: 18),
-                  label: Text(t('home.openOutDir')),
-                ),
-              ),
-            if (firstDest != null) const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _resetQueue,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: Text(t('home.again')),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  Widget _batchDoneView() => BatchDoneView(
+        batch: _batch!,
+        onOpenFolder: _openFolder,
+        onRevealInFolder: _revealInFolder,
+        onReset: _resetQueue,
+      );
 
   Widget _emptyView() {
     final cs = Theme.of(context).colorScheme;
@@ -2786,9 +2702,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ───────────────────────── 小工具 ─────────────────────────
-
-  /// 批量结论 → 人话（老引擎给 Debug 名、新引擎给码，两种都认；见 `humanize.dart`）
-  String _batchOutcomeText(String oc) => batchOutcomeText(oc);
 
   /// 在文件管理器里定位某个文件（失败项用）
   Future<void> _revealInFolder(String path) async {
