@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../key_action_scope.dart';
 import '../keyboard.dart';
 import '../l10n.dart';
 import '../notify.dart';
@@ -324,8 +325,16 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return KeyActionScope(
+      // ★ takeFocus 必须 false：和首页在 IndexedStack 里同时挂着，抢焦点会把首页的 Enter 弄失灵。
+      //   代价：「刚切过来没点过任何东西就按 Enter」不生效 —— 要保存必然先改过东西，不影响正常流程。
+      takeFocus: false,
+      // 与保存按钮 onPressed 同一个条件：正在存 / 还没读完配置就都不接
+      handlers: {
+        KeyAction.primary: _saving || !_loaded ? null : () => _save(),
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
       children: [
         Text(t('settings.title'), style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
@@ -516,10 +525,15 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 14),
         Align(
           alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: _saving || !_loaded ? null : _save,
-            icon: const Icon(Icons.save_outlined, size: 18),
-            label: Text(_saving ? t('settings.saving') : t('settings.save')),
+          child: Tooltip(
+            // 键位就地提示（T11）：Enter = 保存（焦点不在输入框里时；
+            // 在输入框里按 Enter 属于输入框自己，不会被截走）
+            message: 'Enter',
+            child: FilledButton.icon(
+              onPressed: _saving || !_loaded ? null : _save,
+              icon: const Icon(Icons.save_outlined, size: 18),
+              label: Text(_saving ? t('settings.saving') : t('settings.save')),
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -614,6 +628,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _section(t('settings.section.keys'), cs),
         const _KeysTable(),
       ],
+      ),
     );
   }
 
