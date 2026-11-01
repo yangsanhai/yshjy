@@ -18,6 +18,7 @@ import '../l10n.dart';
 import '../format.dart';
 
 import 'home_batch_done_view.dart';
+import 'home_empty_view.dart';
 import 'home_queue_view.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
@@ -1425,68 +1426,11 @@ class _HomePageState extends State<HomePage> {
         onReset: _resetQueue,
       );
 
-  Widget _emptyView() {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      key: const ValueKey('empty'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withValues(alpha: 0.5),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.inbox_outlined, size: 56, color: cs.primary),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            _dragging ? t('home.dropHint') : t('home.dropTitle'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            t('home.dropDesc'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.6,
-                ),
-          ),
-          const SizedBox(height: 28),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 10,
-            children: [
-              FilledButton.icon(
-                onPressed: _pick,
-                icon: const Icon(Icons.add),
-                label: Text(t('home.pickFile')),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // 次入口弱化成文字按钮（调研 07:921-923：第一屏只该有一个最强入口）
-              // ⚠️ 别改成 FilledButton —— widget_test 里有条测试专门钉着这件事
-              TextButton.icon(
-                onPressed: _pickFolder,
-                icon: const Icon(Icons.folder_open_outlined, size: 16),
-                label: Text(t('home.pickDir'), style: const TextStyle(fontSize: 12)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text(
-            t('home.anyFormatHint'),
-            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _emptyView() => EmptyDropView(
+        dragging: _dragging,
+        onPickFile: _pick,
+        onPickFolder: _pickFolder,
+      );
 
   Widget _busyView(String text) {
     return Center(
