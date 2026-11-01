@@ -329,7 +329,43 @@ Dart 不允许类的花括号跨文件。`part` 只能放顶层内容 —— Loc
 rm -rf /tmp/yshjy-test-config && mkdir -p /tmp/yshjy-test-config
 XDG_CONFIG_HOME=/tmp/yshjy-test-config flutter test
 ```
-以后跑全量一律带这个，别图省事。
+以后跑全量一律带这个，别图省事。**第 7 块验证：`flutter test` 303 条全过、`flutter analyze` 干净。**
+
+---
+
+### 同批：第 8 块 —— 失败页（`home_page.dart` 2029 → **1893 行**）
+
+这批最后一块硬骨头。分两步走，先易后难：
+
+**8A `_spaceShortageBlock` + `_spaceLine`**（62 + 17 行）→ `pages/home_space_shortage.dart`。
+这块的历史值得记在代码里：**以前这里是死路** —— 引擎连 `SPACE_SHORTAGE` 事件都不发（全库只有定义、
+零发射点），界面这段处理代码永远收不到；`--force` 界面也一个参数都没传。现在引擎发事件 +
+错误 detail 带 `need` / `available`，三个按钮各有真实后端行为。
+
+`spaceLine()` 是纯函数：detail 里拿不到两个数就退成一句通用建议，**不给算错的数字**
+（跟 CLI 侧同一口径，别一边猜一边不猜）。
+
+**8B `_errorView` 主体**（200 行）→ `pages/home_error_view.dart`（`ErrorHead` / `ErrorPasswordRetry`）。
+失败页从 200 行降到 **75 行组装层**。
+
+**16 条测试，重点全是「每种失败该说什么」而不是「能显示」**：
+- 缺分卷要说**缺哪一块**（`part3.rar`）不许只说「分卷不全」；
+- 空间不够要给**三个真数字**（detail 里是字符串也要能读；够用时不许出现负数差额）；
+- **没有预览就不给「只解压部分」**（用户还没看到清单，挑不了）；
+- 「继续试试」的风险说明必须写在按钮旁边（不做空间检查、写满会停下）；
+- 兜底文案必须存在（`err.unknown`），空白比说「原因不明」更差。
+
+**★ 和预览页的一处关键差别**：错误页点常用码是「**填入 + 立刻重试**」，预览页只是填入
+（那时还没开始解压，重试无从谈起）。两个组件的注释里都写了这条。
+
+**反向验证**：`if (note.isNotEmpty)` → `if (true)` → 「没有技术详情时两个详情按钮都不出现」立刻红。
+
+**★ 写测试踩到一个 finder 坑**：兜底文案 `err.unknown` 本身是「这次没成功 —— 原因不明，
+可以点「生成诊断包」查一下」，**标题里就含「生成诊断包」这四个字**。于是
+`find.textContaining('生成诊断包')` 在「没有详情」那条找到 1 个（标题）、在「有详情」那条找到 2 个。
+改用 `find.byIcon(Icons.bug_report_outlined)` 定位才对。
+
+**验证**：`flutter test` **319 条**全过、`flutter analyze` 干净。
 
 ---
 
