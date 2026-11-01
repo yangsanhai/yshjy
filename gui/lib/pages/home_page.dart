@@ -23,6 +23,7 @@ import 'home_empty_view.dart';
 import 'home_queue_view.dart';
 import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
+import 'preview_parts.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
@@ -990,26 +991,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 紧凑小按钮：默认 TextButton 高 48，一行塞四个会把上面的列表挤没（窄窗口致命）
-  Widget _miniBtn(String text, VoidCallback onTap, {IconData? icon}) {
-    const st = ButtonStyle(
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      minimumSize: WidgetStatePropertyAll(Size(0, 28)),
-      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8)),
-      textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-    );
-    final label = Text(text, style: const TextStyle(fontSize: 12));
-    return icon == null
-        ? TextButton(style: st, onPressed: onTap, child: label)
-        : TextButton.icon(
-            style: st,
-            onPressed: onTap,
-            icon: Icon(icon, size: 15),
-            label: label,
-          );
-  }
-
   /// 高级选项弹窗（P23-2 输出目录 / P23-3 文件名编码）
   ///
   /// 做成弹窗而不是页面上的一块：页面上放不下时会挤掉列表高度（窄窗口下列表为 0 高、
@@ -1514,7 +1495,7 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  _smartDirHint(pv),
+                  smartDirHint(pv),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ),
@@ -1670,23 +1651,23 @@ class _HomePageState extends State<HomePage> {
         Row(
           children: [
             Text(
-              t('home.pickedCount', {'picked': '${_picked.length}', 'total': '${pv.fileCount}', 'size': _size(_pickedBytes(pv))}),
+              t('home.pickedCount', {'picked': '${_picked.length}', 'total': '${pv.fileCount}', 'size': _size(pickedBytes(pv, _picked))}),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
-            _miniBtn(t('home.selectAll'), () => setState(() {
+            MiniButton(t('home.selectAll'), () => setState(() {
                   _picked
                     ..clear()
                     ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
                 })),
-            _miniBtn(t('home.selectNone'), () => setState(() => _picked.clear())),
+            MiniButton(t('home.selectNone'), () => setState(() => _picked.clear())),
             const Spacer(),
             // 树 / 平铺切换：树是默认（看层级 + 按目录勾），平铺留给「只想全选」的老习惯
-            _miniBtn(
+            MiniButton(
               _treeView ? t('home.viewFlat') : t('home.viewTree'),
               () => setState(() => _treeView = !_treeView),
               icon: _treeView ? Icons.view_list_outlined : Icons.account_tree_outlined,
             ),
-            _miniBtn(
+            MiniButton(
               t('home.advancedSummary', {
                 'place': _outDir == null ? t('home.nextToArchive') : t('home.viewCustom'),
                 'enc': _encoding == 'auto' ? t('home.encodingAutoName') : _encoding.toUpperCase(),
@@ -1749,15 +1730,6 @@ class _HomePageState extends State<HomePage> {
   //
   // 树的构建与勾选逻辑全在 `entry_tree.dart`（纯 Dart，可单测）；
   // 这里只管「怎么画」。别把聚合算法写进 build 里 —— 那玩意儿没法测。
-
-  /// 勾上的文件合计多少字节（状态栏用；目录不算，它自己不产出文件）
-  int _pickedBytes(Preview pv) {
-    var n = 0;
-    for (final e in pv.entries) {
-      if (!e.isDir && _picked.contains(e.index)) n += e.size;
-    }
-    return n;
-  }
 
   /// 面包屑：**真过滤**（点哪一级就只看那一层的下一级），最后一节高亮。
   Widget _crumbBar() => CrumbBar(
@@ -2442,17 +2414,6 @@ class _HomePageState extends State<HomePage> {
   ///
   /// 单文件 → 直接解；包里只有一个顶层目录 → 解到那个目录；散文件 → 新建同名文件夹。
   /// 说清楚这句，用户点「开始解压」前就知道磁盘上会多出什么。
-  String _smartDirHint(Preview pv) {
-    final files = pv.entries.where((e) => !e.isDir).toList();
-    if (files.isEmpty) return t('home.noFilesInArchive');
-    if (files.length == 1) return t('home.willExtractOne');
-    final roots = files.map((e) => e.path.split('/').first).toSet();
-    final allNested = files.every((e) => e.path.contains('/'));
-    if (roots.length == 1 && allNested) {
-      return t('home.willExtractInto', {'root': roots.first});
-    }
-    return t('home.willCreateFolder', {'n': '${files.length}'});
-  }
 
   /// 读密码本，给密码框做「常用解压码」chips（只读，不回写）
   ///
