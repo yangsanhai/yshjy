@@ -80,6 +80,13 @@ impl MultiFile {
     pub fn volumes(&self) -> usize {
         self.files.len()
     }
+
+    /// 各分卷在逻辑流里的起始偏移（例如 2 卷 → `[0, 307200]`）
+    ///
+    /// 分卷 ZIP 的索引修正要用它判断「某一处是不是卷边界」（审计 A-5）。
+    pub fn starts(&self) -> &[u64] {
+        &self.starts
+    }
 }
 
 impl Read for MultiFile {

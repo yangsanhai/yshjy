@@ -6,6 +6,13 @@
       "job": "int",
       "note": "str"
     },
+    "EntryFinished": {
+      "bytes": "int",
+      "index": "int",
+      "job": "int",
+      "path": "str",
+      "result": "str"
+    },
     "ExtractProgress": {
       "current": "NoneType",
       "job": "int",
@@ -18,9 +25,7 @@
     },
     "JobFinished": {
       "job": "int",
-      "outcome": {
-        "Failed": "Truncated"
-      }
+      "outcome": "str"
     },
     "JobStarted": {
       "job": "int",
@@ -63,5 +68,5 @@
     "partial": "int",
     "total": "int"
   },
-  "rc": 1
+  "rc": 0
 }
