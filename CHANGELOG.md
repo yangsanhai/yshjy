@@ -158,6 +158,46 @@ Dart 不允许类的花括号跨文件。`part` 只能放顶层内容 —— Loc
 把夹在中间的那行文档注释 `/// 批量完成卡（Sunpack 三段式…）` 一起删掉了 —— 功能无影响
 （新文件里写了等价注释），但**搬移脚本必须把被删范围的首尾行打出来核对**，这条已写进第 2 块脚本的注释。
 
+---
+
+### ★ 真机验收抓到 bug：队列页按键盘完全没反应（`d933357`）
+
+用户真机验收原话：**「按键盘没反应啊」**。这是这批里最有价值的一次验收 ——
+因为当时 `flutter test` 全绿，绿得毫无破绽。
+
+**根因（两条，缺一不可）**：
+
+1. 第一版给**每一行**挂 `Focus(autofocus: i == 0)`。`autofocus` 的语义是
+   「这个节点首次挂载时，如果所在 FocusScope 还没有别的焦点，就自己接过来」——
+   而真实流程是「用户拖文件 → 队列才出现」，那一刻焦点早就在窗口根
+   （`_ModalScopeState Focus Scope`）上了，抢不到。
+2. 就算焦点移动了也没用：`ListTile` 默认**几乎没有焦点样式**，按 ↓ 屏幕上一个像素都不变，
+   用户只能判断成「程序坏了」。
+
+**改法**：`QueueView` 转 `StatefulWidget`，**整块一个 `Focus` + 内部选中索引 `_sel`**，
+选中行高亮（`selectedTileColor` `alpha 0.12` + 左侧 3px 竖线），挂载后第一帧主动
+`requestFocus()`，鼠标点行同步选中；`didUpdateWidget` 里修 `_sel` 越界。
+
+**★ 为什么原来 6 条键位测试没抓到 —— 假绿的典型形状**：
+`queue_view_keyboard_test.dart` 是把 `QueueView` **当根 widget** 挂起来测的，
+那种环境下 `autofocus` 必然成功。它证明的是「键位判断逻辑对」，
+**证明不了「真实页面里焦点真在队列上」**。
+
+新加的 `test/home_queue_keyboard_integration_test.dart` 换了形状：用 `debugScanItems`
+把队列灌进**完整 HomePage**（真实 Navigator / Scaffold 全在），断言
+`FocusManager.instance.primaryFocus?.debugLabel == 'queue-list'` 且 Delete 真能删。
+
+**反向验证（关键证据）**：把 `requestFocus()` 注释掉 →
+焦点实测 `Expected: 'queue-list' / Actual: '_ModalScopeState<dynamic> Focus Scope'`，
+Delete 那条同时红（`Expected: no matching candidates / Found 1 widget with text "一号.zip"`）——
+**和用户描述的症状完全一致**，这才叫复现，不是"我觉得修好了"。
+
+**用户真机复验**：**「这回按键正常」**。
+
+**给后续 8 块立的规矩**：凡是「焦点 / 键盘 / 拖放」这类**依赖真实 widget 树形状**的行为，
+测试必须用完整 `HomePage` 挂（`debugScanItems` / `debugPreview` / `debugErrorCode` 这些注入口就是为此存在的），
+**不许把子 widget 当根挂** —— 否则就是假绿。
+
 ## [0.9.47] · 2026-11-01（真机抓出来的：设置页「本机磁盘类型没探到」）
 
 **这是用户截图点出来的，不是我测出来的**：0.9.46 装完，设置页那块小字写

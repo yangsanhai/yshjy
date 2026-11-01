@@ -23,8 +23,19 @@
 > - **第 2 块（`f8b7951`）**：批量完成卡 → `pages/home_batch_done_view.dart`（`BatchDoneView`），
 >   只依赖 `batch` + 3 个回调。`home_page.dart` 现 **2789 行**。★捞到真空：这张卡原来**零测试**，
 >   抽出后补 5 条（成功/失败/点击定位/打开目录/无目录不显示按钮），反向验证过（`onTap` 改 null → 立红）。
-> - **当前状态**：`flutter test` **224 条**全过、`flutter analyze` 干净、装机版仍 0.9.47（本批未发版）。
-> - **下一块**：`_emptyView`（拖放区，62 行）。**已做 2 块样板，等用户真机点一次再往下连推**。
+> - **★ 真机验收抓到一个 bug（`d933357`）：按键盘完全没反应。** 根因两条：
+>   ① 给每一行挂 `Focus(autofocus: i == 0)` —— `autofocus` 只在行**首次挂载**时请求焦点，
+>      真实流程「拖文件 → 队列才出现」时焦点已经在窗口根上，抢不到；
+>   ② `ListTile` 默认**几乎没有焦点样式**，就算焦点移了，用户屏幕上看不出任何变化。
+>   改成：`QueueView` 转 `StatefulWidget`，**整块一个 `Focus` + 内部选中索引 + 选中行高亮**
+>   （底色 `alpha 0.12` + 左侧 3px 竖线），挂载后第一帧主动 `requestFocus()`；鼠标点行同步选中。
+> - **★ 为什么原来 6 条键位测试没抓到**：那条测试把 `QueueView` 当**根 widget** 挂，
+>   `autofocus` 必然成功 —— **假绿**。新增 `test/home_queue_keyboard_integration_test.dart`：
+>   用 `debugScanItems` 把队列灌进**完整 HomePage**，断言 `primaryFocus.debugLabel == 'queue-list'`
+>   且 Delete 真能删。反向验证：去掉 `requestFocus` → 焦点实测落在 `_ModalScopeState Focus Scope`、
+>   Delete 删不掉，**与真机症状完全一致**。用户真机复验原话：**「这回按键正常」**。
+> - **当前状态**：`flutter test` **226 条**全过、`flutter analyze` 干净、装机版仍 0.9.47（本批未发版）。
+> - **下一块**：`_emptyView`（拖放区，62 行）。**每块都要走一遍「抽 widget → 真机点 → 补集成测试」。**
 
 > **2026-11-01 深夜 · 批 6b 完成：T15 覆盖率基线（`d29103f`，只出证据、代码零改动、装机版仍 0.9.47）**
 >
