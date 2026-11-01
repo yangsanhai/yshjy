@@ -544,9 +544,9 @@
   "keys.note": "键位固定，不能改。按 Tab 可以在按钮之间移动。",
   "err.SAFETY_LIMIT": "解出来的体积超出安全上限（防压缩炸弹）—— 文件没坏，是限额拦的",
   "settings.safety.ratio": "压缩比上限",
-  "settings.safety.ratioHint": "解开后的体积最多能是压缩包的几倍，超了就拦下（防压缩炸弹）。大日志、磁盘镜像这类压缩率很高，解不开时先把这一项调大。",
-  "settings.safety.ratio100": "100 倍（默认）",
-  "settings.safety.ratio500": "500 倍",
+  "settings.safety.ratioHint": "解开后的体积最多能是压缩包的几倍，超了就拦下。默认不检查 —— 和 7-Zip、PeaZip 这些工具一致；只有担心别人塞压缩炸弹时才需要设。",
+  "settings.safety.ratio100": "100 倍",
   "settings.safety.ratio2000": "2000 倍",
-  "settings.safety.ratioOff": "不限（不拦）"
+  "settings.safety.ratioOff": "不检查（默认）",
+  "settings.safety.ratio1000": "1000 倍"
 }

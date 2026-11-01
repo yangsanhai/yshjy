@@ -544,9 +544,9 @@
   "keys.note": "Los atajos son fijos. Usa Tab para moverte entre botones.",
   "err.SAFETY_LIMIT": "El tamaño extraído supera el límite de seguridad (protección antizombi) — el archivo NO está dañado",
   "settings.safety.ratio": "Límite de compresión",
-  "settings.safety.ratioHint": "Cuántas veces más grande que el archivo puede ser lo extraído. Los registros e imágenes de disco comprimen mucho: súbelo si no se extraen.",
-  "settings.safety.ratio100": "100× (predeterminado)",
-  "settings.safety.ratio500": "500×",
+  "settings.safety.ratioHint": "Cuántas veces más grande que el archivo puede ser lo extraído. Desactivado por defecto, como 7-Zip o PeaZip: actívalo solo si te preocupan las bombas zip.",
+  "settings.safety.ratio100": "100×",
   "settings.safety.ratio2000": "2000×",
-  "settings.safety.ratioOff": "Sin límite"
+  "settings.safety.ratioOff": "Sin comprobar (predeterminado)",
+  "settings.safety.ratio1000": "1000×"
 }
