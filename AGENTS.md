@@ -106,6 +106,9 @@ flutter build linux --debug   # CMake 开了 -Wall -Werror，任何警告都是�
 - 系统托盘要 `libayatana-appindicator3-dev`（已装），GNOME 需要 appindicator 扩展（已启用）。
 - 引擎所有落盘都走原子写入，写盘代码必须留 `.yshjy-part` 中间态，别直接写正式名。
 - 测试里 MethodChannel 没有原生实现会抛 `MissingPluginException`，包装类必须吞掉异常，否则 widget 测试全红。
+- **改了某个命令的输出/退出码，`bash tests/all.sh` 里「协议契约」会红**：那是 `tests/contract/golden/*.json`
+  没跟着改（不是功能坏了）。确认真是新设计后跑 `python3 tests/contract/run.py --update`，
+  并在提交说明里写清「哪个字段、为什么变」—— 别直接 `--update` 了事，也别把它当老账跳过。
 
 ## 干活流程
 
