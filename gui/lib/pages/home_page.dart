@@ -23,6 +23,7 @@ import 'home_empty_view.dart';
 import 'home_queue_view.dart';
 import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
+import 'preview_header.dart';
 import 'preview_parts.dart';
 import 'preview_password_box.dart';
 import 'preview_pick_card.dart';
@@ -1471,23 +1472,7 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-        Row(
-          children: [
-            Chip(
-              label: Text(pv.format.toUpperCase()),
-              visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(width: 8),
-            Text(t('home.fileCountSize', {'files': '${pv.fileCount}', 'size': _size(pv.totalSize)})),
-            const Spacer(),
-            if (pv.encryptedCount > 0)
-              Chip(
-                avatar: const Icon(Icons.lock_outline, size: 16),
-                label: Text(t('home.encryptedCount', {'n': '${pv.encryptedCount}'})),
-                visualDensity: VisualDensity.compact,
-              ),
-          ],
-        ),
+        PreviewSummary(preview: pv),
         // 智能解压的结果预告（调研 07:864-865）：点「开始解压」之前就知道会多出什么
         Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -1545,26 +1530,7 @@ class _HomePageState extends State<HomePage> {
             _password = pw;
           }),
         ),
-        if (_notes.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final n in _notes)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: cs.primary),
-                        const SizedBox(width: 6),
-                        Expanded(child: Text(n, style: const TextStyle(fontSize: 13))),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        PreviewNotes(notes: _notes),
         const SizedBox(height: 12),
         // 封面与内容上下并列、各自带勾选（GUI-PLAN §5.2①，用户验收原话）
         PreviewPickCard(
