@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **10 / 13 块**（队列 / 批量完成卡 / 拖放区 / 等待页 / 面包屑 / 文件清单 / 三个纯零件 / 预览主体四段 / 解压进行屏 / 单文件完成屏；`home_page.dart` 2100 行，装机版仍 0.9.47）**
+> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **11 / 13 块**（只剩骨架 + 纯函数区；`home_page.dart` 1893 行，装机版仍 0.9.47）**
 >
 > - **做了什么**：`home_page.dart` **3117 → 2876 行**。队列视图抽成独立文件
 >   `gui/lib/pages/home_queue_view.dart`（`QueueItem` + `QueueView` + `_QueueStatusChip`，212 行）；
@@ -55,8 +55,14 @@
 >   只切 2 行、方法体留在原地，报一串 `Undefined name 'onTap'`。已写进技能 `flutter-linux-desktop-gui`。
 > - **★ 另一个坑：块末尾的分隔 `SizedBox` 容易被一起吃进去**（B 段就丢了 12px 间距，测试抓不到，
 >   靠核对「被删范围末行」才发现）。切 build 片段时终点要取在下一个 `SizedBox` **之前**。
-> - **当前状态**：`flutter test` **303 条**全过、`flutter analyze` 干净、`home_page.dart` **2100 行**
->   （起点 3117，已减 33%）、装机版仍 0.9.47（本批未发版）。
+> - **当前状态**：`flutter test` **319 条**全过、`flutter analyze` 干净、`home_page.dart` **1893 行**
+>   （起点 3117，已减 39%）、装机版仍 0.9.47（本批未发版）。
+> - **第 8 块（失败页）也做完了**，分两步：先 `home_space_shortage.dart`（`spaceShortageBlock` +
+>   纯函数 `spaceLine`），再 `home_error_view.dart`（`ErrorHead` / `ErrorPasswordRetry`）——
+>   失败页 200 → **75 行组装层**。★错误页点常用码是「填入+立刻重试」，预览页只是填入，别混。
+> - **剩两块都很轻**：第 9 块骨架 `_scaffold` + `_body`（54 行）、第 10 块纯函数区
+>   （`_kindName` / `_shortPath` / `_typeHint` / `_entryHint` 等，~200 行，最便宜）。
+>   做完这两块就可以发版 0.9.48 了。
 > - **★ 跑全量的正确命令（我忘过两次）**：
 >   `rm -rf /tmp/yshjy-test-config && mkdir -p /tmp/yshjy-test-config && XDG_CONFIG_HOME=/tmp/yshjy-test-config flutter test`
 >   —— `settings_perf_widget_test` 会真写 `config.toml`，直接 `flutter test` 时多个测试进程抢真实
