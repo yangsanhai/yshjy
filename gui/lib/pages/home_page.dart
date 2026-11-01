@@ -25,6 +25,7 @@ import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
 import 'preview_parts.dart';
 import 'preview_password_box.dart';
+import 'preview_pick_card.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
@@ -1566,47 +1567,12 @@ class _HomePageState extends State<HomePage> {
           ),
         const SizedBox(height: 12),
         // 封面与内容上下并列、各自带勾选（GUI-PLAN §5.2①，用户验收原话）
-        Card(
-          margin: EdgeInsets.zero,
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              if (pv.hasCover)
-                CheckboxListTile(
-                  key: const ValueKey('want-cover'),
-                  dense: true,
-                  value: _wantCover,
-                  onChanged: (v) => setState(() => _wantCover = v ?? false),
-                  secondary: const Icon(Icons.movie_outlined, size: 20),
-                  title: Text(
-                    t('home.coverLabel', {
-                      'size': _size((pv.cover!['size'] as num?)?.toInt() ?? 0),
-                      'ext': pv.cover!['ext'] != null ? ' · ${pv.cover!['ext']}' : '',
-                    }),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
-                  subtitle: Text(
-                    t('home.pickMedia'),
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                ),
-              CheckboxListTile(
-                key: const ValueKey('want-extract'),
-                dense: true,
-                value: _wantExtract,
-                onChanged: (v) => setState(() => _wantExtract = v ?? false),
-                secondary: const Icon(Icons.folder_zip_outlined, size: 20),
-                title: Text(
-                  t('home.contentsTitle', {'files': '${pv.fileCount}', 'size': _size(pv.totalSize)}),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-                subtitle: Text(
-                  t('home.pickFiles'),
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ),
-            ],
-          ),
+        PreviewPickCard(
+          preview: pv,
+          wantCover: _wantCover,
+          wantExtract: _wantExtract,
+          onWantCoverChanged: (v) => setState(() => _wantCover = v),
+          onWantExtractChanged: (v) => setState(() => _wantExtract = v),
         ),
         const SizedBox(height: 12),
         // 文件级挑选（P23-1）：统计 + 全选 + 高级入口压成**一行**。
