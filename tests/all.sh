@@ -119,6 +119,8 @@ if [ -n "$BIN" ]; then
   run "冒烟测试（smoke.sh）" bash tests/smoke.sh "$BIN"
   run "错误文案探针（errmsgs.sh）" bash tests/errmsgs.sh "$BIN"
   run "救援模式承诺（rescue_verify.sh）" bash tests/rescue_verify.sh "$BIN"
+  # 分卷 ZIP（.zip + .z01）：以前 --list 只重建出 1 项、--test 说「不是压缩包」（审计 A-5）
+  run "分卷 ZIP（zip_split.sh）" bash tests/zip_split.sh "$BIN"
   run "重名策略探针（conflict.sh）" bash tests/conflict.sh "$BIN"
   # 原包处置：--trash-source 进回收站 / --delete-source 二次确认（唯一不可逆的一类）
   run "原包处置（trash_source.sh）" bash tests/trash_source.sh "$BIN"

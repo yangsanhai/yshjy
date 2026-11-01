@@ -59,6 +59,12 @@ pub struct ZipLayout {
     pub trailing_bytes: u64,
     /// ZIP 注释长度
     pub comment_len: u16,
+    /// 是否是**分卷 ZIP**（`.z01` 那一族）—— 由 [`locate_volumes`] 判定
+    ///
+    /// ★ 分卷里 `base` 落在**某一卷的起点**上，而不是本地文件头上（因为 CD 的
+    /// `cd_offset` 记的是「相对最后一卷起点」的偏移）。这时 `base` 不能直接拿去
+    /// 当解压窗口 —— 必须先用 [`分卷索引补丁`] 把索引换算成整条流的坐标。
+    pub split: bool,
 }
 
 impl ZipLayout {
@@ -128,7 +134,22 @@ pub fn find_eocd_backwards(buf: &[u8]) -> Option<usize> {
 /// 1. 尾部窗口（默认 1 MiB）内倒着找 EOCD —— 覆盖绝大多数情况
 /// 2. 若未找到，返回 [`ErrorCode::NotArchive`]，由上层决定是否做全文件扫描
 pub fn locate<R: Read + Seek>(r: &mut R, file_size: u64) -> Result<ZipLayout> {
-    locate_with_window(r, file_size, DEFAULT_WINDOW)
+    locate_inner(r, file_size, DEFAULT_WINDOW, None)
+}
+
+/// **分卷 ZIP 的定位**（`.zip + .z01` 那一族）
+///
+/// `卷起点` 是各分卷在逻辑流里的起始偏移（`MultiFile` 拼好后就有），例如
+/// `[0, 307200]`。为什么要它：分卷 ZIP 的中央目录里记的 `cd_offset` 是
+/// 「**相对最后一卷起点**」的偏移（Info-ZIP `zip -s` 的规矩），于是反推出的
+/// `base` 会正好落在某个卷边界上 —— 那里是数据延续，不是 `PK\x03\x04`，
+/// 普通校验会把它判成「这不是压缩包」。实测样本：`tests/data/C12_split`。
+pub fn locate_volumes<R: Read + Seek>(
+    r: &mut R,
+    file_size: u64,
+    卷起点: &[u64],
+) -> Result<ZipLayout> {
+    locate_inner(r, file_size, DEFAULT_WINDOW, Some(卷起点))
 }
 
 /// 与 [`locate`] 相同，但可自定义尾部搜索窗口大小
@@ -139,6 +160,15 @@ pub fn locate_with_window<R: Read + Seek>(
     r: &mut R,
     file_size: u64,
     window: u64,
+) -> Result<ZipLayout> {
+    locate_inner(r, file_size, window, None)
+}
+
+fn locate_inner<R: Read + Seek>(
+    r: &mut R,
+    file_size: u64,
+    window: u64,
+    卷起点: Option<&[u64]>,
 ) -> Result<ZipLayout> {
     if file_size < EOCD_LEN {
         return Err(Error::new(ErrorCode::NotArchive)
@@ -273,11 +303,22 @@ pub fn locate_with_window<R: Read + Seek>(
     })?;
 
     // ── 结构自校验：base 处必须是本地文件头 ──
-    verify_base(r, base).map_err(|e| {
-        e.context(format!(
-            "推算的 base={base} 处不是 PK03 04（cd_at={cd_at}, cd_offset={cd_offset}）"
-        ))
-    })?;
+    //
+    // ★ 分卷 ZIP 是唯一例外（审计 A-5 实测 `C12_split`）：分卷里 CD 的
+    //   `cd_offset` 记的是「相对最后一卷起点」的偏移，反推出的 base 因此正好
+    //   落在**某一卷的起点**上；卷与卷的接缝是数据延续，本来就不是 `PK\x03\x04`。
+    //   这里只放行「base 正好是某个已知卷起点」这一种情况，别的一律照旧拒收
+    //   —— 判据必须窄，否则等于把自校验关掉。
+    let mut split = false;
+    if let Err(e) = verify_base(r, base) {
+        if base > 0 && 卷起点.is_some_and(|starts| starts.contains(&base)) {
+            split = true;
+        } else {
+            return Err(e.context(format!(
+                "推算的 base={base} 处不是 PK03 04（cd_at={cd_at}, cd_offset={cd_offset}）"
+            )));
+        }
+    }
 
     Ok(ZipLayout {
         base,
@@ -288,6 +329,7 @@ pub fn locate_with_window<R: Read + Seek>(
         zip64,
         trailing_bytes,
         comment_len,
+        split,
     })
 }
 
@@ -408,6 +450,213 @@ fn verify_base<R: Read + Seek>(r: &mut R, base: u64) -> Result<()> {
             ));
     }
     Ok(())
+}
+
+/// 分卷 ZIP 的「索引换算」结果
+///
+/// 分卷 ZIP 里 CD 和每条目的偏移都是**卷内坐标**（相对各自那一卷的起点），
+/// 而解码器只认一条连续流。这里把两者换算成整条流的坐标，输出一张补丁表 ——
+/// 由 `PatchWindow` 在**读取时**贴上去，磁盘上一个字节都不改。
+#[derive(Debug, Clone)]
+pub struct 分卷修正 {
+    /// 修正后「单卷等价 ZIP」的起点（= 第一条目的绝对位置，跳过卷首分卷标记）
+    pub base: u64,
+    /// 修正后窗口长度（从 `base` 到 EOCD 结束）
+    pub len: u64,
+    /// 相对 `base` 的补丁表，交给 [`crate::io::patch::PatchWindow`]
+    pub patches: Vec<crate::io::patch::Patch>,
+    /// 核对过位置的条目数
+    pub entries: u64,
+}
+
+/// CD 固定头长度
+const CD_HEAD: u64 = 46;
+/// 一次能把 CD 读进内存的上限（防 `cd_size` 被恶意写大把内存吃光）
+const CD_MAX: u64 = 64 << 20;
+
+/// 把分卷 ZIP 的索引换算成「整条流坐标」（审计 A-5）
+///
+/// # 实测依据（`tests/data/C12_split.z01` + `.zip`，`zip -s 300k` 生成）
+/// - CD 里 `cd_offset` 相对**最后一卷起点**：307200 + 103014 = 410214 ✅
+/// - 每条目的 `local_header_offset` 相对**它自己那一卷的起点**：
+///   前 7 条在卷 1（loff 4…205211），第 8 条在卷 2（loff 102894 → 绝对 410094）✅
+/// - 卷 1 开头还有 4 字节 `PK\x07\x08` 分卷标记，所以第一条 loff=4 而不是 0
+///
+/// 换算后整条流就是一个合法的单卷 ZIP（数据本来就是连续切开的），
+/// 于是「定位→解码」全程复用现成实现，不用另写一个分卷解压器。
+pub fn 分卷索引补丁<R: Read + Seek>(
+    r: &mut R,
+    total: u64,
+    layout: &ZipLayout,
+    卷起点: &[u64],
+) -> Result<分卷修正> {
+    // ★ ZIP64 分卷暂不支持：要改 ZIP64 EOCD(56B) 和条目 extra 里的 8 字节偏移，
+    //   手上没有真实样本验过 —— 宁可明确说「不支持」，也不写没验过的猜测代码
+    //   （和 A-1 / A-2 的处理态度一致：不谎报、不假装成功）。
+    if layout.zip64 {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "split_zip64_unsupported")
+            .context("这是 ZIP64 分卷包，目前还不支持（普通分卷可以正常解）"));
+    }
+    if layout.cd_size > CD_MAX {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "split_cd_too_big")
+            .with("cd_size", layout.cd_size));
+    }
+
+    let mut cd = vec![0u8; layout.cd_size as usize];
+    r.seek(SeekFrom::Start(layout.cd_at))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek cd: {e}")))?;
+    let got = read_full(r, &mut cd)?;
+    if got < cd.len() {
+        return Err(Error::new(ErrorCode::Truncated)
+            .with("reason", "cd_truncated")
+            .with("want", cd.len())
+            .with("got", got));
+    }
+
+    let mut patches: Vec<crate::io::patch::Patch> = Vec::new();
+    let mut base: Option<u64> = None;
+    let mut cd_rel: Option<u64> = None; // CD 在窗口里的偏移 = cd_at - base
+    let mut entries = 0u64;
+    let mut p: u64 = 0;
+
+    while p + CD_HEAD <= layout.cd_size {
+        let at = p as usize;
+        if &cd[at..at + 4] != CD_SIG {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "bad_cd_entry_sig")
+                .with("at", layout.cd_at + p));
+        }
+        let name_len = u16le(&cd, at + 28) as u64;
+        let extra_len = u16le(&cd, at + 30) as u64;
+        let comment_len = u16le(&cd, at + 32) as u64;
+        let loff = u32le(&cd, at + 42) as u64;
+        let entry_len = CD_HEAD + name_len + extra_len + comment_len;
+        if p + entry_len > layout.cd_size {
+            return Err(Error::new(ErrorCode::Truncated)
+                .with("reason", "cd_entry_overrun")
+                .with("at", layout.cd_at + p));
+        }
+        let name = &cd[at + CD_HEAD as usize..at + (CD_HEAD + name_len) as usize];
+
+        // 条目偏移是 64 位真值时藏在 ZIP64 extra 里 —— 分卷 + 超 4GB 才会碰到，
+        // 本轮不支持（同上：没有样本不猜）。
+        if loff == 0xFFFF_FFFF {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "split_zip64_entry_offset")
+                .with("name", String::from_utf8_lossy(name).into_owned())
+                .context("分卷里的条目用了 64 位偏移，目前还不支持"));
+        }
+
+        // ── 定卷：哪个卷起点 + loff 处是「签名对 + 名字对」的本地文件头 ──
+        // 判据必须带名字核对，只验签名会被压缩数据里碰巧出现的 `PK\x03\x04` 骗到。
+        let mut abs: Option<u64> = None;
+        for &s in 卷起点 {
+            let Some(cand) = s.checked_add(loff) else {
+                continue;
+            };
+            if cand + 30 > total {
+                continue;
+            }
+            if let Some(lfh_name) = 读本地名字(r, cand)?
+                && lfh_name == name
+            {
+                abs = Some(cand);
+                break;
+            }
+        }
+        let abs = abs.ok_or_else(|| {
+            Error::new(ErrorCode::NotArchive)
+                .with("reason", "split_entry_not_found")
+                .with("name", String::from_utf8_lossy(name).into_owned())
+                .with("loff", loff)
+                .context("分卷里这一条在每一卷里都对不上位置（可能中间缺了一卷）")
+        })?;
+
+        let b = *base.get_or_insert(abs);
+        // ★ 用 checked_sub 而不是直接相减：构造过的包可以把一条「名字也对的」LFH 放到
+        //   中央目录之后，那时 abs > cd_at，直接减法在 debug 下会 panic。
+        let cr = *cd_rel.get_or_insert_with(|| layout.cd_at.saturating_sub(b));
+        if layout.cd_at < b {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "split_entry_after_cd")
+                .with("name", String::from_utf8_lossy(name).into_owned())
+                .context("分卷里这一条的位置落在中央目录后面 —— 包结构不对"));
+        }
+        let rel = abs.checked_sub(b).ok_or_else(|| {
+            Error::new(ErrorCode::NotArchive)
+                .with("reason", "split_entry_order")
+                .with("name", String::from_utf8_lossy(name).into_owned())
+        })?;
+        if rel > u32::MAX as u64 {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("reason", "split_offset_overflow")
+                .with("rel", rel)
+                .context("分卷里条目偏移超过 4 GB，需要 ZIP64 支持"));
+        }
+        // CD 条目里的 `local header offset` 字段：固定头第 42..46 字节
+        patches.push(crate::io::patch::Patch::new(
+            cr + p + 42,
+            (rel as u32).to_le_bytes().to_vec(),
+        ));
+
+        entries += 1;
+        p += entry_len;
+    }
+
+    let base = base.ok_or_else(|| {
+        Error::new(ErrorCode::NotArchive)
+            .with("reason", "split_no_entries")
+            .context("分卷包里的中央目录是空的")
+    })?;
+    if entries == 0 {
+        return Err(Error::new(ErrorCode::NotArchive).with("reason", "split_no_entries"));
+    }
+
+    // ── EOCD 里的 `cd_offset` 也换成整条流坐标 ──
+    let cd_off_rel = layout.cd_at.checked_sub(base).ok_or_else(|| {
+        Error::new(ErrorCode::NotArchive)
+            .with("reason", "split_cd_before_base")
+            .with("cd_at", layout.cd_at)
+            .with("base", base)
+    })?;
+    if cd_off_rel > u32::MAX as u64 {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "split_offset_overflow")
+            .with("cd_off", cd_off_rel));
+    }
+    patches.push(crate::io::patch::Patch::new(
+        layout.eocd_at - base + 16,
+        (cd_off_rel as u32).to_le_bytes().to_vec(),
+    ));
+
+    let len = layout.eocd_at + EOCD_LEN + layout.comment_len as u64 - base;
+    Ok(分卷修正 {
+        base,
+        len,
+        patches,
+        entries,
+    })
+}
+
+/// 读某个位置上的「本地文件头」里的文件名原始字节（不是本地头或读不全 → None）
+fn 读本地名字<R: Read + Seek>(r: &mut R, at: u64) -> Result<Option<Vec<u8>>> {
+    let mut h = [0u8; 30];
+    r.seek(SeekFrom::Start(at))
+        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("seek lfh: {e}")))?;
+    if read_full(r, &mut h)? < 30 || &h[0..4] != LFH_SIG {
+        return Ok(None);
+    }
+    let n = u16le(&h, 26) as usize;
+    if n == 0 || n > 4096 {
+        return Ok(None);
+    }
+    let mut name = vec![0u8; n];
+    if read_full(r, &mut name)? < n {
+        return Ok(None);
+    }
+    Ok(Some(name))
 }
 
 /// 尽量读满缓冲区（返回实际读到的字节数；EOF 不算错误）
@@ -890,5 +1139,92 @@ mod tests {
         // 多个候选时取最后一个（离文件尾最近）
         buf[800..804].copy_from_slice(EOCD_SIG);
         assert_eq!(find_eocd_backwards(&buf), Some(800));
+    }
+
+    // ───────────── 分卷 ZIP（审计 A-5）─────────────
+    //
+    // 样本是真文件（`zip -s 300k` 生成，5 个文件、307200+103588 字节），
+    // 以前 `tests/` 里**零断言**用我们自己的引擎验过它 —— 这就是账本里说的
+    // 「假绿温床」：7z 验过不代表我们行。下面两条钉死它。
+
+    fn 分卷样本() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data");
+        let z01 = dir.join("C12_split.z01");
+        let zip = dir.join("C12_split.zip");
+        if z01.exists() && zip.exists() {
+            Some((z01, zip))
+        } else {
+            eprintln!("分卷样本不在，跳过（tests/data/C12_split.*）");
+            None
+        }
+    }
+
+    #[test]
+    fn 分卷_zip_能定位且索引换算成整条流坐标() {
+        let Some((z01, zip)) = 分卷样本() else { return };
+        let mut mf = crate::extract7z::MultiFile::open(&[z01, zip]).unwrap();
+        let total = mf.total();
+        let starts = mf.starts().to_vec();
+        assert_eq!(starts, vec![0, 307_200], "两卷，第二卷从 307200 开始");
+
+        // ① 定位：base 落在卷边界上（不是本地文件头）→ 必须标成 split
+        let l = locate_volumes(&mut mf, total, &starts).unwrap();
+        assert!(l.split, "应当认出这是分卷 ZIP（base 在卷边界）");
+        assert_eq!(l.base, 307_200);
+        assert_eq!(l.entries_total, 8);
+
+        // ② 换算：8 条条目偏移 + 1 条 EOCD 偏移
+        let fix = 分卷索引补丁(&mut mf, total, &l, &starts).unwrap();
+        assert_eq!(fix.entries, 8);
+        assert_eq!(fix.patches.len(), 9, "8 条条目 + 1 条 EOCD");
+        assert_eq!(fix.base, 4, "跳过卷首那 4 字节 PK07 08 分卷标记");
+
+        // ③ 打上补丁后必须是一个**干净的普通 ZIP**
+        let mut pw =
+            crate::io::patch::PatchWindow::new(&mut mf, fix.base, fix.len, fix.patches.clone())
+                .unwrap();
+        let l2 = locate(&mut pw, fix.len).unwrap();
+        assert!(!l2.split, "修好后不该再是分卷");
+        assert_eq!(l2.base, 0);
+        assert_eq!(l2.entries_total, 8);
+
+        // ④ 真的能被解码器打开，8 条名字都在（含第 8 条：它在第二卷里）
+        pw.seek(SeekFrom::Start(0)).unwrap();
+        let mut arch = 打开已知偏移(&mut pw).expect("补丁后的流应当是个合法 ZIP");
+        assert_eq!(arch.len(), 8, "zip crate 应按 8 个条目打开");
+        let mut names: Vec<String> = (0..arch.len())
+            .map(|i| arch.by_index_raw(i).unwrap().name().unwrap().to_string())
+            .collect();
+        names.sort();
+        assert!(
+            names.iter().any(|n| n == "payload/说明.txt"),
+            "第二卷里的条目必须也在: {names:?}"
+        );
+        assert!(
+            names.iter().any(|n| n == "payload/random.bin"),
+            "第一卷里跨卷边界的条目必须在: {names:?}"
+        );
+    }
+
+    /// **反向验证用**：只交第一卷起点 → 第二卷里那条必然定不到位。
+    ///
+    /// 这条钉的是「定卷」这一步不能省：如果哪天有人把实现简化成
+    /// 「所有条目都用 base + loff」，第 8 条会算到垃圾位置上去 ——
+    /// 那时要么静默解出错数据，要么（像这里）明确报错。必须报错。
+    #[test]
+    fn 分卷只给一卷起点时明确报错而不是瞎猜() {
+        let Some((z01, zip)) = 分卷样本() else { return };
+        let mut mf = crate::extract7z::MultiFile::open(&[z01, zip]).unwrap();
+        let total = mf.total();
+        let starts = mf.starts().to_vec();
+        let l = locate_volumes(&mut mf, total, &starts).unwrap();
+
+        let e = 分卷索引补丁(&mut mf, total, &l, &[0]).unwrap_err();
+        assert_eq!(e.param("reason"), Some("split_entry_not_found"));
+        assert_eq!(
+            e.param("name"),
+            Some("payload/说明.txt"),
+            "报错要说清是哪一条定不到位置"
+        );
     }
 }

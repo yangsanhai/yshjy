@@ -170,12 +170,23 @@ fn preview_target(
             // 拼成一条逻辑流 → 找中央目录 → 之后和普通 ZIP 完全一样
             let mut mf = crate::extract7z::MultiFile::open(volumes)?;
             let size = mf.total();
-            let l = crate::layout::zip::locate(&mut mf, size).map_err(|e| {
+            let starts = mf.starts().to_vec();
+            let l = crate::layout::zip::locate_volumes(&mut mf, size, &starts).map_err(|e| {
                 Error::new(ErrorCode::NotArchive)
                     .context(format!("分卷里的中央目录没找到（是不是缺了一块？）: {e}"))
             })?;
-            let mut src = crate::unpack::Source::new(&mut mf)
-                .with_offset(l.base, l.data_len())
+            // 分卷的索引是「卷内坐标」，解码器只认整条流坐标 → 换算 + 内存打补丁
+            // （非分卷时补丁表为空，走的还是原来那条路，行为一个字都不变）
+            let (b, len, patches) = if l.split {
+                let fix = crate::layout::zip::分卷索引补丁(&mut mf, size, &l, &starts)?;
+                (fix.base, fix.len, fix.patches)
+            } else {
+                (l.base, l.data_len(), Vec::new())
+            };
+            let mut pw = crate::io::patch::PatchWindow::new(&mut mf, b, len, patches)
+                .map_err(|e| Error::new(ErrorCode::Internal).context(format!("补丁窗口: {e}")))?;
+            let mut src = crate::unpack::Source::new(&mut pw)
+                .with_offset(0, len)
                 .with_packed_total(size);
             列清单(ctx, &mut src, &uopts, ArchiveFormat::Zip, Shape::Volumes)
         }
