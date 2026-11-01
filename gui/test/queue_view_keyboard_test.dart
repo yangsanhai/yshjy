@@ -97,17 +97,29 @@ void main() {
     final calls = await pumpQueue(tester, [item('a.zip'), item('b.zip')]);
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
-    expect(calls['remove'], [0], reason: '第一行是 autofocus，Del 应该是移走它');
+    expect(calls['remove'], [0], reason: '默认选中第一行，Del 应该是移走它');
   });
 
-  testWidgets('↓ 把焦点移到下一行（不是滚页面）', (tester) async {
+  testWidgets('↓ / ↑ 移动选中的行，看得见（不是滚页面）', (tester) async {
     await pumpQueue(tester, [item('a.zip'), item('b.zip')]);
-    final before = tester.binding.focusManager.primaryFocus;
+    bool sel(int i) =>
+        tester.widget<ListTile>(find.byType(ListTile).at(i)).selected;
+    expect(sel(0), isTrue, reason: '打开第一行就该是选中的');
+
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
-    final after = tester.binding.focusManager.primaryFocus;
-    expect(after, isNotNull);
-    expect(after, isNot(before), reason: '↓ 之后焦点没动，键盘就没法在行间走');
+    expect(sel(0), isFalse);
+    expect(sel(1), isTrue,
+        reason: '↓ 之后选中行没动，屏幕上一点变化都没有 —— 用户会以为键盘坏了（真机第一版就是这样）');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(sel(0), isTrue);
+
+    // 已经在第一行还按 ↑，不该越界
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(sel(0), isTrue, reason: '第一行再往上走，说明没做边界保护');
   });
 
   testWidgets('普通包只看得到状态，不该出现「换个地方试」', (tester) async {
