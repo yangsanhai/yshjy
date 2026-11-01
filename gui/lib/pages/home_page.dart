@@ -21,6 +21,7 @@ import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
 import 'home_empty_view.dart';
 import 'home_queue_view.dart';
+import 'preview_crumb_bar.dart';
 
 /// 界面状态机（对应 UI-SPEC 的 S1 ~ S9 / S11）
 enum Phase { empty, listing, preview, extracting, done, error, queue }
@@ -1758,43 +1759,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 面包屑：**真过滤**（点哪一级就只看那一层的下一级），最后一节高亮。
-  /// 第一节显示包名（比「全部」更好认），点它回根。
-  /// 依据：PeaZip 的面包屑是被夸的点，7-Zip 的下拉框是被吐槽的点（调研 07:616-631 / :682）。
-  Widget _crumbBar() {
-    final cs = Theme.of(context).colorScheme;
-    final crumbs = breadcrumbs(_crumb);
-    final pkg = (_file ?? '').split('/').last;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 2),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (var i = 0; i < crumbs.length; i++) ...[
-              if (i > 0)
-                Icon(Icons.chevron_right, size: 16, color: cs.onSurfaceVariant),
-              InkWell(
-                onTap: () => setState(() => _crumb = crumbs[i].path),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Text(
-                    i == 0 ? (pkg.isEmpty ? crumbs[i].name : pkg) : crumbs[i].name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: i == crumbs.length - 1 ? cs.onSurface : cs.primary,
-                      fontWeight: i == crumbs.length - 1
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _crumbBar() => CrumbBar(
+        crumb: _crumb,
+        filePath: _file,
+        onCrumbTap: (path) => setState(() => _crumb = path),
+      );
 
   /// 文件清单卡片（树 / 平铺共用同一块卡片与滚动条，滚动位置不丢）
   Widget _fileList(Preview pv) {
