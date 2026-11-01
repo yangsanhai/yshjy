@@ -407,7 +407,7 @@ pub enum Error {
 5. **每块独立提交、独立回滚**，验收 = `flutter analyze` 干净 + `flutter test` 全绿 +
    **反向验证一次**（把功能改坏看测试是否变红）+ 用户真机点一遍。
 
-### 进度（13 块）
+### 进度（12 块）
 
 | # | 块 | 原行数 | 引用成员数 | 状态 |
 |---|---|---|---|---|
@@ -416,8 +416,7 @@ pub enum Error {
 | 3 | `_emptyView`（拖放区） | 62 | 3 | ✅ **已拆** → `pages/home_empty_view.dart`（`EmptyDropView`）。补 4 条测试，把两条只写在注释里的设计约定钉死：拖拽中必须换「松手就行」、第一屏只许一个 `FilledButton` |
 | 4 | `_busyView` | 13 | 1 | ✅ **已拆** → `pages/home_busy_view.dart`（`BusyView`）。零状态依赖；注释里写清「转圈是无限动画，测试只能用定次 pump」 |
 | 5a | `_crumbBar`（面包屑路径条） | 38 | 3 | ✅ **已拆** → `pages/preview_crumb_bar.dart`（`CrumbBar`）。★顺手修了「包名取法只认 `/`」的 Windows bug（改用 `baseName()`），补 5 条测试 |
-| 5b | `_fileList`（文件清单卡片） | 77 | 6 | ⬜ 下一块 |
-| 5c | `_entryRow`（清单一行） | 116 | 4 | ⬜ **有 4 处 setState**（展开/勾选）—— 要么下沉成本地状态、要么上提成回调，是这块唯一的判断题 |
+| 5b+5c | `_fileList` + `_entryRow`（清单 + 每行） | 77+116 | 6+4 | ✅ **已拆（两块合成一块）** → `pages/preview_file_list.dart`（`FileListView`）。**4 处 setState 改成 3 个回调，状态全留在父层** —— `_picked` 要传给引擎、`_crumb` 要算缩进基准和面包屑，下沉就变成两份真相。补 7 条交互测试 |
 | 5d | `_previewView`（预览页主体） | 325 | 26 | ⬜ 最后做，它负责组装上面三块 + 密码区 + 勾选区 + 主按钮 |
 | 6 | `_progressView` + `_flushView` | 121+65 | — | ⬜ |
 | 7 | `_doneView`（完成卡） | 169 | — | ⬜ |
