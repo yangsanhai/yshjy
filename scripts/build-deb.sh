@@ -90,6 +90,17 @@ cp -a gui/linux/icons/hicolor/. "$STAGE/usr/share/icons/hicolor/"
 # AppStream 元数据：软件中心靠它显示名称/简介/版本说明
 install -m644 data/io.github.yangsanhai.yshjy.metainfo.xml \
   "$STAGE/usr/share/metainfo/io.github.yangsanhai.yshjy.metainfo.xml"
+# 截图（T9）：**先不装** —— metainfo 里那段还注释着。
+# 原因：AppStream 只认 http(s) 绝对 URL，随包分发的相对路径会报 web-url-expected；
+# 而仓库还没有远程，写 GitHub raw 是死链。等推到 GitHub、metainfo 解除注释后，
+# 把下面四行的注释一起去掉（图在 data/screenshots/，1366×768 16:9）。
+# mkdir -p "$STAGE/usr/share/metainfo/screenshots"
+# install -m644 data/screenshots/preview.png \
+#   "$STAGE/usr/share/metainfo/screenshots/preview.png"
+# install -m644 data/screenshots/done.png \
+#   "$STAGE/usr/share/metainfo/screenshots/done.png"
+# install -m644 data/screenshots/settings.png \
+#   "$STAGE/usr/share/metainfo/screenshots/settings.png"
 
 # ── 文件管理器右键菜单（N7）──
 # 在 Nautilus 里选中压缩包 → 右键 →「脚本」→「用杨三海解压」

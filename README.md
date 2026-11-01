@@ -14,6 +14,12 @@
 > 当前两版格式覆盖**一致** —— 全能版的价值要等冷门格式一个个补完才拉开。
 > `yshjy --version` 会告诉你装的是哪一档。
 
+<p align="center">
+  <img src="data/screenshots/preview.png" width="32%" alt="预览：认出这是个伪装包，列出里面真正的文件">
+  <img src="data/screenshots/done.png" width="32%" alt="解开之后：告诉你在哪、里面还有没有别的包">
+  <img src="data/screenshots/settings.png" width="32%" alt="设置页：所有快捷键一张表">
+</p>
+
 ---
 
 ## 😵 你是不是遇到过这种事
