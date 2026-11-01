@@ -555,6 +555,16 @@ fn extract_7z_with_hint_ctx<R: Read + Seek>(
                 } else {
                     ErrorCode::NeedPassword
                 }
+            } else if matches!(
+                e,
+                sevenz_rust2::Error::UnsupportedCompressionMethod(_)
+                    | sevenz_rust2::Error::Unsupported(_)
+                    | sevenz_rust2::Error::ExternalUnsupported
+            ) || msg.to_lowercase().contains("unsupported")
+            {
+                // 包是好的，只是用了没实现的编码器（7z 的第三方 coder：zstd / brotli / lz4）。
+                // 报「这不是压缩包」会让人以为文件坏了 —— 2026-11-02 审计 A-2（sevenz-rust 样本实测）。
+                ErrorCode::UnsupportedMethod
             } else {
                 ErrorCode::NotArchive
             };

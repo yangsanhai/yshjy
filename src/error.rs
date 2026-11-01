@@ -90,6 +90,19 @@ pub enum ErrorCode {
     /// 没密码时连「里面有哪几个文件」都读不出来，与「内容加密、清单可读」是两种情况，
     /// 文案必须分开，否则用户会以为「我给了密码怎么还不行」。
     HeadEncrypted,
+    /// **不支持的压缩方法**：包是好的，但用了我们没实现的算法
+    /// （zip 里的 LZMA/PPMd/XZ/Implode/Reduce/Shrink/Deflate64-raw，
+    /// 7z 里的 zstdmt-brotli / zstdmt-lz4 等）。
+    ///
+    /// ★ 必须与 `DataLost` / `NotArchive` 分开：报「中间有一段数据丢了」会让人
+    /// 以为包坏了去重新下载、换软件 —— 而用 7-Zip 打开就正常。
+    /// 2026-11-02 审计实测：zip2 的 8 个样本 + sevenz-rust 的 2 个样本全被谎报。
+    UnsupportedMethod,
+    /// **包里有不安全的名字**：条目名含控制字符、绝对路径、`..` 穿越等。
+    /// 我们**故意不写出来**（写出去就是安全漏洞），但这不等于包坏了 ——
+    /// 以前落到 `DataLost`（「中间有一段数据丢了」），用户会以为数据丢了去重下。
+    /// 2026-11-02 审计 A-4：zip2 的 `zip64_magic_in_filename_*` 正是这种包。
+    UnsafePath,
     /// 既不是压缩包，也没藏着压缩包
     NotArchive,
     /// 文件不完整（被截断）
@@ -147,7 +160,7 @@ impl ErrorCode {
             PathNotFound | InvalidArgument | NotEnoughSpace | PermissionDenied | PathTooLong
             | DestIsFile | SafetyLimit | Internal => 1,
             NeedPassword | WrongPassword | HeadEncrypted | NotArchive | Truncated | MissingVolume
-            | DataLost | EncryptedUnbreakable | VideoUnplayable => 2,
+            | DataLost | EncryptedUnbreakable | VideoUnplayable | UnsupportedMethod | UnsafePath => 2,
             Cancelled => exit_code::CANCELLED,
         }
     }
@@ -160,7 +173,9 @@ impl ErrorCode {
             | DestIsFile | SafetyLimit | Internal => exit_code::ERROR,
             NotArchive => exit_code::NOT_ARCHIVE,
             NeedPassword | WrongPassword | HeadEncrypted | EncryptedUnbreakable => exit_code::PASSWORD,
-            Truncated | MissingVolume | DataLost | VideoUnplayable => exit_code::ERROR,
+            Truncated | MissingVolume | DataLost | VideoUnplayable | UnsupportedMethod | UnsafePath => {
+                exit_code::ERROR
+            }
             Cancelled => exit_code::CANCELLED,
         }
     }
@@ -181,6 +196,8 @@ impl ErrorCode {
             NeedPassword => "NEED_PASSWORD",
             WrongPassword => "WRONG_PASSWORD",
             HeadEncrypted => "HEAD_ENCRYPTED",
+            UnsupportedMethod => "UNSUPPORTED_METHOD",
+            UnsafePath => "UNSAFE_PATH",
             NotArchive => "NOT_ARCHIVE",
             Truncated => "TRUNCATED",
             MissingVolume => "MISSING_VOLUME",

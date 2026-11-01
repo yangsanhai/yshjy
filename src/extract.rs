@@ -291,6 +291,50 @@ pub fn extract_zip_at<R: Read + Seek>(
     extract_zip_at_ctx(r, base, len, opts, &UnpackCtx::quiet(0))
 }
 
+/// 把 zip crate 的条目错误翻成人话。
+///
+/// ★ `UnsupportedArchive` 必须单独标出来：那是「**包是好的，只是这个算法我们没实现**」
+///   （zip 里的 LZMA/PPMd/XZ/Implode/Reduce/Shrink/Deflate64-raw）。
+///   上层靠「不支持的压缩方法」这几个字归成 `UNSUPPORTED_METHOD`；不标的话会落到
+///   `DataLost`（「中间有一段数据丢了」），用户以为包坏了去重新下载 —— 2026-11-02 审计实测。
+fn 条目打不开说明(e: &zip::result::ZipError) -> String {
+    match e {
+        zip::result::ZipError::CompressionMethodNotSupported(id) => format!(
+            "不支持的压缩方法（编号 {id}）—— 包本身是好的，用 7-Zip 或 PeaZip 能打开"
+        ),
+        zip::result::ZipError::UnsupportedArchive(msg) => format!(
+            "不支持的压缩方法（{msg}）—— 包本身是好的，用 7-Zip 或 PeaZip 能打开"
+        ),
+        _ => format!("打开条目失败: {e}"),
+    }
+}
+
+/// zip crate 打不开、但我们自己的定位器已经解析出中央目录时走的兜底路径（审计 A-4）。
+///
+/// 只有「按 local header 真能重建出条目」时才走 —— 重建不出来就老实说文件不行，
+/// 免得把垃圾数据当成功产物写出来。
+fn 救援兜底<R: Read + Seek>(
+    r: &mut R,
+    base: u64,
+    len: u64,
+    opts: &ExtractOptions,
+    ctx: &UnpackCtx,
+) -> Result<ExtractReport> {
+    let end = base.saturating_add(len);
+    let items = crate::rescue::rescue_by_locals(
+        r,
+        base,
+        end,
+        &crate::rescue::RescueOptions::default(),
+    )?;
+    if items.is_empty() {
+        return Err(Error::new(ErrorCode::NotArchive)
+            .with("reason", "zip_crate_refused_and_no_local_headers")
+            .context("这个包连文件头都重建不出来 —— 不是 ZIP，或者数据区已经没了"));
+    }
+    crate::rescue::extract_by_locals_ctx(r, base, end, opts, ctx)
+}
+
 /// 同 [`extract_zip_at`]，但带上事件 / 进度 / 取消上下文
 pub fn extract_zip_at_ctx<R: Read + Seek>(
     r: R,
@@ -299,12 +343,32 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
     opts: &ExtractOptions,
     ctx: &UnpackCtx,
 ) -> Result<ExtractReport> {
+    let mut r = r;
     // 把「文件 + 偏移」虚拟成一个独立的小 ZIP 文件
-    let window = Window::new(r, base, len)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?;
-
-    let mut archive = crate::layout::zip::打开已知偏移(window)
-        .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("zip open: {e}")))?;
+    let 开包 = crate::layout::zip::打开已知偏移(
+        Window::new(&mut r, base, len)
+            .map_err(|e| Error::new(ErrorCode::Internal).context(format!("window: {e}")))?,
+    );
+    let mut archive = match 开包 {
+        Ok(a) => a,
+        // ★ 审计 A-4：有些包的名字字段里就塞着 `PK\x06\x06` / `PK\x06\x07` 这些 ZIP64 魔数
+        //   （zip2 的 `zip64_magic_in_filename_*` 就是造来考验解析器的）。`zip` crate 会被骗得
+        //   去找并不存在的 ZIP64 记录然后整包拒收 —— 而 7-Zip 照解不误。
+        //   这时退回「照 local header 抽数据」的救援路径。
+        //   ★ 但**先让修复流程上**：A-3 那种「坏 extra / 偏移被改错」的包是修复能救的，
+        //   抢在它前面走救援会少解条目（实测：2 个文件只解出 1 个）。
+        Err(e) => {
+            let 能修 = matches!(
+                crate::repair::analyze(&mut r, base, len),
+                Ok(crate::repair::RepairAnalysis::Repairable(_))
+            );
+            if 能修 {
+                return Err(Error::new(ErrorCode::NotArchive)
+                    .context(format!("zip open: {e}")));
+            }
+            return 救援兜底(&mut r, base, len, opts, ctx);
+        }
+    };
 
     // 先列出「打包后总大小」，给炸弹防护做基准
     let packed_total: u64 = (0..archive.len())
@@ -596,7 +660,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         } else {
             archive
                 .by_index(i)
-                .map_err(|e| format!("打开条目失败: {e}"))
+                .map_err(|e| 条目打不开说明(&e))
         } {
             Ok(f) => f,
             Err(msg) => {
@@ -1176,6 +1240,40 @@ mod tests {
     #[test]
     fn aes_加密包可解() {
         试加密样本("tests/data/aes_secret.zip", "secret", "enc_aes");
+    }
+
+    #[test]
+    fn 坏extra字段的包也能解() {
+        // 参考样本（来自 zip2 的 extended_timestamp_bad.zip）：
+        // CD 条目 test.txt 的 extra 链尺寸字段写坏 —— 0x5455(UT) 后面 size=0，
+        // 再往后的字节全被当成下一个 field 的 tag/size（tag=0x1103 size=13121，越界）。
+        //
+        // 现状（2026-11-02 审计 A-3）：EOCD 层面自洽 → repair::analyze 判「不用修」→
+        // zip crate 打不开 → 报「这不是压缩包」，而 7z / unzip 都能正常解 2 个文件。
+        // 期望：坏 extra 不该让整个包判死，内容照解。
+        let path = format!(
+            "{}/tests/data/extended_timestamp_bad.zip",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let mut f = std::fs::File::open(&path).unwrap();
+        let len = std::fs::metadata(&path).unwrap().len();
+        let dest = scratch_dir("bad_extra");
+        let opts = ExtractOptions::new(&dest);
+
+        let (rep, 修复说明) = extract_zip_auto(&mut f, 0, len, &opts)
+            .expect("坏 extra 字段的包应该能解（忽略坏字段，别把好包判成「不是压缩包」）");
+        eprintln!("修复说明: {修复说明:?}");
+
+        assert_eq!(
+            rep.files.len(),
+            2,
+            "应解出 2 个文件，实际: {:?}，跳过: {:?}",
+            rep.files.iter().map(|f| &f.name).collect::<Vec<_>>(),
+            rep.skipped
+        );
+        let txt = std::fs::read_to_string(dest.join("mimetype")).unwrap();
+        assert_eq!(txt.len(), 39, "mimetype 的 39 字节要完整解出");
+        let _ = std::fs::remove_dir_all(&dest);
     }
 
     #[test]

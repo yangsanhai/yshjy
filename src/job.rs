@@ -512,6 +512,32 @@ fn locate_zip(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> Resu
             //   * 伪装包（名字是 .mp4、内容只有个 PK 签名 + 几十字节垃圾）：命中只有开头一处
             // 判据：命中 ≥2 处，或文件本身已经不小（>64 KB）且开头是 PK。
             // 只按「开头是 PK」判会把伪装包误判成「没下完」（serve.rs 有个测试盯着这条）。
+            // ★ 审计 A-9：定位失败时**先试救援** —— 按 local header 真能重建出条目就救，
+            //   这比只报「没下完 / 不是压缩包」有用得多（zip2 的 `deflate64_issue_25.zip`，
+            //   以及「CD 被删掉但文件头都在」的包都属这类）。
+            //   `--list` 早有这个兜底（try_list_by_rescue），`--test`/解压没有，于是两条命令打架。
+            //   判据必须硬：**真重建出条目**才算，重建不出来就往下走原来的两种报错 ——
+            //   这样「只有个 PK 签名 + 几十字节垃圾」的伪装包不会被误救。
+            let 起点 = hits.iter().map(|h| h.offset).min().unwrap_or(0);
+            let 能救 = crate::rescue::rescue_by_locals(
+                &mut f,
+                起点,
+                size,
+                &crate::rescue::RescueOptions::default(),
+            )
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+            if 能救 {
+                ctx.diagnostic(
+                    DiagnosticCode::HiddenAtOffset,
+                    format!("rescue base={起点} len={}", size - 起点),
+                );
+                return Ok(Target::Zip {
+                    base: 起点,
+                    len: size - 起点,
+                });
+            }
+
             let 像是没下完 = hits.len() >= 2 || (size > 64 * 1024 && 开头像zip(&mut f));
             if 像是没下完 {
                 return Err(Error::new(ErrorCode::Truncated)
@@ -1497,6 +1523,22 @@ fn outcome_from(res: Result<ExtractReport>, stats: &mut JobStats, ctx: &UnpackCt
                     // T9-P3：一个都没解出来，但原因是「写不进去」（只读目录 / 没空间 /
                     // 路径太长 / 目标是个文件）—— 这不是包坏了，别报「中间有一段数据丢了」
                     code
+                } else if rep
+                    .skipped
+                    .iter()
+                    .any(|(_, why)| why.contains("不支持的压缩方法"))
+                {
+                    // 包是好的，只是用了我们没实现的算法（LZMA/PPMd/XZ/Implode…）。
+                    // 报「数据丢了」会让人去重下 —— 2026-11-02 审计 A-2。
+                    ErrorCode::UnsupportedMethod
+                } else if rep
+                    .skipped
+                    .iter()
+                    .any(|(_, why)| why.contains("路径不安全被拒"))
+                {
+                    // 条目名含控制字符 / 绝对路径 → 我们**故意**不写（写出去就是漏洞）。
+                    // 这是安全闸，不是数据丢了 —— 审计 A-4。
+                    ErrorCode::UnsafePath
                 } else if rep.budget_hit {
                     // ★ 安全限额拦下的（压缩比 / 单次总量）—— 包是好的，是我们自己的闸。
                     //   以前这条落到下面的 `DataLost` 兜底，用户看到「中间有一段数据丢了」，
@@ -1722,6 +1764,104 @@ mod tests {
             "里面有东西".as_bytes()
         );
         let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn 中央目录被删掉也能按文件头救出来() {
+        // D9 样本（79 B）：只有 1 个 local header + 数据，**没有中央目录、没有 EOCD**。
+        // 以前：locate 失败 → 「这不是压缩包（没找到可识别的压缩数据）」，
+        // 而同一个包 `--list` 有救援兜底、`--test` 没有 → 两条命令自相矛盾（审计 A-9）。
+        // 现在：定位失败时先试救援，**真能重建出条目**就照救援路径解。
+        let p = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/D9_no_central_directory.zip"
+        ));
+        let out = scratch("no_cd");
+        let opts = BatchOptions {
+            encoding: None,
+            dest: Some(out.clone()),
+            smart_dir: false,
+            verify_only: false,
+            ..Default::default()
+        };
+        let sink: Arc<dyn EventSink> = Arc::new(NullSink);
+        let o = run_job(&Job::new(1, p, 0), &opts, &sink, &CancelToken::new());
+        assert!(
+            matches!(o.outcome, Outcome::Success),
+            "应当救出来，实际 {:?}（stats: {:?}）",
+            o.outcome,
+            o.stats
+        );
+        assert_eq!(o.stats.entries_done, 1, "应当解出 1 个条目：{:?}", o.stats);
+        let got = std::fs::read(out.join("hello.txt")).unwrap_or_default();
+        assert_eq!(
+            got,
+            b"hi from a zip with no central directory\n",
+            "解出来的内容不对"
+        );
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn 控制字符文件名报不安全路径而不是数据丢了() {
+        // zip2 的 `zip64_magic_in_filename_1.zip`（168 B）：文件名本身就是
+        // `PK\x06\x06…PK\x06\x07…` 这些 ZIP64 魔数，两个坑叠在一起：
+        //   ① 定位器被 EOCD 前的假 locator 骗 → 已经按「只有字段是哨兵值才走 ZIP64」修掉
+        //   ② 名字含控制字符 → 安全闸拒绝写盘（**这是对的**，写出去就是漏洞）
+        // 但以前报「中间有一段数据丢了」，用户会以为数据坏了去重下 —— 审计 A-4。
+        // 7-Zip 会把这种名字照解出来；我们有意不跟随，但必须说清是安全保护。
+        let p = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/zip64_magic_in_filename.zip"
+        ));
+        let out = scratch("unsafe_path");
+        let opts = BatchOptions {
+            encoding: None,
+            dest: Some(out.clone()),
+            smart_dir: false,
+            verify_only: true,
+            ..Default::default()
+        };
+        let sink: Arc<dyn EventSink> = Arc::new(NullSink);
+        let o = run_job(&Job::new(1, p, 0), &opts, &sink, &CancelToken::new());
+        assert_eq!(
+            o.outcome,
+            Outcome::Failed(ErrorCode::UnsafePath),
+            "应当是 UNSAFE_PATH，实际 {:?}（stats: {:?}）",
+            o.outcome,
+            o.stats
+        );
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn 不支持的压缩方法报专门错误码() {
+        // 样本来自 zip2（`tests/data/legacy/implode.zip` 原样收进来）：
+        // 包是好的，但用了 Implode（方法 6），我们没实现。
+        // 以前落到 `DataLost`（「中间有一段数据丢了」），用户以为包坏了去重下 ——
+        // 而 7-Zip / unzip 都能正常解。2026-11-02 审计 A-2。
+        let p = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/implode_legacy.zip"
+        ));
+        let out = scratch("unsupported_method");
+        let opts = BatchOptions {
+            encoding: None,
+            dest: Some(out.clone()),
+            smart_dir: false,
+            verify_only: true,
+            ..Default::default()
+        };
+        let sink: Arc<dyn EventSink> = Arc::new(NullSink);
+        let o = run_job(&Job::new(1, p, 0), &opts, &sink, &CancelToken::new());
+        assert_eq!(
+            o.outcome,
+            Outcome::Failed(ErrorCode::UnsupportedMethod),
+            "应当是 UNSUPPORTED_METHOD，实际 {:?}（stats: {:?}）",
+            o.outcome,
+            o.stats
+        );
         let _ = std::fs::remove_dir_all(&out);
     }
 

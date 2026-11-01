@@ -619,7 +619,8 @@ fn main() -> ExitCode {
         return do_list(&targets, quiet, json, 编码.as_deref(), val_of("--password").as_deref());
     }
     if has("--rescue") {
-        return do_rescue(&targets, &val_of("--dest"), quiet);
+        // `--test` 也要传下去：以前这里丢了，于是 `--test --rescue` 照样落盘（审计 A-8）
+        return do_rescue(&targets, &val_of("--dest"), quiet, has("--test"));
     }
     // 只剥封面、不解压（DESIGN §3 / §17.5）
     if has("--extract-cover") {
@@ -1938,6 +1939,8 @@ fn 失败文案(code: yshjy::error::ErrorCode) -> String {
         C::NeedPassword => "error.password_missing",
         C::WrongPassword => "error.password_wrong",
         C::HeadEncrypted => "error.head_encrypted",
+        C::UnsupportedMethod => "error.unsupported_method",
+        C::UnsafePath => "error.unsafe_path",
         C::NotArchive => "error.not_archive",
         C::Truncated => "error.truncated",
         C::MissingVolume => "error.missing_volume",
@@ -3323,7 +3326,7 @@ fn do_extract_cover(
     }
 }
 
-fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> ExitCode {
+fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool, verify_only: bool) -> ExitCode {
     let 语 = 文案();
     let path = &targets[0];
     let mut f = match std::fs::File::open(path) {
@@ -3356,7 +3359,7 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
     // 救援主路径没有 json 出口，所以这里固定传 false。
     let 出口: std::sync::Arc<dyn yshjy::event::EventSink> =
         std::sync::Arc::new(终端出口::new(quiet, false));
-    let ctx = yshjy::ctx::UnpackCtx::new(1, 出口);
+    let ctx = yshjy::ctx::UnpackCtx::new(1, 出口).with_verify_only(verify_only);
     let hits = match yshjy::scan::scan_whole_file(&mut f, size, &yshjy::scan::ScanOptions::strict())
     {
         Ok(h) => h,
@@ -3402,10 +3405,14 @@ fn do_rescue(targets: &[String], dest_opt: &Option<String>, quiet: bool) -> Exit
             };
             let eopts = yshjy::extract::ExtractOptions::new(&dest);
             if !quiet {
-                println!(
-                    "{}",
-                    语.t("cli.rescue_extract_to", &[("dest", &dest.display().to_string())])
-                );
+                if verify_only {
+                    println!("{}", 语.t("cli.rescue_verify", &[]));
+                } else {
+                    println!(
+                        "{}",
+                        语.t("cli.rescue_extract_to", &[("dest", &dest.display().to_string())])
+                    );
+                }
             }
             match yshjy::rescue::extract_by_locals_ctx(&mut f, start, size, &eopts, &ctx) {
                 Ok(rep) => {

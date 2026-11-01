@@ -173,6 +173,16 @@ pub fn parse_local_header<R: Read + Seek>(
         return Ok(None);
     }
 
+    // ── 名字必须像文件名 ──
+    // 含控制字符（NUL / 0x01–0x1F / 0x7F）说明这个 `PK\x03\x04` 只是**数据区或别的文件名里
+    // 碰巧出现的字节**，不是真的 local header。审计 A-4 实测：zip2 的
+    // `zip64_magic_in_filename_1~5.zip` 就是这么从数据里扫出垃圾条目 —— 名字整段是
+    // `PK\x06\x06\x00\x00…` 这类控制字节，`--list` 列得有模有样，`--test` 却说不是包。
+    // 宁可少列一条，也不许谎报（真文件名的合法多字节是 ≥0x80，不会被误杀）。
+    if raw_name.iter().any(|&b| b < 0x20 || b == 0x7F) {
+        return Ok(None);
+    }
+
     // ── ZIP64 extra（0x0001）：字段为哨兵值 0xFFFFFFFF 时，真实值在这里 ──
     // 顺序与含义（PKWARE APPNOTE 4.5.3）：原始大小、压缩大小、local header 偏移、磁盘号
     // 只读取"哪些字段是哨兵"对应的那几项。
@@ -425,8 +435,13 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
         return Err(Error::new(ErrorCode::NotArchive).with("reason", "没有可重建的条目"));
     }
 
-    std::fs::create_dir_all(&opts.dest)
-        .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
+    // ★ 只测不写时不建输出目录：`--test --rescue` 以前照样建 `<包名>.rescue/` 目录，
+    //   违反「一个字节都不落盘」的承诺（2026-11-02 审计 A-8）。下面每条的父目录/落盘
+    //   都已经按 `ctx.verify_only` 分支，这里漏了一处。
+    if !ctx.verify_only {
+        std::fs::create_dir_all(&opts.dest)
+            .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
+    }
 
     // 以"压缩数据总量"为分母做炸弹防护
     let packed_total: u64 = items.iter().map(|i| i.pack_size).sum::<u64>().max(1);

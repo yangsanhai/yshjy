@@ -1,5 +1,32 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-02 深夜 · P8 审计修复战役：9 条修完 6 条（本地提交，未发版）**
+>
+> **账本是 `docs/IMPL-PROVENANCE.md`**（A 类逐条「触发/落点/修法/状态」全在里面，别在别处再抄一份）。
+>
+> **这一轮修完的（都带反向验证过的回归测试）**：
+> - **A-1 RAR5 头加密**（`-hp`）：以前不给密码报「分卷不齐」、给对密码报「这不是压缩包」。
+>   新增 `打开归档()`：先不带密码试 → 只对 `NeedPassword` 才轮三编码候选 `read_path_with_options`；
+>   单卷 + 多卷都改了（多卷密码类错误原样上抛，不被吞成「第 N 卷读不出来」）。
+> - **A-2 不支持的压缩方法**：新增 `ErrorCode::UnsupportedMethod`，zip 的 LZMA/PPMd/XZ/Implode/Reduce/Shrink
+>   + 7z 的 zstdmt-brotli/lz4 共 9 个样本全部从「数据丢了/不是包」改成「这个包用了本程序不支持的压缩方法」。
+> - **A-3 `--test` 假阴性**：坏 extra 链检测（`坏extra区间`/`extra链坏了`/`空字段填充`）。
+> - **A-4 假 ZIP64 魔数**：三层病 —— ①ZIP64 判据改成「只有 EOCD 字段是哨兵值才必须走 ZIP64」
+>   ②救援扫描不认含控制字符的名字 ③新增 `ErrorCode::UnsafePath`（名字不安全 ≠ 数据丢了）。
+> - **A-8 `--test --rescue` 会落盘**：`do_rescue` 补传 verify_only + `extract_by_locals_ctx` 的
+>   `create_dir_all` 加闸。新增探针 `tests/rescue_verify.sh`（已挂 all.sh）。
+> - **A-9 定位失败不试救援**：`locate_zip` 失败分支先试 `rescue_by_locals`，真能重建出条目就救。
+>
+> **验证口径**：`cargo test` **436 passed / 1 ignored / 0 failed**、`clippy -D warnings` 干净、
+> `flutter test` 420 全过、`tests/rescue_verify.sh` 3/3。locales 7 语言 **156 键**、GUI 7 语言 **553 键**。
+>
+> **剩 3 条**（账本第六节有顺序）：A-5 zip 分卷拼接（1 天，要动 CD 定位）、A-6 声明尺寸封顶（半天）、
+> B 类 6 条写注释 + 死代码清理 + `dead_pub.sh`（半天）。
+>
+> **★ 未发版**：装机仍是 0.9.52，这一轮只在本地 git 提交。
+> **下次开工**：读账本第六节挑下一条；A-5 动分卷定位，先看 `docs/IMPL-PROVENANCE.md` 的 A-5 小节和
+> `src/api.rs` 的 `ZipSplit` 分支。
+
 > **2026-11-02 夜 · T11 收尾做完，Linux 功能侧视为完整；用户决定「先停」**
 >
 > **这一轮做完的**：`Ctrl+V 粘贴路径`（以前 `keyboard.dart` 有动作、有映射，全仓**零消费** =

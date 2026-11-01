@@ -70,6 +70,45 @@ impl ExtractRarOptions {
     }
 }
 
+/// 打开一个 RAR —— **头加密**的包（WinRAR 的 `-hp`）必须先带密码才打得开：
+/// 整份清单都被加密，不带密码连「里面有几个文件」都读不出来。
+///
+/// 以前这里固定 `read_path`（不带密码），于是头加密包在**打开阶段**就失败，
+/// 被包成「这不是压缩包」或「分卷不齐」—— 用户给对了密码照样失败
+/// （2026-11-02 审计 A-1；`unrar` 同密码 `All OK`）。
+///
+/// 顺序：先不带密码试（明文包最快，也不用拿密码去开明文包）→ 只对 `NeedPassword`
+/// 才轮到候选密码（UTF-8 → GBK → UTF-16LE，与内容密码同一套：
+/// WinRAR 在中文 Windows 上写的是 CP936，单用 UTF-8 必然报「密码错」）。
+fn 打开归档(path: &Path, password: Option<&str>) -> Result<rars::Archive> {
+    match rars::ArchiveReader::read_path(path) {
+        Ok(a) => return Ok(a),
+        Err(rars::Error::NeedPassword) => {}
+        Err(e) => {
+            return Err(Error::new(ErrorCode::NotArchive)
+                .with("file", path.display().to_string())
+                .context(format!("不是有效的 RAR（或版本不支持）: {e}")));
+        }
+    }
+
+    let Some(pw) = password else {
+        return Err(Error::new(ErrorCode::HeadEncrypted)
+            .with("file", path.display().to_string())
+            .context("这个 RAR 的清单被加密了（头加密 -hp），要解压码才能看里面有什么"));
+    };
+    for cand in crate::extract::密码候选(pw) {
+        if let Ok(a) = rars::ArchiveReader::read_path_with_options(
+            path,
+            rars::ArchiveReadOptions::with_password(&cand),
+        ) {
+            return Ok(a);
+        }
+    }
+    Err(Error::new(ErrorCode::WrongPassword)
+        .with("file", path.display().to_string())
+        .context("解压码不对 —— 这个 RAR 的清单是加密的（头加密），三种编码都试过了"))
+}
+
 /// 解压一个 RAR 文件
 pub fn extract_rar_file(
     path: &Path,
@@ -85,12 +124,9 @@ pub fn extract_rar_file_ctx(
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
     let packed = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    // 流式读：read_path 按需取载荷，不再整包进内存（X2：RAR 大小上限已删除）
-    let archive = rars::ArchiveReader::read_path(path).map_err(|e| {
-        Error::new(ErrorCode::NotArchive)
-            .with("file", path.display().to_string())
-            .context(format!("不是有效的 RAR（或版本不支持）: {e}"))
-    })?;
+    // 流式读：read_path 按需取载荷，不再整包进内存（X2：RAR 大小上限已删除）。
+    // 头加密的包必须带密码才打得开 —— 走 `打开归档`（审计 A-1）。
+    let archive = 打开归档(path, opts.password.as_deref())?;
     // 只给了一卷、但它自己末尾挂着「内容续到下一卷」→ 就是缺卷。
     // 不在这里拦，库会解到一半才失败，最后被归类成「这不是压缩包」（自相矛盾且误导）
     if 还有后续卷(&archive) {
@@ -122,18 +158,30 @@ pub fn extract_rar_volumes_ctx(
     let mut archives = Vec::with_capacity(volumes.len());
     let mut packed = 0u64;
     for (i, p) in volumes.iter().enumerate() {
-        let a = rars::ArchiveReader::read_path(p).map_err(|e| {
-            Error::new(ErrorCode::MissingVolume)
-                .with("volume", p.display().to_string())
-                .with("index", (i + 1).to_string())
-                .context(format!(
-                    "第 {} 卷读不出来（{}）—— 可能没下全或下坏了: {e}",
-                    i + 1,
-                    p.file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default()
-                ))
-        })?;
+        // 头加密的分卷每卷都要密码才打得开；密码类错误原样上抛，别归成「第 N 卷读不出来」
+        let a = match 打开归档(p, opts.password.as_deref()) {
+            Ok(a) => a,
+            Err(e)
+                if matches!(
+                    e.code,
+                    ErrorCode::NeedPassword | ErrorCode::WrongPassword | ErrorCode::HeadEncrypted
+                ) =>
+            {
+                return Err(e);
+            }
+            Err(e) => {
+                return Err(Error::new(ErrorCode::MissingVolume)
+                    .with("volume", p.display().to_string())
+                    .with("index", (i + 1).to_string())
+                    .context(format!(
+                        "第 {} 卷读不出来（{}）—— 可能没下全或下坏了: {e}",
+                        i + 1,
+                        p.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    )));
+            }
+        };
         packed = packed.saturating_add(fs::metadata(p).map(|m| m.len()).unwrap_or(0));
         archives.push(a);
     }
@@ -765,6 +813,55 @@ mod tests {
         let rep = extract_rar_ctx(&data, &ExtractRarOptions::new(&dest), &ctx).unwrap();
         assert!(rep.cancelled, "应当标记为已取消");
         assert!(rep.files.is_empty());
+    }
+
+    /// 审计 A-1：头加密（WinRAR `-hp`）的 RAR —— 清单本身被加密。
+    ///
+    /// 以前打开时固定 `read_path`（不带密码），于是：不给密码被包成「分卷不齐」，
+    /// 给对密码被包成「这不是压缩包」（`unrar` 同密码 `All OK`）。现在三态都要对：
+    /// 不给 → `HeadEncrypted`；给错 → `WrongPassword`；给对 → 真能解出文件。
+    #[test]
+    fn 头加密rar_三态() {
+        let p = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/rar5_header_encrypted.rar"
+        ));
+        let dest = scratch("rar_head_encrypted");
+
+        // ① 不给密码
+        let opts = ExtractRarOptions::new(&dest);
+        let e = extract_rar_file(&p, &opts).expect_err("不给密码不该成功");
+        assert_eq!(
+            e.code,
+            ErrorCode::HeadEncrypted,
+            "不给密码应当是 HeadEncrypted，实际 {:?}（{}）",
+            e.code,
+            e.context.as_deref().unwrap_or("")
+        );
+
+        // ② 给错密码
+        let mut opts = ExtractRarOptions::new(&dest);
+        opts.password = Some("wrongpw".into());
+        let e = extract_rar_file(&p, &opts).expect_err("错密码不该成功");
+        assert_eq!(
+            e.code,
+            ErrorCode::WrongPassword,
+            "错密码应当是 WrongPassword，实际 {:?}（{}）",
+            e.code,
+            e.context.as_deref().unwrap_or("")
+        );
+
+        // ③ 给对密码（rars 夹具的密码就是 password）
+        let mut opts = ExtractRarOptions::new(&dest);
+        opts.password = Some("password".into());
+        let rep = extract_rar_file(&p, &opts).expect("对密码应当能解");
+        assert_eq!(rep.files.len(), 1, "应当解出 1 个文件：{:?}", rep.files.len());
+        assert!(
+            rep.files.iter().any(|f| f.name.contains("hello.txt")),
+            "解出的应当是 hello.txt：{:?}",
+            rep.files.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
+        let _ = fs::remove_dir_all(&dest);
     }
 
     fn scratch(tag: &str) -> PathBuf {

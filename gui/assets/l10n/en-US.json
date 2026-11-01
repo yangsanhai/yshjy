@@ -20,6 +20,8 @@
   "about.stateDir": "Open state directory (crash logs live here)",
   "about.footer": "Made with Flutter + Rust · the GUI talks to the engine over docs/PROTOCOL.md",
   "err.NOT_ARCHIVE": "No archive found in there — it may not be a disguised archive, or the file is damaged",
+  "err.UNSUPPORTED_METHOD": "This archive uses a compression method this app doesn't support — open it with 7-Zip or PeaZip",
+  "err.UNSAFE_PATH": "The archive contains unsafe names (control characters etc.) — refused to write them out; a safety guard, not a broken archive",
   "err.MISSING_VOLUME": "Missing part — one volume is not here; download the missing one and try again",
   "err.TRUNCATED": "Download incomplete (the data ends early)",
   "err.DATA_LOST": "The file is damaged — only part of it can be recovered",
