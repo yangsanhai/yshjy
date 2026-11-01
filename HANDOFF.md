@@ -1,5 +1,40 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 深夜 · T11 无障碍：键盘做完了（7 屏 + 2 块），语义补了关键几处 —— 尚未发版、尚未真机验**
+>
+> - **为什么做这个**：上一轮核台账时发现执行顺序表把 6c 打成「✅ 全部完成」，但 6d（T11）说
+>   「并入 6c 一起补」——实际 `Semantics(` 全仓 **0 处**、键盘只有队列块一处。
+>   这跟 T19 抓到的那三处是同一类毛病：**文档说做了、代码其实漏了**。用户选了先补这张账。
+> - **做了什么**：
+>   - 新文件 `gui/lib/keyboard.dart` —— 键位唯一真源（纯函数 `keyActionFor`）。
+>     Enter / Esc / Del / Ctrl+A / Ctrl+V / Ctrl+E 全出自 `docs/UI-SPEC.md` §4b.6 + §七
+>     和 PeaZip `en.txt:1414`；**带 Shift/Alt 的一律不接**（规范没写的不许自己拍）。
+>   - 新文件 `gui/lib/key_action_scope.dart` —— 「这块认哪些键」的通用外壳。
+>     ★**不用 `autofocus`**：队列块第一版就栽在这（真实流程里焦点已在别处，抢不到 → 真机按键全废），
+>     统一改成「挂载后第一帧 requestFocus」。嵌套时子后挂载 → 子赢，其余键冒泡给父
+>     （文件树只吃 Ctrl+A，Enter/Esc 落到预览页）。
+>   - 接上的屏：空态 / 单文件完成 / 批量完成 / 落盘 / 解压中 / 报错页 / 预览页 / 文件树 / 预览密码框。
+>   - `canStartExtract` 纯函数（`home_extract_request.dart`）：预览页主按钮「亮不亮」和
+>     键盘 Enter/Ctrl+E 共用一条判断。以前那串条件只写在 `onPressed` 里，键盘再写一遍就是两份真相。
+>   - 语义：面包屑每格 `Semantics(button + label + onTap)`、两个进度条 `semanticsLabel/Value`、
+>     打包页 2 个裸图标补 tooltip。多语言 +2 条键（`pack.removeInput` / `pack.pickOutput`），7 语言 **530 → 532**。
+> - **★ 两个测试当场抓到的真问题（都值得记住）**：
+>   ① `excludeSemantics: true` 会连子节点的 **tap 动作**一起排掉 —— 只留 `isButton` 标记，
+>      读屏念「按钮」却点不动。修法：语义层自己带 `onTap`（同一个回调，不是两份真相）。
+>   ② 测试里命令不回包 → `EngineClient` 的**超时 Timer** 一直挂着，报
+>      「A Timer is still pending even after the widget tree was disposed」。
+>      给 `test/fake_engine.dart` 加了 `autoReply`（按命令名回合法响应）；另外解压完会发
+>      `Process.run('notify-send')`，测试里必须 `Notifier.enabled = false`。
+>   ③ 顺带核实：`history_page.dart:149` 那个排序图标**一直有 tooltip**，
+>      之前「3 个裸图标」的说法里它不算（是我 400 字符窗口扫错了，已纠正）。
+> - **验证（全实跑）**：`flutter test` **362 → 393 条全绿**、`flutter analyze` 干净、
+>   反向验证把 `keyActionFor` 直接 `return null` → **13 条当场红**，恢复后全绿。
+> - **★ 还没做的**（别当成已完成）：打包 / 设置 / 历史三页的键位；暂停 / 跳过没有键位
+>   （UI-SPEC 没定，不自己拍）；`Ctrl+V 粘贴路径`（SPEC 明写、全仓零实现 → 新账）；
+>   **真机未验** —— 装着的还是 0.9.49，这些改动要发版装机后才能让用户亲手点。
+> - **下一步（等用户定）**：A 发 0.9.50 装机验键盘 → B 补打包/设置/历史三页键位 →
+>   C 回 6e（T9 真截图，`metainfo.xml` 的 `<screenshots>` 还是注释掉的示例）。
+
 > **2026-11-01 夜 · ✅ 0.9.49 已发版、已装机、用户真机验收通过（原话「看了 ok 的」）**
 >
 > - **这一版装的是什么**：批 7（界面动作逻辑纯函数化，4 步）+ T19（协议层 25 条单测）。**零行为变化**，

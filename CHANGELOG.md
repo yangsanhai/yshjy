@@ -2,6 +2,48 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] · T11 无障碍：键盘操作 + 关键语义
+
+**这一版补的是「不用鼠标也能把活干完」**。以前除了队列页，全软件的键盘都是摆设 ——
+按 Enter、Esc 什么都没发生（`Semantics(` 全仓 0 处，键盘处理只有队列块那一处）。
+
+**键盘**：键位唯一真源在 `gui/lib/keyboard.dart`（纯函数 `keyActionFor`，白盒可测）。
+键位一条都不是自己拍的：Enter 确认 / Esc 取消 / Del 删除 / Ctrl+A 全选 出自
+`docs/UI-SPEC.md` §4b.6 + §七；Ctrl+E 解压出自 PeaZip 原文
+（`refs/…/PeaZip/…/en.txt:1414`，`Ctrl+E (or F12) extracts the entire archive`）。
+带 Shift / Alt 的组合一律不接 —— 规范没写的不许「顺手也支持一下」。
+
+已接的屏：首页空态（Enter=选文件，含小键盘 Enter）· 单文件完成页（Enter=打开目录、Esc=再来一个）·
+批量完成卡（Enter=打开输出目录、Esc=再来一批）· 落盘等待页（Esc=停止等待）·
+解压中（Esc=取消）· 报错页（Enter=换一个文件、Esc=返回）·
+预览页（Enter / Ctrl+E=开始解压、Esc=取消）· 文件树（Ctrl+A 全选整个包的文件）·
+预览页密码框（Enter=填好就走）。
+
+**机制上的两条经验（都是抄参考项目踩过的坑）**：
+- 不用 `LogicalKeySet`：Linux 开着 Num Lock 时 Enter 会带上 numpad 修饰，精确匹配会失效
+  （LocalSend issue 3481）。这里判「逻辑键 + 现读修饰键」。
+- 不给块用 `autofocus`：本项目队列块第一版就栽在这上面（真实流程里焦点早就在别处，
+  autofocus 抢不到，真机按键全无反应）。统一改成「挂载后第一帧主动 requestFocus」，
+  和队列块同一套。
+
+**语义**：面包屑每格补 `Semantics(button + label + onTap)`（★`excludeSemantics` 会连
+子节点的 tap 动作一起排掉，只留按钮标记 —— 测试当场抓到「念得出按钮却点不动」，
+所以语义层自己带 `onTap`）；两个进度条补 `semanticsLabel` / `semanticsValue`
+（算不出比例时不报假百分比）；打包页两个纯图标按钮补 tooltip
+（第三个 `history_page.dart` 的排序按钮其实一直有 tooltip，2026-11-01 核实）。
+
+**顺手统一的一处判断**：预览页主按钮「亮不亮」原来写在 `onPressed` 里，键盘要判断同一件事
+就会变成两份真相（典型事故：按钮亮着按 Enter 没反应 / 按钮灰着按 Enter 却真解了）。
+现在抽成 `canStartExtract` 纯函数，按钮和键盘共用。多语言加 2 条键（`pack.removeInput` /
+`pack.pickOutput`），7 语言 **530 → 532**。
+
+**验证**：界面测试 **362 → 393（+31）**；反向验证把 `keyActionFor` 直接 `return null` →
+**13 条当场红**，恢复全绿；`flutter analyze` 干净。★**真机未验**（等下一版装机后用户点）。
+
+**还没做的（如实记着）**：打包 / 设置 / 历史三页的键位；暂停 / 跳过没有键位
+（UI-SPEC 没定，不自己拍）；`Ctrl+V 粘贴路径` —— SPEC §4b.6 明写了但全仓零实现，
+属于新账。
+
 ## [0.9.49] · 2026-11-01（批 7 动作逻辑纯函数化 + T19 协议层单测）
 
 **这一版几乎全是内部整理：界面行为和上一版一样，变的是「以后再改这些地方，改坏了会被测试拦住」。**
