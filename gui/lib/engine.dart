@@ -242,7 +242,123 @@ class EngineError implements Exception {
 
 // ───────────────────────── 客户端 ─────────────────────────
 
-class EngineClient {
+/// 页面能用引擎做的事 —— **界面只许依赖这个接口，不许直接摸 `EngineClient`**
+///
+/// 为什么要有这一层（批 7a，2026-11-01）：
+/// 以前页面写死 `EngineClient.instance`，想验一个动作方法就得让假引擎真的收 JSON、回 JSON
+/// （`test/fake_engine.dart` 走的就是这条路）。那套东西验的是**协议链路**，不是界面的判断逻辑 ——
+/// 于是 `_extract` 里 28 处「该不该传这个字段」一条断言都没有。有了接口，测试塞一个普通
+/// Dart 对象就能同步给结果，还能断言「界面到底发了哪条命令」。
+///
+/// 参考项目（实测，不是印象）：LocalSend 用 refena 的 `ViewProvider` 注入服务、
+/// 页面配 `*_vm.dart` 视图模型；RustDesk 的 Flutter 页面直接调全局 FFI 绑定，压根不做注入。
+/// 我们项目小、又有 337 条测试绑在 State 上 —— 不引第三方状态管理库，
+/// Dart 原生抽象类 + 构造参数注入，收益一样，动的地方最少。
+///
+/// 约定：
+/// - 抽象方法**不许带默认值**（Dart 语法），所以这里的可选参数只写类型；
+///   **默认值的唯一出处是 `EngineClient` 的方法实现**。
+/// - 数据模型（`Preview` / `ExtractResult` / `EngineEvent` / `EngineError`）不在这里：
+///   它们不是"能做什么"，是"拿回来长什么样"。
+abstract class EngineApi {
+  /// 引擎推过来的事件流（进度、暂停、空间不足……）
+  Stream<EngineEvent> get events;
+
+  /// 是否有请求在飞（关窗口 / 托盘退出前要问一句）
+  bool get busy;
+
+  /// 起引擎（幂等）
+  Future<void> start();
+
+  /// 握手：能力表 + 磁盘类型（同一进程内只真发一次）
+  Future<Map<String, dynamic>> hello({bool refresh});
+
+  /// 列一个包里的条目（预览页）
+  Future<Preview> list(String path, {String? password});
+
+  /// 解压（最多参数的一条，判断逻辑最密 —— 见 7b）
+  Future<ExtractResult> extract(
+    String path, {
+    String? dest,
+    String? password,
+    bool cover,
+    bool wantExtract,
+    bool drill,
+    bool ask,
+    List<int>? select,
+    String? encoding,
+    bool force,
+    int? candidate,
+    bool verifyOnly,
+    bool? smartDir,
+  });
+
+  /// 打包（普通压缩 / 伪装）
+  Future<Map<String, dynamic>> pack({
+    required List<String> inputs,
+    required String out,
+    String? password,
+    int? splitBytes,
+    bool checksum,
+    bool readme,
+    String mode,
+    String? format,
+    String? cover,
+    String? sfxKind,
+    int? level,
+    int? decoy,
+    int? decoySize,
+    bool decoySignatures,
+    bool tweakTime,
+    String? layout,
+    String? second,
+  });
+
+  /// 扫一批路径（目录展开、分卷归并都在引擎里做）
+  Future<Map<String, dynamic>> scan(List<String> paths);
+
+  /// 批量解压
+  Future<Map<String, dynamic>> batch({
+    required List<String> paths,
+    String? dest,
+    String? password,
+    String? encoding,
+  });
+
+  /// 回答引擎的 ASK_USER（continue / skip / cancel）
+  Future<Map<String, dynamic>> answer(String value);
+
+  /// 批量里只跳过当前这一项
+  Future<Map<String, dynamic>> skipCurrent();
+
+  /// 生成诊断包
+  Future<Map<String, dynamic>> report({String? path, String? outDir});
+
+  /// 救援（索引坏了按文件头抢救）
+  Future<Map<String, dynamic>> rescue(
+    String path, {
+    String? dest,
+    bool listOnly,
+    String? encoding,
+  });
+
+  /// 取消当前任务
+  Future<void> cancel();
+
+  /// 只取消队列里的某一行
+  Future<Map<String, dynamic>> cancelJob(int job);
+
+  /// 队列「全部暂停」（真正停住要看 `PAUSED` 事件，回执不算）
+  Future<Map<String, dynamic>> pauseQueue();
+
+  /// 队列「继续」
+  Future<Map<String, dynamic>> resumeQueue();
+
+  /// 释放（关窗口时）
+  void dispose();
+}
+
+class EngineClient implements EngineApi {
   /// 全局单例：整个应用只有**一个**引擎进程（多页面共用，事件流广播给所有订阅者）
   static final EngineClient instance = EngineClient();
 
@@ -287,13 +403,16 @@ class EngineClient {
     return name;
   }
 
+  @override
   Stream<EngineEvent> get events => _events.stream;
 
   /// 是否有正在跑的请求（关闭窗口时用来决定要不要先问一句）
+  @override
   bool get busy => _pending.isNotEmpty;
 
   /// 起引擎（幂等）。并发的多次调用共用同一个 Future —— 只会起一个进程；
   /// 启动失败时清掉缓存，允许下次重试。
+  @override
   Future<void> start() => _starting ??= _doStart();
 
   Future<void> _doStart() async {
@@ -391,6 +510,7 @@ class EngineClient {
   ///
   /// 失败**不缓存**：下次调用会重新发一次（这样"第一次冷启动失败"能自愈）。
   /// 要强制重问（引擎升级后刷新能力表）就传 `refresh: true`。
+  @override
   Future<Map<String, dynamic>> hello({bool refresh = false}) {
     if (!refresh && _helloCache != null) return Future.value(_helloCache!);
     final inflight = _helloInflight;
@@ -411,6 +531,7 @@ class EngineClient {
     }
   }
 
+  @override
   Future<Preview> list(String path, {String? password}) async {
     final r = await _call({
       'cmd': 'list',
@@ -432,6 +553,7 @@ class EngineClient {
         .toList();
   }
 
+  @override
   Future<ExtractResult> extract(
     String path, {
     String? dest,
@@ -505,6 +627,7 @@ class EngineClient {
   /// 普通压缩是默认语义（GUI-PLAN §5.2②）；伪装是特殊功能，要显式选。
   /// `cover` = 用户挑的外壳文件路径（任意类型）。伪装模式下必填；
   /// 引擎会按外壳的文件头决定布局（MP4 走 free 原子，其他走尾部追加）。
+  @override
   Future<Map<String, dynamic>> pack({
     required List<String> inputs,
     required String out,
@@ -578,6 +701,7 @@ class EngineClient {
   }
 
   /// 扫一批路径（目录会自动展开、分卷自动归并）——只读文件头，不解压
+  @override
   Future<Map<String, dynamic>> scan(List<String> paths) async => _unwrap(
         await _call({'cmd': 'scan', 'paths': paths},
             timeout: const Duration(minutes: 3)),
@@ -587,6 +711,7 @@ class EngineClient {
   ///
   /// `ask:true` 让限额命中时走 ASK_USER 询问（否则整批直接失败）；
   /// 批量里选「跳过」只跳过当前这一项（组 B 的 `skip` 语义）。
+  @override
   Future<Map<String, dynamic>> batch({
     required List<String> paths,
     String? dest,
@@ -605,11 +730,13 @@ class EngineClient {
       }, timeout: const Duration(hours: 6)));
 
   /// 回答引擎的 ASK_USER：continue / skip / cancel
+  @override
   Future<Map<String, dynamic>> answer(String value) async =>
       _unwrap(await _call({'cmd': 'answer', 'value': value},
           timeout: const Duration(seconds: 10)));
 
   /// 批量里只跳过当前这一项，下一项继续（不是整批取消）
+  @override
   Future<Map<String, dynamic>> skipCurrent() async =>
       _unwrap(await _call({'cmd': 'skip'}, timeout: const Duration(seconds: 10)));
 
@@ -618,6 +745,7 @@ class EngineClient {
   /// `outDir`（E6 / 协议 `report.out_dir`）：存到哪个目录。**不传时引擎落在进程当前
   /// 目录** —— 对 GUI 来说就是「从哪启动就落在哪」（可能是 `/` 或 `~`），用户回头
   /// 根本找不着。所以界面一律传一个好找的地方（见 `platform_paths.downloadsDir`）。
+  @override
   Future<Map<String, dynamic>> report({String? path, String? outDir}) async {
     final r = await _call({
       'cmd': 'report',
@@ -634,6 +762,7 @@ class EngineClient {
   /// - 不给 `dest` 时引擎落到 `<包名>.rescue`（与 CLI 一致）
   ///
   /// 超时给到 30 分钟：救援要扫全文件，网盘挂载点上慢得多。
+  @override
   Future<Map<String, dynamic>> rescue(
     String path, {
     String? dest,
@@ -649,6 +778,7 @@ class EngineClient {
           'encoding': encoding,
       }, timeout: const Duration(minutes: 30)));
 
+  @override
   Future<void> cancel() async {
     try {
       await _call({'cmd': 'cancel'}, timeout: const Duration(seconds: 10));
@@ -662,6 +792,7 @@ class EngineClient {
   /// 返回 `{"cancelled_job": n, "running": bool}`：
   /// - `running: true` —— 它正在跑，已经真的被打断
   /// - `running: false` —— 它还在排队，引擎轮到它时会直接标记跳过
+  @override
   Future<Map<String, dynamic>> cancelJob(int job) async {
     try {
       return _unwrap(await _call(
@@ -679,6 +810,7 @@ class EngineClient {
   /// - `delivered: false` —— 当时没有任务在跑（界面该把按钮复位，别假装暂停成功）
   /// - `delivered: true` **只代表请求送到了**：引擎要等当前这个文件解完才真的停，
   ///   那时会发 `PAUSED` 事件 —— 界面必须按事件翻按钮，否则就是「点了没反应」
+  @override
   Future<Map<String, dynamic>> pauseQueue() async {
     try {
       return _unwrap(await _call({'cmd': 'pause'}, timeout: const Duration(seconds: 10)));
@@ -688,6 +820,7 @@ class EngineClient {
   }
 
   /// 队列「继续」（T18-4）：从暂停处接着跑，不重解已经完成的条目
+  @override
   Future<Map<String, dynamic>> resumeQueue() async {
     try {
       return _unwrap(await _call({'cmd': 'resume'}, timeout: const Duration(seconds: 10)));
@@ -696,6 +829,7 @@ class EngineClient {
     }
   }
 
+  @override
   void dispose() {
     _proc?.closeInput();
     _proc?.kill();

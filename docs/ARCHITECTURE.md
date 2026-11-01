@@ -438,6 +438,59 @@ pub enum Error {
 **下一批的入口**：`_pick` / `_open` / `_extract` / `_scan` 这些**动作方法**还没动（它们改状态、
 调引擎、跳相位），属于「逻辑」而不是「视图」，拆它们要先把引擎客户端抽成可注入的接口。
 
+---
+
+## 动作方法重构（批 7，2026-11-01 定）
+
+### 病在哪
+
+`home_page.dart` 里 `_pick`（505 行起）到 `_pauseOrResume` 这段**动作区 745 行**，一件界面行为
+要同时做三件事：改十几个 `setState` 字段、调引擎、跳相位。其中 `_extract` 一个方法 78 行、
+**28 处判断**（只检查时封面必须关 / 换候选时不带 select / 全选不传 select / 校验不带 dest……）。
+
+这些判断**一条测试都没有**。原因不是没人写，是以前只有一条路：让假引擎真收 JSON、回 JSON
+（`gui/test/fake_engine.dart`）。那条路验的是**协议链路**，一旦调参数写错，JSON 里少一个字段，
+测试照样绿 —— 0.9.47 那个「jobs 写成字符串 → 引擎静默退回 1 → 假开关」就是这一类。
+
+### 参照：业界怎么组织（实测代码，不是印象）
+
+| 项目 | 做法 | 出处 |
+|---|---|---|
+| LocalSend | 页面只读状态，逻辑在 `pages/*_vm.dart`；服务用 refena 的 `ViewProvider` / `Provider` 注入（`ref.watch` / `ref.read`） | `refs/upstream/localsend/app/lib/pages/donation/donation_page_vm.dart`、`provider/persistence_provider.dart` |
+| RustDesk | 不做注入：Flutter 页面直接调全局 FFI 绑定（`bind.xxx`），因为测量点在 Rust 侧 | `refs/upstream/rustdesk/flutter/lib/desktop/pages/` |
+
+**本项目的选择**：不引第三方状态管理库。理由是本项目 337 条测试全绑在 `_HomePageState` 上，
+换一套状态管理＝重写测试；而收益（逻辑可单测）用 **Dart 原生抽象类 + 构造参数** 就能拿到。
+LocalSend 那种「页面 + vm」的分离留到真需要时再说。
+
+### 规范（后续动作逻辑改动照这个走）
+
+1. **页面只许依赖 `EngineApi`**（`gui/lib/engine.dart` 顶部），不许写 `EngineClient.instance`；
+   生产由 `HomePage(engine: null)` 自动落到单例，测试直接注入普通 Dart 对象。
+2. **接口里不写默认值**（Dart 抽象方法不允许）：默认值的唯一出处是 `EngineClient` 的实现。
+3. **判断逻辑抽成纯函数**（放在 `lib/` 或同页旁的独立文件），入参就是它真正读的那几个值，
+   不许把整个 State 传进去 —— 判据同「GUI 文件组织规范」第 2 条（只收它真正需要的）。
+4. 每步独立提交、独立回滚，验收＝`flutter analyze` 干净 + `flutter test` 全绿 +
+   **反向验证一次**（把功能改坏看测试变红）+ 每步在 HANDOFF 记一条。
+
+### 进度（4 步）
+
+| # | 步 | 内容 | 状态 |
+|---|---|---|---|
+| 7a | 地基 | `EngineApi` 接口 + `EngineClient implements` + `HomePage(engine:)` 注入；新增 `test/engine_api_inject_test.dart` 3 条（预览走注入对象 / 解压参数翻译 / 销毁 dispose） | ✅ **完成**（340 条测试全绿，反向验证：改回单例 → 3 条全红） |
+| 7b | 解压参数 | `_extract` 里 28 处判断 → 纯函数 `extractRequestFor(...)`；单测钉四类组合（只检查 / 换候选 / 全选 / 封面开关） | ⬜ 下一个 |
+| 7c | 预览状态 | `_open` 里「预览结果 → 界面状态」（默认全选、`wantCover=hasCover`、树全展开、换包清旧密码）→ 纯函数 | ⬜ |
+| 7d | 文件挑选 | `_pick` / `_pickFolder` 的文件对话框改成可注入（函数类型），测「取消 / 单选走预览 / 多选走队列」 | ⬜ |
+
+> **不做的**：不引 Riverpod / refena；不把 `_HomePageState` 重写成 controller（337 条测试全绑在它上面）；
+> 不动引擎侧代码。
+
+> **7a 记的两个坑**：① 接口与实现的签名行**一模一样**，批量插 `@override` 必须从
+> `class EngineClient implements EngineApi {` 之后扫，且每条正则恰好命中一次才写盘；
+> ② `_open` 第一行 `await Directory(...).exists()` 是**真实文件 IO**，
+> widget 测试里必须 `tester.runAsync`，否则 Future 永不完成、假引擎一条命令都收不到（看着像注入没生效）。
+
+
 ### 已做的第 1 块留下的两条经验
 
 - **抽出独立 widget 最大的好处是可测性**：`QueueView` 只依赖「一个列表 + 六个回调」，
