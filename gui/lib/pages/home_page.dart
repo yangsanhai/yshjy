@@ -19,6 +19,7 @@ import '../format.dart';
 
 import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
+import 'home_done_view.dart';
 import 'home_empty_view.dart';
 import 'home_flush_view.dart';
 import 'home_progress_view.dart';
@@ -1718,170 +1719,24 @@ class _HomePageState extends State<HomePage> {
         onCancel: _cancel,
       );
 
-  Widget _doneView() {
-    final r = _result!;
-    final cs = Theme.of(context).colorScheme;
-    final ok = r.ok;
-    // 只勾了「伪装封面」那一项：解出 0 个文件是正常的，别吓用户
-    final onlyCover = r.entriesDone == 0 && r.cover != null;
-    final seconds = (r.millis / 1000).toStringAsFixed(1);
-    return Center(
-      key: const ValueKey('done'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _verifyMode
-                ? (ok ? Icons.verified_outlined : Icons.report_problem_outlined)
-                : (ok ? Icons.check_circle_outline : Icons.info_outline),
-            size: 72,
-            color: ok ? cs.primary : cs.tertiary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _verifyMode
-                // 别写「解开了 N 个文件」：一个字节都没写，目录也不存在
-                ? (ok
-                    ? t('home.verifyAllGood', {'entries': '${r.entriesDone}'})
-                    : t('home.verifySomeBad', {'done': '${r.entriesDone}', 'total': '${r.entriesTotal}'}))
-                : (ok
-                    ? (onlyCover
-                        ? t('home.coverExtracted')
-                        : t('home.extractedN', {'entries': '${r.entriesDone}'}))
-                    : t('home.extractedPartialN', {'done': '${r.entriesDone}', 'total': '${r.entriesTotal}'})),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            // 校验时 bytesWritten 是「解码过的字节」，不是写进硬盘的量 —— 不能拿来当产物大小
-            _verifyMode
-                ? t('home.timeNoWrite', {'secs': seconds})
-                : t('home.timeWithSize', {'secs': seconds, 'size': _size(r.bytesWritten)}),
-            style: TextStyle(color: cs.onSurfaceVariant),
-          ),
-          if (!_verifyMode && r.dest != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              r.dest!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
-          // 嵌套包（产物里还套着压缩包）：问一句，不自动解
-          if (_nestedArchives.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              decoration: BoxDecoration(
-                color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.inventory_2_outlined,
-                      size: 16, color: cs.onSecondaryContainer),
-                  const SizedBox(width: 8),
-                  Text(
-                    t('home.nestedCount', {'n': '${_nestedArchives.length}'}),
-                    style: TextStyle(fontSize: 12, color: cs.onSecondaryContainer),
-                  ),
-                  TextButton(
-                    onPressed: () => _scan(_nestedArchives),
-                    child: Text(t('home.continueExtract')),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          // 封面分离结果（DESIGN §17.5）：伪装包里的原版视频/图片
-          if (r.cover != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              t('home.coverSeparated', {
-                'name': (r.cover!['path'] as String).split('/').last,
-                'size': _size((r.cover!['size'] as num?)?.toInt() ?? 0),
-              }),
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-            ),
-            TextButton.icon(
-              onPressed: () => _openFolder(r.cover!['path'] as String),
-              icon: const Icon(Icons.play_circle_outline, size: 16),
-              label: Text(t('home.openCover'), style: const TextStyle(fontSize: 12)),
-            ),
-          ],
-          // 「接下来点这个」说的是产物里的启动文件 —— 校验模式没有产物，别指路
-          if (!_verifyMode)
-            if (_entryHint() case final hint?) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                t('home.nextClickThis', {'hint': hint}),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ],
-          if (_notes.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            for (final n in _notes)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text('· $n', style: const TextStyle(fontSize: 12)),
-              ),
-          ],
-          const SizedBox(height: 26),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 校验模式没有产物目录：那个 dest 是引擎顺手回显的路径，
-              // 目录根本没建过，摆个「打开目录」只会点了报错。
-              if (!_verifyMode && r.dest != null)
-                FilledButton.icon(
-                  onPressed: () => _openFolder(r.dest),
-                  icon: const Icon(Icons.folder_open),
-                  label: Text(t('home.openDir')),
-                ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: () {
-                  // 分享文案（调研 07:952-954）：资源圈的真实动作是「把方法告诉对方」
-                  final name = (_file ?? '').split('/').last;
-                  final pw = (_password == null || _password!.isEmpty)
-                      ? ''
-                      : t('home.pwLine', {'pw': '$_password'});
-                  Clipboard.setData(ClipboardData(
-                    text: t('home.copyHowto', {'name': name, 'pw': pw}),
-                  ));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(t('home.copiedSend'))),
-                  );
-                },
-                icon: const Icon(Icons.copy_all_outlined, size: 18),
-                label: Text(t('home.copyHowtoBtn')),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: () => setState(() {
-                  _phase = Phase.empty;
-                  _file = null;
-                  _preview = null;
-                  _result = null;
-                  _notes.clear();
-                }),
-                icon: const Icon(Icons.add),
-                label: Text(t('home.againOne')),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _doneView() => DoneView(
+        result: _result!,
+        verifyMode: _verifyMode,
+        nestedArchives: _nestedArchives,
+        notes: _notes,
+        fileName: _file,
+        password: _password,
+        entryHint: _entryHint(),
+        onScanNested: _scan,
+        onOpenFolder: _openFolder,
+        onReset: () => setState(() {
+          _phase = Phase.empty;
+          _file = null;
+          _preview = null;
+          _result = null;
+          _notes.clear();
+        }),
+      );
 
   /// S5：空间不足卡片 —— 三个数 + 三条出路
   ///
