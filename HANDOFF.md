@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-11-01 深夜 · 批 6c 完成（13/13 块）：`home_page.dart` 3117 → 1790 行（-42.6%）、测试 213 → 337 条全绿。装机版仍 0.9.47 —— 本批只是搬移，界面零变化，下一步是发版 0.9.48**
+> **2026-11-01 深夜 · 批 6c 完成（13/13 块）+ 已发版装机 0.9.48：`home_page.dart` 3117 → 1790 行（-42.6%）、测试 213 → 337 条全绿。本批只有一处界面变化（队列键盘），其余是结构搬移**
 >
 > - **做了什么**：`home_page.dart` **3117 → 2876 行**。队列视图抽成独立文件
 >   `gui/lib/pages/home_queue_view.dart`（`QueueItem` + `QueueView` + `_QueueStatusChip`，212 行）；
@@ -62,12 +62,16 @@
 >   （→ `home_app_bar.dart`），`_scaffold` / `_body` **故意不抽** —— 判据是引用成员数不是行数。
 > - **★ 顺藤又抓到一个同类 bug**：`shortPath` 只按 `/` 切分，Windows 路径整条原样显示。
 >   本批 5a 面包屑也是同一个毛病 —— **以后看到路径处理先查分隔符**。
+> - **装机版 = 0.9.48**（2026-11-01 16:05 装，`dpkg -l yshjy` 可查）。发版链路全绿：
+>   flutter release 52s → `release.sh` 出两个 tar.gz（各 4.2M）→ `build-deb.sh` 出 11M deb →
+>   `test-packages.sh` **37 项全 PASS** → `sudo apt install`。**AppStream 补了 0.9.48 的 `<release>`**
+>   （原来停在 0.9.34，落后 14 版）。
 > - **下一步（等你定）**：
->   - **A. 发版 0.9.48**：`flutter build linux --release` → 6 处版本号 → `release.sh` →
->     `build-deb.sh` → `test-packages.sh` → 装机 → 五项验收。**本批零界面变化，但代码结构大改，
->     发一版让装机版和源码对齐**；
->   - **B. 继续下一批**：动作方法（`_pick` / `_open` / `_extract` / `_scan`）—— 要先把引擎客户端
->     抽成可注入接口，是比本批更大的设计活。
+>   - **A. 批 6e（T9 真截图）**：`screenshots/` 已有 20+ 张真机图，缺的是「README 没引用 +
+>     metainfo 没有 `<screenshots>` 段」—— 挑 4 张改名 → 填 metainfo → README 加图 →
+>     `appstreamcli validate --no-net`。**最终图要你自己开一次确认**，我不动你的窗口。
+>   - **B. 下一批重构**：动作方法（`_pick` / `_open` / `_extract` / `_scan`）—— 要先把引擎客户端
+>     抽成可注入接口，比本批更大的设计活。
 > - **第 8 块（失败页）也做完了**，分两步：先 `home_space_shortage.dart`（`spaceShortageBlock` +
 >   纯函数 `spaceLine`），再 `home_error_view.dart`（`ErrorHead` / `ErrorPasswordRetry`）——
 >   失败页 200 → **75 行组装层**。★错误页点常用码是「填入+立刻重试」，预览页只是填入，别混。
