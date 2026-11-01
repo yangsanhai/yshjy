@@ -26,6 +26,7 @@ import 'home_extract_request.dart';
 import 'home_hints.dart';
 import 'home_empty_view.dart';
 import 'home_flush_view.dart';
+import 'home_preview_state.dart';
 import 'home_progress_view.dart';
 import 'home_queue_view.dart';
 import 'home_space_shortage.dart';
@@ -268,16 +269,10 @@ class _HomePageState extends State<HomePage> {
     final pv0 = widget.debugPreview;
     if (pv0 != null) {
       _file = t('home.samplePath');
-      _preview = pv0;
+      // 与真机 `_open` 共用同一个纯函数（批 7c）—— 以前这里是一份手抄的副本，
+      // 注释明确写着「两处要一起改」，那正是迟早会漏的写法。
+      _applyPreviewState(pv0);
       _phase = Phase.preview;
-      _wantCover = pv0.hasCover;
-      _picked
-        ..clear()
-        ..addAll(pv0.entries.where((e) => !e.isDir).map((e) => e.index));
-      _tree = buildEntryTree(pv0.entries);
-      _expanded
-        ..clear()
-        ..addAll(allDirPaths(_tree));
       _crumb = '';
     }
     // 测试注入口：预设「输出到指定目录」（与 debugPreview 同理，只影响测试）
@@ -522,6 +517,26 @@ class _HomePageState extends State<HomePage> {
   String _errText(String code) => errorText(code);
 
   // ───────────────────────── 动作 ─────────────────────────
+
+  /// 清单 → 界面字段的**唯一落地点**（真机 `_open` 与测试注入口 `debugPreview` 共用）
+  ///
+  /// 为什么要有这个方法而不是两处各写一遍：以前 `initState` 里有一份手抄副本，
+  /// 注释写着「两处要一起改」—— 那就是会漏的地方（批 7c 收敛）。
+  /// 具体默认值（有封面才勾、只勾文件、树全展开）都在纯函数
+  /// `previewUiState` 里，可以单独测。
+  void _applyPreviewState(Preview pv) {
+    final s = previewUiState(pv);
+    _preview = pv;
+    _wantCover = s.wantCover;
+    _wantExtract = s.wantExtract;
+    _picked
+      ..clear()
+      ..addAll(s.picked);
+    _tree = s.tree;
+    _expanded
+      ..clear()
+      ..addAll(s.expanded);
+  }
 
   Future<void> _pick() async {
     // 不设扩展名白名单：伪装包的外壳可能是 .pdf / .docx / .mp3 / .exe 之类，
@@ -842,22 +857,13 @@ class _HomePageState extends State<HomePage> {
       final pv = await _client.list(path);
       if (!mounted) return;
       setState(() {
-        _preview = pv;
+        // 清单 → 界面字段：纯函数在 pages/home_preview_state.dart（批 7c）
+        _applyPreviewState(pv);
         _phase = Phase.preview;
-        // 有封面区才默认勾「伪装封面」；普通 zip 不显示那一行，也不提取
-        _wantCover = pv.hasCover;
-        _wantExtract = true;
-        // 新包默认全选（取消勾选才是「只解一部分」）；输出目录/编码回默认
-        _picked
-          ..clear()
-          ..addAll(pv.entries.where((e) => !e.isDir).map((e) => e.index));
+        // 以下三项是「换包必须回默认」的字面赋值，不属于 previewUiState：
+        // 旧解压码静默套到新包上 → 「明明没输密码却报解压码不对」（2026-10-30 修过）
         _outDir = null;
         _encoding = 'auto';
-        // 第三期 A（预览树）：建一次树、默认全展开、面包屑回到根
-        _tree = buildEntryTree(pv.entries);
-        _expanded
-          ..clear()
-          ..addAll(allDirPaths(_tree));
         _crumb = '';
       });
       widget.onStatus?.call(t('home.identified', {'files': '${pv.fileCount}'}));
