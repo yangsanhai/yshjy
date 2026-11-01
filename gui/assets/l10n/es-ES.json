@@ -534,5 +534,12 @@
     "translators": "yshjy 项目组"
   },
   "pack.removeInput": "Quitar este archivo",
-  "pack.pickOutput": "Elegir ubicación de salida"
+  "pack.pickOutput": "Elegir ubicación de salida",
+  "settings.section.keys": "Atajos de teclado",
+  "keys.primary": "Confirmar el botón principal de esta pantalla",
+  "keys.cancel": "Cancelar / volver una pantalla",
+  "keys.extract": "Extraer el paquete completo",
+  "keys.selectAll": "Seleccionar todos los archivos del paquete",
+  "keys.remove": "Quitar el elemento seleccionado de la cola",
+  "keys.note": "Los atajos son fijos. Usa Tab para moverte entre botones."
 }

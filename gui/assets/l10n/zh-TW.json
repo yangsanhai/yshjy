@@ -534,5 +534,12 @@
     "translators": "yshjy 專案組"
   },
   "pack.removeInput": "移除這個檔案",
-  "pack.pickOutput": "選擇輸出的位置"
+  "pack.pickOutput": "選擇輸出的位置",
+  "settings.section.keys": "快速鍵",
+  "keys.primary": "確認目前畫面的主按鈕",
+  "keys.cancel": "取消 / 返回上一頁",
+  "keys.extract": "開始解壓整個壓縮檔",
+  "keys.selectAll": "全選壓縮檔內所有檔案",
+  "keys.remove": "從佇列移除選取的那一項",
+  "keys.note": "鍵位固定，無法更改。按 Tab 可在按鈕之間移動。"
 }

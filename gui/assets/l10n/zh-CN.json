@@ -534,5 +534,12 @@
   "common.all": "全部",
   "settings.pickDirConfirm": "就用这个目录",
   "pack.removeInput": "去掉这个文件",
-  "pack.pickOutput": "选择输出位置"
+  "pack.pickOutput": "选择输出位置",
+  "settings.section.keys": "快捷键",
+  "keys.primary": "确认当前屏幕的主按钮",
+  "keys.cancel": "取消 / 返回上一屏",
+  "keys.extract": "开始解压整个包",
+  "keys.selectAll": "全选包内所有文件",
+  "keys.remove": "移出队列里选中的那一项",
+  "keys.note": "键位固定，不能改。按 Tab 可以在按钮之间移动。"
 }

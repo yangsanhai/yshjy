@@ -534,5 +534,12 @@
     "translators": "yshjy 项目组"
   },
   "pack.removeInput": "이 파일 제거",
-  "pack.pickOutput": "출력 위치 선택"
+  "pack.pickOutput": "출력 위치 선택",
+  "settings.section.keys": "단축키",
+  "keys.primary": "현재 화면의 기본 버튼 실행",
+  "keys.cancel": "취소 / 이전 화면으로",
+  "keys.extract": "압축 파일 전체 풀기",
+  "keys.selectAll": "압축 파일의 모든 파일 선택",
+  "keys.remove": "대기열에서 선택 항목 제거",
+  "keys.note": "단축키는 고정이며 변경할 수 없습니다. Tab으로 버튼 사이를 이동합니다."
 }

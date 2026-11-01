@@ -68,13 +68,18 @@ class EmptyDropView extends StatelessWidget {
             alignment: WrapAlignment.center,
             spacing: 10,
             children: [
-              FilledButton.icon(
-                onPressed: onPickFile,
-                icon: const Icon(Icons.add),
-                label: Text(t('home.pickFile')),
-                style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
+              // 键位就地提示（T11）：Enter = 本屏主操作。设置页有完整表格，
+              // 但用户不该为了找一个键先跑去设置页。
+              Tooltip(
+                message: 'Enter',
+                child: FilledButton.icon(
+                  onPressed: onPickFile,
+                  icon: const Icon(Icons.add),
+                  label: Text(t('home.pickFile')),
+                  style: FilledButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

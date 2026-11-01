@@ -105,10 +105,14 @@ class BatchDoneView extends StatelessWidget {
           children: [
             if (firstDest != null)
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => onOpenFolder(firstDest),
-                  icon: const Icon(Icons.folder_open, size: 18),
-                  label: Text(t('home.openOutDir')),
+                // 键位就地提示（T11）：Enter = 打开输出目录；Esc = 再来一批
+                child: Tooltip(
+                  message: 'Enter',
+                  child: FilledButton.icon(
+                    onPressed: () => onOpenFolder(firstDest),
+                    icon: const Icon(Icons.folder_open, size: 18),
+                    label: Text(t('home.openOutDir')),
+                  ),
                 ),
               ),
             if (firstDest != null) const SizedBox(width: 8),

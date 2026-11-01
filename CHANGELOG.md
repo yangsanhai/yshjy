@@ -32,12 +32,25 @@
 （算不出比例时不报假百分比）；打包页两个纯图标按钮补 tooltip
 （第三个 `history_page.dart` 的排序按钮其实一直有 tooltip，2026-11-01 核实）。
 
+**键位写在界面上**（用户要求的：「不然快捷按键别人也不知道」）：
+- 设置页最下面新增一节「快捷键」，只读表格五行（Enter / Esc / Ctrl+E / Ctrl+A / Del）+
+  一句「键位固定，不能改。按 Tab 可以在按钮之间移动」。行数据来自 `lib/keyboard.dart`
+  的 `keyHelpRows` —— **和 `keyActionFor` 同一份真相**，以后改键说明自动跟着变，
+  不会出现「说明写着 Ctrl+E、实际按的是别的」。
+  位置和做法参照 RustDesk 设置页的「Keyboard shortcuts」卡片（它是可重映射所以进独立配置页；
+  我们键位固定，直接摆表格省一步）。LocalSend / Keka / FileRoller 的设置里没有快捷键页。
+- 主按钮上就地写了键位（悬停可见）：第一屏「选文件」Enter、预览页「开始解压」Ctrl+E / Enter、
+  预览页「取消」Esc、解压中「取消」Esc、完成页「打开目录」Enter、批量完成「打开输出目录」Enter、
+  报错页「换一个文件」Enter / 「返回」Esc。★暂停 / 跳过**故意不标** —— UI-SPEC 没给它们键位，
+  我们不自己拍。
+- 键名（Enter / Esc / Ctrl+E）不进语言包：各国用户看到的物理键就是这几个字。
+
 **顺手统一的一处判断**：预览页主按钮「亮不亮」原来写在 `onPressed` 里，键盘要判断同一件事
 就会变成两份真相（典型事故：按钮亮着按 Enter 没反应 / 按钮灰着按 Enter 却真解了）。
-现在抽成 `canStartExtract` 纯函数，按钮和键盘共用。多语言加 2 条键（`pack.removeInput` /
-`pack.pickOutput`），7 语言 **530 → 532**。
+现在抽成 `canStartExtract` 纯函数，按钮和键盘共用。多语言加 9 条键
+（`pack.removeInput` / `pack.pickOutput` + `keys.*` 七条），7 语言 **530 → 539**。
 
-**验证**：界面测试 **362 → 393（+31）**；反向验证把 `keyActionFor` 直接 `return null` →
+**验证**：界面测试 **362 → 397（+35）**；反向验证把 `keyActionFor` 直接 `return null` →
 **13 条当场红**，恢复全绿；`flutter analyze` 干净。★**真机未验**（等下一版装机后用户点）。
 
 **还没做的（如实记着）**：打包 / 设置 / 历史三页的键位；暂停 / 跳过没有键位
