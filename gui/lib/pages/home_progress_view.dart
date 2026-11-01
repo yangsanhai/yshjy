@@ -221,10 +221,15 @@ class ExtractActionRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
         ],
-        OutlinedButton.icon(
-          onPressed: onCancel,
-          icon: const Icon(Icons.stop_circle_outlined),
-          label: Text(batch ? t('home.cancelBatch') : t('home.cancel')),
+        // 键位就地提示（T11）：Esc = 取消。暂停/跳过**没有**键位
+        // （UI-SPEC §4b.6 没定，我们不自己拍），所以这两颗按钮不加提示。
+        Tooltip(
+          message: 'Esc',
+          child: OutlinedButton.icon(
+            onPressed: onCancel,
+            icon: const Icon(Icons.stop_circle_outlined),
+            label: Text(batch ? t('home.cancelBatch') : t('home.cancel')),
+          ),
         ),
       ],
     );

@@ -534,5 +534,12 @@
     "translators": "yshjy 项目组"
   },
   "pack.removeInput": "このファイルを削除",
-  "pack.pickOutput": "出力先を選ぶ"
+  "pack.pickOutput": "出力先を選ぶ",
+  "settings.section.keys": "ショートカットキー",
+  "keys.primary": "現在の画面の主ボタンを実行",
+  "keys.cancel": "キャンセル / 前の画面に戻る",
+  "keys.extract": "アーカイブ全体を展開",
+  "keys.selectAll": "アーカイブ内のファイルをすべて選択",
+  "keys.remove": "キューから選択項目を外す",
+  "keys.note": "キーは固定で変更できません。Tab でボタン間を移動できます。"
 }

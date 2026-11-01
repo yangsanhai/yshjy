@@ -1522,10 +1522,15 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 16),
         Row(
           children: [
-            OutlinedButton.icon(
-              onPressed: () => setState(() => _phase = Phase.empty),
-              icon: const Icon(Icons.close),
-              label: Text(t('home.cancel')),
+            // 键位就地写在按钮上（T11）：设置页有完整表格，但用户不该为了找一个键
+            // 先跑去看设置。Tooltip 只放键名，键名不进语言包（各国都一样）。
+            Tooltip(
+              message: 'Esc',
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _phase = Phase.empty),
+                icon: const Icon(Icons.close),
+                label: Text(t('home.cancel')),
+              ),
             ),
             const SizedBox(width: 8),
             // E4「只检查」：完整解码 + 校验，一个字节都不落盘（协议 verify_only）。
@@ -1541,9 +1546,11 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const Spacer(),
-            FilledButton.icon(
-              // 键盘 Enter / Ctrl+E 走同一个判断（唯一真源：home_extract_request.dart）
-              onPressed: canStartExtract(
+            Tooltip(
+              message: 'Ctrl+E / Enter',
+              child: FilledButton.icon(
+                // 键盘 Enter / Ctrl+E 走同一个判断（唯一真源：home_extract_request.dart）
+                onPressed: canStartExtract(
                 preview: _preview,
                 picked: _picked,
                 wantExtract: _wantExtract,
@@ -1559,8 +1566,10 @@ class _HomePageState extends State<HomePage> {
                         : t('home.startPicked', {'n': '${_picked.length}'}))
                     : (pv.hasCover && _wantCover ? t('home.extractCoverOnly') : t('home.mustPickSomething')),
               ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                ),
               ),
             ),
           ],
@@ -1802,15 +1811,22 @@ class _HomePageState extends State<HomePage> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                FilledButton.icon(
-                  onPressed: _pick,
-                  icon: const Icon(Icons.folder_open),
-                  label: Text(t('home.changeFile')),
+                // 键位就地提示（T11）：Enter = 换一个文件；下面的「返回」是 Esc
+                Tooltip(
+                  message: 'Enter',
+                  child: FilledButton.icon(
+                    onPressed: _pick,
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(t('home.changeFile')),
+                  ),
                 ),
                 const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () => setState(() => _phase = Phase.empty),
-                  child: Text(t('home.back')),
+                Tooltip(
+                  message: 'Esc',
+                  child: OutlinedButton(
+                    onPressed: () => setState(() => _phase = Phase.empty),
+                    child: Text(t('home.back')),
+                  ),
                 ),
               ],
             ),

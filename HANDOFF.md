@@ -17,7 +17,13 @@
 >   - `canStartExtract` 纯函数（`home_extract_request.dart`）：预览页主按钮「亮不亮」和
 >     键盘 Enter/Ctrl+E 共用一条判断。以前那串条件只写在 `onPressed` 里，键盘再写一遍就是两份真相。
 >   - 语义：面包屑每格 `Semantics(button + label + onTap)`、两个进度条 `semanticsLabel/Value`、
->     打包页 2 个裸图标补 tooltip。多语言 +2 条键（`pack.removeInput` / `pack.pickOutput`），7 语言 **530 → 532**。
+>     打包页 2 个裸图标补 tooltip。
+>   - **键位写在界面上**（用户原话「不然别人也不知道」）：设置页最下一节加只读「快捷键」表
+>     （行来自 `lib/keyboard.dart` 的 `keyHelpRows`，和 `keyActionFor` 同一份真相），
+>     主按钮就地标键位（选文件=Enter / 开始解压=Ctrl+E·Enter / 取消=Esc / 打开目录=Enter）。
+>     ★暂停·跳过**不标**：UI-SPEC 没给键位，不自己拍。
+>     参考项目：只有 RustDesk 设置页有「Keyboard shortcuts」卡片（LocalSend/Keka/FileRoller 都没有）。
+>     多语言 +9 条键（`pack.*` 2 + `keys.*` 7），7 语言 **530 → 539**。
 > - **★ 两个测试当场抓到的真问题（都值得记住）**：
 >   ① `excludeSemantics: true` 会连子节点的 **tap 动作**一起排掉 —— 只留 `isButton` 标记，
 >      读屏念「按钮」却点不动。修法：语义层自己带 `onTap`（同一个回调，不是两份真相）。
@@ -27,7 +33,7 @@
 >      `Process.run('notify-send')`，测试里必须 `Notifier.enabled = false`。
 >   ③ 顺带核实：`history_page.dart:149` 那个排序图标**一直有 tooltip**，
 >      之前「3 个裸图标」的说法里它不算（是我 400 字符窗口扫错了，已纠正）。
-> - **验证（全实跑）**：`flutter test` **362 → 393 条全绿**、`flutter analyze` 干净、
+> - **验证（全实跑）**：`flutter test` **362 → 397 条全绿**、`flutter analyze` 干净、
 >   反向验证把 `keyActionFor` 直接 `return null` → **13 条当场红**，恢复后全绿。
 > - **★ 还没做的**（别当成已完成）：打包 / 设置 / 历史三页的键位；暂停 / 跳过没有键位
 >   （UI-SPEC 没定，不自己拍）；`Ctrl+V 粘贴路径`（SPEC 明写、全仓零实现 → 新账）；

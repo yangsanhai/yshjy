@@ -97,3 +97,35 @@ KeyAction? actionForEvent(KeyEvent event) {
     alt: k.isAltPressed,
   );
 }
+
+/// 设置页「快捷键」表的一行
+///
+/// # 为什么这张表放在**这个文件**里
+///
+/// 键位和键位说明必须是同一份真相。分成两处（代码里一套、文档/设置页另一套）的
+/// 典型事故：说明写着「Ctrl+E 解压」，代码里其实早就改了键 —— 用户照着说明按没反应，
+/// 只会以为功能坏了。所以改键位时，[keyActionFor] 和这张表一起改，设置页自动跟着变。
+///
+/// 参考项目怎么做的：RustDesk 设置页有一张「Keyboard shortcuts」卡片
+/// （开关 + 「Configure shortcuts...」进独立配置页，键位可重映射）；
+/// LocalSend / Keka / FileRoller 的设置项里**没有**快捷键页。
+/// 我们键位固定、不需要重映射，所以做成只读表格 —— 比"进去看一眼再退回来"省一步。
+class KeyHelpRow {
+  /// 显示用的键名（`Enter` / `Esc` / `Ctrl+E`）。
+  /// ★ 这些是**物理键名**，各国用户看到的都一样，不进语言包（不翻译）。
+  final String keys;
+
+  /// 这个键干什么 —— 语言包里的键名（`keys.*` 段）
+  final String whatKey;
+
+  const KeyHelpRow(this.keys, this.whatKey);
+}
+
+/// 设置页那张表的行（顺序 = 用户最可能先找的那几个）
+const List<KeyHelpRow> keyHelpRows = [
+  KeyHelpRow('Enter', 'keys.primary'),
+  KeyHelpRow('Esc', 'keys.cancel'),
+  KeyHelpRow('Ctrl+E', 'keys.extract'),
+  KeyHelpRow('Ctrl+A', 'keys.selectAll'),
+  KeyHelpRow('Del', 'keys.remove'),
+];

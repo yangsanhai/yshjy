@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../engine.dart';
+import '../keyboard.dart';
 import '../l10n.dart';
 import '../notify.dart';
 import '../platform_paths.dart';
@@ -606,6 +607,12 @@ class _SettingsPageState extends State<SettingsPage> {
           value: _warnExec,
           onChanged: (v) => setState(() => _warnExec = v),
         ),
+        const SizedBox(height: 18),
+        // 快捷键说明（T11）：位置照 RustDesk 设置页 —— 放在最下面一节。
+        // 行数据来自 `lib/keyboard.dart` 的 keyHelpRows（和 keyActionFor 同一份真相），
+        // 这里只负责画，不另抄一份键位表。
+        _section(t('settings.section.keys'), cs),
+        const _KeysTable(),
       ],
     );
   }
@@ -768,6 +775,57 @@ class _CapsTableState extends State<_CapsTable> {
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// 快捷键表（T11）—— 只读，因为键位是 UI-SPEC 定死的、不做重映射。
+///
+/// ★ 行的来源是 `lib/keyboard.dart` 的 `keyHelpRows`，**不是**在这里手写一份 ——
+///   否则以后改了键、说明还停在旧键上，用户照着按没反应只会以为功能坏了。
+/// ★ 键名（Enter / Esc / Ctrl+E）不翻译：各国用户看到的物理键就是这几个字。
+class _KeysTable extends StatelessWidget {
+  const _KeysTable();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      key: const ValueKey('keys-table'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final r in keyHelpRows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 84,
+                  child: Text(
+                    r.keys,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'monospace',
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(t(r.whatKey),
+                      style: const TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          t('keys.note'),
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+        ),
       ],
     );
   }

@@ -534,5 +534,12 @@
   "common.all": "All",
   "settings.pickDirConfirm": "Use this folder",
   "pack.removeInput": "Remove this file",
-  "pack.pickOutput": "Choose output location"
+  "pack.pickOutput": "Choose output location",
+  "settings.section.keys": "Keyboard shortcuts",
+  "keys.primary": "Confirm the primary button on this screen",
+  "keys.cancel": "Cancel / go back one screen",
+  "keys.extract": "Extract the whole archive",
+  "keys.selectAll": "Select every file in the archive",
+  "keys.remove": "Remove the selected item from the queue",
+  "keys.note": "Shortcuts are fixed. Use Tab to move between buttons."
 }

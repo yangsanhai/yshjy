@@ -195,10 +195,14 @@ class DoneView extends StatelessWidget {
               // 校验模式没有产物目录：那个 dest 是引擎顺手回显的路径，
               // 目录根本没建过，摆个「打开目录」只会点了报错。
               if (!verifyMode && r.dest != null)
-                FilledButton.icon(
-                  onPressed: () => onOpenFolder(r.dest),
-                  icon: const Icon(Icons.folder_open),
-                  label: Text(t('home.openDir')),
+                // 键位就地提示（T11）：Enter = 打开目录（本屏主操作）
+                Tooltip(
+                  message: 'Enter',
+                  child: FilledButton.icon(
+                    onPressed: () => onOpenFolder(r.dest),
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(t('home.openDir')),
+                  ),
                 ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
