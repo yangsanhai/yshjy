@@ -561,6 +561,13 @@ pub fn extract_by_locals_ctx<R: Read + Seek>(
                     Ok(0) => break,
                     Ok(n) => {
                         if let Err(e) = budget.record(n as u64) {
+                            // ★ 这里刻意**不区分**「安全限额」和「真损坏」：
+                            //   救援模式（--rescue）本来就是针对**已经坏掉的包**，
+                            //   用户要的是「能捞多少捞多少」，报 DataLost 不会误导他
+                            //   去重新下载（他手上那个包本来就不完整）。
+                            //   另外这个闭包拿不到 `ExtractReport`，没有地方留 budget_hit
+                            //   标记 —— 与其硬塞一个不准的码，不如让文案说实话（下面这句
+                            //   「安全限额中止」会原样进 skipped 的原因列表）。
                             *err = Some(format!("安全限额中止: {e}"));
                             break;
                         }

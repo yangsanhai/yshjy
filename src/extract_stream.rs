@@ -246,10 +246,21 @@ pub fn decompress_stream_ctx<R: Read>(
             ctx: ctx.clone(),
             label: out_label.clone(),
             cancelled: false,
+            budget_hit: false,
         };
         let mut src = std::io::BufReader::new(src);
-        lzma_rs::xz_decompress(&mut src, &mut out)
-            .map_err(|e| Error::new(ErrorCode::NotArchive).context(format!("xz 解压失败: {e}")))?;
+        if let Err(e) = lzma_rs::xz_decompress(&mut src, &mut out) {
+            // ★ 限额命中时，真正的错误码在 `Write` 那层被压成了 io::Error（接口限制），
+            //   这里靠标记还原 —— 否则用户看到的是「xz 解压失败」，又以为包坏了。
+            if out.budget_hit {
+                return Err(Error::new(ErrorCode::SafetyLimit)
+                    .with("reason", "possible_zip_bomb")
+                    .with("written", out.written));
+            }
+            return Err(
+                Error::new(ErrorCode::NotArchive).context(format!("xz 解压失败: {e}"))
+            );
+        }
         let written = out.written;
         if out.cancelled {
             // part 由 Drop 删掉：不留半截正式文件
@@ -331,6 +342,13 @@ struct BudgetWriter<'a> {
     label: String,
     /// 是否因取消而中途停了
     cancelled: bool,
+    /// 限额命中（压缩比 / 单次总量）
+    ///
+    /// ★ 为什么要这个标记：`std::io::Write::write` 的签名只能是 `io::Result`，
+    ///   把我们的 [`Error`] 压成 `io::Error` 会**丢掉错误码**，上层只能看到一句
+    ///   「xz 解压失败」并归成 NotArchive —— 用户又以为包坏了（T20 的同款毛病）。
+    ///   所以错误照旧上抛，但在这里留一个标记，调用方据此还原成 `SafetyLimit`。
+    budget_hit: bool,
 }
 
 impl Write for BudgetWriter<'_> {
@@ -343,9 +361,13 @@ impl Write for BudgetWriter<'_> {
                 "cancelled by user",
             ));
         }
-        self.budget
-            .record(buf.len() as u64)
-            .map_err(std::io::Error::other)?;
+        if let Err(e) = self.budget.record(buf.len() as u64) {
+            // 取消是控制流，不算限额命中
+            if !e.is_cancelled() {
+                self.budget_hit = true;
+            }
+            return Err(std::io::Error::other(e.to_string()));
+        }
         let n = self.inner.write(buf)?;
         self.written += n as u64;
         self.ctx.advance(n as u64, Some(&self.label));
@@ -698,7 +720,14 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
             Some(msg) => {
                 drop(part);
                 report.skipped.push((name.clone(), msg));
-                ctx.entry_done(idx, &name, ItemResult::DataError, 0);
+                // 限额拦下的不能标成「数据损坏」——文件是好的，是我们自己的闸
+                // （和 `extract.rs` 的 zip 路径同一处理；实测 tar.xz 会走到这里）
+                let 条目标记 = if report.budget_hit {
+                    ItemResult::SafetyLimited
+                } else {
+                    ItemResult::DataError
+                };
+                ctx.entry_done(idx, &name, 条目标记, 0);
             }
             None => {
                 // 原子落地：改名成功之前，正式文件名还不存在
