@@ -1,5 +1,22 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · 批 7c 完成：预览状态映射纯函数化（`previewUiState`）**
+>
+> - **做了什么**：新文件 `gui/lib/pages/home_preview_state.dart` —— `PreviewUiState`（5 个字段）+
+>   纯函数 `previewUiState(pv)`。`home_page.dart` 里加了一个 `_applyPreviewState(pv)`，
+>   **真机 `_open` 与测试注入口 `debugPreview` 现在共用它**。
+> - **★ 捞到一份重复真相**：这套初始化原来写了**两遍** —— `_open()` 一处、`initState` 的
+>   `debugPreview` 分支一处，后者的注释自己就写着「两处要一起改 —— 否则测试验的是另一套初始状态」。
+>   那句注释等于承认「迟早漏一处」。现在收敛成一处。
+> - **五条默认值的理由**（都写进代码注释）：有封面区才勾封面 / 换包回到「解内容」/
+>   默认勾**只含文件**（目录不是协议 `select` 的合法锚点）/ 树建一次且全展开 /
+>   换包清旧解压码与输出目录编码（后三项留在 `_open` 里，它们不是判断而是字面赋值）。
+> - **6 条单测**（`gui/test/preview_state_test.dart`）：有/无封面、只勾文件、换包回「解内容」、
+>   树全展开、空包不炸、**每次返回新的可变集合**（共享同一个 Set 会让一个包污染另一个包的初始状态）。
+> - **反向验证**：把 `if (!e.isDir)` 去掉（目录也进 picked）→ 第 2 条立刻红（`+5 -1`）。
+> - **当前状态**：`flutter analyze` 干净、`flutter test` **355 条**全过（349 + 6）、装机版仍 0.9.48。
+> - **下一步**：7d 文件挑选可注入（`_pick` / `_pickFolder` 的对话框 + 「单选走预览 / 多选走队列」判断）。
+
 > **2026-11-01 夜 · 批 7b 完成：解压参数纯函数化（`buildExtractRequest`）**
 >
 > - **做了什么**：新文件 `gui/lib/pages/home_extract_request.dart` —— `ExtractRequest`（11 个字段，
