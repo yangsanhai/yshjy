@@ -1,5 +1,23 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-01 夜 · ✅ 0.9.49 已发版、已装机、用户真机验收通过（原话「看了 ok 的」）**
+>
+> - **这一版装的是什么**：批 7（界面动作逻辑纯函数化，4 步）+ T19（协议层 25 条单测）。**零行为变化**，
+>   用户可见的只有两处错误提示更准确（cancel 在 C ABI 入口不再说"没这条命令"、诊断包密码本路径脱敏）。
+> - **发版链路（全实跑）**：`bump-version.py 0.9.49`（11 处一致）→ `cargo build --release`（20s）→
+>   `flutter build linux --release` → `release.sh` 出两个 tar.gz（各 4.2M，带 sha256）→
+>   `build-deb.sh` 出 deb（11M）→ `test-packages.sh` **37 / 37 全 PASS** → `sudo apt install`。
+> - **装机核对**：`dpkg -l yshjy` = **0.9.49**、`/usr/bin/yshjy --version` = 0.9.49（常用版）。
+> - **真机验收（用户自己点、自己看）**：状态栏「引擎 0.9.49」、设置页格式表 12 行正常、伪装视频照常进预览页。
+> - **★ 记账补漏**：CHANGELOG 里原来挂着一条 `## [未发布]`（P2-1 版本号工具）—— 它其实随 0.9.48 就发出去了，
+>   之前漏记版本号。这次一并归到 `## [0.9.48]`，并新增 `## [0.9.49]` 条目。
+>   **以后发版固定动作**：确认 CHANGELOG 顶部没有残留的 `[未发布]`。
+> - **AppStream**：`data/*.metainfo.xml` 的 `<releases>` 补了 0.9.49，`appstreamcli validate --no-net` ✔ 通过
+>   （只有两条「中文描述首词未大写」的 info，是中文标签的正常提示）。
+> - **累计状态**：界面测试 362、Rust 426+33+2、`flutter analyze` / `cargo clippy --all-targets` 均干净。
+> - **下一批候选（等用户定）**：**6e（T9 真截图）** —— `screenshots/` 有 20+ 张真机图，缺「README 引用 +
+>   metainfo `<screenshots>` 段 + 挑 4 张改名」，成品图要用户自己开一次确认；或 T19 之外的新账。
+
 > **2026-11-01 夜 · T19 全部完成：协议层 25 条单测（api 19 / serve 2 / report 4）+ 抓到 3 个真问题**
 >
 > - **做了什么**：`src/api.rs` 末尾新增 `#[cfg(test)] mod 参数契约`，**19 条测试**。
