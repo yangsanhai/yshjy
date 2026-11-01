@@ -20,6 +20,7 @@ import '../format.dart';
 import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
 import 'home_empty_view.dart';
+import 'home_flush_view.dart';
 import 'home_queue_view.dart';
 import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
@@ -1778,66 +1779,12 @@ class _HomePageState extends State<HomePage> {
   /// 用户原话：「只有打开了的人给他一个检验的进度条，这样有个东西就不会让他等待了」。
   /// 所以这里的进度条是**真读数**（内核还剩多少没写进盘），不是假转圈；
   /// 数字在降、秒数在涨，用户就能看出「它在干活，不是卡死」。
-  Widget _flushView() {
-    final cs = Theme.of(context).colorScheme;
-    final frac = _flushPeak <= 0
-        ? null
-        : (1 - (_flushPending / _flushPeak)).clamp(0.0, 1.0);
-    return Center(
-      key: const ValueKey('flush'),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(t('home.flushing'), style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              t('home.flushExplain'),
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(value: frac, minHeight: 10),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    t('home.flushRemaining', {'size': _size(_flushPending)}),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                Text(
-                  t('home.flushWaited', {'secs': '$_flushSecs'}),
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              t('home.flushTips'),
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _cancel,
-                  icon: const Icon(Icons.stop_circle_outlined),
-                  label: Text(t('home.stopWaiting')),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _flushView() => FlushView(
+        peak: _flushPeak,
+        pending: _flushPending,
+        secs: _flushSecs,
+        onCancel: _cancel,
+      );
 
   Widget _doneView() {
     final r = _result!;
