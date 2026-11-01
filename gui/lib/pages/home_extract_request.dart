@@ -111,3 +111,24 @@ ExtractRequest buildExtractRequest({
     smartDir: smartDir,
   );
 }
+
+/// 底部主按钮「该不该亮」的唯一判断（T11 键盘要用，和按钮共用同一条规矩）
+///
+/// 为什么抽出来：预览页那个青色主按钮的 `onPressed` 里写着
+/// `(_wantExtract && _picked.isEmpty) || (!_wantExtract && !(pv.hasCover && _wantCover)) ? null : _extract`。
+/// 键盘接 Enter / Ctrl+E 时要判断同一件事 —— 复制一份就是「按钮亮了但键不响应」
+/// 或更糟的「按钮灰着，按 Enter 却真去解了」。
+///
+/// 规则（与按钮逐条对齐）：
+///   · 勾了「解压内容」→ 至少选中一个条目才能开始
+///   · 只提封面（没勾解压内容）→ 必须有封面区、且用户勾了封面
+bool canStartExtract({
+  required Preview? preview,
+  required Set<int> picked,
+  required bool wantExtract,
+  required bool wantCover,
+}) {
+  if (preview == null) return false;
+  if (wantExtract) return picked.isNotEmpty;
+  return preview.hasCover && wantCover;
+}

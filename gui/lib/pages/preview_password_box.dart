@@ -25,6 +25,7 @@ class PreviewPasswordBox extends StatelessWidget {
     required this.onToggleShowPlain,
     required this.onChanged,
     required this.onPickRecent,
+    this.onSubmitted,
   });
 
   /// 有几个条目加密（`<= 0` 时整块不显示）
@@ -47,6 +48,12 @@ class PreviewPasswordBox extends StatelessWidget {
   /// 点了某个常用码
   final void Function(String pw) onPickRecent;
 
+  /// 在输入框里按回车 —— 等于「密码填好了，走吧」（= 本屏主操作，UI-SPEC §4b.6）
+  ///
+  /// ★ 为什么必须有：报错页那个重试框早就有 `onSubmitted`（按回车立刻重试），
+  ///   预览页这个框却没有 —— 同一个软件里两处行为不一致，用户只会觉得「这里坏了」。
+  final VoidCallback? onSubmitted;
+
   @override
   Widget build(BuildContext context) {
     if (encryptedCount <= 0) return const SizedBox.shrink();
@@ -57,6 +64,8 @@ class PreviewPasswordBox extends StatelessWidget {
         TextField(
           controller: controller,
           obscureText: !showPlain,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => onSubmitted?.call(),
           onChanged: (v) {
             final txt = v.trim();
             // 不用 setState：这个字段不影响本帧画面

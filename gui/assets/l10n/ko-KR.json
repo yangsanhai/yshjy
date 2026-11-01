@@ -532,5 +532,7 @@
     "code": "ko-KR",
     "name": "한국어",
     "translators": "yshjy 项目组"
-  }
+  },
+  "pack.removeInput": "이 파일 제거",
+  "pack.pickOutput": "출력 위치 선택"
 }

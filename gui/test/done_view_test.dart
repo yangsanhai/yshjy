@@ -10,6 +10,7 @@
 // ③ 嵌套包不自动解，要用户再点一次。
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/engine.dart';
 import 'package:yshjy_gui/pages/home_done_view.dart';
@@ -158,5 +159,29 @@ void main() {
     await tester.tap(find.text('打开目录'));
     await tester.pump();
     expect(rec.opened, ['/tmp/out']);
+  });
+
+  // ── T11 无障碍：键盘 ─────────────────────────────────────────────
+  testWidgets('Enter = 打开目录（本屏主操作）', (tester) async {
+    final rec = await pumpDone(tester, result: res(dest: '/tmp/out'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(rec.opened, ['/tmp/out'],
+        reason: '解完最想干的事就是看产物，键盘按了没反应等于白做');
+  });
+
+  testWidgets('校验模式 Enter 不打开目录 —— 和按钮同一口径', (tester) async {
+    final rec = await pumpDone(tester, verifyMode: true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(rec.opened, isEmpty,
+        reason: '校验模式根本没建目录，键盘却去打开 → 用户看到报错框，以为解压失败了');
+  });
+
+  testWidgets('Esc = 再处理一个', (tester) async {
+    final rec = await pumpDone(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(rec.resets, 1, reason: 'Esc 没接上，键盘用户回了不到空态，只能去点鼠标');
   });
 }

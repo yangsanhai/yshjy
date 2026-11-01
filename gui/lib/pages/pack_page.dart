@@ -635,6 +635,9 @@ class _PackPageState extends State<PackPage> {
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.close, size: 16),
+                            // T11：纯图标按钮没有 tooltip，读屏软件只能念「按钮」，
+                            // 键盘用户也看不到它是什么（这条原来在 3 个裸图标之一）
+                            tooltip: t('pack.removeInput'),
                             onPressed: _busy ? null : () => setState(() => _inputs.removeAt(i)),
                           ),
                         );
@@ -723,6 +726,8 @@ class _PackPageState extends State<PackPage> {
               errorText: _nameErrorText,
               suffixIcon: IconButton(
                 icon: const Icon(Icons.folder_open, size: 18),
+                // T11：同上 —— 一个孤零零的文件夹图标，不说清是「选输出位置」
+                tooltip: t('pack.pickOutput'),
                 onPressed: _busy ? null : _pickOut,
               ),
             ),

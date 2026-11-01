@@ -10,6 +10,8 @@ library;
 import 'package:flutter/material.dart';
 
 import '../format.dart';
+import '../key_action_scope.dart';
+import '../keyboard.dart';
 import '../l10n.dart';
 
 class FlushView extends StatelessWidget {
@@ -37,7 +39,7 @@ class FlushView extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final frac =
         peak <= 0 ? null : (1 - (pending / peak)).clamp(0.0, 1.0);
-    return Center(
+    final content = Center(
       key: const ValueKey('flush'),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
@@ -55,7 +57,14 @@ class FlushView extends StatelessWidget {
             const SizedBox(height: 16),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(value: frac, minHeight: 10),
+              child: LinearProgressIndicator(
+                value: frac,
+                minHeight: 10,
+                // T11：同上 —— 念出「在等落盘」+ 具体百分比
+                semanticsLabel: t('home.flushing'),
+                semanticsValue:
+                    frac == null ? null : '${(frac * 100).floor()}%',
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -91,6 +100,12 @@ class FlushView extends StatelessWidget {
           ],
         ),
       ),
+    );
+    // Esc = 取消当前操作（UI-SPEC §4b.6）。这一屏只有「停止等待」一个动作，
+    // 所以 Esc 就给它 —— 用户在等落盘时最想干的事就是「别等了」。
+    return KeyActionScope(
+      handlers: {KeyAction.cancel: onCancel},
+      child: content,
     );
   }
 }

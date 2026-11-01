@@ -6,6 +6,7 @@
 // 那看起来就是「卡死了」，用户会直接拔盘。
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/pages/home_flush_view.dart';
 
@@ -76,5 +77,24 @@ void main() {
     await pumpFlush(tester);
     expect(find.textContaining('请勿拔出'), findsOneWidget,
         reason: '这一屏存在的理由就是这句话，丢了就可能丢数据');
+  });
+
+  // ── T11 无障碍：键盘 ─────────────────────────────────────────────
+  // UI-SPEC §4b.6「Esc 取消当前操作」。这一屏只有一个动作「停止等待」，
+  // 等得不耐烦的用户第一反应就是按 Esc。
+  testWidgets('Esc = 停止等待', (tester) async {
+    final rec = await pumpFlush(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(rec.cancels, 1,
+        reason: 'Esc 没接上，键盘用户只能眼睁睁看着进度条不许走');
+  });
+
+  testWidgets('Enter 在这屏不做任何事（误触不能打断落盘）', (tester) async {
+    final rec = await pumpFlush(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(rec.cancels, 0,
+        reason: 'Enter 意外取消了落盘，用户会以为「解压坏了」');
   });
 }

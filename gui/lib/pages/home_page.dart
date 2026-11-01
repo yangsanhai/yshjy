@@ -12,6 +12,8 @@ import '../engine.dart';
 import '../entry_tree.dart';
 import '../history_store.dart';
 import '../humanize.dart';
+import '../key_action_scope.dart';
+import '../keyboard.dart';
 import '../notify.dart';
 import '../platform_paths.dart';
 import '../l10n.dart';
@@ -1355,7 +1357,7 @@ class _HomePageState extends State<HomePage> {
     final cs = Theme.of(context).colorScheme;
     // 整页接住滚轮：用户在窗口任何位置滚，都滚文件列表。
     // 只在 ListView 里滚的话，鼠标停在头部/卡片上就会「滚了没反应」（用户实测报过）。
-    return Listener(
+    final content = Listener(
       onPointerSignal: (e) {
         if (e is PointerScrollEvent && _listCtrl.hasClients) {
           final pos = _listCtrl.position;
@@ -1458,6 +1460,15 @@ class _HomePageState extends State<HomePage> {
             _pwCtrl.text = pw;
             _password = pw;
           }),
+          // 输完密码按回车 = 本屏主操作（和点那个青色按钮同一条路、同一个判断）
+          onSubmitted: canStartExtract(
+            preview: _preview,
+            picked: _picked,
+            wantExtract: _wantExtract,
+            wantCover: _wantCover,
+          )
+              ? _extract
+              : null,
         ),
         PreviewNotes(notes: _notes),
         const SizedBox(height: 12),
@@ -1531,10 +1542,15 @@ class _HomePageState extends State<HomePage> {
             ),
             const Spacer(),
             FilledButton.icon(
-              onPressed: (_wantExtract && _picked.isEmpty) ||
-                      (!_wantExtract && !(pv.hasCover && _wantCover))
-                  ? null
-                  : _extract,
+              // 键盘 Enter / Ctrl+E 走同一个判断（唯一真源：home_extract_request.dart）
+              onPressed: canStartExtract(
+                preview: _preview,
+                picked: _picked,
+                wantExtract: _wantExtract,
+                wantCover: _wantCover,
+              )
+                  ? _extract
+                  : null,
               icon: Icon(_wantExtract ? Icons.download : Icons.movie_outlined),
               label: Text(
                 _wantExtract
@@ -1552,6 +1568,24 @@ class _HomePageState extends State<HomePage> {
       ],
       ),
     );
+    // 键位（UI-SPEC §4b.6 + PeaZip「Ctrl+E (or F12) extracts the entire archive」）：
+    //   Enter / Ctrl+E = 那个青色主按钮（同一套参数、同一个 canStartExtract 判断）
+    //   Esc            = 左下角「取消」，和点按钮同一行代码
+    // 注意密码框聚焦时 Enter 不会到这 —— TextField 会先把它当「提交」吃掉，这是对的。
+    final canStart = canStartExtract(
+      preview: _preview,
+      picked: _picked,
+      wantExtract: _wantExtract,
+      wantCover: _wantCover,
+    );
+    return KeyActionScope(
+      handlers: {
+        KeyAction.primary: canStart ? _extract : null,
+        KeyAction.extract: canStart ? _extract : null,
+        KeyAction.cancel: () => setState(() => _phase = Phase.empty),
+      },
+      child: content,
+    );
   }
 
   // ─────────────── 第三期 A：预览树 / 面包屑 / 三态勾选 ───────────────
@@ -1566,30 +1600,57 @@ class _HomePageState extends State<HomePage> {
         onCrumbTap: (path) => setState(() => _crumb = path),
       );
 
-  Widget _fileList(Preview pv) => FileListView(
-        preview: pv,
-        treeView: _treeView,
-        tree: _tree,
-        expanded: _expanded,
-        crumb: _crumb,
-        picked: _picked,
-        scrollController: _listCtrl,
-        onToggleExpand: (path) => setState(() {
-          if (_expanded.contains(path)) {
-            _expanded.remove(path);
-          } else {
-            _expanded.add(path);
-          }
-        }),
-        onTogglePick: (n) => setState(
-            () => applyPick(n, _picked, pickStateOf(n, _picked) != PickState.all)),
-        onDrill: (path) => setState(() => _crumb = path),
+  Widget _fileList(Preview pv) => KeyActionScope(
+        // 文件树自己认 Ctrl+A（UI-SPEC §4b.6「全选」），别的键冒泡给外层预览页。
+        // 焦点落在这里（子后挂载 → 后请求 → 赢），所以 Enter / Esc 依然能到父层。
+        handlers: {KeyAction.selectAll: _selectAllFiles},
+        child: FileListView(
+          preview: pv,
+          treeView: _treeView,
+          tree: _tree,
+          expanded: _expanded,
+          crumb: _crumb,
+          picked: _picked,
+          scrollController: _listCtrl,
+          onToggleExpand: (path) => setState(() {
+            if (_expanded.contains(path)) {
+              _expanded.remove(path);
+            } else {
+              _expanded.add(path);
+            }
+          }),
+          onTogglePick: (n) => setState(
+              () => applyPick(n, _picked, pickStateOf(n, _picked) != PickState.all)),
+          onDrill: (path) => setState(() => _crumb = path),
+        ),
       );
+
+  /// Ctrl+A：把整包所有**文件**都勾上（不是只勾当前这一层）
+  ///
+  /// 为什么是整包：这个页的语义就是「这包里有什么区别」，用户按全选想的是
+  /// 「我全要」，而不是「我要当前目录这一层」。目录本身不进 select（引擎的锚点是文件序号）。
+  void _selectAllFiles() {
+    final pv = _preview;
+    if (pv == null) return;
+    setState(() {
+      if (_treeView && _tree.isNotEmpty) {
+        for (final n in _tree) {
+          for (final i in fileIndexesOf(n)) {
+            _picked.add(i);
+          }
+        }
+      } else {
+        for (final e in pv.entries) {
+          if (!e.isDir) _picked.add(e.index);
+        }
+      }
+    });
+  }
 
   Widget _progressView() {
     // 检验落盘阶段单独一屏：这里最要紧的一句话是「请勿拔出设备」
     if (_flushing) return _flushView();
-    return Center(
+    final content = Center(
       key: const ValueKey('extract'),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
@@ -1630,6 +1691,12 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+    );
+    // Esc = 取消当前操作（UI-SPEC §4b.6）。只有「取消」接键：
+    // 暂停/跳过在规范里没有键位，不自己拍（要加得先改 UI-SPEC §4b.6 再动手）。
+    return KeyActionScope(
+      handlers: {KeyAction.cancel: _cancel},
+      child: content,
     );
   }
 
@@ -1689,7 +1756,7 @@ class _HomePageState extends State<HomePage> {
     final hint = (_errorCode == 'MISSING_VOLUME' || _errorCode == 'NOT_ENOUGH_SPACE')
         ? null
         : typeHint(_error);
-    return Center(
+    final content = Center(
       key: const ValueKey('error'),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
@@ -1750,6 +1817,16 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+    );
+    // Enter = 主操作「换一个文件」；Esc = 次操作「返回」（UI-SPEC §4b.6）。
+    // ★ 密码输入框聚焦时 Enter 归它（ErrorPasswordRetry 的 onSubmitted = 立刻重试），
+    //   不会冒泡到这里 —— 用户在哪一屏按回车都是「此刻最想做的那件事」。
+    return KeyActionScope(
+      handlers: {
+        KeyAction.primary: _pick,
+        KeyAction.cancel: () => setState(() => _phase = Phase.empty),
+      },
+      child: content,
     );
   }
 

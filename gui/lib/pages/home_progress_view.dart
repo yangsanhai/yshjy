@@ -71,6 +71,10 @@ class ExtractProgressBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: frac, // null = 不确定进度（未知总大小时）
             minHeight: 10,
+            // T11：读屏软件念进度条时只说「进度指示器」，得有人告诉它
+            // 「在解压」和「到哪了」。value 为 null（算不出比例）时不报假百分比。
+            semanticsLabel: t('home.extracting'),
+            semanticsValue: frac == null ? null : '${(frac * 100).floor()}%',
           ),
         ),
         const SizedBox(height: 12),

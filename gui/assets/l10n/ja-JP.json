@@ -532,5 +532,7 @@
     "code": "ja-JP",
     "name": "日本語",
     "translators": "yshjy 项目组"
-  }
+  },
+  "pack.removeInput": "このファイルを削除",
+  "pack.pickOutput": "出力先を選ぶ"
 }

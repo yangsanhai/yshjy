@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 
 import '../format.dart';
 import '../humanize.dart';
+import '../key_action_scope.dart';
+import '../keyboard.dart';
 import '../l10n.dart';
 
 class BatchDoneView extends StatelessWidget {
@@ -49,7 +51,7 @@ class BatchDoneView extends StatelessWidget {
         .map((j) => j['dest'] as String?)
         .firstWhere((d) => d != null, orElse: () => null);
 
-    return Column(
+    final content = Column(
       key: const ValueKey('batch-done'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -120,6 +122,16 @@ class BatchDoneView extends StatelessWidget {
           ],
         ),
       ],
+    );
+    // Enter = 本屏主操作（UI-SPEC §4b.6）。这一屏的主操作是「打开输出目录」；
+    // 一个成功的都没有（firstDest == null）时就不接 —— 按钮也没出现，
+    // 键盘不能凭空造出一个界面上不存在的入口。
+    return KeyActionScope(
+      handlers: {
+        KeyAction.primary: firstDest == null ? null : () => onOpenFolder(firstDest),
+        KeyAction.cancel: onReset,
+      },
+      child: content,
     );
   }
 }

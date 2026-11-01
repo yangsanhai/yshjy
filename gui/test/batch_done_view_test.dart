@@ -9,6 +9,7 @@
 //   {ok, failed, partial, elapsed_ms, bytes, jobs: [{path, dest, outcome}]}
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/pages/home_batch_done_view.dart';
 
@@ -109,5 +110,40 @@ void main() {
     expect(find.text('打开输出目录'), findsNothing,
         reason: '没有目录却给个按钮，点下去只会报错');
     expect(find.text('再来一批'), findsOneWidget);
+  });
+
+  // ── T11 无障碍：键盘 ─────────────────────────────────────────────
+  testWidgets('Enter = 打开输出目录（本屏主操作）', (tester) async {
+    final calls = await pumpCard(
+      tester,
+      batchResult(ok: 1, jobs: [
+        {'path': '/tmp/a.zip', 'dest': '/tmp/out', 'outcome': 'ok'},
+      ]),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(calls['openFolder'], ['/tmp/out'],
+        reason: '批量做完最想干的就是看产物，键盘按了没反应等于白做');
+  });
+
+  testWidgets('全失败时 Enter 不打开目录（键盘不能造出界面上没有的入口）', (tester) async {
+    final calls = await pumpCard(
+      tester,
+      batchResult(ok: 0, failed: 1, jobs: [
+        {'path': '/tmp/a.zip', 'outcome': 'failed'},
+      ]),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(calls['openFolder'], isEmpty,
+        reason: '一个成功的都没有还去打开目录，用户会看到空文件夹或报错');
+  });
+
+  testWidgets('Esc = 再来一批（取消/返回）', (tester) async {
+    final calls = await pumpCard(tester, batchResult());
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(calls['reset'], hasLength(1),
+        reason: 'Esc 没接上，键盘用户做不了第二批');
   });
 }

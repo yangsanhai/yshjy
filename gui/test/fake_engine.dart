@@ -47,6 +47,16 @@ class FakeEngine implements EngineTransport {
   /// 让**下一次** hello 失败一次（模拟「引擎刚 fork、还没预热」的真机冷启动）
   bool failHelloOnce = false;
 
+  /// 「某条命令怎么回」——默认只回 hello，其余命令**不回**（调用方会一直等）。
+  ///
+  /// 为什么要有：命令不回包时 `EngineClient` 那边的**超时 Timer** 会一直挂着，
+  /// widget 测试结束时报「A Timer is still pending even after the widget tree
+  /// was disposed」（2026-11-01 接预览页键盘时踩到）。
+  /// 用例只要关心「命令发没发」+「界面变了没」，就让引擎立刻回一个合法结果。
+  /// 值 = 除 `id` 以外的整个响应体，例如
+  /// `{'ok': true, 'result': {...}}`。
+  final Map<String, Map<String, dynamic>> autoReply = {};
+
   /// `hello` 的返回值。默认给一份有 `formats` + `disk` 的最小表：
   /// 格式表要能出两行、磁盘建议要能说「机械硬盘」。
   Map<String, dynamic> helloResult = {
@@ -114,6 +124,11 @@ class FakeEngine implements EngineTransport {
         return;
       }
       _out.add(jsonEncode({'id': m['id'], 'ok': true, 'result': helloResult}));
+      return;
+    }
+    final reply = autoReply[m['cmd']];
+    if (reply != null) {
+      _out.add(jsonEncode({'id': m['id'], ...reply}));
     }
   }
 }
