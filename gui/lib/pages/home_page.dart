@@ -22,6 +22,7 @@ import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
 import 'home_done_view.dart';
 import 'home_error_view.dart';
+import 'home_extract_request.dart';
 import 'home_hints.dart';
 import 'home_empty_view.dart';
 import 'home_flush_view.dart';
@@ -878,35 +879,23 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       widget.onStatus?.call(verifyOnly ? t('home.verifyNoWrite') : t('home.extracting'));
-      final pv = _preview;
-      // 全勾 = 不传 select（引擎默认全解，与以前行为完全一致）
-      final pickedAll = pv == null ||
-          _picked.length == pv.entries.where((e) => !e.isDir).length;
-      final r = await _client.extract(
-        path,
+      // 界面状态 → 协议参数：**唯一的翻译处**在 home_extract_request.dart（批 7b）。
+      // 以前这段判断直接写在这里，28 处条件一条测试都没有。
+      final req = buildExtractRequest(
+        path: path,
+        preview: _preview,
+        picked: _picked,
+        wantCover: _wantCover,
+        wantExtract: _wantExtract,
         password: _password,
-        // 「只检查」时封面必须关：切封面是真写盘的另一条路，
-        // 开着它就与「硬盘一个字节都不动」矛盾（实测 CLI --test 是零字节）。
-        cover: verifyOnly ? false : _wantCover,
-        // 校验不跟随界面勾选：勾了一半不等于包只坏了一半，
-        // 而且用户点「只检查」想要的答案就是「整包完不完好」。
-        wantExtract: verifyOnly ? true : _wantExtract,
-        dest: verifyOnly ? null : _outDir,
-        // S10：换候选解压时不带挑选序号 —— 另一段里的条目跟当前预览完全可能不同，
-        // 带着旧序号去解等于用 A 包的清单挑 B 包的文件（会漏解或报错）。
-        select: (verifyOnly || !_wantExtract || pickedAll || candidate != null)
-            ? null
-            : _picked.toList(),
+        outDir: _outDir,
         encoding: _encoding,
-        // S5「继续试试」：跳过空间预检（引擎侧早支持，界面以前没传）
-        force: force,
-        // S10 多候选：只解用户点的那一处（预览页「换一处解压」）
-        candidate: candidate,
-        // E4：只检查不落盘（协议 verify_only）
-        verifyOnly: verifyOnly,
-        // E5：智能解压（不传 = 引擎默认 true，与老行为一致）
         smartDir: _smartDir,
+        force: force,
+        candidate: candidate,
+        verifyOnly: verifyOnly,
       );
+      final r = await req.send(_client);
       if (!mounted) return;
       setState(() {
         _result = r;
