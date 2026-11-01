@@ -412,8 +412,8 @@ pub enum Error {
 | # | 块 | 原行数 | 引用成员数 | 状态 |
 |---|---|---|---|---|
 | 1 | `_queueView` + `_queueStatusChip` | 213 | 7 | ✅ **已拆** → `pages/home_queue_view.dart`（`QueueItem` / `QueueView` / `_QueueStatusChip`），键盘 Enter / Ctrl+E / Del / ↑↓ |
-| 2 | `_batchDoneView`（批量完成卡） | 92 | — | ⬜ 下一块 |
-| 3 | `_emptyView`（拖放区） | 62 | — | ⬜ |
+| 2 | `_batchDoneView`（批量完成卡） | 92 | 4 | ✅ **已拆** → `pages/home_batch_done_view.dart`（`BatchDoneView`）。★这张卡**原来一条测试都没有**，抽出来后补了 5 条（成功/失败/点击定位/打开目录/无目录不显示按钮） |
+| 3 | `_emptyView`（拖放区） | 62 | — | ⬜ 下一块 |
 | 4 | `_busyView` | 13 | — | ⬜ |
 | 5 | `_previewView` + `_crumbBar` + `_fileList` + `_entryRow`（预览树，一块） | 314+40+78+116 | **38** | ⬜ 最难，要先把 38 个引用拆成「必要参数 / 可下沉到 controller」 |
 | 6 | `_progressView` + `_flushView` | 121+65 | — | ⬜ |
