@@ -21,6 +21,7 @@ import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
 import 'home_empty_view.dart';
 import 'home_flush_view.dart';
+import 'home_progress_view.dart';
 import 'home_queue_view.dart';
 import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
@@ -1661,11 +1662,6 @@ class _HomePageState extends State<HomePage> {
   Widget _progressView() {
     // 检验落盘阶段单独一屏：这里最要紧的一句话是「请勿拔出设备」
     if (_flushing) return _flushView();
-    final p = _progress;
-    final cs = Theme.of(context).colorScheme;
-    // 扫描阶段没有 _progress：用 SCAN_PROGRESS 的两个数字画进度条（D1）
-    final frac = p?.fraction ??
-        (_scanTotal > 0 ? (_scanDone / _scanTotal).clamp(0.0, 1.0) : null);
     return Center(
       key: const ValueKey('extract'),
       child: ConstrainedBox(
@@ -1674,99 +1670,35 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(t('home.extracting'), style: Theme.of(context).textTheme.titleMedium),
+            Text(t('home.extracting'),
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: frac, // null = 不确定进度（未知总大小时）
-                minHeight: 10,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _current ?? t('home.preparing'),
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                Text(
-                  p == null
-                      ? ''
-                      : '${_size(p.doneBytes)} / ${p.totalBytes == 0 ? "?" : _size(p.totalBytes)}${_etaText(p)}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
+            ExtractProgressBar(
+              progress: _progress,
+              scanDone: _scanDone,
+              scanTotal: _scanTotal,
+              current: _current,
+              speed: _speed,
+              paused: _paused,
             ),
             const SizedBox(height: 6),
-            if (_pwTry > 0 && _pwTotal > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  t('home.pwTrying', {'cur': '$_pwTry', 'total': '$_pwTotal'}),
-                  style: TextStyle(fontSize: 12, color: cs.primary),
-                ),
-              ),
-            if (_stage == 'LOCATE' && _scanTotal > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  t('home.scanning', {'done': _size(_scanDone), 'total': _size(_scanTotal)}),
-                  style: TextStyle(fontSize: 12, color: cs.primary),
-                ),
-              ),
-            // T18-4：暂停中 / 已暂停，都在这一行说清楚「现在是什么状态」
-            // （按钮点下去到真停之间有间隔，不说清楚就像卡住了）
-            if (_pauseRequested || _paused)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  _paused ? t('home.pausedNote') : t('home.pausing'),
-                  style: TextStyle(fontSize: 12, color: cs.primary),
-                ),
-              ),
-            Text(
-              _stage == 'LOCATE'
-                  ? t('home.step1')
-                  : _stage == 'LIST'
-                      ? t('home.step2')
-                      : t('home.step3'),
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ExtractStatusLines(
+              stage: _stage,
+              scanDone: _scanDone,
+              scanTotal: _scanTotal,
+              pwTry: _pwTry,
+              pwTotal: _pwTotal,
+              pauseRequested: _pauseRequested,
+              paused: _paused,
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // T18-4：批量才给「全部暂停」—— 单个文件暂停没意义
-                // （它本来就快跑完了，暂停只会让用户以为卡住）
-                if (_batchOrder.length > 1) ...[
-                  OutlinedButton.icon(
-                    onPressed: _pauseRequested ? null : _pauseOrResume,
-                    icon: Icon(_paused
-                        ? Icons.play_arrow_outlined
-                        : Icons.pause_circle_outline),
-                    label: Text(_paused ? t('home.resumeQueue') : t('home.pauseQueue')),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                // 批量里跳过当前这一个（组 B 的 skip 语义：不是整批取消）
-                if (_batchOrder.length > 1) ...[
-                  OutlinedButton.icon(
-                    onPressed: _skipCurrent,
-                    icon: const Icon(Icons.skip_next_outlined),
-                    label: Text(t('home.skipThisItem')),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                OutlinedButton.icon(
-                  onPressed: _cancel,
-                  icon: const Icon(Icons.stop_circle_outlined),
-                  label: Text(_batchOrder.length > 1 ? t('home.cancelBatch') : t('home.cancel')),
-                ),
-              ],
+            ExtractActionRow(
+              batchSize: _batchOrder.length,
+              paused: _paused,
+              pauseRequested: _pauseRequested,
+              onPauseOrResume: _pauseOrResume,
+              onSkipCurrent: _skipCurrent,
+              onCancel: _cancel,
             ),
           ],
         ),
@@ -2301,19 +2233,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 「 · 12.3 MB/s · 剩 41 秒」；速度未知就返回空串
-  String _etaText(Progress p) {
-    // 暂停时不报速度：用户真机验收抓到暂停画面上还挂着「1.04 GB/s · 剩 0 秒」——
-    // 停都停了还显示速度，看着像没停住。恢复后下一帧进度事件会把速度算回来。
-    if (_paused) return '';
-    if (_speed <= 0 || p.totalBytes <= 0) return '';
-    final left = p.totalBytes - p.doneBytes;
-    if (left <= 0) return '';
-    final sec = (left / _speed).round();
-    final eta = sec >= 60
-        ? t('home.durMinSec', {'min': '${sec ~/ 60}', 'sec': '${sec % 60}'})
-        : t('home.durSec', {'sec': '$sec'});
-    return t('home.speedEta', {'speed': _size(_speed.round()), 'eta': eta});
-  }
+
 
   String _size(int bytes) => formatBytes(bytes);
 
