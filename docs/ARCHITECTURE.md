@@ -413,8 +413,8 @@ pub enum Error {
 |---|---|---|---|---|
 | 1 | `_queueView` + `_queueStatusChip` | 213 | 7 | ✅ **已拆** → `pages/home_queue_view.dart`（`QueueItem` / `QueueView` / `_QueueStatusChip`），键盘 Enter / Ctrl+E / Del / ↑↓ |
 | 2 | `_batchDoneView`（批量完成卡） | 92 | 4 | ✅ **已拆** → `pages/home_batch_done_view.dart`（`BatchDoneView`）。★这张卡**原来一条测试都没有**，抽出来后补了 5 条（成功/失败/点击定位/打开目录/无目录不显示按钮） |
-| 3 | `_emptyView`（拖放区） | 62 | — | ⬜ 下一块 |
-| 4 | `_busyView` | 13 | — | ⬜ |
+| 3 | `_emptyView`（拖放区） | 62 | 3 | ✅ **已拆** → `pages/home_empty_view.dart`（`EmptyDropView`）。补 4 条测试，把两条只写在注释里的设计约定钉死：拖拽中必须换「松手就行」、第一屏只许一个 `FilledButton` |
+| 4 | `_busyView` | 13 | 1 | ✅ **已拆** → `pages/home_busy_view.dart`（`BusyView`）。零状态依赖；注释里写清「转圈是无限动画，测试只能用定次 pump」 |
 | 5 | `_previewView` + `_crumbBar` + `_fileList` + `_entryRow`（预览树，一块） | 314+40+78+116 | **38** | ⬜ 最难，要先把 38 个引用拆成「必要参数 / 可下沉到 controller」 |
 | 6 | `_progressView` + `_flushView` | 121+65 | — | ⬜ |
 | 7 | `_doneView`（完成卡） | 169 | — | ⬜ |
