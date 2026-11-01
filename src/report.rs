@@ -502,6 +502,10 @@ fn 配置快照(脱敏: &mut 脱敏器) -> String {
         .output_dir()
         .map(|p| format!("{:?}", 脱敏.路径(&p)))
         .unwrap_or_else(|| "null".to_string());
+    // 密码本文件名也要脱敏（T19 补的）：配置里写成绝对路径时（用户常见写法），
+    // 直接 `{:?}` 会把 `/home/用户名/...` 原样打进诊断包 —— 而界面那句「路径已脱敏」
+    // 就是给用户壮胆、让他放心贴出去的。相对路径会变成 `<path-1>`，值是安全的。
+    let 密码本文件 = format!("{:?}", 脱敏.路径(Path::new(&cfg.password.file)));
 
     format!(
         "# yshjy 配置快照（脱敏）\n\
@@ -512,7 +516,7 @@ fn 配置快照(脱敏: &mut 脱敏器) -> String {
          jobs = {}\n\
          \n\
          [password]\n\
-         file = {:?}\n\
+         file = {密码本文件}\\n\
          auto_from_notes = {}\n\
          max_candidates = {}\n\
          password_book_lines = {}   # 只记行数，不记内容\n\
@@ -526,7 +530,6 @@ fn 配置快照(脱敏: &mut 脱敏器) -> String {
          warn_executables = {}\n",
         语言行(cfg),
         cfg.general.jobs,
-        cfg.password.file,
         cfg.password.auto_from_notes,
         cfg.password.max_candidates,
         密码本行数,
@@ -625,5 +628,128 @@ mod 崩溃日志测试 {
         assert_eq!(名, "crash-20261031-120000.log");
         assert_eq!(内容, "新");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod 采集项契约 {
+    //! T19：诊断包**每一类采集项**的最小契约 —— 「键必须在」+「路径必须脱敏」。
+    //!
+    //! 为什么值得单测：诊断包是本项目**唯一**会把用户机器信息带出去的功能
+    //! （用户会按提示把它贴到群里/发给别人）。两类事故都很实在：
+    //!   · 键少了 → 报障时缺一环，只能来回追问；
+    //!   · 路径没脱敏 → 隐私事故，而且界面那边写着「路径已脱敏」，用户会放心贴出去。
+    //! 脱敏器本身的用例在 `脱敏测试` 里，这里只钉**采集项**（meta / findings / 配置快照）。
+
+    use super::*;
+    use crate::event::NullSink;
+    use std::sync::Arc;
+
+    fn 上下文() -> UnpackCtx {
+        let sink: Arc<dyn crate::event::EventSink> = Arc::new(NullSink);
+        UnpackCtx::new(1, sink)
+    }
+
+    fn 家() -> String {
+        std::env::var("HOME").expect("测试机总有 HOME")
+    }
+
+    #[test]
+    fn meta_每类环境信息都在_命令行里的密码与家目录必须脱掉() {
+        let home = 家();
+        let opts = ReportOptions {
+            target: None,
+            out_dir: std::env::temp_dir(),
+            argv: vec![
+                "yshjy".to_string(),
+                "--report".to_string(),
+                "-p".to_string(),
+                "hunter2-明文密码".to_string(),
+                format!("{home}/下载/我的包.mp4"),
+            ],
+            hide_paths: true,
+        };
+        let mut 脱敏 = 脱敏器::new(true);
+        let v = meta_json(&opts, &mut 脱敏).expect("meta.json 应该能生成");
+
+        // ① 键必须在（少一个，报障时就少一条线索）
+        for 键 in [
+            "yshjy_version",
+            "generated_at",
+            "os",
+            "arch",
+            "hardware",
+            "disk_available_bytes",
+            "argv",
+            "proxy_env_set",
+            "paths_hidden",
+            "privacy_note",
+        ] {
+            assert!(v.get(键).is_some(), "meta.json 少了 `{键}`：{v}");
+        }
+        assert_eq!(v["paths_hidden"], true);
+
+        // ② 命令行：密码值与家目录都不许原样出现
+        let argv = v["argv"].to_string();
+        assert!(!argv.contains("hunter2"), "命令行里的密码被写进诊断包了：{argv}");
+        assert!(!argv.contains(&home), "命令行里的家目录没脱敏：{argv}");
+    }
+
+    #[test]
+    fn findings_没给目标时也要把话说清() {
+        let opts = ReportOptions {
+            target: None,
+            out_dir: std::env::temp_dir(),
+            argv: vec![],
+            hide_paths: true,
+        };
+        let mut 脱敏 = 脱敏器::new(true);
+        let v = findings_json(&opts, &上下文(), &mut 脱敏).expect("生成 findings");
+
+        assert!(v["target"].is_null(), "没给包时 target 必须是 null：{v}");
+        assert!(
+            v["note"].as_str().is_some_and(|s| !s.is_empty()),
+            "必须说明「这次只收集了环境信息」，否则开发者以为包分析崩了：{v}"
+        );
+    }
+
+    #[test]
+    fn findings_给了目标但识别失败时_路径脱敏且错误原文也脱敏() {
+        let home = 家();
+        // 用家目录下的假路径：脱敏器会把家目录换成 <home>
+        let 假包 = format!("{home}/下载/yshjy-t19-没有这个包.mp4");
+        let opts = ReportOptions {
+            target: Some(std::path::PathBuf::from(&假包)),
+            out_dir: std::env::temp_dir(),
+            argv: vec![],
+            hide_paths: true,
+        };
+        let mut 脱敏 = 脱敏器::new(true);
+        let v = findings_json(&opts, &上下文(), &mut 脱敏).expect("生成 findings");
+
+        assert!(v.get("target").is_some(), "findings 少了 target：{v}");
+        let 全部 = v.to_string();
+        assert!(!全部.contains(&home), "findings 里泄漏了家目录：{全部}");
+        assert!(v["error"].as_str().is_some_and(|s| !s.is_empty()), "识别失败时要带 error 原文：{v}");
+    }
+
+    #[test]
+    fn 配置快照四段都在_且配置路径已脱敏() {
+        let home = 家();
+        let mut 脱敏 = 脱敏器::new(true);
+        let 文本 = 配置快照(&mut 脱敏);
+
+        for 段 in ["[general]", "[password]", "[output]", "[safety]"] {
+            assert!(文本.contains(段), "配置快照少了 {段}：\n{文本}");
+        }
+        // 密码本只记行数、不记内容 —— 这条是红线
+        assert!(文本.contains("password_book_lines"), "必须只记行数：\n{文本}");
+        // 文件名必须是占位符：默认配置是相对路径（不含家目录），光断言"不含 home"
+        // 反而会假绿 —— 用户把密码本写成绝对路径时才会泄漏（T19 修的就是这个）
+        assert!(
+            文本.contains("file = \"<path-"),
+            "密码本文件名必须走脱敏器（绝对路径会带走 /home/用户名）：\n{文本}"
+        );
+        assert!(!文本.contains(&home), "配置快照里泄漏了家目录：\n{文本}");
     }
 }

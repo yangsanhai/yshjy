@@ -50,12 +50,22 @@ impl 当前任务 {
     }
 }
 
-/// 运行服务，返回进程退出码
+/// 运行服务（真 stdin / stdout），返回进程退出码
 pub fn 运行() -> u8 {
+    运行_从(std::io::stdin(), std::io::stdout())
+}
+
+/// 同 [`运行`]，但输入输出可注入 —— **只为测试**。
+///
+/// 为什么要这个口子（T19，2026-11-01）：D16 那条「脚本一次喂完命令、EOF 先到，
+/// 结果也必须吐完」以前只能靠 `printf '…' | yshjy --serve` 这类外部脚本验
+/// （`tests/caps_protocol.py` 那一类）。那是**探针**不是单测：换个 shell、换个管道行为
+/// 就可能假绿。现在喂一段内存里的 stdin 就能断言输出里真有那条响应。
+fn 运行_从<R: std::io::Read + Send + 'static, W: Write>(读: R, 写: W) -> u8 {
     let (命令发, 命令收) = mpsc::channel::<String>();
     std::thread::spawn(move || {
-        let stdin = std::io::stdin();
-        for 行 in stdin.lock().lines() {
+        let reader = std::io::BufReader::new(读);
+        for 行 in reader.lines() {
             match 行 {
                 Ok(l) if !l.trim().is_empty() => {
                     if 命令发.send(l).is_err() {
@@ -78,8 +88,7 @@ pub fn 运行() -> u8 {
     let mut 断流开始: Option<Instant> = None;
     const 断流上限: Duration = Duration::from_secs(600);
 
-    let stdout = std::io::stdout();
-    let mut 出 = stdout.lock();
+    let mut 出 = 写;
 
     loop {
         // ① 先吐事件：进度事件在队列里堆着不输出，界面就会"卡住不动"
@@ -393,5 +402,71 @@ mod tests {
         let 答案 = 门.问("possible_zip_bomb", 100, 10);
         assert_eq!(答案, ask::答案::跳过);
         assert!(t0.elapsed() < Duration::from_secs(1), "超时必须真的返回");
+    }
+
+    #[test]
+    fn 上一个任务没跑完新任务要报_busy_而取消和握手照常能用() {
+        // 「一次只跑一个任务」是**传输层**的约束（`api.rs` 根本不知道有队列）。
+        // 界面靠 BUSY 翻成「等一会儿」；要是静默排队/静默丢弃，用户看到的就是"点了没反应"。
+        let (结果发, _结果收) = mpsc::channel::<Value>();
+        let 事件 = ChannelSink::new(1024);
+        let 门 = AskGate::new(
+            Arc::new(yshjy::event::NullSink) as Arc<dyn EventSink>,
+            Duration::from_millis(10),
+        );
+        // 造一个「还在跑」的任务：睡 300ms 的线程
+        let 句柄 = std::thread::spawn(|| std::thread::sleep(Duration::from_millis(300)));
+        let mut 当前 = Some(当前任务 {
+            取消: CancelToken::new(),
+            门,
+            句柄,
+        });
+
+        let mut 出: Vec<u8> = Vec::new();
+        处理命令(
+            r#"{"id":42,"cmd":"scan","paths":["/tmp/yshjy-t19.zip"]}"#,
+            &mut 出,
+            &事件,
+            &结果发,
+            &mut 当前,
+        );
+        let 文本 = String::from_utf8_lossy(&出).to_string();
+        assert!(文本.contains("\"BUSY\""), "忙的时候必须明确回 BUSY：{文本}");
+        assert!(文本.contains("\"id\":42"), "BUSY 也要带原 id，否则前端对不上号：{文本}");
+
+        // 忙的时候这几条必须照常能用 —— 否则用户连「取消」都按不了
+        for 命令文本 in [r#"{"id":43,"cmd":"hello"}"#, r#"{"id":44,"cmd":"cancel"}"#] {
+            let mut 出2: Vec<u8> = Vec::new();
+            处理命令(命令文本, &mut 出2, &事件, &结果发, &mut 当前);
+            let t2 = String::from_utf8_lossy(&出2).to_string();
+            assert!(t2.contains("\"ok\":true"), "忙时 {命令文本} 必须还能用：{t2}");
+            assert!(!t2.contains("\"BUSY\""), "忙时 {命令文本} 不该被 BUSY 拦：{t2}");
+        }
+
+        if let Some(t) = 当前.take() {
+            let _ = t.句柄.join();
+        }
+    }
+
+    #[test]
+    fn 一条命令后立刻_eof_也要把结果吐完() {
+        // D16：`printf '…' | yshjy --serve` 时 EOF 常常比结果先到。
+        // 以前直接 break → 命令发了、结果没有（前端只能等超时）。
+        //
+        // ⚠️ 必须用**走任务线程**的命令（list/extract/pack/batch/rescue）：
+        //    hello / scan / report 是在 `处理命令` 里**同步写**响应的，EOF 前就已经吐出，
+        //    拿它们验这条会假绿（2026-11-01 第一版就写错了，改用 list 才红得起来）。
+        let mut 输出: Vec<u8> = Vec::new();
+        let 读 = std::io::Cursor::new(
+            b"{\"id\":7,\"cmd\":\"list\",\"path\":\"/nonexistent/yshjy-t19.zip\"}\n".to_vec(),
+        );
+        let 码 = 运行_从(读, &mut 输出);
+
+        assert_eq!(码, 0);
+        let 文本 = String::from_utf8_lossy(&输出).to_string();
+        assert!(
+            文本.contains("\"id\":7"),
+            "EOF 之后任务结果必须照样吐出来（D16）：{文本}"
+        );
     }
 }
