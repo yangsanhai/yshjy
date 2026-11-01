@@ -126,7 +126,34 @@ Dart 不允许类的花括号跨文件。`part` 只能放顶层内容 —— Loc
 ② 把 `isEnter || isCtrlE` 改成 `&&` → 两条键位测试同时变红（`Expected: length 1 / Actual: []`）。
 两次都改回并复跑全绿，`grep` 自检无 `isShiftPressed` / `isEnter && isCtrlE` 残留。
 
-**下一批**：6c 第 3 块 `_emptyView`（拖放区，62 行）；剩余清单见 `docs/ARCHITECTURE.md`。
+**下一批**：第 5 块 —— 预览树。
+
+---
+
+### 同批：第 3、4 块 —— 空态拖放区、处理中等待页
+
+| 块 | 新文件 | 依赖 | `home_page.dart` |
+|---|---|---|---|
+| 3 | `pages/home_empty_view.dart`（`EmptyDropView`） | `dragging` + 2 个回调 | 2789 → 2733 |
+| 4 | `pages/home_busy_view.dart`（`BusyView`） | 只有 `text` | 2733 → 2722 |
+
+**第 3 块补的 4 条测试里，有两条是把「只写在注释里的设计约定」变成测试**：
+
+- 拖拽中标题必须换成「松手就行」—— 平时挂这句，用户会以为程序卡在某个状态；
+- 第一屏只允许**一个** `FilledButton`，次入口弱化成 `TextButton`（调研 07:921-923）。
+  这条原来只是注释，**注释不拦人** —— 现在 `find.byType(FilledButton)` 必须是 `findsOneWidget`。
+
+反向验证：把拖拽三元表达式改成恒定 `t('home.dropTitle')` →
+`Found 0 widgets with text "松手就行"` 立刻红，改回复跑全绿。
+
+**第 4 块（`BusyView`）零状态依赖**，注释里钉了那个老坑：`CircularProgressIndicator`
+是**无限动画**，任何 `pumpAndSettle` 撞上它都会等到超时，测试只能用定次 `pump`。
+
+**验证**：`flutter test` **231 条**全过、`flutter analyze` 干净。
+
+**下一批：第 5 块 —— 预览树**（`_previewView` + `_crumbBar` + `_fileList` + `_entryRow`，
+合计 548 行、引用 **38 个** State 成员）。这块和前面四块不是一个难度：前四块都是「一份数据 +
+几个回调」，这块得先决定「哪些状态下沉成参数、哪些留在 State」，是唯一需要**先设计再动手**的一块。
 
 ---
 

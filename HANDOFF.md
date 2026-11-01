@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **2 / 10 块**（`f7f2887` 队列视图、`f8b7951` 批量完成卡，装机版仍 0.9.47）**
+> **2026-11-01 深夜 · 批 6c 进行中：拆 home_page 已 **4 / 10 块**（`f7f2887` 队列、`f8b7951` 批量完成卡、`3e68d37` 拖放区、`e8038ba` 等待页；装机版仍 0.9.47）**
 >
 > - **做了什么**：`home_page.dart` **3117 → 2876 行**。队列视图抽成独立文件
 >   `gui/lib/pages/home_queue_view.dart`（`QueueItem` + `QueueView` + `_QueueStatusChip`，212 行）；
@@ -34,8 +34,12 @@
 >   用 `debugScanItems` 把队列灌进**完整 HomePage**，断言 `primaryFocus.debugLabel == 'queue-list'`
 >   且 Delete 真能删。反向验证：去掉 `requestFocus` → 焦点实测落在 `_ModalScopeState Focus Scope`、
 >   Delete 删不掉，**与真机症状完全一致**。用户真机复验原话：**「这回按键正常」**。
-> - **当前状态**：`flutter test` **226 条**全过、`flutter analyze` 干净、装机版仍 0.9.47（本批未发版）。
-> - **下一块**：`_emptyView`（拖放区，62 行）。**每块都要走一遍「抽 widget → 真机点 → 补集成测试」。**
+> - **第 3、4 块（`3e68d37` / `e8038ba`）**：拖放区 → `EmptyDropView`（依赖 `dragging` + 2 个回调）、
+>   等待页 → `BusyView`（零状态依赖）。`home_page.dart` 现 **2722 行**。
+>   第 3 块把两条「只写在注释里的设计约定」变成测试：拖拽中必须换「松手就行」、第一屏只许一个 `FilledButton`。
+> - **当前状态**：`flutter test` **231 条**全过、`flutter analyze` 干净、装机版仍 0.9.47（本批未发版）。
+> - **下一块：第 5 块 = 预览树（548 行 / 引用 38 个成员），是唯一需要先设计再动手的一块** ——
+>   要先决定「哪些状态下沉成参数、哪些留在 State」。**别按前四块的惯性直接开搬。**
 
 > **2026-11-01 深夜 · 批 6b 完成：T15 覆盖率基线（`d29103f`，只出证据、代码零改动、装机版仍 0.9.47）**
 >
