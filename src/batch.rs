@@ -154,7 +154,7 @@ pub struct BatchOptions {
     /// 智能解压三规则（UI-SPEC §9.2）：单一顶层目录/单文件直接解到目标目录，
     /// 否则自动建同名子目录。默认开。
     pub smart_dir: bool,
-    /// 跳过解压前的磁盘空间预检（`--force`）
+    /// 跳过解压前的安全预检（磁盘空间 + 压缩比，`--force`）
     ///
     /// 预检只在**预估得出总大小时**才拦人（拿不准就放行，见 [`crate::safety::check_space`]）。
     pub force: bool,

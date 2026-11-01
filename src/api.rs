@@ -355,6 +355,18 @@ pub fn 解压(
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         limits: crate::safety::Limits {
+            // ★ 以前这里是 `..Default::default()` —— 等于把压缩比上限写死成 100，
+            //   用户在 config.toml / 设置页调过的 `zip_bomb_ratio` 对界面和协议**完全无效**
+            //   （CLI 一直读配置，界面走这条路读的是默认值，两边行为不一致）。
+            //   force=true → 0（这道闸不检查），与 CLI 的 `--force` 同一语义。
+            // 注意：这一层 `force` 不是局部变量（它只作为下面 struct 字段的值出现过），
+            // 所以这里再取一次参数 —— 与 `force:` 那行是**同一个表达式**，不会走岔。
+            max_ratio: if 参数.get("force").and_then(|v| v.as_bool()).unwrap_or(false) {
+                0
+            } else {
+                crate::config::全局配置().safety.zip_bomb_ratio
+            },
+            warn_executables: crate::config::全局配置().safety.warn_executables,
             ask: ask.cloned(),
             ..Default::default()
         },
@@ -1000,6 +1012,7 @@ pub fn 批量(
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         limits: crate::safety::Limits {
+            // 同上：批量这条路也读配置，不再写死默认 100
             max_ratio: cfg.safety.zip_bomb_ratio,
             warn_executables: cfg.safety.warn_executables,
             ask: ask.cloned(),

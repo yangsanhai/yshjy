@@ -48,7 +48,7 @@ COMMON OPTIONS:
                                   top-level folder we extract straight into the destination instead of
                                   nesting another same-named folder. This flag always nests.
   -q, --quiet                     print results only (for scripts)
-  --force                         skip the pre-extraction free-space check (which otherwise
+  --force                          Skip pre-flight safety checks (disk space AND compression ratio)
   --test                          Verify only: full decode + checksum without writing anything (use it to test an archive)
                                   refuses to start when the disk is too full)
   --lang <lang>                   switch the UI language (e.g. zh-CN, ja, ko, ru, es)
