@@ -11,6 +11,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../key_action_scope.dart';
+import '../keyboard.dart';
 import '../l10n.dart';
 
 class EmptyDropView extends StatelessWidget {
@@ -33,7 +35,7 @@ class EmptyDropView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Center(
+    final content = Center(
       key: const ValueKey('empty'),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -93,6 +95,12 @@ class EmptyDropView extends StatelessWidget {
           ),
         ],
       ),
+    );
+    // Enter = 本屏主操作（UI-SPEC §4b.6「Enter 确认」）。第一屏的主操作就是「选文件」，
+    // 也就是上面那个唯一的主按钮 —— 键盘和鼠标走同一个回调，不另开一条路。
+    return KeyActionScope(
+      handlers: {KeyAction.primary: onPickFile},
+      child: content,
     );
   }
 }

@@ -532,5 +532,7 @@
     "code": "es-ES",
     "name": "Español",
     "translators": "yshjy 项目组"
-  }
+  },
+  "pack.removeInput": "Quitar este archivo",
+  "pack.pickOutput": "Elegir ubicación de salida"
 }

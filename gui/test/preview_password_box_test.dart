@@ -14,6 +14,7 @@ class Rec {
   final changed = <String?>[];
   final picked = <String>[];
   int toggles = 0;
+  int submitted = 0;
 }
 
 Future<Rec> pumpBox(
@@ -21,6 +22,7 @@ Future<Rec> pumpBox(
   int encryptedCount = 3,
   bool showPlain = false,
   List<String> recent = const [],
+  bool withSubmit = false,
 }) async {
   final rec = Rec();
   final ctrl = TextEditingController();
@@ -38,6 +40,7 @@ Future<Rec> pumpBox(
         onToggleShowPlain: () => rec.toggles++,
         onChanged: rec.changed.add,
         onPickRecent: rec.picked.add,
+        onSubmitted: withSubmit ? () => rec.submitted++ : null,
       ),
     ),
   ));
@@ -99,5 +102,25 @@ void main() {
   testWidgets('密码本为空时不占地方', (tester) async {
     await pumpBox(tester);
     expect(find.byType(ActionChip), findsNothing);
+  });
+
+  // ── T11 无障碍：键盘 ─────────────────────────────────────────────
+  testWidgets('输完密码按回车 = 提交（UI-SPEC §4b.6「Enter 确认」）', (tester) async {
+    final rec = await pumpBox(tester, withSubmit: true);
+    await tester.enterText(find.byType(TextField), 'abc123');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(rec.submitted, 1,
+        reason: '报错页那个重试框早就能回车提交，预览页这个框没反应 → 用户以为「这里坏了」');
+  });
+
+  testWidgets('父层没给提交回调时，回车什么都不做（不报错）', (tester) async {
+    final rec = await pumpBox(tester); // withSubmit: false
+    await tester.enterText(find.byType(TextField), 'abc123');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(rec.submitted, 0);
+    expect(rec.changed, contains('abc123'),
+        reason: '没接提交也不该把输入丢掉 —— 输入变化照旧要报给父层');
   });
 }

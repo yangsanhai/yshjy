@@ -15,6 +15,8 @@ import 'package:flutter/services.dart';
 
 import '../engine.dart';
 import '../format.dart';
+import '../key_action_scope.dart';
+import '../keyboard.dart';
 import '../l10n.dart';
 
 class DoneView extends StatelessWidget {
@@ -66,7 +68,7 @@ class DoneView extends StatelessWidget {
     // 只勾了「伪装封面」那一项：解出 0 个文件是正常的，别吓用户
     final onlyCover = r.entriesDone == 0 && r.cover != null;
     final seconds = (r.millis / 1000).toStringAsFixed(1);
-    return Center(
+    final content = Center(
       key: const ValueKey('done'),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -226,6 +228,19 @@ class DoneView extends StatelessWidget {
           ),
         ],
       ),
+    );
+    // Enter = 本屏主操作（UI-SPEC §4b.6）= 「打开目录」。
+    // ★ 校验模式和「只提封面」两种情况没有可打开的产物目录，那时不接
+    //   —— 界面上的按钮也是这时才隐藏（`!verifyMode && r.dest != null`），
+    //     键盘必须和按钮同一口径，不能凭空给出一个点了就报错的入口。
+    // Esc = 取消/返回 → 「再来一个」，和点那个按钮同一条路。
+    return KeyActionScope(
+      handlers: {
+        KeyAction.primary:
+            (!verifyMode && r.dest != null) ? () => onOpenFolder(r.dest) : null,
+        KeyAction.cancel: onReset,
+      },
+      child: content,
     );
   }
 }

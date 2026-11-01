@@ -532,5 +532,7 @@
     "code": "ru-RU",
     "name": "Русский",
     "translators": "yshjy 项目组"
-  }
+  },
+  "pack.removeInput": "Убрать этот файл",
+  "pack.pickOutput": "Выбрать место сохранения"
 }

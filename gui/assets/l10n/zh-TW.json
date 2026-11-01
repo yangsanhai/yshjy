@@ -532,5 +532,7 @@
     "code": "zh-TW",
     "name": "繁體中文（台灣）",
     "translators": "yshjy 專案組"
-  }
+  },
+  "pack.removeInput": "移除這個檔案",
+  "pack.pickOutput": "選擇輸出的位置"
 }

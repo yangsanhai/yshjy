@@ -532,5 +532,7 @@
   "engine.atMb": "从开头算 {mb} MB 处",
   "engine.atKb": "从开头算 {kb} KB 处",
   "common.all": "全部",
-  "settings.pickDirConfirm": "就用这个目录"
+  "settings.pickDirConfirm": "就用这个目录",
+  "pack.removeInput": "去掉这个文件",
+  "pack.pickOutput": "选择输出位置"
 }

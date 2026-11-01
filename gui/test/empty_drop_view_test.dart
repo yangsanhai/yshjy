@@ -5,6 +5,7 @@
 // 一次只验一件事：拖拽中的文案、两个入口回调、以及「第一屏只有一个主按钮」这条设计规矩。
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/pages/home_empty_view.dart';
 
@@ -69,5 +70,33 @@ void main() {
     // 次入口存在，只是弱化 —— 不是被砍掉
     expect(find.byType(TextButton), findsOneWidget);
     expect(find.text('选整个文件夹'), findsOneWidget);
+  });
+
+  // ── T11 无障碍：键盘 ─────────────────────────────────────────────
+  // 键位出处：UI-SPEC §4b.6「Enter 确认」= 提交本屏主操作。
+  // 第一屏的主操作是「选文件」，所以 Enter 必须等价于点那个按钮。
+
+  testWidgets('Enter 触发选文件（主操作），Esc / Tab 不触发', (tester) async {
+    final calls = await pumpEmpty(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(calls['pickFile'], hasLength(1),
+        reason: '主操作键没接上，只用键盘的用户在第一屏就卡死了');
+    expect(calls['pickFolder'], isEmpty,
+        reason: 'Enter 走进了次入口，用户按确认键却弹目录选择框');
+
+    // 这块不认 Esc（没有可取消的操作）—— 不能因为「顺手」就给没意义的行为
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(calls['pickFile'], hasLength(1));
+    expect(calls['pickFolder'], isEmpty);
+  });
+
+  testWidgets('小键盘 Enter 和主 Enter 等价（外接数字区很常见）', (tester) async {
+    final calls = await pumpEmpty(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+    await tester.pump();
+    expect(calls['pickFile'], hasLength(1),
+        reason: '只认主 Enter，笔记本接数字小键盘的用户会觉得主操作键坏了');
   });
 }

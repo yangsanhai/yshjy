@@ -532,5 +532,7 @@
   "engine.atMb": "{mb} MB from the start",
   "engine.atKb": "{kb} KB from the start",
   "common.all": "All",
-  "settings.pickDirConfirm": "Use this folder"
+  "settings.pickDirConfirm": "Use this folder",
+  "pack.removeInput": "Remove this file",
+  "pack.pickOutput": "Choose output location"
 }

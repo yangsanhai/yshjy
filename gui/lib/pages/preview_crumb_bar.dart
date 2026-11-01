@@ -48,7 +48,21 @@ class CrumbBar extends StatelessWidget {
             for (var i = 0; i < crumbs.length; i++) ...[
               if (i > 0)
                 Icon(Icons.chevron_right, size: 16, color: cs.onSurfaceVariant),
-              InkWell(
+              // T11：自绘的可点区域（InkWell 包文字）在无障碍树里只是个「文本」，
+              // 读屏软件不会说它能按。包一层 Semantics 才读成「合集A，按钮」。
+              // excludeSemantics 去掉子 Text 自带的同名文本，免得念两遍。
+              Semantics(
+                button: true,
+                label: i == 0
+                    ? (pkg.isEmpty ? crumbs[i].name : pkg)
+                    : crumbs[i].name,
+                excludeSemantics: true,
+                // ★ 语义层必须自己带 onTap：加了 excludeSemantics 之后子节点（InkWell）
+                //   的 tap 动作被排掉了，只有 button 标记 —— 读屏会念「按钮」却点不动
+                //   （2026-11-01 测试当场抓到：isButton ✔ 但 missing actions: [tap]）。
+                //   两处 onTap 指的是同一个回调，不是两份真相。
+                onTap: () => onCrumbTap(crumbs[i].path),
+                child: InkWell(
                 onTap: () => onCrumbTap(crumbs[i].path),
                 child: Padding(
                   padding:
@@ -68,6 +82,7 @@ class CrumbBar extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
               ),
             ],
           ],
