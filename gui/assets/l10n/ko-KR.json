@@ -542,5 +542,11 @@
   "keys.selectAll": "압축 파일의 모든 파일 선택",
   "keys.remove": "대기열에서 선택 항목 제거",
   "keys.note": "단축키는 고정이며 변경할 수 없습니다. Tab으로 버튼 사이를 이동합니다.",
-  "err.SAFETY_LIMIT": "압축을 푼 크기가 안전 한도를 넘었습니다(압축 폭탄 방지) — 파일은 손상되지 않았습니다"
+  "err.SAFETY_LIMIT": "압축을 푼 크기가 안전 한도를 넘었습니다(압축 폭탄 방지) — 파일은 손상되지 않았습니다",
+  "settings.safety.ratio": "압축률 상한",
+  "settings.safety.ratioHint": "압축을 푼 크기가 원본의 몇 배까지 허용할지. 큰 로그나 디스크 이미지는 압축률이 높아 안 풀릴 때 이 값을 올리세요.",
+  "settings.safety.ratio100": "100배(기본)",
+  "settings.safety.ratio500": "500배",
+  "settings.safety.ratio2000": "2000배",
+  "settings.safety.ratioOff": "제한 없음"
 }

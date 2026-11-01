@@ -542,5 +542,11 @@
   "keys.selectAll": "アーカイブ内のファイルをすべて選択",
   "keys.remove": "キューから選択項目を外す",
   "keys.note": "キーは固定で変更できません。Tab でボタン間を移動できます。",
-  "err.SAFETY_LIMIT": "展開後のサイズが安全上限を超えました（圧縮爆弾対策）—— ファイルは壊れていません"
+  "err.SAFETY_LIMIT": "展開後のサイズが安全上限を超えました（圧縮爆弾対策）—— ファイルは壊れていません",
+  "settings.safety.ratio": "圧縮率の上限",
+  "settings.safety.ratioHint": "展開後のサイズが圧縮ファイルの何倍まで許すか。大きなログやディスクイメージは圧縮率が高く、解けない時はここを上げてください。",
+  "settings.safety.ratio100": "100 倍（既定）",
+  "settings.safety.ratio500": "500 倍",
+  "settings.safety.ratio2000": "2000 倍",
+  "settings.safety.ratioOff": "制限なし"
 }

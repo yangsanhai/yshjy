@@ -52,6 +52,12 @@ class _SettingsPageState extends State<SettingsPage> {
   String _closeAction = Platform.isWindows ? 'exit' : 'tray';
   /// 并行任务数（T17-2）：三档 **1 / 2 / 4**，默认 1（设计口径：机械盘不该被打成碎片）
   int _jobs = 1;
+  /// 压缩比上限（T20）：解开后的体积最多是压缩包的几倍，超过就拦（防压缩炸弹）。
+  ///
+  /// 四档：100（默认）/ 500 / 2000 / 0（不限）。0 是引擎认可的「不检查」。
+  /// 为什么给用户改：大日志、CSV、稀疏磁盘镜像的压缩比轻松过百，
+  /// 默认 100 会把它们当炸弹拦下（以前还会报成「数据损坏」，见 T20）。
+  int _ratioLimit = 100;
   /// 解出可执行文件时提醒（T17-2）：默认开，与引擎 config.rs 的 `warn_executables` 默认一致
   bool _warnExec = true;
   /// 本机写入盘类型：`solid` / `rotational` / `unknown`（引擎 hello.disk 真探测来的）
@@ -103,6 +109,10 @@ class _SettingsPageState extends State<SettingsPage> {
         // 并行任务数（T17-2）：只认三档 1 / 2 / 4。配置被手改成别的数时**夹到最近的档位**
         // —— 下拉里放一个不在 items 里的值会直接 assert 崩（Flutter 的硬规则）。
         _jobs = _normalizeJobs(gen['jobs']);
+        // 压缩比上限（T20）：只认 100 / 500 / 2000 / 0 四档。
+        // 配置被手改成别的数（比如 300）→ 夹到最近的档，**绝不把原值塞进下拉**
+        // （Dropdown 的 items 里没有的值会直接 assert 崩）。
+        _ratioLimit = _normalizeRatio(saf['zip_bomb_ratio']);
         // 可执行提醒（T17-2）：默认开（引擎 config.rs 也是 true），只有明确写 off 才算关
         _warnExec = _readSwitch(saf['warn_executables'], dflt: true);
         final ca = gen['close_action'];
@@ -125,6 +135,19 @@ class _SettingsPageState extends State<SettingsPage> {
     if (n >= 4) return 4;
     if (n >= 2) return 2;
     return 1;
+  }
+
+  /// 把配置里的 `zip_bomb_ratio` 夹到四档（100 / 500 / 2000 / 0）。
+  ///
+  /// 0 原样保留（引擎认它 = 不检查）。其余往上取整到最近的档：
+  /// 用户手写 300 说明他想放宽，给 500 而不是硬塞回 100 —— 那等于把他的设置抹掉。
+  static int _normalizeRatio(String? v) {
+    final n = int.tryParse((v ?? '').trim()) ?? 100;
+    if (n <= 0) return 0; // 0 / 负数都按「不限」
+    if (n > 2000) return 2000;
+    if (n > 500) return 2000;
+    if (n > 100) return 500;
+    return 100;
   }
 
   /// 问引擎要「本机写入盘是机械还是固态」（T17-2 的那句建议靠它才不是假话）。
@@ -282,7 +305,10 @@ class _SettingsPageState extends State<SettingsPage> {
         'flush_movable': _flushMovable ? 'on' : 'off',
         // 可执行提醒（T17-2）：界面从「一行说明」改成真开关，关掉后引擎不再提醒
         'warn_executables': _warnExec ? 'on' : 'off',
-      });
+        // 压缩比上限（T20）：引擎用 `as_integer()` 读，必须写成 `zip_bomb_ratio = 100`
+        // 而不是 `= "100"` —— 写成字符串会被静默当没写（「假开关」）
+        'zip_bomb_ratio': '$_ratioLimit',
+      }, numeric: {'zip_bomb_ratio'});
       // 自动找解压码的两个开关：引擎读 [password] 这一段（config.rs 的 auto_from_notes
       // / auto_from_book）。只写这两行，`file` 和 `max_candidates` 由 _upsertSection
       // 原样保留 —— 用户手写的值不会被本页冲掉。
@@ -592,6 +618,33 @@ class _SettingsPageState extends State<SettingsPage> {
             DropdownMenuItem(value: '4', child: Text(t('settings.perf.jobs4'))),
           ],
           onChanged: (v) => setState(() => _jobs = _normalizeJobs(v)),
+        ),
+        const SizedBox(height: 12),
+        // 压缩比上限（T20）：防压缩炸弹的那道闸，默认 100 倍。
+        // 为什么要给用户改：大日志 / CSV / 稀疏镜像的压缩比轻松过百，
+        // 默认值会把它们拦下来；以前还会误报成「数据损坏」，让人以为包坏了。
+        DropdownButtonFormField<String>(
+          key: const ValueKey('ratio-select'),
+          initialValue: '$_ratioLimit',
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: t('settings.safety.ratio'),
+            helperText: t('settings.safety.ratioHint'),
+            helperMaxLines: 3,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(
+                value: '100', child: Text(t('settings.safety.ratio100'))),
+            DropdownMenuItem(
+                value: '500', child: Text(t('settings.safety.ratio500'))),
+            DropdownMenuItem(
+                value: '2000', child: Text(t('settings.safety.ratio2000'))),
+            DropdownMenuItem(
+                value: '0', child: Text(t('settings.safety.ratioOff'))),
+          ],
+          onChanged: (v) => setState(() => _ratioLimit = _normalizeRatio(v)),
         ),
         const SizedBox(height: 6),
         // 本机磁盘类型（引擎 hello.disk 真探测来的，不是写死的文案）
