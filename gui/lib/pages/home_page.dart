@@ -18,6 +18,7 @@ import '../l10n.dart';
 import '../format.dart';
 
 import 'home_batch_done_view.dart';
+import 'home_busy_view.dart';
 import 'home_empty_view.dart';
 import 'home_queue_view.dart';
 
@@ -1432,19 +1433,7 @@ class _HomePageState extends State<HomePage> {
         onPickFolder: _pickFolder,
       );
 
-  Widget _busyView(String text) {
-    return Center(
-      key: const ValueKey('busy'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 20),
-          Text(text),
-        ],
-      ),
-    );
-  }
+  Widget _busyView(String text) => BusyView(text: text);
 
   Widget _previewView() {
     final pv = _preview!;
