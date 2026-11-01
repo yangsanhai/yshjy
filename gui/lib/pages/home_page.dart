@@ -20,10 +20,12 @@ import '../format.dart';
 import 'home_batch_done_view.dart';
 import 'home_busy_view.dart';
 import 'home_done_view.dart';
+import 'home_error_view.dart';
 import 'home_empty_view.dart';
 import 'home_flush_view.dart';
 import 'home_progress_view.dart';
 import 'home_queue_view.dart';
+import 'home_space_shortage.dart';
 import 'preview_crumb_bar.dart';
 import 'preview_file_list.dart';
 import 'preview_header.dart';
@@ -1742,89 +1744,10 @@ class _HomePageState extends State<HomePage> {
   ///
   /// 三条出路都必须有**真实后端行为**，不做假开关：
   /// 换位置 = 改 `_outDir` 重解；只解压部分 = 回预览树勾选；继续试试 = 协议 `extract.force`。
-  List<Widget> _spaceShortageBlock(ColorScheme cs) {
-    return [
-      const SizedBox(height: 14),
-      Container(
-        key: const ValueKey('space-shortage'),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: cs.errorContainer.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: cs.error.withValues(alpha: 0.25)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              t('home.noSpace'),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: cs.error,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(_spaceLine(), style: const TextStyle(fontSize: 12, height: 1.5)),
-          ],
-        ),
-      ),
-      const SizedBox(height: 10),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        alignment: WrapAlignment.center,
-        children: [
-          OutlinedButton.icon(
-            key: const ValueKey('space-change-dest'),
-            onPressed: _changeDestAndRetry,
-            icon: const Icon(Icons.folder_open, size: 18),
-            label: Text(t('home.changeLocation')),
-          ),
-          if (_preview != null)
-            OutlinedButton.icon(
-              key: const ValueKey('space-pick-part'),
-              onPressed: () => setState(() => _phase = Phase.preview),
-              icon: const Icon(Icons.checklist, size: 18),
-              label: Text(t('home.extractPartialBtn')),
-            ),
-          FilledButton.icon(
-            key: const ValueKey('space-force'),
-            onPressed: () => _extract(force: true),
-            icon: const Icon(Icons.play_arrow, size: 18),
-            label: Text(t('home.tryAnyway')),
-          ),
-        ],
-      ),
-      const SizedBox(height: 4),
-      Text(
-        t('home.tryAnywayHint'),
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-      ),
-    ];
-  }
 
   /// 空间不足的三个人话数字
   ///
   /// 引擎在错误的 `detail` 里给 `need` / `available`（字节数，协议里可能是字符串）。
-  /// 拿不到就退成一句通用建议 —— **不给算错的数字**（CLI 侧同一口径，别一边猜一边不猜）。
-  String _spaceLine() {
-    int? pick(String k) {
-      final v = _errorDetail?[k];
-      if (v is num) return v.toInt();
-      if (v is String) return int.tryParse(v);
-      return null;
-    }
-
-    final need = pick('need');
-    final avail = pick('available');
-    if (need == null || avail == null) {
-      return t('home.freeSpaceHint');
-    }
-    final short = need > avail ? need - avail : 0;
-    return t('home.noSpaceDetail', {'need': _size(need), 'avail': _size(avail), 'short': _size(short)});
-  }
 
   /// 换个位置再解一次（S5 第一个按钮）
   Future<void> _changeDestAndRetry() async {
@@ -1849,170 +1772,41 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: cs.error),
-            const SizedBox(height: 16),
-            Text(
-              _errText(_errorCode ?? 'UNKNOWN'),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
+            ErrorHead(
+              errorCode: _errorCode,
+              errorNote: _errorNote,
+              errorDetail: _errorDetail,
+              canRescue: _canRescue,
+              hint: hint,
+              onRescue: _rescue,
+              onMakeReport: _makeReport,
             ),
-            if (hint != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: hint.warn
-                      ? cs.errorContainer.withValues(alpha: 0.35)
-                      : cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  hint.text,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: hint.warn ? cs.error : null,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-            // 缺分卷是网盘资源最高频的失败原因 —— 直接说缺哪一块、怎么补救
-            if (_errorCode == 'MISSING_VOLUME') ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      (_errorDetail?['missing'] as String?) != null
-                          ? t('home.missingPart', {'name': '${_errorDetail!['missing']}'})
-                          : t('home.volumesIncomplete'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: cs.error,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      (_errorDetail?['found'] as String?) != null
-                          ? t('home.volumesFound', {'n': '${_errorDetail!['found']}'})
-                          : t('home.volumesMissing'),
-                      style: const TextStyle(fontSize: 12, height: 1.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            // 索引坏了也有救：CLI 的 --rescue 在界面上就是这个按钮。
-            // 用 OutlinedButton 不用 FilledButton —— 首屏「唯一最强入口」的约束
-            // 有 widget 测试钉着，这里再放一个实心按钮会诱导误点。
-            if (_canRescue) ...[
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                key: const ValueKey('rescue'),
-                onPressed: _rescue,
-                icon: const Icon(Icons.healing_outlined, size: 18),
-                label: Text(t('home.rescueBtn')),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                t('home.rescueDesc'),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              ),
-            ],
-            // 技术详情（`Error { code: … }`）对新手是噪音，默认收起来：
-            // 需要报障时一键复制，而不是糊在脸上
-            if ((_errorNote ?? '').isNotEmpty)
-              TextButton.icon(
-                onPressed: _makeReport,
-                icon: const Icon(Icons.bug_report_outlined, size: 15),
-                label: Text(t('home.diagPack'), style: const TextStyle(fontSize: 12)),
-              ),
-            if ((_errorNote ?? '').isNotEmpty)
-              TextButton.icon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: _errorNote!));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(t('home.copiedDetail'))),
-                  );
-                },
-                icon: const Icon(Icons.copy, size: 15),
-                label: Text(t('home.copyDetail'), style: const TextStyle(fontSize: 12)),
-              ),
             // S5：空间不够 —— 三个数 + 三条出路。
-            //
             // 以前这里是死路：引擎连 `SPACE_SHORTAGE` 事件都不发（全库只有定义、零发射点），
             // 界面那段处理代码永远收不到；而 `--force` 界面也一个参数都没传。
             // 现在引擎发事件 + 错误 detail 带 need/available，三个按钮各有真实后端行为。
-            if (_errorCode == 'NOT_ENOUGH_SPACE') ..._spaceShortageBlock(cs),
-            if (_needsPassword) ...[
-              const SizedBox(height: 18),
-              // 密码本里的常用解压码：点一下直接填入并重试（调研 07:874-878）
-              if (_recentPw.isNotEmpty) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    t('home.commonPw'),
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final pw in _recentPw)
-                      ActionChip(
-                        avatar: const Icon(Icons.history, size: 14),
-                        label: Text(pw, style: const TextStyle(fontSize: 12)),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () {
-                          _pwCtrl.text = pw;
-                          _retryWithPassword();
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-              ],
-              TextField(
+            if (_errorCode == 'NOT_ENOUGH_SPACE')
+              ...spaceShortageBlock(
+                cs,
+                line: spaceLine(_errorDetail),
+                hasPreview: _preview != null,
+                onChangeDest: _changeDestAndRetry,
+                onPickPart: () => setState(() => _phase = Phase.preview),
+                onTryAnyway: () => _extract(force: true),
+              ),
+            if (_needsPassword)
+              ErrorPasswordRetry(
                 controller: _pwCtrl,
-                obscureText: !_showPw,
-                autofocus: true,
-                onSubmitted: (_) => _retryWithPassword(),
-                textInputAction: TextInputAction.done,
-                decoration: InputDecoration(
-                  labelText: t('home.pwLabel'),
-                  hintText: t('home.pwHint'),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.key),
-                  // 眼睛：点一下看明文，再点回密文（打错一个字符不用整段重输）
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showPw ? Icons.visibility_off : Icons.visibility,
-                      size: 18,
-                    ),
-                    tooltip: _showPw ? t('home.pwHide') : t('home.pwShow'),
-                    onPressed: () => setState(() => _showPw = !_showPw),
-                  ),
-                ),
+                showPlain: _showPw,
+                recent: _recentPw,
+                onToggleShowPlain: () => setState(() => _showPw = !_showPw),
+                onRetry: _retryWithPassword,
+                // 常用码点一下 = 填入 + 立刻重试（预览页只是填入，这里要省那一次点击）
+                onPickRecent: (pw) {
+                  _pwCtrl.text = pw;
+                  _retryWithPassword();
+                },
               ),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: _retryWithPassword,
-                icon: const Icon(Icons.lock_open),
-                label: Text(t('home.retryWithPw')),
-              ),
-            ],
             const SizedBox(height: 24),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -2088,7 +1882,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 「 · 12.3 MB/s · 剩 41 秒」；速度未知就返回空串
-
 
   String _size(int bytes) => formatBytes(bytes);
 
