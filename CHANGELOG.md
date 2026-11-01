@@ -2,6 +2,30 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布] —— P8 审计收官（B 类注释 + 死代码清理、B-4 假账更正）+ A-6 + A-5 + T11 收尾
+
+### 死了 150 多行的代码清掉了，还揪出一条假账（P8 B 类 · 2026-11-02）
+
+**注释**：B-1…B-6 六条「我们比参考实现好在哪」全部写在**具体代码行上**
+（`scan.rs::scan_whole_file`、`unpack.rs` 的 tar 家族、`extract_rar.rs` 的候选密码与缺卷自查、
+`单卷解压` 的 test-先验），每条都带「改回去会坏什么」的样本名。
+
+**★ B-4 原来是假账**：账本说「RAR 中文密码靠 UTF-8→GBK→UTF-16LE 三候选，样本 `rar5_cnpwd.rar` 能开」。
+实测：那个样本**库里根本不存在**；用 `rar` 7.11 现造中文密码 RAR5 一测 —— 我们能开，命中的是 **UTF-8**，
+而 GBK/UTF-16LE 对 RAR **永远命不中**（RAR5 密码是 UTF-8 文本；`rars` 的 RAR4 实现直接
+`str::from_utf8 → NonUtf8Password`）。旧写法只会让**错密码时把整包多解两遍**。
+现在 RAR 侧只交 UTF-8 一份（ZIP/7z 侧的三候选是真的需要，保留）。
+新增样本 `tests/data/B4_rar5_cn_pwd.rar`（179 B）+ 两条回归测试（含「错密码必须报错」）。
+
+**死代码**：`scripts/dead_pub.sh` 找「声明成 pub 但全仓没人用」的条目（`pub` 会压住 dead_code，
+`clippy -D warnings` 全绿也挡不住）。清掉 14 个（`rescue_broken_index` 47 行、
+`try_remux_with_ffmpeg` 35 行、`sniff_head`、`bits`、`with_progress`、`set_done_bytes`、
+`can_verify_video`、`elapsed_millis`、`lang_name`、`cover_path`、`target_path`、`is_open`、
+`patch_count`、`allows_sampling_scan`），保留 `long_flags`（测试/生成器用）与 `MAX_SIZE`（`#[deprecated]` 兼容名）。
+脚本已挂进 `tests/all.sh`，当前 **0 个**；自带反向验证（植入假死函数 → 报 1 个并点名行号）。
+
+**验证**：`cargo test` **443 passed / 1 ignored**、`clippy -D warnings` 干净、`cargo build --release` 通过。
+
 ## [未发布] —— 声明尺寸封顶（A-6）+ 分卷 ZIP（A-5）+ T11 收尾：Ctrl+V 粘贴路径
 
 ### 坏包不再把「1.17 GB」当真的摆给你看（审计 A-6）

@@ -29,11 +29,6 @@ impl ExternalTools {
         }
     }
 
-    /// 能否做视频自检
-    pub fn can_verify_video(&self) -> bool {
-        self.ffmpeg.is_some() && self.ffprobe.is_some()
-    }
-
     /// 给用户/日志看的一行摘要
     pub fn summary(&self) -> String {
         let mut parts = Vec::new();

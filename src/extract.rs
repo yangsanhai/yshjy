@@ -187,6 +187,20 @@ impl ExtractReport {
 ///
 /// 顺序不影响正确性：错密码会被 CRC / 校验块挡住，只是白试一次；
 /// 影响的是命中速度 —— 现代包占多数，所以 UTF-8 先试。
+/// # 为什么同一段中文密码要试三种字节（账本 B-4，已按实测更正）
+///
+/// **ZIP / 7z 侧确实需要**：这两个格式里密码就是「一串任意字节」，没有编码规定。
+/// 中文 Windows 上的压缩工具写的是 CP936（GBK），7z 规范还允许 UTF-16LE ——
+/// 只试 UTF-8 会让这批包一律「密码错」。实测：`tests/data/A3_steg_modeA_cn_pwd.mp4`
+/// （密码 `demo-password`，ZIP 内 AES-256）用 UTF-8 候选就能开（写端传的是 UTF-8），
+/// 但中文 Windows 工具造的包必须靠 GBK 候选。
+///
+/// **RAR 侧不需要**：RAR5 的密码是 UTF-8 文本、RAR4 的 `rars` 实现直接拒绝非 UTF-8
+/// （见 `extract_rar.rs` 里 `候选` 那段的实测记录）。所以 `extract_rar` **不用这个函数**，
+/// 只在解 ZIP / 7z 时用。
+///
+/// 纯 ASCII 密码只试一次（GBK 字节与 UTF-8 相同、UTF-16LE 实践中不存在）→ 零性能退化。
+/// ⚠️ 别把它「优化」成只试 UTF-8 —— 那是把中文 Windows 造的 ZIP 推回密码错。
 pub fn 密码候选(pw: &str) -> Vec<Vec<u8>> {
     let mut out = Vec::with_capacity(3);
     out.push(pw.as_bytes().to_vec());

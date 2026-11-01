@@ -23,7 +23,7 @@ use crate::pack::cover::BuiltinCover;
 use crate::pack::decoy::DecoyOptions;
 // 写侧加密目前还挂在 zip 的 unstable 门后（读侧已稳定）
 use std::fs;
-use std::io::{Read, Seek, Write};
+use std::io::{Seek, Write};
 use std::path::{Path, PathBuf};
 use zip::unstable::write::FileOptionsExt as _;
 
@@ -1687,18 +1687,6 @@ pub fn self_check_tar(
         warnings.push(format!("自检：条目数不一致（写入 {expect_entries}，读回 {n}）"));
     }
     Ok(warnings)
-}
-
-/// 读一个文件的前若干字节（用于验证封面是不是合法视频/图片）
-pub fn sniff_head(path: &Path, n: usize) -> Result<Vec<u8>> {
-    let mut f = fs::File::open(path)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("open: {e}")))?;
-    let mut buf = vec![0u8; n];
-    let got = f
-        .read(&mut buf)
-        .map_err(|e| Error::new(ErrorCode::Internal).context(format!("read: {e}")))?;
-    buf.truncate(got);
-    Ok(buf)
 }
 
 // ───────────────────────── 自解压（SFX）─────────────────────────

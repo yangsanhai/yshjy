@@ -299,10 +299,6 @@ impl ProgressSnapshot {
         self.view().fraction()
     }
 
-    /// 直接写入已完成字节（用于「段结束补齐」，不常用）
-    pub fn set_done_bytes(&self, n: u64) {
-        self.done_bytes.store(n, Ordering::Relaxed);
-    }
 }
 
 // ───────────────────────────── 多任务聚合 ─────────────────────────────

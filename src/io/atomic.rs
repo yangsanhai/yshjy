@@ -92,11 +92,6 @@ impl PartFile {
         &self.part
     }
 
-    /// 最终路径
-    pub fn target_path(&self) -> &Path {
-        &self.target
-    }
-
     /// 拿到可写的文件句柄
     pub fn as_file(&mut self) -> &mut File {
         self.file
@@ -213,10 +208,6 @@ impl PartWriter {
         }
     }
 
-    /// 是否还没 finish
-    pub fn is_open(&self) -> bool {
-        self.part.is_some()
-    }
 }
 
 impl io::Write for PartWriter {

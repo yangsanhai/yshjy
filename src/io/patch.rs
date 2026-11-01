@@ -64,11 +64,6 @@ impl<R: Read + Seek> PatchWindow<R> {
         })
     }
 
-    /// 这个窗口一共打了多少处补丁
-    pub fn patch_count(&self) -> usize {
-        self.patches.len()
-    }
-
     /// 窗口长度
     pub fn len(&self) -> u64 {
         self.len

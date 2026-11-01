@@ -280,53 +280,6 @@ pub fn analyze<R: Read + Seek>(r: &mut R, base: u64, len: u64) -> Result<RepairA
     )))
 }
 
-/// **从「索引坏了」的包里救数据**（高层入口，CLI 直接用这个）
-///
-/// 流程：
-/// 1. 用 [`crate::scan`] 扫出归档真正的起点（不信任头部记录的偏移）
-/// 2. [`analyze`] 判断索引错在哪
-/// 3. 用 [`crate::io::patch::PatchWindow`] 在内存里把错的字节改对
-/// 4. 交给解码器正常解 —— **磁盘上的源文件一个字节都不动**
-///
-/// 返回 `(解压报告, 修复说明)`。
-pub fn rescue_broken_index<R: Read + Seek>(
-    r: &mut R,
-    file_size: u64,
-    opts: &crate::extract::ExtractOptions,
-) -> Result<(crate::extract::ExtractReport, String)> {
-    // ① 找归档起点（只认高置信度的 ZIP 命中）
-    let hits = crate::scan::scan_whole_file(r, file_size, &crate::scan::ScanOptions::strict())?;
-    let base = hits
-        .iter()
-        .find(|h| h.format == crate::layout::ArchiveFormat::Zip)
-        .map(|h| h.offset)
-        .ok_or_else(|| {
-            Error::new(ErrorCode::NotArchive).with("reason", "没找到压缩包起点（可能不是 ZIP）")
-        })?;
-    let len = file_size.saturating_sub(base);
-
-    // ② 分析索引
-    match analyze(r, base, len)? {
-        RepairAnalysis::Ok => {
-            let rep = crate::extract::extract_zip_at(&mut *r, base, len, opts)?;
-            Ok((rep, "索引本身没问题，已直接解出".into()))
-        }
-        RepairAnalysis::Repairable(plan) => {
-            let reason = plan.reason.clone();
-            let patched = crate::io::patch::PatchWindow::new(&mut *r, base, len, plan.patches)
-                .map_err(|e| {
-                    Error::new(ErrorCode::Internal).context(format!("建补丁窗口失败: {e}"))
-                })?;
-            let mut patched = patched;
-            let rep = crate::extract::extract_zip_at(&mut patched, 0, len, opts)?;
-            Ok((rep, reason))
-        }
-        RepairAnalysis::Unknown(why) => {
-            Err(Error::new(ErrorCode::NotArchive).with("reason", format!("修不了：{why}")))
-        }
-    }
-}
-
 fn read_up_to<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut total = 0;
     while total < buf.len() {

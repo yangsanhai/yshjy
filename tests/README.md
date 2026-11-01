@@ -2,6 +2,11 @@
 
 > 生成日期：2026-10-16　生成脚本：`tests/make_samples.py`（可重跑）　机器可读结果：`tests/results.json`
 > 样本目录：**`/home/user/hermes/yshjy/tests/data/`** —— 共 **35 个文件 / 14.3 MB**，单文件最大 2.77 MB
+>
+> ⚠️ **`tests/data/` 整个目录在 `.gitignore` 里（不入库）**。所以：①新克隆的仓库跑
+> `cargo test` 会有几条依赖样本的测试**报「样本不见了」而红**（故意不静默跳过 —— 静默跳过
+> 就是假绿温床）；②要复跑，先 `python3 tests/make_samples.py` 加上面两份手工收进来的样本
+> （`A6_declared_size_impossible.zip`、`B4_rar5_cn_pwd.rar`，造法见下面对应条目）。
 
 本文件逐样本说明：**文件名 / 大小 / 造法 / 期望结构 / 用什么能解开 / 实测结果 / 已知坑**。
 下面所有「实测」数字都来自 `results.json`（最后一次生成时跑出来的真实值，非手写）。
@@ -195,6 +200,12 @@ zip 命令统一加 `-X`（不写 extra 属性）进一步保证稳定。
   `csize=394571` 却声明 `usize=1_258_686_016`（1.17 GiB，≈3190:1），超过 DEFLATE 的
   理论极限 1032:1 —— 数学上不可能。`--list` 现在写「尺寸异常」而不是 1.17 GB。
   样本来自 zip2（MIT）的 `raw_deflate64_index_out_of_bounds.zip`，原样收进来。
+- **B4 RAR5 中文密码**（`B4_rar5_cn_pwd.rar`，179 B）：用 `rar 7.11 -ma5 -m0 -pdemo-password`
+  现造（明文头、内容 AES 加密），里面一个 `中文文件.txt`。回归测试
+  `extract_rar::tests::rar5_中文密码能解开_且只试_utf8_一份`：正确密码解出且内容对、
+  错一个字的密码必须报 `WrongPassword`（不能静默产出空文件）。
+  ★ 造它的原因见账本 B-4：原来那条「RAR 中文密码靠 GBK 候选」是**假账**（引的样本不存在），
+  实测 RAR5 的密码按 UTF-8 存，GBK/UTF-16LE 候选永远命不中。
 
 ---
 

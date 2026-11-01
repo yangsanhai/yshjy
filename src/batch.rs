@@ -17,7 +17,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
 
 use crate::error::{exit_code, ArchiveFlags, ItemResult, Outcome};
 use crate::event::{Event, EventSink};
@@ -609,11 +608,6 @@ pub fn make_jobs(paths: &[PathBuf]) -> Vec<Job> {
         .enumerate()
         .map(|(i, p)| Job::new(i as u64 + 1, p.clone(), file_size(p)))
         .collect()
-}
-
-/// 计时助手（统计耗时用）
-pub fn elapsed_millis(start: Instant) -> u64 {
-    start.elapsed().as_millis() as u64
 }
 
 #[cfg(test)]

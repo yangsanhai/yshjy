@@ -46,11 +46,6 @@ impl ResourceProfile {
         matches!(self, Self::High)
     }
 
-    /// 是否允许"取样扫描"（头尾 + 关键点）
-    pub fn allows_sampling_scan(self) -> bool {
-        matches!(self, Self::Balanced | Self::High)
-    }
-
     /// 扫描深度：越大越彻底
     pub fn depth(self) -> ScanDepth {
         match self {
