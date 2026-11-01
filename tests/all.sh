@@ -92,6 +92,10 @@ run "cargo build --release" cargo build --release --quiet
 # 增量编译约 8 秒，无改动时近 0 秒。
 run "cargo build（debug，探针用）" cargo build --quiet
 run "cargo clippy（-D warnings）" bash -c 'cargo clippy --quiet -- -D warnings'
+# `pub` 会压住 dead_code 检查，所以 clippy 全绿也挡不住「没人用的公开 API」累积。
+# 判据：整个仓库（引擎+界面+测试+示例）里只出现定义这一处 = 疑似死代码。
+# 明示保留的（`#[allow(dead_code)]` / `#[deprecated]` 兼容名）脚本会跳过。
+run "死代码探测（dead_pub.sh）" bash -c 'n=$(bash scripts/dead_pub.sh --count); if [ "$n" -ne 0 ]; then echo "发现 $n 个没人用的 pub："; bash scripts/dead_pub.sh; exit 1; fi'
 # 右键菜单脚本（N7）：语法 + 「能不能自己找到引擎」的干跑
 run "右键脚本语法检查" bash -c 'bash -n gui/linux/nautilus-script-yshjy && bash -n scripts/install-nautilus.sh && bash -n scripts/build-deb.sh'
 # 格式检查只作提示：本项目是手写紧凑风格 + 大量中文标识符，

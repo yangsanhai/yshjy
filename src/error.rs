@@ -287,11 +287,6 @@ impl ArchiveFlags {
         self.0 & bit != 0
     }
 
-    /// 原始位
-    pub fn bits(&self) -> u16 {
-        self.0
-    }
-
     /// 是否干净（没有任何毛病）
     pub fn is_clean(&self) -> bool {
         self.0 == 0

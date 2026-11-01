@@ -35,13 +35,6 @@ pub fn cover_kind(ext: &str) -> &'static str {
     }
 }
 
-/// 由原包路径推出封面路径：`a.mp4` → `a.封面.mp4`（落在包旁边）
-///
-/// 重名时加 ` (1)`（与解压的 rename 策略一致），**永不返回原包路径**。
-pub fn cover_path(input: &Path) -> PathBuf {
-    cover_path_in(input, None)
-}
-
 /// 同上，但落点目录可以指定（`-o <目录>` / 协议 `dest`）。
 ///
 /// 为什么需要它：`-o` 是「产物放这儿」的通用承诺，封面也是产物。不认 `-o` 的后果实测过 ——
@@ -205,41 +198,6 @@ pub fn extract_zip_cover_to(input: &Path, base: u64, dest: Option<&Path>) -> Res
         size: copied,
         kind: cover_kind(&ext),
     }))
-}
-
-/// 可选的 ffmpeg remux：把封面视频的 moov 索引修好（不装 ffmpeg 就跳过）
-///
-/// 不做转码，只 `-c copy` 重写容器；失败一律忽略（封面已经能播，修不了也不影响）。
-pub fn try_remux_with_ffmpeg(cover: &Cover) -> bool {
-    if cover.kind != "video" {
-        return false;
-    }
-    let tmp = cover.path.with_extension("remux.tmp.mp4");
-    let status = std::process::Command::new("ffmpeg")
-        .args([
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            &cover.path.to_string_lossy(),
-            "-c",
-            "copy",
-            "-movflags",
-            "+faststart",
-            &tmp.to_string_lossy(),
-        ])
-        .status();
-    match status {
-        Ok(s) if s.success() && tmp.exists() => {
-            // 用 remux 结果替换（保留原封面名）
-            let _ = std::fs::rename(&tmp, &cover.path);
-            true
-        }
-        _ => {
-            let _ = std::fs::remove_file(&tmp);
-            false
-        }
-    }
 }
 
 #[cfg(test)]

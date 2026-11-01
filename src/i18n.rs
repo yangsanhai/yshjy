@@ -299,11 +299,6 @@ impl I18n {
             .unwrap_or_else(|| FALLBACK.to_string())
     }
 
-    /// 当前语言的自称（`简体中文` / `English`）
-    pub fn lang_name(&self) -> &str {
-        self.active.as_ref().map(|c| c.name()).unwrap_or(FALLBACK)
-    }
-
     /// 内置支持哪些语言（给 `--help` 和错误提示用）
     pub fn available(&self) -> Vec<String> {
         let mut v: Vec<String> = self.builtin.keys().cloned().collect();

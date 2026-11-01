@@ -658,6 +658,15 @@ impl InArchive for SingleStreamUnpacker {
 }
 
 /// tar 家族：里面是**目录树**（tar / tar.gz / tar.xz / tar.zst / …）
+///
+/// # 为什么不跟 7z 对齐「只列一层」（账本 B-3）
+///
+/// 审计对照：`7z l x.tar.gz` 只报 **1 个文件**（gzip 解出来就是 tar 流本身，实测输出
+/// `419840 410427 1 files`）；我们剥掉外层压缩后列出 tar 里真正的
+/// **5 个文件 + 3 个目录**（`tests/data/C4_plain.tar.gz` 实测，含中文目录和「空格 文件名.bin」）。
+///
+/// 用户问的是「这包里有什么」，不是「这一层压缩了什么」。
+/// ⚠️ 别为了「和 7z 一致」把剥壳去掉 —— 那等于把 tar.gz 当单文件，预览和挑选全废。
 pub struct TarStreamUnpacker;
 
 impl InArchive for TarStreamUnpacker {

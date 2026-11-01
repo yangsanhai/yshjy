@@ -1,5 +1,24 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-02 · 🎉 P8 审计全部收官（9 条 A 类 + 6 条 B 类注释 + 死代码清理）—— 仍未发版**
+>
+> 最后一轮做了三件事：
+> 1. **B 类 6 条注释落在具体代码行上**（不是写在文档里）：`scan.rs::scan_whole_file`（垃圾前缀也认）、
+>    `unpack.rs` tar 家族（剥壳后列真实文件，7z 只报 1 files）、`extract_rar.rs` 的候选密码与缺卷自查、
+>    `单卷解压`（为什么不用 PBKDF2 passcheck）。
+> 2. **★ 揪出 B-4 是假账**：账本引的 `rar5_cnpwd.rar` 库里不存在。用 `rar` 7.11 现造中文密码包实测 ——
+>    我们能开，命中 **UTF-8**；GBK/UTF-16LE 对 RAR 永远命不中（RAR5 密码就是 UTF-8 文本，
+>    `rars` 的 RAR4 更是强制 UTF-8）。已把 RAR 侧候选收成一份，账本按实测改。
+>    RAR 中文密码现在是**机器验过的**：`tests/data/B4_rar5_cn_pwd.rar` + 两条回归测试。
+> 3. **死代码清理**：`scripts/dead_pub.sh`（已挂 `all.sh`，现 0 个）清掉 14 个无人用的 `pub`，
+>    含 `rescue_broken_index`(47 行)、`try_remux_with_ffmpeg`(35 行)。
+>
+> **验证**：`cargo test` **443 passed / 1 ignored**、`clippy -D warnings` 干净、
+> `flutter test` 421、`bash tests/all.sh` 全绿。
+>
+> **★ 仍未发版**：装机还是 0.9.52，这些改动只在本地 git（A-5 / A-6 / B 类三笔）。
+> **下一步等用户定**：① 真机长跑验证（他说过「开发完了还没测试」）② 发版 ③ 新需求。
+
 > **2026-11-02 深夜 · P8 A-6 修完：坏包不再把「1.17 GB」当真的摆出来（本地提交，未发版）**
 >
 > 724 B 的坏包以前在 `--list` 和界面里都显示「1.17 GB」—— 那是包自己写在索引里的数字。

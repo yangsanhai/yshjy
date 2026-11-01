@@ -174,12 +174,6 @@ impl UnpackCtx {
         self
     }
 
-    /// 共用一个进度快照（多任务聚合时用）
-    pub fn with_progress(mut self, progress: Arc<ProgressSnapshot>) -> Self {
-        self.progress = progress;
-        self
-    }
-
     /// 共用一个取消令牌（批量取消时用）
     pub fn with_cancel(mut self, cancel: CancelToken) -> Self {
         self.cancel = cancel;

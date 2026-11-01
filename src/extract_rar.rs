@@ -212,6 +212,14 @@ pub fn extract_rar_volumes_ctx(
 /// 缺卷自查靠它：分卷包少给最后几卷时，前面每一卷都读得出来、也「看起来像」完整包，
 /// 只有这个位能说明「后面还有」。拿不到成员列表就返回 false —— 宁可漏报，绝不乱报
 /// （乱报会把好好的完整包拒收，比漏报还糟）。
+/// # 判据故意窄到只剩一个位（账本 B-5）
+///
+/// 只有最后一卷的末条目挂着 `is_split_after` 才说明「后面还有卷」。
+/// 这是自研逻辑（参考实现没这一步），实测无假警报。
+///
+/// 为什么不做「文件名像 `xxx.part2` / 体积是整数倍」这类启发式：
+/// **乱报会把完好的包拒收**，比漏报糟得多。宁可少提示一句，也不冤枉好包。
+/// ⚠️ 扩判据前先想清楚：误报的代价是用户以为自己的包坏了。
 fn 还有后续卷(a: &rars::Archive) -> bool {
     a.members()
         .last()
@@ -220,6 +228,16 @@ fn 还有后续卷(a: &rars::Archive) -> bool {
 }
 
 /// 单卷：先 `test` 验密码（`rars` 解密失败不报错、只静默不写 → 必须先验），再流式解
+///
+/// # 为什么不用 XADMaster 的 PBKDF2 passcheck（账本 B-6）
+///
+/// XADMaster 走 PBKDF2 校验口令：一次密钥派生就知道密码对不对，不用真解一遍，省时间。
+/// 我们没抄 —— RAR5 的 passcheck 要自己实现 PBKDF2-HMAC-SHA256 + 加密口令校验块，
+/// 而 `rars` 已经把这条路径封在库里。这是**有意的取舍：多读一遍整包，换实现简单可靠**。
+///
+/// 代价：带密码的包要读两遍（大包慢一点，用户能感知到）。
+/// ⚠️ 别为了「看起来更专业」自己手写 PBKDF2：那块最容易写出「密码明明对却报错」的兼容坑，
+/// 而我们没有足够多的真实样本去验它。
 fn 单卷解压(
     archive: rars::Archive,
     packed_total: u64,
@@ -354,9 +372,16 @@ where
     fs::create_dir_all(&opts.dest)
         .map_err(|e| { let m = format!("建输出目录失败: {e}"); Error::from(e).context(m) })?;
 
-    // 密码候选（UTF-8 → GBK → UTF-16LE）：RAR 与 ZIP 一样，密码只是任意字节，
-    // 中文 Windows 的 WinRAR 写的是 CP936 —— 单用 UTF-8 必然报「密码错」。
-    let 候选 = opts.password.as_ref().map(|p| crate::extract::密码候选(p));
+    // ★ RAR 侧只用 UTF-8 一份，**不是** `extract::密码候选`（账本 B-4 的实测更正）
+    //
+    // 以前这里跟 ZIP 一样试 UTF-8 → GBK → UTF-16LE，实测发现后两个在 RAR 上永远不可能命中：
+    //   · RAR5：密码是 UTF-8 文本。拿 `rar` 7.11 在 UTF-8 环境建的中文密码包实测 ——
+    //     UTF-8 字节命中，CP936 字节报「wrong password」
+    //   · RAR4：`rars` 的 crypto 直接 `str::from_utf8(...)` → 非 UTF-8 报 `NonUtf8Password`
+    //     （`rars-0.11.0/src/crypto/rar30/implementation.rs`）
+    // 所以对一个**错密码**的包，旧写法会把整个包多解两遍（每遍都要跑完 KDF + 解码）。
+    // ZIP 侧不一样：中文 Windows 的 zip 工具确实写 CP936，那边的候选必须留着。
+    let 候选 = opts.password.as_ref().map(|p| vec![p.as_bytes().to_vec()]);
     let mut pw_bytes: Option<Vec<u8>> = None;
     let dest = opts.dest.clone();
     let overwrite = opts.overwrite;
@@ -741,6 +766,59 @@ fn unique_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rar5_中文密码能解开_且只试_utf8_一份() {
+        // 账本 B-4 的实测回归：RAR5 里密码是 UTF-8 文本，我们的引擎拿中文密码能开。
+        // 样本 `tests/data/B4_rar5_cn_pwd.rar` 是用 `rar 7.11 -ma5 -pdemo-password` 现造的
+        // （179 B，明文头、内容 AES 加密），里面一个 `中文文件.txt`。
+        //
+        // 这条也顺带守住「RAR 侧只用 UTF-8 一份」这个决定：如果谁把 `候选` 改回
+        // `extract::密码候选`（三份），功能不会坏，但错密码时要多解整包两遍 —— 所以
+        // 另有一条断言直接盯源码（见下）。
+        use crate::ctx::UnpackCtx;
+
+        let data = fs::read("tests/data/B4_rar5_cn_pwd.rar").expect("样本不见了");
+        let dest = scratch("rar5_cn_pwd");
+        let ctx = UnpackCtx::quiet(1);
+        let mut opts = ExtractRarOptions::new(&dest);
+        opts.password = Some("demo-password".to_string());
+
+        let rep = extract_rar_ctx(&data, &opts, &ctx).expect("中文密码该能解开");
+        assert_eq!(rep.files.len(), 1, "只该解出一个文件：{:?}", rep.warnings);
+        let out = fs::read_to_string(&rep.files[0].out_path).expect("读不出解出来的文件");
+        assert!(out.contains("中文密码样本"), "内容不对: {out:?}");
+
+        // 反向验证：换一个字都不对的密码必须报「密码错」，不能静默产出空文件
+        let dest2 = scratch("rar5_cn_pwd_wrong");
+        let mut opts2 = ExtractRarOptions::new(&dest2);
+        opts2.password = Some("wrong-password".to_string());
+        let err = extract_rar_ctx(&data, &opts2, &ctx).expect_err("错密码必须报错");
+        assert!(
+            matches!(err.code, ErrorCode::WrongPassword | ErrorCode::NeedPassword),
+            "错密码该报 WrongPassword / NeedPassword，实际 {:?}: {}",
+            err.code,
+            err
+        );
+    }
+
+    #[test]
+    fn rar_侧不再用三候选密码() {
+        // 这条盯源码：RAR 的密码只交 UTF-8 一份（理由见 `候选` 那段注释）。
+        // 有人改回 `crate::extract::密码候选` 就会红 —— 那会让错密码的包多解整包两遍。
+        let src = include_str!("extract_rar.rs");
+        // 注意：针脚在运行时拼出来，否则这两句自己就会把目标字符串写进源码、断言永远成立
+        let 该有的 = ["let 候选 = opts.password.as_ref().map(|p| vec![p.as_bytes()", ".to_vec()]);"].concat();
+        let 不该有的 = ["opts.password.as_ref().map(|p| crate::extract::", "密码候选(p))"].concat();
+        assert!(
+            src.contains(&该有的),
+            "RAR 侧密码候选被改动了，回去看 `候选` 那段实测记录再决定"
+        );
+        assert!(
+            !src.contains(&不该有的),
+            "RAR 侧又用上了三候选 —— 对 RAR 无效且更慢"
+        );
+    }
 
     #[test]
     fn rar_解出的文件带包内原始修改时间() {

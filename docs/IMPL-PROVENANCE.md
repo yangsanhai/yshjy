@@ -131,12 +131,19 @@
 
 ## 二、B 类 · 我们更好（不换，必须在代码里写注释）
 
+> ✅ **2026-11-02：6 条注释全部落在具体代码行上**（不是写在文档里）：
+> `scan.rs::scan_whole_file`（B-1/B-2）、`unpack.rs` tar 家族（B-3）、`extract_rar.rs` 的 `候选`（B-4，**已更正**）、
+> `还有后续卷`（B-5）、`单卷解压`（B-6）。每条都写了「参考实现怎么做 / 我们为什么更好 / 改回去会坏什么」。
+>
+> ⚠️ **B-4 原来是假账**：引的样本 `rar5_cnpwd.rar` 库里根本不存在，我现造样本一测才发现
+> RAR5 密码是 UTF-8 文本、GBK 候选永远命不中。这是「文档状态标记不可信、必须逐条实测」的又一个例子。
+
 | # | 我们的行为 | 参考实现做不到 | 落点 | 为什么要注释 |
 |---|---|---|---|---|
 | B-1 | `zip64_demo.zip`：包在偏移 14（前置 `Leading junk.\n`），能定位并校验通过 | 7z：`Cannot open the file as [zip] archive` | `src/scan.rs` 全文件签名扫描 | 下轮审计会误判成「怎么垃圾文件也认」 |
 | B-2 | `D2b_prefixed_2355200.zip`：偏移 2,355,192 定位成功 | 7z：打不开 | 同上 | 同上 |
 | B-3 | `tar.gz/.xz/.zst/.bz2` 列 **5 个文件**（穿透到 tar） | 7z 只认 gzip 层 = 1 files | `src/unpack.rs` 分层 | 用户要的是「里面有几个」，别被"和 7z 对齐"改回去 |
-| B-4 | RAR **中文密码**（UTF-8→GBK→UTF-16LE 三候选）`rar5_cnpwd.rar` 解开 | XADMaster `XADRAR5Parser.m:734` 只用 `NSUTF8StringEncoding` | `src/extract_rar.rs:309-311` | 中文 WinRAR 写 CP936，只试 UTF-8 必然报密码错 |
+| B-4 | ⚠️ **原文有误，已按实测更正 2026-11-02**：RAR5 的密码是 **UTF-8 文本**，中文密码包我们**能开**（`rar` 7.11 现造样本实测 rc=0）；GBK/UTF-16LE 候选对 RAR **永远命不中** | XADMaster `XADRAR5Parser.m:734` 只用 `NSUTF8StringEncoding`；`rars` 的 RAR4 实现更强制 UTF-8（`str::from_utf8 → NonUtf8Password`） | `src/extract_rar.rs` 的 `候选` 段（现只交 UTF-8 一份） | ★ 原条目引的 `rar5_cnpwd.rar` **在库里不存在**，是凭想象写的账。实测证据：`tests/data/B4_rar5_cn_pwd.rar`（rar 7.11 `-ma5 -pdemo-password` 现造）→ 引擎解出、错密码报错；把 CP936 字节塞进 argv 造的畸形包 unrar 能开、我们打不开（rars 限制，已在注释里写明）。**ZIP / 7z 侧的三候选是真的需要**（中文 Windows zip 工具写 CP936），那条留在 `extract::密码候选` |
 | B-5 | RAR **缺卷自查**：只有 `split_after` 位才说明后面还有卷，宁可漏报不乱报 | —（我们自研，实测无假警报） | `src/extract_rar.rs:167` | 乱报会把完好包拒收，比漏报更糟 |
 | B-6 | 先 `test` 整包验密码再解（rars 解密失败不报错） | XADMaster 用 PBKDF2 passcheck 校验（更省时间，但要自己实现 PBKDF2） | `src/extract_rar.rs:174-192` | 这是有意的取舍：多解一遍换实现简单 |
 
@@ -167,16 +174,19 @@
 | 名字 | 位置 | 判定 |
 |---|---|---|
 | `UNSUPPORTED_METHOD` | `src/error.rs:229` | 🔴 死（见 A-2）|
-| `rescue_broken_index` | `src/repair.rs:195` | 🔴 死：已被 `src/extract.rs:792-809` 内联流程取代，旧的没删 |
-| `try_remux_with_ffmpeg` | `src/cover_extract.rs` | 🔴 死：装了 ffmpeg 能修的封面 moov，零调用 |
-| `can_verify_video` | `src/tools.rs` | 🟡 死（能力探测，UI 没用）|
-| `MAX_SIZE` | `src/extract_rar.rs` | ✅ `#[deprecated]` 兼容名，正常 |
+| `rescue_broken_index` | `src/repair.rs` | ✅ **已删**（2026-11-02）：已被 `src/extract.rs` 内联流程取代 |
+| `try_remux_with_ffmpeg` | `src/cover_extract.rs` | ✅ **已删**（2026-11-02）：零调用的 ffmpeg 修补路径 |
+| `can_verify_video` | `src/tools.rs` | ✅ **已删**（2026-11-02）：能力探测，界面从没用过 |
+| `MAX_SIZE` | `src/extract_rar.rs` | ✅ 留：`#[deprecated]` 兼容名（`dead_pub.sh` 会跳过） |
 | `build_sfx` | `src/pack/mod.rs` | ✅ 薄包装，真功能有 3 处调用 |
-| `allows_sampling_scan` | `src/hardware.rs` | ⬜ 待核 |
+| `allows_sampling_scan` | `src/hardware.rs` | ✅ **已删**（2026-11-02）：无人调 |
+| `bits` · `cover_path` · `elapsed_millis` · `is_open` · `target_path` · `lang_name` · `patch_count` · `set_done_bytes` · `sniff_head` · `with_progress` | 多个文件 | ✅ **全删**（2026-11-02）：11 个无人调的访问器/小助手，YAGNI —— 用到时再写 |
+| `long_flags` | `src/cli_spec.rs` | ✅ 留：测试与生成器在用，已带 `#[allow(dead_code)]` |
 
-未核的 14 个：`bits` · `cover_path` · `elapsed_millis` · `extract_7z` · `is_open` · `target_path` ·
-`lang_name` · `long_flags` · `patch_count` · `set_done_bytes` · `sniff_head` · `unix_to_civil_` ·
-`wait_until_written` · `with_progress`
+> **现在由 `scripts/dead_pub.sh` 常驻检查**（`bash scripts/dead_pub.sh`，当前 **0 个**）。
+> 它已挂进 `tests/all.sh`，判据是「`pub` 声明在整个仓库（引擎+界面+测试+示例）里只出现定义这一处」。
+> 自带反向验证记录：植入一个假死函数 → 报 1 个并点名行号；移除 → 0 个。
+> 注意它会跳过 `#[allow(dead_code)]` / `#[deprecated]` 的条目（那是明示保留）。
 
 > **注意事项**：`pub` 在 Rust 不触发 `dead_code`，所以 `clippy -D warnings` 全绿**挡不住这类问题**。
 > 建议后面做成 `scripts/dead_pub.sh` 常驻检查。
@@ -195,9 +205,10 @@
 | 5.5 | ~~**A-9** 定位失败时没试救援~~ ✅ **已修 2026-11-02** | — | 已完成（见 A-9 状态行）|
 | 6 | ~~**A-5** zip 分卷拼接~~ ✅ **已修 2026-11-02** | — | 已完成（见 A-5 状态行）；回归 `layout::zip::tests::分卷*` 两条 + 探针 `tests/zip_split.sh` |
 | 7 | ~~**A-6** 声明尺寸封顶~~ ✅ **已修 2026-11-02** | — | 已完成（见 A-6 状态行）；用 DEFLATE 1032:1 硬上限，界面四处都不摆假 GB |
-| 8 | B 类 6 条写注释 + 死代码清理 + `dead_pub.sh` | 半天 | 防止未来被改坏 |
+| 8 | ~~B 类 6 条写注释 + 死代码清理 + `dead_pub.sh`~~ ✅ **已完成 2026-11-02** | — | 注释落在具体行上；14 个死 `pub` 已删；`scripts/dead_pub.sh` 常驻（现 0 个）并挂进 `all.sh` |
 
-**进度：9 条完成 8 条（A-1 / A-2 / A-3 / A-4 / A-5 / A-6 / A-8 / A-9），剩 B 类 6 条注释 + 死代码清理（半天）。**
+**进度：9 条全部完成**（A-1 / A-2 / A-3 / A-4 / A-5 / A-6 / A-8 / A-9 + B 类 6 条注释与死代码清理）。
+**P8 审计收官。** 仍未发版：装机仍是 0.9.52，改动只在本地 git。
 
 ## 七、每条施工的纪律（不变）
 
