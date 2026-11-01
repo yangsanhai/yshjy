@@ -61,12 +61,25 @@
   <content_rating type="oars-1.1" />
 
   <!--
-    截图：Flathub 要求至少一张。当前仓库还没有真截图（README 里那三张是徽章）。
-    真截图放 screenshots/ 目录后再填：
+    截图（T9）：图已经截好、处理好了，放在 data/screenshots/（1366×768，16:9）。
+    但 AppStream 只认 http(s) 绝对 URL —— 实测 `file://` 和相对路径都报
+    `E: web-url-expected`，所以「随包分发」这条路走不通。
+    而这个仓库目前**没有远程**（`git remote -v` 为空），写 GitHub raw 地址就是一条
+    永远 404 的假链接（装上后软件中心只会显示破图），所以这里先保持注释。
+    等仓库推到 GitHub 后，把下面这段取消注释即可（路径已按 main 分支对齐）：
+
     <screenshots>
       <screenshot type="default">
-        <caption>识别出伪装成视频的压缩包，列出里面的内容</caption>
-        <image type="source">https://raw.githubusercontent.com/yangsanhai/yshjy/main/screenshots/home.png</image>
+        <caption>识别出伪装成视频的压缩包，列出里面真正的文件</caption>
+        <image type="source">https://raw.githubusercontent.com/yangsanhai/yshjy/main/data/screenshots/preview.png</image>
+      </screenshot>
+      <screenshot>
+        <caption>解开之后告诉你在哪、里面还有没有别的包</caption>
+        <image type="source">https://raw.githubusercontent.com/yangsanhai/yshjy/main/data/screenshots/done.png</image>
+      </screenshot>
+      <screenshot>
+        <caption>设置页能查全部快捷键（键位固定，不可改）</caption>
+        <image type="source">https://raw.githubusercontent.com/yangsanhai/yshjy/main/data/screenshots/settings.png</image>
       </screenshot>
     </screenshots>
   -->
