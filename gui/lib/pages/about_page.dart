@@ -43,6 +43,55 @@ class _AboutPageState extends State<AboutPage> {
     }
   }
 
+  /// 赞赏码：**打包在本地的图片**，软件本身不发任何网络请求（T18-6 的离线口径不变）。
+  ///
+  /// 为什么做成弹窗而不是直接铺在页面上：关于页已经够长了，报障和状态目录这些
+  /// 正事不该被一张二维码挤下去。想支持的人点一下就看见，不想看的完全不受打扰。
+  Future<void> _showDonate() async {
+    final cs = Theme.of(context).colorScheme;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('about.donate.dialog.title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              // 本地资源：这条路永远不联网（这一页是「完全离线」的样板）
+              child: Image.asset(
+                'assets/donate/wechat.png',
+                width: 240,
+                errorBuilder: (_, __, ___) => Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(t('about.donate.dialog.hint'), textAlign: TextAlign.center),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              t('about.donate.dialog.hint'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              t('about.donate.dialog.note'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, height: 1.5, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(t('about.donate.close')),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -125,6 +174,18 @@ class _AboutPageState extends State<AboutPage> {
           },
           icon: const Icon(Icons.folder_open, size: 18),
           label: Text(t('about.stateDir')),
+        ),
+        const SizedBox(height: 20),
+        _card(
+          cs,
+          title: t('about.donate.title'),
+          body: t('about.donate.body'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: _showDonate,
+          icon: const Icon(Icons.coffee_outlined, size: 18),
+          label: Text(t('about.donate.button')),
         ),
         const SizedBox(height: 20),
         Center(
