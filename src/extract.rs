@@ -24,7 +24,7 @@ use crate::safety::{self, ExtractBudget, Limits};
 use crate::select::Selection;
 use std::fs;
 use std::io::{Read, Seek};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 同名文件处理策略
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -349,6 +349,104 @@ fn 救援兜底<R: Read + Seek>(
     crate::rescue::extract_by_locals_ctx(r, base, end, opts, ctx)
 }
 
+/// 「失败就把这次新建的空目录收回来」的守卫。
+///
+/// # 为什么用 Drop，而不是在函数末尾写一句清理
+///
+/// 解压中途有很多**提前返回**：包打不开、剥壳失败、建目录失败……每一条都手动清理
+/// 既容易漏、又会越加越多（实测就踩过：`open_tar_stream` 的 `?` 一跳，末尾的收尾
+/// 根本执行不到，空目录照样留下）。让 `Drop` 兜住所有出口 —— 包括 panic ——
+/// 只需要在「真的解出了东西」时调一次 [`keep`](Self::keep)。
+///
+/// 清理只删**空**目录（见 [`回收本次新建的空目录`]），所以即使判断失误也只是留下残留，
+/// 不会删用户的任何数据。
+pub(crate) struct 空目录守卫 {
+    新建: Vec<PathBuf>,
+    生效: bool,
+}
+
+impl 空目录守卫 {
+    pub(crate) fn new() -> Self {
+        Self {
+            新建: Vec::new(),
+            生效: true,
+        }
+    }
+
+    /// 把记账表交给 [`建目录并记账`]
+    pub(crate) fn 记账(&mut self) -> &mut Vec<PathBuf> {
+        &mut self.新建
+    }
+
+    /// 已经解出了东西 → 目录结构就是用户要的，别再动它
+    pub(crate) fn keep(&mut self) {
+        self.生效 = false;
+    }
+}
+
+impl Drop for 空目录守卫 {
+    fn drop(&mut self) {
+        if self.生效 && !self.新建.is_empty() {
+            回收本次新建的空目录(&self.新建);
+        }
+    }
+}
+
+/// 建目录，顺便记一笔「这是本次新建的」—— 给失败收尾用（见 [`回收本次新建的空目录`]）。
+///
+/// 只记**最上层那一截**：`a/b/c` 全都不存在时只记 `a`，删的时候从 `a` 往下扫空的。
+/// 记三条反而要处理「父目录还没删完」的先后顺序，容易出岔子。
+pub(crate) fn 建目录并记账(p: &Path, 新建: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    if p.exists() {
+        return Ok(());
+    }
+    let mut 顶 = p;
+    while let Some(parent) = 顶.parent() {
+        if parent.as_os_str().is_empty() || parent.exists() {
+            break;
+        }
+        顶 = parent;
+    }
+    新建.push(顶.to_path_buf());
+    fs::create_dir_all(p)
+}
+
+/// 把这次顺手建的空目录收回来 —— 只删**空**的，里面有东西的一律留着。
+///
+/// # 为什么需要它（2026-11-04 真机测试撞出来的）
+///
+/// ZIP 的**文件名不加密**，所以「按条目建目录」这一步发生在密码校验**之前**
+/// （目录条目本身不需要密码）。于是缺密码 / 密码错时会出现：解压报「需要解压码」失败，
+/// 但用户的目标目录里已经多出一串空文件夹 —— 看着像「没解开却动了我磁盘」，
+/// 也与 `CHANGELOG` 里「密码错在建目录之前就失败，不留空文件夹」这句承诺不符。
+///
+/// 7z / RAR 两条路天然没这问题（它们打开包时就验证密码，那时目录还没建）。
+/// 实测对照：A2/A3 伪装包、`aes_secret.zip` 会留空壳；`C10_pwd_cn.7z`、`B4_rar5_cn.pwd.rar` 干净。
+///
+/// # 安全边界（故意写保守）
+///
+/// 递归只删空目录：遇到任何文件 / 符号链接就停下并保留。所以即使判断失误
+/// （比如解压期间别的程序往里写了东西），最坏结果是留下残留，**绝不误删用户的东西**。
+pub(crate) fn 回收本次新建的空目录(新建: &[PathBuf]) {
+    fn 删空(p: &Path) {
+        if let Ok(rd) = fs::read_dir(p) {
+            for e in rd.flatten() {
+                let path = e.path();
+                // 不跟随符号链接：链接指向的目录可能是用户的真实数据
+                if path.is_dir() && !path.is_symlink() {
+                    删空(&path);
+                }
+            }
+        }
+        // 空的才会删成功；不空就留着
+        let _ = fs::remove_dir(p);
+    }
+    // 倒序：深的先删，浅的才有机会变空
+    for d in 新建.iter().rev() {
+        删空(d);
+    }
+}
+
 /// 同 [`extract_zip_at`]，但带上事件 / 进度 / 取消上下文
 pub fn extract_zip_at_ctx<R: Read + Seek>(
     r: R,
@@ -413,6 +511,9 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
     };
     ctx.set_total(raw_total, file_count);
 
+    // 本次新建的目录（解压失败时要把它们收回去 —— 见 `空目录守卫`）
+    let mut 守卫 = 空目录守卫::new();
+
     // T8-P5：目标位置如果已经是个文件，create_dir_all 只会给个含糊的 AlreadyExists，
     // 用户看到的是「内部错误」。这里提前判断，直接说「这是文件不是文件夹」。
     if opts.dest.exists() && !opts.dest.is_dir() {
@@ -421,7 +522,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
     }
     // 只测不写：连输出目录都不建（用户不该因为「测一下」而多出一个空文件夹）
     if !ctx.verify_only {
-        fs::create_dir_all(&opts.dest).map_err(|e| {
+        建目录并记账(&opts.dest, 守卫.记账()).map_err(|e| {
             // T8-P5：目标位置是个文件 / 路径太长 / 没权限，别一律说「内部错误」
             let m = format!("mkdir dest: {e}");
             Error::from(e).context(m)
@@ -490,7 +591,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 ctx.entry_done(i as u64 + 1, &name, ItemResult::Ok, 0);
                 continue;
             }
-            if !ctx.verify_only && let Err(e) = fs::create_dir_all(&out_path) {
+            if !ctx.verify_only && let Err(e) = 建目录并记账(&out_path, 守卫.记账()) {
                 report.note_io_error(&e);
                 report
                     .skipped
@@ -544,7 +645,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
         // 绝对路径 / 用 `..` 爬出目录的一律拒绝并说明 —— 不静默、也不假装解出来了。
         if is_symlink {
             if !ctx.verify_only && let Some(parent) = out_path.parent() {
-                let _ = fs::create_dir_all(parent);
+                let _ = 建目录并记账(parent, 守卫.记账());
             }
             let 读出 = archive.by_index_raw(i).ok().and_then(|mut f| {
                 let mut buf = Vec::new();
@@ -620,7 +721,7 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
 
         if !ctx.verify_only
             && let Some(parent) = out_path.parent()
-            && let Err(e) = fs::create_dir_all(parent)
+            && let Err(e) = 建目录并记账(parent, 守卫.记账())
         {
             report.note_io_error(&e);
             report
@@ -827,6 +928,15 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
                 });
             }
         }
+    }
+
+    // ── 收尾：解出了东西就解除守卫，否则 Drop 自动把空目录收回去 ──
+    //
+    // 判据刻意收紧（`files` 空 **且** 写入 0 字节 = 一个都没落地）：只要有任何文件成功写出，
+    // 目录结构就是用户要的东西，一个都不动 —— 「半成功」（解了几个、剩下要密码）也安全。
+    // 提前返回（包打不开 / 剥壳失败）不需要在这里处理，`Drop` 会兜住。
+    if !report.files.is_empty() || report.bytes_written > 0 {
+        守卫.keep();
     }
 
     Ok(report)
@@ -1048,6 +1158,86 @@ mod tests {
         let _ = fs::remove_dir_all(&p);
         fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    /// 造一个「带加密条目」的内存 ZIP（目录条目也加密），用于密码相关的回归测试
+    fn make_加密zip(密码: &str) -> Vec<u8> {
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let base = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        let 加密 = base.with_aes_encryption(zip::AesMode::Aes256, 密码);
+        w.add_directory("secret/", 加密).unwrap();
+        w.start_file("secret/机密.txt", 加密).unwrap();
+        std::io::Write::write_all(&mut w, b"top secret").unwrap();
+        w.finish().unwrap().into_inner()
+    }
+
+    /// 造一个「明文 + 加密」混合的 ZIP：验证「半成功」时目录结构不能被误删
+    fn make_混合zip(密码: &str) -> Vec<u8> {
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let base = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        let 加密 = base.with_aes_encryption(zip::AesMode::Aes256, 密码);
+        w.add_directory("sub/", base).unwrap();
+        w.start_file("sub/说明.txt", base).unwrap();
+        std::io::Write::write_all(&mut w, b"plain note").unwrap();
+        w.start_file("sub/秘密.txt", 加密).unwrap();
+        std::io::Write::write_all(&mut w, b"secret").unwrap();
+        w.finish().unwrap().into_inner()
+    }
+
+    /// 回归（2026-11-04 真机测试撞出来的）：缺密码解压失败，不该在目标目录留下空文件夹。
+    ///
+    /// 为什么以前会漏：ZIP 的**文件名不加密**，所以「按目录条目建目录」发生在密码校验之前
+    /// （目录条目本身不需要密码）。缺密码 / 密码错时，目标目录里就剩下一串空壳，
+    /// 看着像「没解开却动了我磁盘」，也违背了 CHANGELOG 里「不留空文件夹」的承诺。
+    ///
+    /// 反向验证：把 `回收本次新建的空目录` 那次调用注释掉 → 本测试当场红。
+    #[test]
+    fn 缺密码失败后不留空目录() {
+        let data = make_加密zip("p@ss");
+        let len = data.len() as u64;
+        let dest = scratch_dir("pwd_no_leak");
+
+        let mut cur = Cursor::new(data);
+        let opts = ExtractOptions::new(&dest); // 刻意不给密码
+        let rep = extract_zip_at(&mut cur, 0, len, &opts).unwrap();
+
+        assert!(rep.files.is_empty(), "没密码不该解出文件: {:?}", rep.files);
+        assert_eq!(rep.bytes_written, 0);
+        let 剩余: Vec<String> = fs::read_dir(&dest)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            剩余.is_empty(),
+            "解压失败后目标目录必须干净，实际残留: {剩余:?}"
+        );
+        let _ = fs::remove_dir_all(&dest);
+    }
+
+    /// 反向边界：**半成功**（明文解出来了、加密的跳过）时，目录结构和已解文件一个都不能动。
+    ///
+    /// 这条防的是「清理过头」—— 收尾逻辑只看 `files.is_empty() && bytes_written == 0`，
+    /// 只要有任意一个文件落地就不清理。改成「只要有 skipped 就清理」会让这条当场红。
+    #[test]
+    fn 半成功时保留已解出的文件与目录() {
+        let data = make_混合zip("p@ss");
+        let len = data.len() as u64;
+        let dest = scratch_dir("half_ok");
+
+        let mut cur = Cursor::new(data);
+        let opts = ExtractOptions::new(&dest); // 不给密码：明文能解，加密的跳过
+        let rep = extract_zip_at(&mut cur, 0, len, &opts).unwrap();
+
+        assert_eq!(rep.files.len(), 1, "明文那条该解出来: {:?}", rep.files);
+        assert_eq!(rep.files[0].name, "sub/说明.txt");
+        assert!(!rep.skipped.is_empty(), "加密那条该被跳过并说明原因");
+        let 已解 = dest.join("sub/说明.txt");
+        assert!(已解.is_file(), "解出来的文件必须还在: {}", 已解.display());
+        assert_eq!(fs::read_to_string(&已解).unwrap(), "plain note");
+        let _ = fs::remove_dir_all(&dest);
     }
 
     #[test]
