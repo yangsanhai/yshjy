@@ -1,7 +1,7 @@
 name: yshjy_gui
 description: 杨三海解压 —— 桌面界面（Flutter）
 publish_to: "none"
-version: 0.9.54
+version: 0.9.55
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -23,3 +23,4 @@ flutter:
   # 界面文案（T14）：与引擎 locales/*.toml 同名同规则，见 lib/l10n.dart 顶部说明
   assets:
     - assets/l10n/
+    - assets/donate/
