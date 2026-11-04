@@ -452,9 +452,12 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
     opts: &ExtractStreamOptions,
     ctx: &UnpackCtx,
 ) -> Result<crate::extract::ExtractReport> {
+    // 本次新建的目录（解压失败时要把它们收回去 —— 见 `extract::空目录守卫`）
+    let mut 守卫 = crate::extract::空目录守卫::new();
+
     // 只测不写：不建输出目录
     if !ctx.verify_only {
-        fs::create_dir_all(&opts.dest)
+        crate::extract::建目录并记账(&opts.dest, 守卫.记账())
             .map_err(|e| Error::new(ErrorCode::Internal).context(format!("建目录失败: {e}")))?;
     }
 
@@ -512,7 +515,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                     continue;
                 }
                 if !ctx.verify_only {
-                    let _ = fs::create_dir_all(&d);
+                    let _ = crate::extract::建目录并记账(&d, 守卫.记账());
                 }
                 ctx.resume_record(&name, &d, crate::resume::条目种类::目录);
             }
@@ -553,7 +556,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 continue;
             }
             if !ctx.verify_only && let Some(parent) = 链接路径.parent() {
-                let _ = fs::create_dir_all(parent);
+                let _ = crate::extract::建目录并记账(parent, 守卫.记账());
             }
             // 断点续传：上次链接已经建好 → 跳
             if ctx.resume_skip(&name, &链接路径, crate::resume::条目种类::链接) {
@@ -640,7 +643,7 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
         }
         if !ctx.verify_only
             && let Some(parent) = out_path.parent()
-            && let Err(e) = fs::create_dir_all(parent)
+            && let Err(e) = crate::extract::建目录并记账(parent, 守卫.记账())
         {
             report
                 .skipped
@@ -758,6 +761,13 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 });
             }
         }
+    }
+
+    // ── 收尾：解出了东西就解除守卫，否则 Drop 自动把空目录收回去 ──
+    // 判据与 zip 路径一致（`files` 空 **且** 写入 0 字节 = 一个都没落地）；
+    // 提前返回（比如截断的 .tar.gz 剥壳失败）由 Drop 兜住 —— 以前那条 `?` 会把空目录留下。
+    if !report.files.is_empty() || report.bytes_written > 0 {
+        守卫.keep();
     }
 
     Ok(report)
@@ -1055,6 +1065,64 @@ mod tests {
                 .unwrap_or_else(|_| fs::read(out.join("src/a.txt")).unwrap_or_default());
             assert_eq!(got, b"tar content a", "{name} 内容不对");
         }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 回归（2026-11-04）：单流格式解到一半失败，不该在目标目录留下空文件夹。
+    ///
+    /// 实测场景：`.tar.gz` 被截断 → 剥壳读不下去 → 报「这不是压缩包」，
+    /// 但 tar 里的目录条目在此之前已经建好了，用户得到一个 `src/` 空壳。
+    /// 与 zip 路径同一套收尾（判据也一致：`files` 空 **且** `bytes_written == 0`）。
+    ///
+    /// 反向验证：把函数末尾的 `回收本次新建的空目录` 调用关掉 → 本测试当场红。
+    #[test]
+    fn 截断的_tar_gz_失败后不留空目录() {
+        let 有 = |prog: &str| {
+            std::process::Command::new(prog)
+                .arg("--version")
+                .output()
+                .is_ok_and(|o| o.status.success())
+        };
+        if !有("tar") || !有("gzip") {
+            eprintln!("环境没有 tar/gzip 命令，跳过");
+            return;
+        }
+
+        let dir = std::env::temp_dir().join(format!("yshjy_trunc_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src/子目录")).unwrap();
+        std::fs::write(dir.join("src/大文件.txt"), vec![b'x'; 100_000]).unwrap();
+        assert!(
+            std::process::Command::new("tar")
+                .args(["czf", "t.tar.gz", "src"])
+                .current_dir(&dir)
+                .output()
+                .unwrap()
+                .status
+                .success(),
+            "tar czf 应当成功"
+        );
+
+        // 只留前 100 字节：gzip 流根本不完整，一个条目都解不出来
+        let 全 = std::fs::read(dir.join("t.tar.gz")).unwrap();
+        std::fs::write(dir.join("截断.tar.gz"), &全[..100.min(全.len())]).unwrap();
+
+        let out = dir.join("out");
+        let f = fs::File::open(dir.join("截断.tar.gz")).unwrap();
+        let opts = ExtractStreamOptions::new(&out);
+        // 返回 Err 还是空 report 都行 —— 关键是**别留空壳**（这里不 assume 哪种）
+        let _ = extract_tar(f, Some(ArchiveFormat::Gzip), &opts);
+
+        // 关键断言：这个输出目录是**我们这次建的**，失败后必须整个收回 ——
+        // 只查「里面空不空」会漏掉「目录还在」的情况（第一版就是这么假绿的）。
+        assert!(
+            !out.exists(),
+            "本次自建的目标目录必须收回，实际还在: {}（里面: {:?}）",
+            out.display(),
+            fs::read_dir(&out)
+                .map(|rd| rd.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+                .unwrap_or_default()
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
