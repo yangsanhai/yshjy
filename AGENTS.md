@@ -110,6 +110,27 @@ flutter build linux --debug   # CMake 开了 -Wall -Werror，任何警告都是�
   没跟着改（不是功能坏了）。确认真是新设计后跑 `python3 tests/contract/run.py --update`，
   并在提交说明里写清「哪个字段、为什么变」—— 别直接 `--update` 了事，也别把它当老账跳过。
 
+## 发版与界面（Flutter）：踩过的硬规则
+
+> 这一节原先是只活在 Hermes 记忆里的一句话清单，2026-11-05 搬进仓库。
+> 版本号一律以 `Cargo.toml` 为准，别在这页写死。
+
+1. **界面改完必须 `flutter build linux --release`，再把新的 `lib/libapp.so` 拷进 bundle 和装机目录。**
+   `scripts/build-deb.sh` 和 `scripts/release.sh` **都不自编界面**，只打包现成的 `gui/build/linux/x64/release/bundle`；
+   不拷引擎就跑用户装的那份，等于还是旧界面（历史坑：启动报「引擎未就绪」）。
+2. **debug 编过 ≠ release 编过**。发版前一定跑一次 release —— CMake 的 `-Wall -Werror` 在两种构建下暴露的问题不一样。
+3. **发版链固定顺序**：`flutter build linux --release` → `python3 scripts/bump-version.py <ver>`
+   （`--check` 核对，处数/文件数**以脚本输出为准**，写这份时是 11 处 8 个文件；`docs/yshjy.1` 由生成器带出）
+   → `release.sh` → `build-deb.sh` → `test-packages.sh` → `sudo dpkg -i` 装机 → 五项验收。
+4. **验「装的是不是新版」看两处，别信桌面图标**：`assets/l10n/*.json` 的键数（l10n 文案在 assets 里，不在 `libapp.so` 里）
+   + `lib/libapp.so` 里 key 的字面量。**AOT 里的中文字面量是 UTF-16LE**，用 UTF-8 去 `grep` 永远搜不到，
+   会误判成「没进去」（本机实测 `杨三海解压`: utf8=0 / utf16le=1）。
+5. **`dart format` 会整文件重排**，别对老文件跑 —— diff 全是噪音，评审看不出真改动。
+6. **界面码名一律走 `gui/lib/humanize.dart`**，查不到就回退通用人话，不许把原始码甩给用户。
+7. **`flutter test` 要带 `XDG_CONFIG_HOME`**（指向临时目录），否则读的是真实配置，结果随机器环境变。
+8. **widget 测试里断言的结构形状是自己假定的**：假定错了测试照样绿。新增断言前先拿真机的真实 JSON 核一遍。
+9. **只本地 git**：不发远端、不 `git commit`（见硬规矩 3）。
+
 ## 干活流程
 
 1. 先看 `HANDOFF.md` 顶部 20 行 + `docs/TODO.md` 第一行，确认现在这一轮在做什么。

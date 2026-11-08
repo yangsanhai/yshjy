@@ -295,6 +295,89 @@ fn windows可用内存mib() -> Option<u64> {
     }
 }
 
+/// 路径所在的盘 → `\\.\C:`（只认本地盘符；UNC / 网络盘返回 None）
+#[cfg(windows)]
+fn 盘符设备路径(path: &std::path::Path) -> Option<String> {
+    match path.components().next()? {
+        std::path::Component::Prefix(p) => match p.kind() {
+            std::path::Prefix::Disk(d) => Some(format!("\\\\.\\{}:", d as char)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Windows 磁盘类型：问系统「这块盘要不要寻道」
+///
+/// `IOCTL_STORAGE_QUERY_PROPERTY` + `StorageDeviceSeekPenaltyProperty`：
+/// `IncursSeekPenalty = true` → 机械（有寻道代价），`false` → 固态。
+/// 这是 Windows 上判断 HDD/SSD 的通用做法（`sysinfo` / CrystalDiskInfo 同一套）；
+/// 读不到（虚拟盘、网络盘、U 盘桥接芯片不报）就返回 None，让上层按「未知」保守处理。
+///
+/// 为什么放在 bin：`DeviceIoControl` 是 unsafe，而 lib 是 `#![forbid(unsafe_code)]`。
+/// 启动时注册进 `hardware::注册磁盘探针`，和内存探针同一套模式（W5）。
+#[cfg(windows)]
+fn windows磁盘类型(path: &std::path::Path) -> Option<yshjy::hardware::DiskKind> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::{
+        DEVICE_SEEK_PENALTY_DESCRIPTOR, IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery,
+        STORAGE_PROPERTY_QUERY, StorageDeviceSeekPenaltyProperty,
+    };
+
+    let dev = 盘符设备路径(path)?;
+    let wide: Vec<u16> = std::ffi::OsStr::new(&dev)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    // SAFETY: 句柄用完立刻关；两个缓冲区都是本函数栈上的 POD，API 不在调用后持有指针。
+    unsafe {
+        let h = CreateFileW(
+            wide.as_ptr(),
+            0, // 只查属性，不读不写
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            0,
+            std::ptr::null_mut(),
+        );
+        if h == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let query = STORAGE_PROPERTY_QUERY {
+            PropertyId: StorageDeviceSeekPenaltyProperty,
+            QueryType: PropertyStandardQuery,
+            AdditionalParameters: [0],
+        };
+        let mut desc: DEVICE_SEEK_PENALTY_DESCRIPTOR = std::mem::zeroed();
+        let mut 返回字节: u32 = 0;
+        let ok = DeviceIoControl(
+            h,
+            IOCTL_STORAGE_QUERY_PROPERTY,
+            &query as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<STORAGE_PROPERTY_QUERY>() as u32,
+            &mut desc as *mut _ as *mut std::ffi::c_void,
+            std::mem::size_of::<DEVICE_SEEK_PENALTY_DESCRIPTOR>() as u32,
+            &mut 返回字节,
+            std::ptr::null_mut(),
+        );
+        CloseHandle(h);
+        if ok == 0 {
+            return None;
+        }
+        Some(if desc.IncursSeekPenalty {
+            yshjy::hardware::DiskKind::Rotational
+        } else {
+            yshjy::hardware::DiskKind::SolidState
+        })
+    }
+}
+
 fn main() -> ExitCode {
     // 时区要最先注入：崩溃日志、诊断包、ZIP 条目时间全都靠它显示成"本地时间"
     // （引擎自己碰不了 localtime_r，这一步只能外壳做）
@@ -303,6 +386,10 @@ fn main() -> ExitCode {
     // 解压前的内存预检才有真实数字 —— 以前永远读不到，防 OOM 的内存闸形同虚设（W5）
     #[cfg(windows)]
     yshjy::hardware::注册内存探针(windows可用内存mib);
+    // 磁盘类型同理：Windows 要 DeviceIoControl 问「这块盘要不要寻道」，
+    // 不注册的话设置页那条建议只能显示「没探到」（T17-2 在 Windows 上的缺口）。
+    #[cfg(windows)]
+    yshjy::hardware::注册磁盘探针(windows磁盘类型);
     // 崩溃兜底要**最早装**：后面每一步（读配置、解析语言包、扫目录）都可能炸，
     // 装晚了那几秒里的崩溃就没有现场了。
     crash::装兜底();
@@ -2156,7 +2243,7 @@ fn 打印汇总(report: &yshjy::batch::BatchReport, quiet: bool, verify_only: bo
             // 显示**绝对路径**：`.` 对用户等于没说
             // （实测踩到：产物落在 ~ 里，用户看完输出还是找不到）
             let abs = std::fs::canonicalize(d).unwrap_or_else(|_| d.clone());
-            println!("     📁 {}", abs.display());
+            println!("     📁 {}", 显示路径(&abs));
         }
         for (name, res, why) in j.stats.failed.iter().take(5) {
             match why {
@@ -2298,7 +2385,12 @@ fn 汇总_json(report: &yshjy::batch::BatchReport) -> String {
 /// 进度条填充字符：UTF-8 终端用方块，其余退回 ASCII
 ///
 /// 非 UTF-8 终端（LANG=C 之类）画 █░ 会变成一堆问号或方框，宁可难看也别乱码。
+/// Windows 例外：那边的控制台走 UTF-16 输出，跟 LANG 没关系；而 Windows 上通常
+/// 一个 LANG 都没有，照原判断会被误当成「非 UTF-8」而降级成 `#-`（2026-11-07 撞到）。
 fn 进度条字符() -> (char, char) {
+    if cfg!(windows) {
+        return ('█', '░');
+    }
     let utf8 = ["LC_ALL", "LC_CTYPE", "LANG"]
         .iter()
         .filter_map(|k| std::env::var(k).ok())
@@ -3251,9 +3343,15 @@ fn do_report(argv: &[String], hide_paths: bool) -> ExitCode {
     let ctx = yshjy::ctx::UnpackCtx::quiet(1);
     match yshjy::report::生成(&opts, &ctx) {
         Ok(路径) => {
+            // 已经脱敏过就别再劝「请加 --no-paths」—— 那是给没加的人看的
+            let key = if hide_paths {
+                "cli.report_done_hidden"
+            } else {
+                "cli.report_done"
+            };
             println!(
                 "{}",
-                语.t("cli.report_done", &[("path", &路径.display().to_string())])
+                语.t(key, &[("path", &显示路径(&路径))])
             );
             ExitCode::from(code::OK)
         }
@@ -3262,6 +3360,25 @@ fn do_report(argv: &[String], hide_paths: bool) -> ExitCode {
             ExitCode::from(code::ERR)
         }
     }
+}
+
+/// 显示给用户看的路径
+///
+/// Windows 的 `canonicalize` 返回的是 verbatim 路径（`\\?\D:\...`）—— 实际用起来没问题，
+/// 但打印出来像乱码，用户会以为路径坏了。这里只**去掉显示前缀**，不影响真实路径。
+fn 显示路径(p: &std::path::Path) -> String {
+    let s = p.display().to_string();
+    #[cfg(windows)]
+    {
+        if let Some(rest) = s.strip_prefix(r"\\?\") {
+            // UNC 的 verbatim 前缀是 `\\?\UNC\server\share`
+            if let Some(unc) = rest.strip_prefix("UNC\\") {
+                return format!(r"\\{unc}");
+            }
+            return rest.to_string();
+        }
+    }
+    s
 }
 
 /// 从参数里挑出第一个**真正的**位置参数
@@ -3499,6 +3616,45 @@ mod tests {
         let m = yshjy::hardware::available_mem_mib()
             .expect("注册探针后 available_mem_mib 不该再是 None");
         assert!(m > 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn 盘符设备路径只认本地盘符() {
+        use std::path::Path;
+        assert_eq!(
+            盘符设备路径(Path::new(r"C:\Users\x\a.zip")).as_deref(),
+            Some(r"\\.\C:")
+        );
+        assert_eq!(盘符设备路径(Path::new(r"\\server\share\a.zip")), None);
+        assert_eq!(盘符设备路径(Path::new("relative\\a.zip")), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows磁盘探针能判出系统盘类型() {
+        let sys = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string());
+        let k = windows磁盘类型(std::path::Path::new(&sys));
+        assert!(
+            matches!(
+                k,
+                Some(yshjy::hardware::DiskKind::SolidState | yshjy::hardware::DiskKind::Rotational)
+            ),
+            "真 Windows 上系统盘应能判出机械/固态，实际 {k:?}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows注册磁盘探针后引擎读得到磁盘类型() {
+        // 与内存探针同理：不注册时 Windows 上永远是 Unknown（设置页显示「没探到」）
+        yshjy::hardware::注册磁盘探针(windows磁盘类型);
+        let h = yshjy::hardware::Hardware::detect().with_target(std::env::temp_dir());
+        assert_ne!(
+            h.disk_kind,
+            yshjy::hardware::DiskKind::Unknown,
+            "注册探针后不该还是 Unknown"
+        );
     }
 
     #[test]

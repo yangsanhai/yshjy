@@ -68,10 +68,18 @@ class YshjyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const seed = Color(0xFF00BCD4);
+    // Windows 上 Flutter 默认字体是 Segoe UI，中文全靠系统回退；实测回退会挑到
+    // 「Microsoft YaHei Light」，11~12px 的小字笔画发细，看着发灰像半透明。
+    // 显式把中文回退钉成常规字重的「Microsoft YaHei UI」，西文仍用 Segoe UI。
+    // （Linux 不动：那边回退到 Noto Sans CJK，本来就没这毛病。）
+    final bool isWindows = Platform.isWindows;
     ThemeData theme(Brightness b) => ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: b),
           visualDensity: VisualDensity.standard,
+          fontFamily: isWindows ? 'Segoe UI' : null,
+          fontFamilyFallback:
+              isWindows ? const ['Microsoft YaHei UI', 'Microsoft YaHei'] : null,
         );
 
     return ValueListenableBuilder<ThemeMode>(

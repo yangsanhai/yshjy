@@ -212,6 +212,16 @@ Win32Window::MessageHandler(HWND hwnd,
 
       return 0;
     }
+    case WM_GETMINMAXINFO: {
+      // 界面按「小工具」排的，再窄就挤成一团：给个下限。
+      // 逻辑 760x560，按窗口所在屏的 DPI 折算成物理像素。
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      const UINT dpi = ::GetDpiForWindow(hwnd);
+      const double scale = dpi / 96.0;
+      info->ptMinTrackSize.x = static_cast<LONG>(760 * scale);
+      info->ptMinTrackSize.y = static_cast<LONG>(560 * scale);
+      return 0;
+    }
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {

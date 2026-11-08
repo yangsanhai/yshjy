@@ -1,7 +1,7 @@
 name: yshjy_gui
 description: 杨三海解压 —— 桌面界面（Flutter）
 publish_to: "none"
-version: 0.9.55
+version: 0.9.57
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -24,3 +24,5 @@ flutter:
   assets:
     - assets/l10n/
     - assets/donate/
+    # 开源许可清单（scripts/gen-third-party.py 从 cargo metadata 生成，勿手改）
+    - assets/third_party.json

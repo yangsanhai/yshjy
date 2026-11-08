@@ -36,9 +36,9 @@ Future<void> _pump(WidgetTester tester) async {
   // 等待方式：轮询到「保存按钮可用」= 配置真读完了。以前睡固定 300ms，
   // 全量并发跑时机器忙就偶发红（那条 flaky 的根因就是它，不是业务问题）。
   bool loaded() {
-    final f = find.widgetWithText(FilledButton, '保存');
+    final f = find.byKey(const ValueKey('settings-save'));
     if (f.evaluate().isEmpty) return false;
-    return tester.widget<FilledButton>(f).onPressed != null;
+    return tester.widget<FloatingActionButton>(f).onPressed != null;
   }
 
   await tester.runAsync(() async {
@@ -130,7 +130,7 @@ void main() {
     await _pump(tester);
 
     await tester.runAsync(() async {
-      await tester.tap(find.widgetWithText(FilledButton, '保存'));
+      await tester.tap(find.byKey(const ValueKey('settings-save')));
       await Future<void>.delayed(const Duration(milliseconds: 150));
     });
     await tester.pump();

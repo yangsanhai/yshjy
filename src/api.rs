@@ -132,9 +132,9 @@ fn 本机磁盘类型() -> &'static str {
     let out = crate::config::全局配置().output_dir();
     let target = match out {
         Some(p) if p.exists() => p,
-        _ => std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(".")),
+        // Windows 通常没有 HOME（只有 USERPROFILE）：以前退回 "." = 按启动目录算，
+        // 和用户以为的「我的盘」不是一回事。`paths::home()` 已按平台挑好变量。
+        _ => crate::paths::home().unwrap_or_else(|| PathBuf::from(".")),
     };
     crate::hardware::Hardware::detect()
         .with_target(target)

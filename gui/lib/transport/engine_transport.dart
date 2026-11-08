@@ -81,10 +81,25 @@ class ProcessTransport implements EngineTransport {
   @override
   Future<int> get exitCode => _proc.exitCode;
 
+  /// 串行写队列。
+  ///
+  /// 为什么需要（2026-11-07 在 Windows 上撞到的真 bug）：界面启动时
+  /// `hello`（外壳/设置页）和 `list`（首页打开包）会**同时**发。`flush()`
+  /// 内部是 `addStream`，会把 sink「绑住」；与此同时另一条 `writeln` 进来就抛
+  /// `Bad state: StreamSink is bound to a stream`。`list` 的 Future 直接失败，
+  /// 首页没人接这个异常，表现是**永远停在「正在识别…」**。
+  /// 队列保证「写一整行 + flush」一次只有一个，顺序不变、协议不变。
+  Future<void> _writeChain = Future<void>.value();
+
   @override
-  Future<void> writeLine(String line) async {
-    _proc.stdin.writeln(line);
-    await _proc.stdin.flush();
+  Future<void> writeLine(String line) {
+    final next = _writeChain.then((_) async {
+      _proc.stdin.writeln(line);
+      await _proc.stdin.flush();
+    });
+    // 队列本身不能因为一次失败就永久断掉；失败照常抛给调用方
+    _writeChain = next.catchError((Object _) {});
+    return next;
   }
 
   @override

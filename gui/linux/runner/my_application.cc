@@ -382,6 +382,12 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
+  // 窗口图标（2026-11-05 补）：以前整个 runner 里没有 set_icon，
+  // 于是任务栏 / Alt-Tab / 顶栏显示的都是系统默认齿轮 —— 桌面菜单里的图标
+  // 由 .desktop 的 Icon= 管，跟窗口图标是两回事，缺了这行就只有菜单有图。
+  // 名字要和 /usr/share/icons/hicolor/*/apps/yshjy.png 对得上。
+  gtk_window_set_icon_name(window, "yshjy");
+
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
   // desktop).

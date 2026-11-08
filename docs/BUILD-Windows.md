@@ -1,87 +1,112 @@
 # Windows 构建与出包
 
 > 这份是 **Windows 这台机器** 的操作手册。Linux 那边看 `AGENTS.md`。
-> 全部内容 2026-10-30 在本机实跑过，不是抄来的。
+> 2026-11-07 按 0.9.57 实跑重写过；命令都能直接抄。
 
-## 一、这台机器上已经装好什么
+## 一、一条命令出全套
 
-| 东西 | 位置 | 版本 | 干什么用 |
-|---|---|---|---|
-| Rust | `C:\Users\18484\.cargo` | 1.95.0，目标 `x86_64-pc-windows-msvc` | 编引擎 |
-| MSVC 编译器 | VS 2026 Community（`Program Files\Microsoft Visual Studio\18`） | MSVC 14.50.35717 | 链接 |
-| Windows SDK | `Program Files (x86)\Windows Kits\10` | 10.0.26100 | 同上 |
-| **Inno Setup** | `%LOCALAPPDATA%\Programs\Inno Setup 6`（**按用户装，不需要管理员**） | 6.7.3 | 出安装包 |
-| **Flutter** | `D:\flutter` | 3.47.8 stable / Dart 3.13.7 | 编界面 |
-
-相关环境变量（已设成用户变量，重开终端生效）：
-
-- `INNO_SETUP_PATH` = `C:\Users\18484\AppData\Local\Programs\Inno Setup 6` —— fastforge 找不到 Inno 时先看它
-- `PUB_CACHE` = `D:\pub-cache` —— **故意挪出 C 盘**，Flutter 依赖默认会写到 `C:\Users\…\AppData\Local\Pub\Cache`
-- 用户 `Path` 里加了 `D:\flutter\bin`
-
-> **C 盘只剩约 10 G，装东西一律往 D 盘**（用户 2026-10-30 明确要求）。
-
-## 二、编引擎（命令行版）
-
-```bash
-cd /e/yshjy-20261030
-CARGO_HTTP_PROXY= cargo build --release
-# 产物：target/release/yshjy.exe（约 7.8 MB）
+```powershell
+# 在仓库根目录
+pwsh -File scripts\build-win.ps1
 ```
 
-**`CARGO_HTTP_PROXY=` 不能省**：注册表里留着 FlClash 的 `ProxyServer=127.0.0.1:7890`，
-cargo 会照读；FlClash 没开时就报「download of config.json failed」。
-**置空后走直连，实测能通**（FlClash 开着也能通，两种状态都不用改注册表）。
+它会依次做：编引擎（常用版 + 全能版）→ 编界面（Flutter Windows release）→ 摊目录 →
+打两个 zip → 用 Inno Setup 打安装包 → 生成 `SHA256SUMS.txt`。
 
-跑测试：
+只重新打包、不重编（产物已在）：
 
-```bash
-CARGO_HTTP_PROXY= cargo test
+```powershell
+pwsh -File scripts\build-win.ps1 -SkipBuild
 ```
 
-预期：**341 过 / 14 挂**（2026-10-30 实测）。挂的 14 条全部有账，见
-`docs/TODO.md` 的 W2 / W6 / W8 —— **不是新问题**，别当回归看。
+嫌仓库所在盘（移动硬盘）慢，可以把引擎 target 挪到别的盘：
 
-## 三、编界面
-
-```bash
-cd /e/yshjy-20261030/gui
-flutter build windows --release
-# 产物：build/windows/x64/runner/Release/yshjy_gui.exe（连同 data/ 与几个 dll）
+```powershell
+pwsh -File scripts\build-win.ps1 -TargetDir 'D:\yshjy-target'
 ```
 
-引擎要**跟界面放同一个目录** —— 界面按「自己旁边的 `yshjy.exe`」找引擎
-（`gui/lib/engine.dart:256-263`）。**Windows 上要找的是 `yshjy.exe`，不是 `yshjy`**（W9 待改）。
+产物全在 `dist-win\`：
 
-## 四、出两个版本（用户 2026-10-30 拍板：两个都要）
-
-| 版本 | 形态 | 用户怎么用 |
+| 文件 | 大小（0.9.57 实测） | 是什么 |
 |---|---|---|
-| **免安装绿色版** | 一个 zip | 解压到任意文件夹，双击 exe 就能用，不写注册表 |
-| **安装包** | `-setup.exe`（Inno Setup） | 双击装，自动放开始菜单、挂右键菜单/文件关联 |
+| `yshjy-<版本>-win-x64\` | — | 绿色版目录（双击 `yshjy_gui.exe` 就能用） |
+| `yshjy-<版本>-win-x64-cli\` | — | 命令行版目录 |
+| `yshjy-<版本>-win-x64.zip` | 18.7 MB | 绿色版压缩包 |
+| `yshjy-<版本>-win-x64-cli.zip` | 6.9 MB | 命令行压缩包 |
+| `yshjy-<版本>-setup.exe` | 15.0 MB | 安装包（中文向导） |
+| `SHA256SUMS.txt` | — | 三个包的 sha256 |
 
-一条命令同时出两个（fastforge，参考 `refs/upstream/fastforge/docs/en/packagers/windows.md`）：
+## 二、这台机器上装了什么
 
-```bash
-fastforge package --targets exe,zip
-# 产物在 dist/<版本>/：<名字>-setup.exe + <名字>.zip
+| 东西 | 位置 | 用途 |
+|---|---|---|
+| Rust（MSVC） | `C:\Users\18484\.cargo`，目标 `x86_64-pc-windows-msvc` | 编引擎 |
+| VS 2026 Community + Windows SDK | `Program Files\Microsoft Visual Studio\18` | 链接 |
+| Flutter | `D:\flutter`（3.47.8 stable / Dart 3.13.7） | 编界面 |
+| Inno Setup 6 | `%LOCALAPPDATA%\Programs\Inno Setup 6` | 打安装包 |
+| 7z | `C:\Users\18484\scoop\shims\7z.exe` | 打 zip（没有就用 Compress-Archive） |
+
+> `PUB_CACHE=D:\pub-cache`，Flutter 依赖不落在 C 盘。
+> 新拉下来的仓库第一次要先在 `gui\` 里跑 `flutter pub get --offline`（`package_config.json`
+> 里存的是 Linux 路径，直接编会找不到包）。
+
+## 三、Windows 适配（和 Linux 不一样的四处）
+
+1. **中文字体**：Flutter 默认字体是 Segoe UI，中文靠系统回退；本机实测回退会挑到
+   **Microsoft YaHei Light**，11~12px 的小字笔画发细，看着像半透明。
+   `gui/lib/main.dart` 里显式写了 `fontFamily: 'Segoe UI'` + `fontFamilyFallback:
+   ['Microsoft YaHei UI', 'Microsoft YaHei']`（只在 Windows 生效）。**别再删掉这段。**
+2. **窗口**：标题「杨三海解压」（不是 `yshjy_gui`）；初始尺寸取工作区 92%、最多 1100×760
+   逻辑像素、居中；最小 760×560（`gui/windows/runner/main.cpp` + `win32_window.cpp`）。
+   150% 缩放下如果还写死 1280×720，一开就铺满整块屏。
+3. **深色主题**：标题栏是系统画的，界面切深色时它不会自己变。Dart 侧监听 `themeMode`
+   调 `yshjy/tray` 的 `set_titlebar_dark`，原生 `DwmSetWindowAttribute` 刷成同色
+   （`flutter_window.cpp`）。系统切深浅色也接上了（`didChangePlatformBrightness`）。
+4. **VC++ 运行库**：绿色版和安装包里都塞了 `msvcp140.dll` / `vcruntime140.dll` /
+   `vcruntime140_1.dll`（从 `C:\Windows\System32` 取，**别从 SysWOW64 取**）。
+   干净 Windows 没装过 VS 也能直接跑。
+
+## 四、手动分步（调试用）
+
+```powershell
+# 引擎
+$env:CARGO_HTTP_PROXY=''; cargo build --release
+$env:CARGO_HTTP_PROXY=''; cargo build --release --features full   # 全能版会覆盖同一个 exe，注意先存常用版
+# 界面
+cd gui; flutter build windows --release
+# 安装包
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" "/DAppVersion=0.9.57" scripts\yshjy-setup.iss
 ```
 
-- **引擎 exe 塞进安装目录**：放到 `.fastforge/packaging/windows/shared/files/yshjy.exe`（overlay 目录）
-- 右键菜单**绿色版也能有**：参考 `refs/upstream/hatchzip/packaging/windows/hatchzip.iss` ——
-  它的做法是「**由程序自己在设置页里加右键菜单**」，这样绿色版和安装版行为一致
-- **不签名**：用户首次双击会看到 SmartScreen 的「仍要运行」，README 里写清怎么点
+引擎 exe 必须和界面放同一目录（界面按「自己旁边的 `yshjy.exe`」找引擎）。
 
-## 五、Windows 专属的坑（踩过，别再踩）
+## 五、坑（都踩过）
 
-1. **`append` 打开的文件不能 `set_len`** —— 返回 `os error 5`（拒绝访问）。续传记录就是这么失效的（W2）。
-2. **`#![forbid(unsafe_code)]` 管到 `trash.rs`，管不到 `crash.rs`** ——
-   `lib.rs` 里禁 unsafe，所以 COM 那类活儿（回收站）只能引 crate；`crash.rs` 是 bin 的模块，能写 unsafe。
-3. **测试套件依赖 `zip` / `rar` / `unrar`**，本机 Git Bash 缺这三个（有 `7z` / `unzip` / `file` / `python3`）——
-   `bash tests/all.sh` 跑不全，见 W7。
-4. **`target/` 按平台生成**，Linux 那份 14 G 在 Windows 上一个都用不上；别当资产备份。
+1. **`cargo` 报 `os error 5（拒绝访问）`、build-script「never executed」** —— 移动硬盘上
+   偶发（杀毒软件正在扫刚编出来的 exe）。**原样重跑一次**；还不行用 `-TargetDir` 换到
+   D 盘。
+2. **`flutter build` 报 `LNK1104: 无法打开 yshjy_gui.exe`** —— 上一个界面进程还开着。
+   先 `Stop-Process -Name yshjy_gui -Force` 再编。
+3. **全能版覆盖常用版**：`cargo build --features full` 输出到同一个
+   `target\release\yshjy.exe`。脚本里已经先把常用版挪到临时文件；手动分步时别忘了。
+4. **NTFS 丢执行位**：拷回 Linux 前注意 `mode change 100755 => 100644`，别提交。
+5. **测试里有一个 Windows 专属红**：`test/clipboard_path_test.dart` 的
+   「file:// URI 转本地路径」断言写死了 POSIX `/home/u/...`，在 Windows 上
+   `Uri.toFilePath()` 给出 `\home\u\...`。**不是功能坏了**，是测试没按平台写；
+   2026-11-07 已改成按平台断言（现在 `flutter test` 432 全过）。
+6. **★ 启动竞态（踩过，已修）**：外壳的 `hello` 和首页的 `list` 会同时写引擎 stdin；
+   `IOSink.flush()` 内部是 `addStream`，并发 `writeln` 抛
+   `Bad state: StreamSink is bound to a stream`，界面永远停在「正在识别…」。
+   `ProcessTransport.writeLine` 已串行化 —— **别再把它改回直接 `writeln` + `flush`**。
 
-## 六、还没做的（别以为已经有了）
+## 六、验收记录（2026-11-07）
 
-见 `docs/TODO.md` 末尾「2026-10-30 Windows 实测审计」W1~W10。
-最便宜的三件：**W1 时区**、**W2 续传**、**W4 密码回显**（换成 `dialoguer::Password`，还顺手删一段手写 termios）。
+- 引擎：`yshjy.exe --version` → 0.9.57；GUI 状态栏显示「引擎 0.9.57」；
+  `cargo test` **439 过 / 1 ignored + 38 + 2 doctests**，`clippy -D warnings` 干净。
+- 界面：首页 / 预览页 / 解压完成页 / 设置页，浅色 + 深色都截图看过；中文字重正常；
+  `flutter test` **432 全过 / 3 跳过**。
+- 功能：拖（命令行传参）一个伪装包 `中文 文件名.mp4` → 认出 ZIP、5 个文件、402 KB →
+  点「开始解压」→ 5 个文件全出（含中文目录、空文件、200 KB 二进制），封面也切出来了。
+- 安装包：静默装到临时目录 → 文件齐（含三个运行库 dll）→ 右键菜单指向新路径 →
+  桌面/开始菜单快捷方式在 → 启动正常 → 卸载后目录、注册表、快捷方式全无残留。
+- **没验的**：干净机器（没有 VS / 运行库）复验、老板本人肉眼验收、繁体/英文系统语言。

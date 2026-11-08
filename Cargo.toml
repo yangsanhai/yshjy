@@ -1,6 +1,6 @@
 [package]
 name = "yshjy"
-version = "0.9.55"
+version = "0.9.57"
 edition = "2024"
 license = "MIT"
 authors = ["yangsanhai"]
@@ -72,7 +72,15 @@ rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }
 # 只在 Windows 构建时拉进来 —— Linux/macOS 那半的依赖树与产物一个字节都不变。
 # 台账：docs/REFERENCE-INDEX.md §9（API 归属按 windows-sys 0.61 源码核对过）
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_SystemInformation"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_SystemInformation",
+    # 磁盘类型探测（T17-2）：DeviceIoControl + IOCTL_STORAGE_QUERY_PROPERTY
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_Storage_FileSystem",
+    "Win32_Security",
+] }
 # 回收站走系统 shell（COM IFileOperation → 资源管理器能还原）：COM 要 unsafe，
 # 而 lib 是 forbid(unsafe_code)，自己写不进去（审计 W3 定案；台账 §9 trash-rs）
 trash = "5.2"

@@ -41,9 +41,9 @@ Future<void> _pump(WidgetTester tester) async {
   // 2026-11-01：等待方式从「睡固定 120ms」改成**轮询到保存按钮可用**。
   // 全量跑时机器忙，固定 sleep 会让这条偶发变红（单跑又绿）。
   bool loaded() {
-    final f = find.widgetWithText(FilledButton, '保存');
+    final f = find.byKey(const ValueKey('settings-save'));
     if (f.evaluate().isEmpty) return false;
-    return tester.widget<FilledButton>(f).onPressed != null;
+    return tester.widget<FloatingActionButton>(f).onPressed != null;
   }
 
   await tester.runAsync(() async {
@@ -131,7 +131,7 @@ void main() {
     // ⚠️ 等「文件里真的写出去了」而不是睡固定毫秒：全量并发跑测试时机器很忙，
     //    固定 120ms 会偶发变红（单跑又绿）。轮询到内容出现为止，最多 3 秒。
     await tester.runAsync(() async {
-      await tester.tap(find.widgetWithText(FilledButton, '保存'));
+      await tester.tap(find.byKey(const ValueKey('settings-save')));
       for (var i = 0; i < 120; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 25));
         final done = File(_cfgPath).existsSync() &&

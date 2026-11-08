@@ -686,7 +686,11 @@ pub fn extract_zip_at_ctx<R: Read + Seek>(
             let 建链接: std::io::Result<()> = std::os::unix::fs::symlink(&目标, &out_path);
             #[cfg(not(unix))]
             let 建链接: std::io::Result<()> = {
-                let 真身 = opts.dest.join(&目标);
+                // 链接目标按 POSIX 语义是**相对链接所在目录**的，不是相对解压根
+                //（2026-11-07 实测：`dir/link.txt → file.txt` 被拼成 `out/file.txt`，
+                // 找不到目标 → 整条被跳过）。
+                let 基准 = out_path.parent().unwrap_or(&opts.dest);
+                let 真身 = 基准.join(&目标);
                 match std::fs::metadata(&真身) {
                     Ok(m) if m.is_dir() => fs::create_dir_all(&out_path),
                     Ok(_) => fs::copy(&真身, &out_path).map(|_| ()),
@@ -1009,15 +1013,20 @@ fn 还原条目属性<R: std::io::Read>(
 ) {
     let mut attrs = crate::restore::EntryAttrs::default();
     if let Some(dt) = entry.last_modified() {
-        // ZIP 里存的是「年月日时分秒」的 DOS 格式（且按本地时间看待）
-        attrs.mtime = Some(crate::restore::civil_to_unix(
-            dt.year() as i32,
-            dt.month() as u32,
-            dt.day() as u32,
-            dt.hour() as u32,
-            dt.minute() as u32,
-            dt.second() as u32,
-        ));
+        // ZIP 里存的是「年月日时分秒」的 DOS 格式，按**本地墙钟**看待。
+        // 转成 Unix 秒时必须减掉本地偏移；否则解出来的文件时间会整体 +8 小时
+        //（2026-11-07 在 Windows 上实测：源 18:50 → 解出 02:50 次日）。
+        // 打包端写的是本地时间（`unix_to_civil_本地`），这样一减正好还原。
+        attrs.mtime = Some(
+            crate::restore::civil_to_unix(
+                dt.year() as i32,
+                dt.month() as u32,
+                dt.day() as u32,
+                dt.hour() as u32,
+                dt.minute() as u32,
+                dt.second() as u32,
+            ) - crate::restore::本地偏移秒(),
+        );
     }
     attrs.mode = entry.unix_mode();
     if attrs.is_empty() {

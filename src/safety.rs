@@ -195,6 +195,20 @@ pub fn resolve_safe(root: &Path, entry: &str) -> Result<PathBuf> {
             .context(format!("entry={entry:?}")));
     }
 
+    // ③' Windows 非法字符 `* ? < > " |`：在 Windows 上根本建不出来。
+    //    包多半是 Windows 上造的，统一拒绝比「解到一半创建失败」好懂；
+    //    与下面已有的保留名 / 冒号 / 尾随空格点是同一套「Windows 安全名」策略。
+    //    出处：refs/tech/对比-安全与健壮性.md §A3（7zip / PeaZip / XAD 三家一致）。
+    if let Some(c) = normalized
+        .chars()
+        .find(|c| matches!(c, '*' | '?' | '<' | '>' | '"' | '|'))
+    {
+        return Err(Error::new(ErrorCode::InvalidArgument)
+            .with("reason", "windows_invalid_char")
+            .with("char", c.to_string())
+            .context(format!("entry={entry:?}")));
+    }
+
     // ④ Windows 备用数据流（`file.txt:evil`）与盘符（`C:`）
     //    在 Linux 上冒号合法，但我们的包可能来自 Windows —— 从源头拦掉
     if normalized.contains(':') {
@@ -413,6 +427,19 @@ mod tests {
         assert!(resolve_safe(root(), "").is_err());
         assert!(resolve_safe(root(), "a\u{0}b").is_err());
         assert!(resolve_safe(root(), "a\nb").is_err());
+    }
+
+    /// Windows 非法字符 `* ? < > " |`（refs §A3：7zip / PeaZip / XAD 三家一致）
+    #[test]
+    fn 拒绝windows非法字符() {
+        for c in ['*', '?', '<', '>', '"', '|'] {
+            let name = format!("a{c}b.txt");
+            let e = resolve_safe(root(), &name).unwrap_err();
+            assert_eq!(e.param("reason"), Some("windows_invalid_char"), "{name}");
+        }
+        // 正常的中文 / 空格 / 括号不受影响
+        assert!(resolve_safe(root(), "正常 名字（1）.txt").is_ok());
+        assert!(resolve_safe(root(), "a'b.txt").is_ok());
     }
 
     #[test]

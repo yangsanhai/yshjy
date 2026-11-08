@@ -12,8 +12,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/pages/about_page.dart';
 
+import 'fake_engine.dart';
+
 Future<void> pumpAbout(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(1000, 2400);
+  // 视口要比原来高：2026-11-05 关于页多了「支持的格式」「快捷键」两张表
+  // （从设置页搬来的），ListView 只构建可视区，矮了会让下面的赞赏按钮「找不到」。
+  tester.view.physicalSize = const Size(1000, 5200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(const MaterialApp(
@@ -23,6 +27,20 @@ Future<void> pumpAbout(WidgetTester tester) async {
 }
 
 void main() {
+  FakeEngine? fake;
+
+  setUp(() async {
+    // 关于页现在内嵌「支持的格式」表，进页面就会问引擎 hello.formats。
+    // 不装假引擎的话会去真 spawn 子进程 —— Process.start 的定时器在假时钟里
+    // 永远不完成，退出时报「A Timer is still pending」（2026-11-05 撞到）。
+    fake?.dispose();
+    await Future<void>.delayed(Duration.zero);
+    fake = FakeEngine();
+    installFakeEngine(fake!);
+  });
+
+  tearDownAll(restoreRealTransport);
+
   testWidgets('关于页有赞赏卡片和按钮', (tester) async {
     await pumpAbout(tester);
     expect(find.text('如果它帮到你了'), findsOneWidget);

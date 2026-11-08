@@ -87,7 +87,7 @@ void main() {
     // 保存（真写文件）—— 文件 IO 是真实异步，必须放 runAsync 里，
     // 否则 pumpAndSettle 推不动它（keys_help_test 里 pump 用 runAsync 也是这个原因）
     await tester.runAsync(() async {
-      await tester.tap(find.text(t('settings.save')));
+      await tester.tap(find.byKey(const ValueKey('settings-save')));
       await tester.pump();
       for (var i = 0; i < 40; i++) {
         if (File('${tmp.path}/config.toml').existsSync()) break;

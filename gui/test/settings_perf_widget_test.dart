@@ -36,10 +36,13 @@ Future<void> _pump(WidgetTester tester) async {
   // ⚠️ 这里**轮询**，不睡固定时长。
   // 第一版写的是「runAsync 里等 300ms」—— 全量跑（8 个文件并发）时机器很忙，
   // 300ms 读不完配置，于是「jobs = 4」那条偶发变红，单跑又绿（最费时间的那种假红）。
-  // 结束条件：格式表出结果（成功 → 出现 zip；失败 → 出现「重试」）。
-  bool ready() =>
-      find.text('zip').evaluate().isNotEmpty ||
-      find.text('重试').evaluate().isNotEmpty;
+  // 结束条件：**保存按钮可用** = 配置真读完了。
+  // （2026-11-05 格式表搬去关于页后，不能再拿「zip 出现」当信号 —— 设置页已经没有格式表了。）
+  bool ready() {
+    final f = find.byKey(const ValueKey('settings-save'));
+    if (f.evaluate().isEmpty) return false;
+    return tester.widget<FloatingActionButton>(f).onPressed != null;
+  }
 
   await tester.runAsync(() async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsPage())));
@@ -74,7 +77,7 @@ bool _warnValue(WidgetTester tester) {
 
 Future<void> _tapSave(WidgetTester tester, {String expect = ''}) async {
   await tester.runAsync(() async {
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.tap(find.byKey(const ValueKey('settings-save')));
     // 轮询到「文件里真的出现了预期内容」，不睡固定毫秒（并发跑时固定等待会假红）
     for (var i = 0; i < 120; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
@@ -225,22 +228,7 @@ void main() {
     });
   });
 
-  group('格式表自动显示（T17-1）', () {
-    testWidgets('进页面就出表格，且没有「读取各格式能力」按钮', (tester) async {
-      await _pump(tester);
-      // fake 的 hello 给了两份能力行
-      expect(find.text('zip'), findsOneWidget, reason: '格式表应当自动显示（不用点按钮）');
-      expect(find.text('7z'), findsOneWidget);
-      expect(find.text('读取各格式能力'), findsNothing,
-          reason: 'T17-1 要求去掉那个按钮');
-    });
-
-    testWidgets('引擎报错时如实说，并给一个「重试」', (tester) async {
-      // 让 hello 抛错：传输层直接回一个错误信封
-      fake!.helloResult = {'engine': 'test'}; // 没有 formats → 走「引擎太旧」分支
-      await _pump(tester);
-      expect(find.textContaining('这个引擎版本太旧'), findsOneWidget);
-      expect(find.text('重试'), findsOneWidget);
-    });
-  });
+  // 「格式表自动显示（T17-1）」那两条已随表格搬到 test/about_tables_test.dart
+  // （2026-11-05 用户要求：格式表和快捷键表放关于页，不是设置）。
+  // 本文件只留设置页自己还能改的东西。
 }

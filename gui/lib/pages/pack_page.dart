@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,7 +38,14 @@ class PackPage extends StatefulWidget {
     this.debugInputs,
     this.debugOut,
     this.debugCover,
+    this.acceptDrop = true,
   });
+
+  /// 当前页是否接受拖放。
+  ///
+  /// IndexedStack 里所有页都挂在树上：首页那个 `DropTarget` 铺满整个窗口，
+  /// 不关掉的话在打包页拖文件会被**首页抢走**（变成解压/预览）。
+  final bool acceptDrop;
 
   @override
   State<PackPage> createState() => _PackPageState();
@@ -202,6 +210,20 @@ class _PackPageState extends State<PackPage> {
     _pwCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  /// 拖进来的文件/文件夹 → 加进输入列表（与「添加文件/文件夹」同一套去重与命名规则）
+  void _addDropped(Iterable<String> paths) {
+    if (_busy) return;
+    var added = false;
+    for (final p in paths) {
+      if (p.isEmpty || _inputs.contains(p)) continue;
+      _inputs.add(p);
+      added = true;
+    }
+    if (!added) return;
+    if (!_outUserPicked) _out = suggestOut(_inputs.first, _ext);
+    setState(() {});
   }
 
   Future<void> _addFiles() async {
@@ -447,7 +469,14 @@ class _PackPageState extends State<PackPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return KeyActionScope(
+    return DropTarget(
+      // 打包页也能直接把文件/文件夹拖进来（新手第一反应就是拖）
+      enable: widget.acceptDrop && !_busy,
+      onDragDone: (detail) {
+        if (detail.files.isEmpty) return;
+        _addDropped(detail.files.map((f) => f.path));
+      },
+      child: KeyActionScope(
       // ★ takeFocus 必须 false：这一页和首页在 IndexedStack 里同时挂着，
       //   谁抢焦点谁出事 —— 它会静止地把首页那屏的 Enter 抢走。
       //   代价是「刚切过来什么都没点、直接按 Enter」不生效；用户要打包必然
@@ -639,7 +668,7 @@ class _PackPageState extends State<PackPage> {
                             isDir ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
                             size: 20,
                           ),
-                          title: Text(p.split('/').last, style: const TextStyle(fontSize: 13)),
+                          title: Text(baseName(p), style: const TextStyle(fontSize: 13)),
                           subtitle: Text(
                             isDir ? t('pack.dirEntry') : p,
                             maxLines: 1,
@@ -1074,6 +1103,7 @@ class _PackPageState extends State<PackPage> {
           ),
           ],
         ),
+      ),
       ),
       ),
     );

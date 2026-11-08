@@ -136,9 +136,19 @@ fn 最近崩溃日志_在(dir: &Path) -> Option<(String, String)> {
 
 /// 把家目录换成 `<home>`（`--no-paths` 时用）
 fn 抹掉家目录(文本: &str) -> String {
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() => 文本.replace(&home, "<home>"),
-        _ => 文本.to_string(),
+    // 别直接用 `std::env::var("HOME")`：Windows 上通常没有 HOME，只有 USERPROFILE，
+    // 那样 `--no-paths` 在 Windows 上等于没生效（2026-11-07 跑 Windows 单测撞出来的）。
+    // `paths::home()` 已经按平台挑好变量，这里只负责替换。
+    match crate::paths::home() {
+        Some(home) => {
+            let home = home.to_string_lossy();
+            if home.is_empty() {
+                文本.to_string()
+            } else {
+                文本.replace(home.as_ref(), "<home>")
+            }
+        }
+        None => 文本.to_string(),
     }
 }
 
@@ -550,7 +560,10 @@ mod 脱敏测试 {
     /// 而这包正是要贴到群里/发给别人的。
     #[test]
     fn 错误原文里的家目录要脱掉() {
-        let home = std::env::var("HOME").expect("测试机总有 HOME");
+        let home = crate::paths::home()
+            .expect("测试机总有家目录")
+            .to_string_lossy()
+            .into_owned();
         let mut 脱敏 = 脱敏器::new(true);
         let 出 = 脱敏.文本(&format!(
             "[NOT_ARCHIVE] path={home}/下载/坏文件.bin looks_like=text"
@@ -593,7 +606,10 @@ mod 崩溃日志测试 {
     /// 注释里写着「已脱敏」，谁把它改回原样都不会有人发现。这条是护栏，不是新功能。
     #[test]
     fn 崩溃日志里的家目录要脱掉() {
-        let home = std::env::var("HOME").expect("测试机总有 HOME");
+        let home = crate::paths::home()
+            .expect("测试机总有家目录")
+            .to_string_lossy()
+            .into_owned();
         let 原文 = format!(
             "版本: 0.9.38\n目标包: {home}/下载/我的项目/游戏.mp4\n临时: /tmp/yshjy-x/part\n"
         );
@@ -651,7 +667,10 @@ mod 采集项契约 {
     }
 
     fn 家() -> String {
-        std::env::var("HOME").expect("测试机总有 HOME")
+        crate::paths::home()
+            .expect("测试机总有家目录")
+            .to_string_lossy()
+            .into_owned()
     }
 
     #[test]

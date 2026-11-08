@@ -6,6 +6,8 @@ import '../engine.dart';
 import '../humanize.dart';
 import '../l10n.dart';
 import '../platform_paths.dart';
+import 'licenses_page.dart';
+import 'reference_tables.dart';
 
 /// 关于页：版本、边界、报障入口
 ///
@@ -124,6 +126,21 @@ class _AboutPageState extends State<AboutPage> {
           style: TextStyle(fontSize: 13, height: 1.7, color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 20),
+        // 「支持的格式」与「快捷键」两张只读表 —— 2026-11-05 从设置页搬过来。
+        // 理由（用户原话）：「设置里面一大段话的那些能不能移动到关于里面，因为它们也没啥设置」。
+        // 这里**不折叠**（用户 2026-11-05 明确要求放开），想查就一眼看到。
+        _widgetCard(
+          cs,
+          title: t('settings.section.caps'),
+          child: const CapsTable(),
+        ),
+        const SizedBox(height: 12),
+        _widgetCard(
+          cs,
+          title: t('settings.section.keys'),
+          child: const KeysTable(),
+        ),
+        const SizedBox(height: 12),
         _card(
           cs,
           title: t('about.limits.title'),
@@ -188,6 +205,34 @@ class _AboutPageState extends State<AboutPage> {
           label: Text(t('about.donate.button')),
         ),
         const SizedBox(height: 20),
+        // 开源许可：MIT / BSD / Apache-2.0 都要求分发时保留版权声明与许可文本。
+        // 两个入口分开是因为它们的数据源不同：
+        //   · 「开源库清单」= Rust 依赖，来自 assets/third_party.json（脚本生成）
+        //   · 「完整许可证文本」= Flutter 自带的 LicensePage，覆盖 Dart/pub 包与 Flutter 自身
+        _card(
+          cs,
+          title: t('about.license.title'),
+          body: t('about.license.body'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LicensesPage()),
+          ),
+          icon: const Icon(Icons.inventory_2_outlined, size: 18),
+          label: Text(t('about.license.deps')),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => showLicensePage(
+            context: context,
+            applicationName: t('app.name'),
+            applicationVersion: widget.engineVersion,
+          ),
+          icon: const Icon(Icons.gavel_outlined, size: 18),
+          label: Text(t('about.license.full')),
+        ),
+        const SizedBox(height: 20),
         Center(
           child: Text(
             t('about.footer'),
@@ -197,6 +242,23 @@ class _AboutPageState extends State<AboutPage> {
       ],
     );
   }
+
+  /// 和 [_card] 同款外观，但正文是任意 widget（格式表 / 快捷键表用）
+  Widget _widgetCard(ColorScheme cs, {required String title, required Widget child}) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            child,
+          ],
+        ),
+      );
 
   Widget _card(ColorScheme cs, {required String title, required String body}) => Container(
         padding: const EdgeInsets.all(12),

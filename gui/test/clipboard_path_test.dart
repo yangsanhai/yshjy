@@ -6,6 +6,8 @@
 //
 // 键位出处：UI-SPEC §4b.6「Ctrl+V 粘贴路径（自动开始识别）」。
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/clipboard_path.dart';
 
@@ -49,9 +51,15 @@ void main() {
   });
 
   test('file:// URI 转成本地路径，%20 这类转义解回来', () {
+    // `Uri.toFilePath()` 的结果按平台分隔符走：Windows 上是 `\home\u\...`。
+    // 这里断言的是「转义解回来了、层级没丢」，不是「分隔符一定是 /」——
+    // 写死 POSIX 会让 Windows 上的测试套件永远红一条（2026-11-07 踩过）。
+    final expected = Platform.isWindows
+        ? r'\home\u\我的 文档\包.zip'
+        : '/home/u/我的 文档/包.zip';
     expect(
       pathsFromClipboardText('file:///home/u/我的%20文档/包.zip'),
-      ['/home/u/我的 文档/包.zip'],
+      [expected],
     );
   });
 

@@ -577,10 +577,24 @@ pub fn extract_tar_ctx<'a, R: Read + 'a>(
                 }
                 #[cfg(not(unix))]
                 {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        "这个系统不支持创建符号链接",
-                    ))
+                    // Windows 普通用户建符号链接要管理员权限：和 ZIP 那条路（extract.rs）
+                    // 保持同一套做法 —— 目标是什么就复制什么（目录建目录、文件复制一份），
+                    // 并记一条 SlowPath 让界面看得到，不许静默丢条目。
+                    // 链接目标按 POSIX 语义是**相对链接所在目录**的，不是相对解压根。
+                    let 基准 = 链接路径.parent().unwrap_or(&opts.dest);
+                    let 真身 = 基准.join(&目标);
+                    let r = match fs::metadata(&真身) {
+                        Ok(m) if m.is_dir() => fs::create_dir_all(&链接路径),
+                        Ok(_) => fs::copy(&真身, &链接路径).map(|_| ()),
+                        Err(e) => Err(e),
+                    };
+                    if r.is_ok() {
+                        ctx.diagnostic(
+                            crate::event::DiagnosticCode::SlowPath,
+                            format!("{name}：这个系统不支持符号链接，已按目标内容复制"),
+                        );
+                    }
+                    r
                 }
             } else {
                 // 硬链接：目标必须是同一个解压目录里已经解出来的文件

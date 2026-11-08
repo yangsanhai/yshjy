@@ -2,6 +2,192 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.57 · Linux 同步验收] · 2026-11-08 —— Windows 那轮改动搬回本机，全绿（未发版）
+
+来源：移动硬盘 `yshjy-20261106`（Windows 机上 11-07 收工的工作区，**没有 commit**）。
+同步方式：逐文件 md5 比对后，按清单 rsync 50 个文件（10 个 Windows 机器相关生成物
+`gui/.flutter-plugins-dependencies`、`gui/ios`、`gui/macos`、`gui/android/local.properties`
+与 `gui/pubspec.lock` 刻意不同步）；同步前整棵源码树已备份到
+`~/hermes/backups/yshjy-worktree-20261108/`（222 MB，排除 target/refs）。
+
+**顺手补的一处丢包**：Windows 那份 `HANDOFF-archive.md` 里漏了 0.9.56 / 0.9.57 两张卡
+（主本精简时旧的归档没跟上），已按本机 11-05 的 `HANDOFF.md` 原文补回归档顶部，一字未改。
+
+**本机实测（全真跑）**
+- `cargo test` **448 通过 / 1 忽略** + 33 + 2 doctests；`cargo clippy --all-targets -D warnings` 干净
+- `flutter analyze` No issues；`flutter test` **440 通过 / 0 红**（Windows 上 437，多出的 3 条是 Linux 专属）
+- `bash tests/all.sh` **62 通过 / 0 失败 / 5 跳过**（375 秒）
+- **ZIP 时间（★共享修复）**：造 2026-11-01 18:50:00 的条目，解出仍是 18:50:00（+0800），
+  与 `7z x` 逐秒相同 —— 修前是次日 02:50（+8 小时）
+- **`--split` 裸切分**：`yshjy ys x.mp4 --split 15K` → `.001/.002/.003`；
+  `--list x.mp4.mp4.001` 认成 zip 并列出条目；真解出的 `x.mp4` 与源 `cmp` 字节一致
+- **非法字符**：包内含 `a*b.txt` → 该条跳过并报 `reason=windows_invalid_char char=*`，其余正常解出
+- Windows 交付包三个（setup.exe / win-x64.zip / cli.zip）`sha256sum -c` 全过，已拷到本机 `dist-win/`
+
+**未做**：git 提交（等老板验收）、装机、发版。
+
+## [0.9.57 · Windows 侧] · 2026-11-07 —— 界面在 Windows 上重新编出来（未发版）
+
+用户原话：**「上次编出来的界面有些文字有些透明了看不清」** —— 查实不是透明度，
+是**字体回退挑到了 Light 字重**：Flutter 在 Windows 默认用 Segoe UI，中文交给系统回退，
+回退给的是 `Microsoft YaHei Light`，11~12px 的小字笔画细得像半透明。
+同一句话量过像素：文字颜色本身是 `#3F484A`（不透明），但笔画覆盖率明显偏低。
+
+**做了什么（只动 Windows 侧，Linux 行为不变）**
+
+- `gui/lib/main.dart`：Windows 上显式 `fontFamily: 'Segoe UI'` +
+  `fontFamilyFallback: ['Microsoft YaHei UI', 'Microsoft YaHei']`，钉住常规字重。
+- `gui/windows/runner/main.cpp`：窗口标题 `yshjy_gui` → **杨三海解压**；
+  初始尺寸按工作区 92%、最多 1100×760 逻辑像素、居中（原来写死 1280×720，
+  150% 缩放下正好铺满整块屏）；DPI 用 `FlutterDesktopGetDpiForMonitor`。
+- `gui/windows/runner/win32_window.cpp`：最小窗口 760×560（按 DPI 折算）。
+- `gui/lib/app_shell.dart` + `gui/lib/tray.dart` + `gui/windows/runner/flutter_window.cpp`：
+  界面切深色时把系统标题栏也刷深（`set_titlebar_dark` → `DwmSetWindowAttribute`），
+  系统深浅色切换也跟。
+- `scripts/build-win.ps1`：一条命令出全套（引擎常用+全能、界面、两个 zip、setup.exe、
+  SHA256SUMS）。VC++ 三个运行库 dll 随包；全能版覆盖常用版那个坑已用临时文件避开。
+- `scripts/yshjy-setup.iss` + `scripts/ChineseSimplified.isl`：中文安装向导；
+  按用户装、不弹 UAC；22 个扩展名 + 文件夹的右键菜单（只加菜单，不抢默认打开方式）。
+- **文案按平台分叉**：设置页「通知」那句在 Windows 上不再写「需要系统有 notify-send」
+  （Windows 走托盘气泡），新增 7 语言键 `settings.notify.hintWindows`（**574 → 575 键**，键集一致）。
+- **★ 启动竞态（真 bug，Linux 上同样存在）**：外壳的 `hello` 和首页的 `list`
+  会同时写引擎 `stdin`；`IOSink.flush()` 内部是 `addStream`，会把 sink「绑住」，
+  并发的那条 `writeln` 当场抛 `Bad state: StreamSink is bound to a stream`。
+  `list` 失败没人接，界面就**永远停在「正在识别…」**（Win 上约一半概率复现；
+  E: 机械盘慢时反而躲过）。修法：`ProcessTransport.writeLine` 串行化（写整行 + flush
+  一次只跑一个），协议与顺序不变；`_open` 补了兜底 catch，传输层异常落到错误页而不是吊死。
+- **Windows 单测从「编不过」到全绿**（这次跑出来的三处）：
+  - `src/flush.rs` 的 sysfs 测试带 `std::os::unix::fs::symlink`，Windows 上**编译失败** →
+    三个 Linux 专属测试加 `#[cfg(target_os = "linux")]`（11-05 修过、没跟着快照过来）。
+  - `src/report.rs` 抹家目录只看 `HOME`，Windows 上通常没有 HOME → `--no-paths` 等于没生效
+    → 改用 `paths::home()`（Windows 走 USERPROFILE），测试同步。
+  - `src/main.rs` 进度条字符按 `LANG` 判 UTF-8，Windows 上永远为假 → 一切成 `#-`
+    → Windows 直接用方块（那边的控制台走 UTF-16，跟 LANG 无关）。
+- **exe 文件属性**：Flutter 模板默认的 `com.example` / `yshjy_gui` 改成
+  `杨三海` / `杨三海解压` / MIT（11-05 修过、没跟着快照过来）。
+- **Windows 磁盘类型探测（设置页「并行任务数」下面那句）**：`hello.disk` 以前只读
+  `/proc/mounts` + `/sys/block/*/queue/rotational`，Windows 上永远 `unknown` →
+  界面只能显示「本机磁盘类型没探到」。新增外壳探针（bin 侧 `windows磁盘类型`，
+  `DeviceIoControl` + `IOCTL_STORAGE_QUERY_PROPERTY` 的
+  `StorageDeviceSeekPenaltyProperty`；lib 仍是 `forbid(unsafe_code)`，与内存探针同一套
+  注册模式）。本机实测 `hello.disk = solid`，设置页显示「固态硬盘 —— 可以试试 2 或 4」；
+  顺带把 `本机磁盘类型()` 的 HOME 回退改成 `paths::home()`（Windows 没有 HOME）。
+- **落盘检验在 Windows 上如实标成「暂不支持」**：`is_removable` / `wait_until_written_at`
+  都是 Linux 专属，以前开关能点但什么都不会发生。现在 Windows 上开关禁用，
+  文案改说「拔 U 盘前先安全弹出」（新增 `settings.flush.hintWindows`，7 语言，
+  **575 → 576 键**）；Linux 文案和行为不动。
+- **全面支持 Windows 专项审计（当晚，允许改核心）** —— 逐项验过并修掉：
+  - **ZIP 条目时间**：DOS 墙钟按本地时间看待，转 Unix 秒时少减了时区偏移，
+    解出来的文件整体 **+8 小时**（Windows 实测：源 18:50 → 解出次日 02:50；跟 7z 对照也差 8 小时）。
+    修完往返一致、与 7z 逐秒相同。**Linux 同一处 bug，一起修好。**
+  - **符号链接回退（Windows）**：tar / zip 里的链接条目在 Windows 上改成「按目标内容复制」；
+    原来 zip 路径把目标拼到**解压根**而不是**链接所在目录**（`dir/link → file.txt` 必失败），
+    tar 路径则直接跳过。现在两处都按 POSIX 语义相对链接目录解析，并记 SlowPath。
+  - **CLI 显示路径**：Windows `canonicalize` 带 `\\?\` 前缀，以前原样打印（用户以为路径坏了）；
+    现在只对显示去掉前缀。
+  - **`--report --no-paths`** 仍然提示「请加 --no-paths」→ 新增 7 语言
+    `cli.report_done_hidden`，已脱敏时换一句话。
+  - **外部语言包目录**只看 `HOME` → 改 `paths::home()`（Windows 上放的 `.toml` 语言包以前找不到）。
+- **收尾三笔（按参考项目补齐）**：
+  - **`--split` 产物现在能打开了**：`x.mp4.001/.002/…` 是整包按字节切的裸块，原来没有拼接逻辑。
+    识别层新增 `as_raw_slices`（参考 `refs/tech/对比-同名技术择优.md` §8：unar `XADZipParser.m:60`
+    的 `.zip.001` 命名规则）：按序拼成一条逻辑流 → 走普通 ZIP 定位。同时给 `as_7z_volumes`
+    补了**7z 魔数校验**，否则裸切分的伪装包会被误判成 7z。实测 `--list`、真解都对得上，
+    缺卷会明确报「分卷不齐」。
+  - **非法文件名字符**：按 `refs/tech/对比-安全与健壮性.md` §A3 补 `* ? < > " |` 六个字符
+    （7zip / PeaZip / XAD 三家一致），入库前就拒，原因码 `windows_invalid_char`；
+    与已有的保留名 / 冒号 / 尾随空格点同一套「Windows 安全名」策略。
+  - **RAR4 的 DOS 时间查过了，没有 +8 小时问题**：`rars` 的 `timestamp.rs` 对 `DosLocal`
+    先 `offset_for_local` 换算再转 Unix 秒（`system_time_to_dos_time` 的逆过程），
+    Windows 上取到的就是本地时间；`tests/data/rar_mtime_sample.rar` 的回归照过。
+- **拖放补齐（界面）**：首页原来就能拖（单文件→自动识别、多文件→队列）；**打包页原来不能拖**，
+  必须点「加文件 / 加文件夹」。现在打包页整页也能接：拖文件/文件夹进来直接进输入列表
+  （去重、没手动改过输出名就自动推），并给两页都加了 `acceptDrop` —— IndexedStack 里两页的
+  `DropTarget` 都铺满窗口，不按前台页关掉的话在打包页拖文件会被首页抢走（变成解压）。
+  顺带修输入列表标题只按 `/` 取文件名（Windows 的 `\` 路径会把整条路径当名字）。
+  新增 5 条 widget 测试（`home_drop_test.dart` / `pack_drop_test.dart`：从 `desktop_drop`
+  的 MethodChannel 灌真实拖放事件，覆盖命中、去重、非前台页不接）。
+- **审计到、但这次没动的**（已记 `docs/TODO.md`）：
+  - 托盘隐藏/恢复没有自动化实测（代码未改，靠原生实现）。
+- `docs/BUILD-Windows.md` 按实际重写；`docs/Windows-使用说明.txt` 版本更新。
+
+**验证**
+
+- 界面四屏（首页 / 预览 / 解压完成 / 设置）浅色 + 深色都截图看过；字体对比图证明
+  同一句「直接拖进这个窗口」笔画由细变实。
+- GUI 实解 `中文 文件名.mp4`（伪装 ZIP）：认出 5 个文件 402 KB → 全部解出
+  （中文目录、空文件、200 KB 二进制、空格文件名都对），封面切出。
+- **Windows 核心往返实测**：`ys` 打包 → 解回，字节逐个一致（中文名 / 空格 / 空文件 / 二进制），
+  mtime 一致；中文密码包可解；`--trash-source` 原包进回收站；自解压 exe 输入 `y` 后解出 4 个文件；
+  `--report --no-paths` 的 zip 里搜不到 `C:\Users\<用户名>`；4000 文件解到一半 kill，续跑补齐且无
+  `.yshjy-part` 残留；`.tar.gz` 中文名 + mtime 正确；308 字符长路径可解（本机 `LongPathsEnabled=1`）；
+  大小写同名（`UPPER.txt` / `upper.txt`）自动变成 `upper (1).txt`。
+- **GUI**：双击是空首页；「选择文件」→ 系统文件框 → 选中后进预览（实点）；解压完成弹 Windows
+  通知气泡（截图见 `D:\Work\yshjy-win\截图`）。
+- **启动竞态修完复测：同一份包连开 10 次，10 次都进预览页**（修之前约一半卡在识别）。
+- `flutter analyze` 干净；`flutter test` **432 全过 / 0 红 / 3 跳过**（Windows 上那条
+  `clipboard_path_test` 的 POSIX 路径断言已改成按平台）。
+- `cargo test` **439 过 / 1 ignored（lib）+ 41 过（bin）+ 2 doctests**，`cargo clippy --all-targets -D warnings` 干净。
+- 安装包：静默装到临时目录 → 文件齐（含运行库、两个引擎）→ 右键菜单指向新路径 →
+  快捷方式在 → 启动（空首页）+ 带参打开预览都正常 → 卸载后目录/注册表/快捷方式零残留。
+- **没验**：干净机器（无 VS / 无运行库）复验、老板肉眼验收、繁体/英文系统；
+  托盘隐藏/恢复与拖放入口（无自动化手段）。
+
+## [0.9.57] · 2026-11-05 —— 自己的应用图标 + 修好窗口图标
+
+用户原话：「我的这个应用一直没有图标帮我画一个吧」，接着补了一句关键判断：
+**「压缩软件不应该是看书侧面吗」** —— 对，书得书脊朝前，正面看封面看不出「一摞」。
+
+**做了什么**
+
+- 图标：一摞**书脊朝前**的书（下深青 / 中米白 / 上纯白），右侧露出书页切边，
+  最上面那本的书脊上压一个深色播放三角 —— 一眼是「一摞文件，装成了视频」。
+- 7 档尺寸（16/24/32/48/64/128/256）铺进 `gui/linux/icons/hicolor/*/apps/yshjy.png`；
+  Windows 的 `gui/windows/runner/resources/app_icon.ico` 同步替换。
+- 补 `gtk_window_set_icon_name(window, "yshjy")`（`gui/linux/runner/my_application.cc`）：
+  **此前 runner 里从来没有设过窗口图标**，所以任务栏 / Alt-Tab / 顶栏一直是系统默认齿轮；
+  桌面菜单里的图标由 `.desktop` 的 `Icon=` 管，跟窗口图标是两回事，缺了这行就只有菜单有图。
+
+**验证**
+
+- 装机图标与项目源 md5 一致（`821932ff…`），`gtk-update-icon-cache` 已刷新。
+- `nm -D /usr/lib/yshjy/gui/yshjy_gui` 里有 `U gtk_window_set_icon_name`，`objdump` 里 PLT 有该入口
+  —— 是查**编出来的二进制**，不是查源码（中途 `readelf` 把符号名截断，一度误判没编进去，特此留痕）。
+- `scripts/test-packages.sh` 37/37。
+
+## [0.9.56] · 2026-11-05 —— 设置页收拾干净 + 开源许可上线
+
+用户三句话引出这一版：「设置里面的主题…都不会变」「一大段话的那些能不能移动到关于里面」
+「我们用别人的东西关于里面是不是要带链接和介绍」。
+
+**修掉的 bug**
+
+- **主题选了不生效**：`settings_page.dart` 的下拉 `onChanged` 只改了页面局部变量 `_theme`，
+  `themeMode.value` 只在 `_save()` 里写 —— 所以不按保存就永远是旧主题，看着像坏的。
+  现在选完立刻生效（`theme_mode.dart` 头注释本来就是这么约定的，语言下拉也一样）。
+  先写了回归测试（`settings_theme_test.dart` 3 条），**首跑红**（expected light, actual system）证实是真 bug，再修。
+
+**页面收拾**
+
+- 「支持的格式」14×12 表与「快捷键」6 行表从设置页搬到关于页（新文件 `pages/reference_tables.dart`），
+  按用户要求**铺开不折叠**。设置页 907 → 714 行。
+- 保存按钮从列表中间的文字按钮，改成**右下角常驻的圆形浮动按钮**：
+  不再跟着内容滚动、`tooltip` 同时充当无障碍名；保存中换沙漏图标而**不用转圈**
+  （CircularProgressIndicator 是无限动画，会把 `pumpAndSettle` 卡到超时）。
+
+**开源许可（合规）**
+
+- `scripts/gen-third-party.py`：从 `cargo metadata --locked` 生成 190 个依赖
+  （名字 / 版本 / 许可证 / 仓库地址）到 `gui/assets/third_party.json`；支持 `--check`。
+  清单**脚本生成、不手写** —— 手抄的清单必过期（本项目在 man 页版本号、补全项数上都栽过）。
+- 关于页新增「开源许可」卡片：清单页（带搜索，190 个库）+ Flutter 自带的完整许可证文本页。
+- 仓库地址只有**可选中文本、点了不联网** —— 为一条许可链接引入联网能力，会破掉「完全离线」这条产品承诺，
+  清单页底部写明了「地址可复制，本软件不会自动打开网页」。
+- 「参考与致谢」单列 PeaZip / 7-Zip / NanaZip / RustDesk / LocalSend / hiddify / libarchive，
+  每条写明参考了什么，并声明**未使用其代码**。
+- 7 种语言各加 13 条（561 → **574 键**），键集合完全一致；`tests/all.sh` 加了 `--check` 防清单过期。
+- 测试：新增 `licenses_page_test.dart` 6 条、`about_tables_test.dart` 4 条；界面 **435 条全过**。
+
 ## [0.9.55] · 2026-11-04 —— 关于页加赞赏（微信赞赏码，本地图片、依旧不联网）
 
 用户提的「关于里面想加入赞赏，最好全球支持」。查证后**只做国内微信赞赏码**，海外不做 ——

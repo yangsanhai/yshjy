@@ -328,6 +328,10 @@ mod tests {
     }
 
     /// 造一棵假 sysfs，验「是不是移动设备」的两条判据
+    ///
+    /// 只在 Linux 跑：`device_is_removable` 的判据就是 sysfs，别的平台直接返回 None；
+    /// 这里还用了 unix symlink，Windows 上连编译都过不去（2026-11-05 就踩过）。
+    #[cfg(target_os = "linux")]
     #[test]
     fn 移动设备判定() {
         let root = std::env::temp_dir().join(format!("yshjy-sysfs-{}", std::process::id()));
@@ -373,6 +377,10 @@ mod tests {
     }
 
     /// 端到端：在真文件系统上等一次，应该 Done 且能收到读数
+    ///
+    /// 只在 Linux 跑：`wait_until_written_at` 的非 Linux 分支直接返回 Unsupported
+    ///（读不到 Dirty/Writeback，干等没有意义）。
+    #[cfg(target_os = "linux")]
     #[test]
     fn 等落盘能跑通() {
         let dir = std::env::temp_dir().join(format!("yshjy-flush-{}", std::process::id()));
@@ -390,6 +398,9 @@ mod tests {
     }
 
     /// 取消要立刻生效，不能把用户吊在那儿
+    ///
+    /// 只在 Linux 跑：非 Linux 在进循环之前就返回 Unsupported（见上一条）。
+    #[cfg(target_os = "linux")]
     #[test]
     fn 取消立刻返回() {
         let dir = std::env::temp_dir().join(format!("yshjy-flush-c-{}", std::process::id()));

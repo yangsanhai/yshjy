@@ -282,6 +282,12 @@ fn identify_inner(path: &Path, ctx: &UnpackCtx, 候选: &mut Vec<Candidate>) -> 
             volumes: as_rar_volumes(path),
         });
     }
+    // ②' 裸切分（`x.mp4.001/.002/…`）：拼成一条流后当普通 ZIP 找
+    //    本项目 `--split` 的产物、网盘按大小切的整包都走这里。7z 的裸切分
+    //    已在 ① 被魔数认走；这里只接「第一块不是 7z 头」的其余情况。
+    if let Some(volumes) = as_raw_slices(path) {
+        return Ok(Target::ZipSplit { volumes });
+    }
     // ③ 单流 / TAR
     if let Some(d) = sniff_stream(path) {
         let packed = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
@@ -775,9 +781,14 @@ fn sniff_stream(path: &Path) -> Option<extract_stream::Detected> {
     extract_stream::detect(&head)
 }
 
+/// 7z 的文件头魔数（`37 7A BC AF 27 1C`）
+const 七Z魔数: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
+
 /// 判断是不是 7z（含分卷），是的话返回完整的分卷列表
 ///
-/// 支持 `x.7z` / `x.7z.001` / `x.001` 三种形式
+/// 支持 `x.7z` / `x.7z.001` / `x.001` 三种形式。
+/// **编号形式必须第一块真是 7z 头** —— 否则「裸切分的伪装包」（`x.mp4.001`）
+/// 也会被当成 7z 抢走，用户看到的是「这不是 7z」，而它本来是 ZIP 分片。
 pub fn as_7z_volumes(path: &Path) -> Option<Vec<PathBuf>> {
     let name = path.file_name()?.to_string_lossy().to_string();
     let lower = name.to_lowercase();
@@ -790,6 +801,16 @@ pub fn as_7z_volumes(path: &Path) -> Option<Vec<PathBuf>> {
     // 分卷：按序号往后找，序号断了就停
     let (base, _num, width) = split_volume_name(&name)?;
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    {
+        use std::io::Read;
+        let first = dir.join(format!("{base}{:0width$}", 1, width = width));
+        let mut head = [0u8; 6];
+        let mut f = std::fs::File::open(&first).ok()?;
+        f.read_exact(&mut head).ok()?;
+        if head != 七Z魔数 {
+            return None;
+        }
+    }
     let mut vols = Vec::new();
     for i in 1..=9999u32 {
         let cand = dir.join(format!("{base}{i:0width$}"));
@@ -799,6 +820,40 @@ pub fn as_7z_volumes(path: &Path) -> Option<Vec<PathBuf>> {
             break;
         } else {
             return None; // 第一块都不在，说明不是分卷
+        }
+    }
+    if vols.is_empty() { None } else { Some(vols) }
+}
+
+/// 裸切分：`x.mp4.001` / `.002` / …（整包按字节切开，拼起来才是原文件）
+///
+/// 与 7z 分卷的界线：7z 的第一块以 7z 魔数开头，[`as_7z_volumes`] 会先认走；
+/// 这里接住**其余任意内容**的裸切分 —— 本项目 `--split` 打出来的就是这种，
+/// 网盘按大小切的整包也是这种。拼成一条流后交给 ZIP 定位，和普通包同一条路。
+///
+/// 只认三位以上编号（`.001` 起）：两位的 `.01` 太容易误伤普通文件。
+fn as_raw_slices(path: &Path) -> Option<Vec<PathBuf>> {
+    let name = path.file_name()?.to_string_lossy().to_string();
+    let (base, _num, width) = split_volume_name(&name)?;
+    if width < 3 {
+        return None;
+    }
+    // 7z 的裸切分有专门识别；坏掉的 7z 也别在这里被当成 ZIP 分卷报错
+    if base.to_ascii_lowercase().ends_with(".7z") {
+        return None;
+    }
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let first = dir.join(format!("{base}{:0width$}", 1, width = width));
+    if !first.exists() {
+        return None;
+    }
+    let mut vols = Vec::new();
+    for i in 1..=9999u32 {
+        let cand = dir.join(format!("{base}{i:0width$}"));
+        if cand.exists() {
+            vols.push(cand);
+        } else {
+            break;
         }
     }
     if vols.is_empty() { None } else { Some(vols) }
@@ -815,8 +870,6 @@ pub fn as_7z_volumes(path: &Path) -> Option<Vec<PathBuf>> {
 /// 为什么值得做：改名分卷在网盘分享里很常见（原名带 .001 会被当成压缩包拦），
 /// 而按文件名规则（`.001`）永远认不出来。
 pub fn guess_renamed_volumes(path: &Path) -> Option<Vec<PathBuf>> {
-    const 七Z魔数: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
-
     let name = path.file_name()?.to_string_lossy().to_string();
     // 拆出 (主干, 扩展名带点)
     let (stem, ext) = match name.rfind('.') {
@@ -1774,6 +1827,44 @@ mod tests {
             std::fs::read(out.join("说明.txt")).unwrap(),
             "里面有东西".as_bytes()
         );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    /// 裸切分（本项目 `--split` 的产物）：`包.mp4.001/.002/.003` 拼起来才是原包
+    ///
+    /// 这条是「打包说支持分卷、解压却打不开」的回归闸门。
+    #[test]
+    fn 裸切分的伪装包能认出并解开() {
+        let dir = scratch("rawsplit");
+        let p = fake_mp4_zip(&dir);
+        let bytes = std::fs::read(&p).unwrap();
+        let a = bytes.len() / 3;
+        let b = bytes.len() * 2 / 3;
+        let base = dir.join("切片.mp4");
+        std::fs::write(format!("{}.001", base.display()), &bytes[..a]).unwrap();
+        std::fs::write(format!("{}.002", base.display()), &bytes[a..b]).unwrap();
+        std::fs::write(format!("{}.003", base.display()), &bytes[b..]).unwrap();
+
+        let ctx = UnpackCtx::quiet(1);
+        let first = PathBuf::from(format!("{}.001", base.display()));
+        let t = identify(&first, &ctx).unwrap();
+        assert!(
+            matches!(t, Target::ZipSplit { .. }),
+            "应当认成裸切分（ZipSplit），实际 {t:?}"
+        );
+
+        let out = scratch("rawsplit_out");
+        let opts = BatchOptions {
+            encoding: None,
+            dest: Some(out.clone()),
+            smart_dir: false,
+            ..Default::default()
+        };
+        let sink: Arc<dyn EventSink> = Arc::new(NullSink);
+        let o = run_job(&Job::new(1, first, 0), &opts, &sink, &CancelToken::new());
+        assert_eq!(o.outcome, Outcome::Success, "{:?}", o.stats);
+        assert!(out.join("游戏/pak.dat").exists(), "裸切分里的文件应当解出来");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&out);
     }
