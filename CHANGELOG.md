@@ -2,6 +2,42 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.58] · 2026-11-08 —— 打包页能拖了 + ZIP 时间修好 + 裸分卷能开（已装机，用户验收通过）
+
+这一版把 Windows 那轮改动（含共享逻辑）落到 Linux 装机版上，并把版本号从 0.9.57 升位到
+0.9.58 —— 否则同号重装分不清跑的是新旧哪一版。
+
+**用户可感知的变化**
+- **打包页支持拖放**（★本轮重点）：整页接收，文件/文件夹拖进来直接进输入列表（去重 +
+  自动推输出名），两页按前台页开关 `acceptDrop`，不会互相抢。
+- **ZIP 里解出的文件时间不再 +8 小时**：DOS 墙钟转 Unix 秒时补上本地时区偏移，与 `7z x`
+  逐秒相同，打包再解回也一致（Linux 上原来是同一个 bug）。
+- **`--split` 的裸分卷（`x.mp4.001/.002/…`）能打开了**：先 `--list` 再真解都行，缺卷明确报
+  「分卷不齐」；编号形式要第一块真是 7z 头才认成 7z（原来只看文件名会误判）。
+- **包内含 Windows 非法字符 `* ? < > " |` 的条目被拒**（reason=`windows_invalid_char`），
+  与既有的保留名/冒号/尾随空格同一套策略。
+- **修掉启动竞态**：外壳 `hello` 与首页 `list` 并发写引擎 stdin 时，`flush()` 绑住 sink →
+  界面可能永远停在「正在识别…」；`writeLine` 已串行化，`_open` 补兜底 catch。
+- 顺带：`HOME` → `paths::home()`、Windows 进度条字符、CLI 去掉 `\\?\` 前缀、
+  `--report --no-paths` 已脱敏时不再劝你加 `--no-paths`、符号链接按 POSIX 语义回退。
+- AppStream 补了 0.9.58 的 `<release>` 条目（`data/…metainfo.xml`）。
+
+**发版与装机（全真跑）**
+- 出包链：`flutter build linux --release` → `bump-version.py 0.9.58`（11 处/8 文件，`--check` 全一致）
+  → `release.sh`（常用版 + 全能版 tar.gz 各 4.2M）→ `build-deb.sh`（`dist/yshjy_0.9.58_amd64.deb` 11M）
+  → `test-packages.sh` **37 通过 / 0 失败**
+- 门禁：`cargo test` **448 通过 / 1 忽略** + 33 + 2 doctests、`clippy -D warnings` 干净、
+  `flutter test` **440 通过 / 0 红**、`tests/all.sh` **62 通过 / 0 失败 / 5 跳过**（316 秒）
+- 装机六项：dpkg **0.9.58** ✔／`yshjy` 与 `yshys` 都是 0.9.58 ✔／菜单 **14 种格式** ✔／
+  `tests/pick.sh` **11 通过 0 失败** ✔／真打包→真解压（中文名 + 带空格路径 + 500KB 随机二进制，
+  3 个文件 sha256 逐个一致；mtime 差 1.8 秒属 ZIP 的 2 秒精度）✔／装机 `libapp.so` 与 deb 内
+  那份 md5 相同（`2bee6d04…`）✔
+- **真机拖放（用户亲手验）**：打开「杨三海解压」→ 底部「打包」→ 拖文件进去 → 输入列表出现、
+  输出名自动填上，用户确认「可以拖文件进去打包了」。
+
+> Windows 交付包（setup.exe / 绿色版 zip / CLI zip，sha256 三者全过）是同一天的
+> `dist-win/`，不进 Linux 安装包；Windows 侧的界面验收仍待老板肉眼过一遍。
+
 ## [0.9.57 · Linux 同步验收] · 2026-11-08 —— Windows 那轮改动搬回本机，全绿（未发版）
 
 来源：移动硬盘 `yshjy-20261106`（Windows 机上 11-07 收工的工作区，**没有 commit**）。

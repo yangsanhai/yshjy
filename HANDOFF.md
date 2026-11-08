@@ -1,5 +1,23 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-08 · 0.9.58 已出包并装机，用户验收通过 —— 当前没有欠账**
+>
+> **这一版装的是 0.9.58**（`dpkg -l yshjy` = 0.9.58，`yshjy` / `yshys` 两条命令都是 0.9.58）。
+> **用户可感知的变化**：打包页能拖文件了（★本轮重点，用户亲手验过「可以拖文件进去打包了」）、
+> ZIP 解出的时间不再 +8 小时、`--split` 的 `.001/.002` 裸分卷能打开、含 `* ? < > " |` 的条目被拒、
+> 启动不再卡「正在识别…」。
+>
+> **发版链（全跑过）**：`flutter build linux --release` → `bump-version.py 0.9.58`（11 处/8 文件）
+> → `release.sh`（两档 tar.gz 各 4.2M）→ `build-deb.sh`（`dist/yshjy_0.9.58_amd64.deb` 11M）
+> → `test-packages.sh` 37/37 → `sudo apt install` → 六项验收。
+>
+> **门禁**：`cargo test` 448 过/1 忽略 + 33 + 2 doctests、`clippy -D warnings` 干净、
+> `flutter test` 440 过/0 红、`tests/all.sh` 62 过/0 失败/5 跳过。详见 `CHANGELOG.md` 0.9.58 段。
+> AppStream 也补了 0.9.58 的 `<release>`。
+>
+> **剩下的只有 Windows 侧**：三个包（setup.exe / 绿色版 / CLI）sha256 全过、在 `dist-win/`，
+> 等老板在一台干净 Windows 上肉眼验收。Linux 侧这一轮没有欠账。
+
 > **2026-11-08 · Windows 那轮改动已同步回 Linux 并全绿（已提交，未发版）**
 >
 > 从移动硬盘 `yshjy-20261106` 搬回 50 个文件（10 个 Windows 机器相关生成物刻意不同步），
