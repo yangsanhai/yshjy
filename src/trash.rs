@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 回收站（DESIGN §17.2：解压完原包可以「移入回收站」，**永不 rm**）
 //!
 //! 平台分两路（审计 W3）：

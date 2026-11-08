@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 打包后处理：分卷 / 校验和 / 自动说明书（DESIGN §14.2 / §17.8）
 //!
 //! 放在打包核心之外：核心只管「拼出一个合法的伪装包」，这里管「交付形态」。

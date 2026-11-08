@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 引擎传输层：界面与引擎「怎么说话」的抽象
 //!
 //! 为什么要有这一层（DESIGN §18.1）：现在的实现是 `Process.start` 起一个子进程，

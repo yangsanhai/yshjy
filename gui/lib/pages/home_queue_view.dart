@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 批量解压队列（S13）—— 从 `home_page.dart` 抽出来的第一块。
 ///
 /// **为什么先抽这一块**：原文件 3117 行，其中 2976 行是同一个 State 类的实现，

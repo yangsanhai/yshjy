@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 剪贴板文本 → 路径列表（UI-SPEC §4b.6 的 `Ctrl+V 粘贴路径`）
 ///
 /// 为什么要单独一层纯函数：这一段的输入是「别人放进剪贴板的东西」，

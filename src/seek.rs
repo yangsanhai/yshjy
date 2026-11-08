@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 「这个位置能不能跳着读」—— 移动端 seek 三档（第三期 C）
 //!
 //! # 为什么需要

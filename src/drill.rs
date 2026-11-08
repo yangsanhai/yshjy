@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 嵌套包自动下钻（只下一层）
 //!
 //! 真实场景：网盘里下的「游戏.mp4」解开后是 `示例包.7z.001` + `示例包.7z.002`，

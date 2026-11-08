@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 挑选：预览之后只解用户勾的那部分
 //!
 //! # 为什么需要它（见 `docs/V0.5-ENGINE.md` §5）

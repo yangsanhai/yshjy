@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 断点续传：把「已经解完的条目」记在磁盘上，下次接着解
 //!
 //! # 解决什么

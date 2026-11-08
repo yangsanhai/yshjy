@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 救援模式：**目录表坏了也能重建文件列表**
 //!
 //! # 算法来源（综合参考项目，非自创）

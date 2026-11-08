@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 偏移窗口：把底层文件的 `[start, start+len)` 区间映射成逻辑位置 `0..len`
 //!
 //! # 为什么需要它

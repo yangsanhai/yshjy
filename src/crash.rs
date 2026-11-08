@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 崩溃兜底：程序意外炸掉时，留下能报障的现场
 //!
 //! # 为什么「完整应用」必须有这一层

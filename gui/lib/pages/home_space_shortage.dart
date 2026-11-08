@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 「空间不够」那张卡 + 三条出路 —— 从 `home_page.dart` 抽出来的第 8 块 A 段。
 ///
 /// 这一块的历史值得记：**以前这里是死路**。引擎连 `SPACE_SHORTAGE` 事件都不发

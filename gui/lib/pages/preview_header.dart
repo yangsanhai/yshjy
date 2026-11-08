@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 预览页顶部的两块小信息 —— 从 `home_page.dart` 抽出来的第 5d-2 第 3、4 段。
 ///
 /// 两块都是**纯展示、零回调**，各自只吃一个字段：

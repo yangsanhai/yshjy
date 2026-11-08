@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 把归档里记录的「时间戳 / 权限」还原到解出来的文件上
 //!
 //! # 为什么单开一个模块

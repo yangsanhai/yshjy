@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 import 'package:flutter/material.dart';
 
 import '../engine.dart';

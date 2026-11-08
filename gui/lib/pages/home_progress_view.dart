@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 解压进行中那一屏的三段 —— 从 `home_page.dart` 抽出来的第 6 块 B 段。
 ///
 /// 原来 `_progressView` 是一个 115 行的方法、直接读 14 个 State 字段。按段拆成三块之后

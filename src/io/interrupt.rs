@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 可中断读取：让"取消"能立刻生效
 //!
 //! # 为什么需要它（见 08-三层贯通审查 B1）

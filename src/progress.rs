@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 进度、取消与剩余时间估算
 //!
 //! # 设计（见 `docs/V0.5-ENGINE.md` §3）

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 引擎 API 层：一次请求 → 一次结果
 //!
 //! 为什么单独一层：`--serve`（管道）、C ABI（iOS/Android）、将来的其它外壳只是

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 // 预览页的初始界面状态 —— 引擎的 `list` 结果 → 界面字段（批 7c）
 //
 // 为什么抽出来（2026-11-01）：

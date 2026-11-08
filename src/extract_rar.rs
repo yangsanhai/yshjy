@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! RAR 解压（含加密、含分卷）
 //!
 //! # 读取方式（L1 批改造）

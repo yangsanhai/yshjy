@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 主页的四个纯函数 —— 从 `home_page.dart` 抽出来的第 10 块。
 ///
 /// 这些原来都是 `State` 的私有方法，看似「就几行」，实际全都**读着 State 字段**

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 预览页的「封面 / 内容」两张勾选卡 —— 从 `home_page.dart` 抽出来的第 5d-2 第 2 段。
 ///
 /// **为什么是「上下两张卡各带勾选」而不是两个按钮**（GUI-PLAN §5.2①，用户验收原话）：

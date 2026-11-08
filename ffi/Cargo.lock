@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "yshjy"
-version = "0.9.58"
+version = "1.0.0"
 dependencies = [
  "brotli",
  "bzip2-rs",
@@ -1667,7 +1667,7 @@ dependencies = [
 
 [[package]]
 name = "yshjy-ffi"
-version = "0.9.58"
+version = "1.0.0"
 dependencies = [
  "serde_json",
  "yshjy",

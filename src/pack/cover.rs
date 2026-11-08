@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 内置封面素材
 //!
 //! 打包（伪装）时当"外壳"用。用户没指定就用内置的 ——

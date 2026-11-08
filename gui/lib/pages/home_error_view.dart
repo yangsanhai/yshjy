@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 失败页的两段 —— 从 `home_page.dart` 抽出来的第 8 块 B/C 段。
 ///
 /// 失败页是这个项目最要紧的一屏：用户撞上它的次数远多于成功页（包坏了、密码错了、

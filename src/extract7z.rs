@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 7z 解压 —— 含**分卷虚接**
 //!
 //! # 为什么单独一个模块

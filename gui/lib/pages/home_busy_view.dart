@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 处理中（扫描 / 起引擎 / 收尾）的等待页 —— 从 `home_page.dart` 抽出来的第 4 块。
 ///
 /// 零状态依赖：只有一个 `text` 参数，所以它能独立存在、独立测。

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 // 解压请求参数 —— 界面状态 → 协议参数的**唯一翻译处**（批 7b）
 //
 // 为什么单独一个文件（2026-11-01）：

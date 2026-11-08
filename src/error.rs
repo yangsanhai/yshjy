@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 错误码体系（三层结果模型）
 //!
 //! # 设计原则（ARCHITECTURE.md §7 + 三层审查修正 1）

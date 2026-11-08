@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 空态拖放区 —— 从 `home_page.dart` 抽出来的第 3 块。
 ///
 /// 依赖只有三个：拖拽中标记（决定标题换不换那句话）+ 两个「选文件 / 选文件夹」回调。

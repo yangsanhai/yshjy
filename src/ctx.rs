@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 解压上下文：事件 / 进度 / 取消 三件套
 //!
 //! # 出处

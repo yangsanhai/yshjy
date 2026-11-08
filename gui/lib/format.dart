@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 字节数 → 人话（"1.23 GB" / "456.7 MB" / "789 KB" / "42 B"）
 ///
 /// 抽出来是因为同一段实现原来在三个页面里各写了一份

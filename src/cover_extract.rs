@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 封面分离：把伪装包里的「原版视频/图片」也交出来（DESIGN §3 / §17.5）
 //!
 //! 伪装包的结构是 `[封面区][压缩层]`：定位阶段已经算出了压缩层的真实起点

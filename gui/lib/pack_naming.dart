@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 打包页的**命名与路径规则**（纯函数，可单测）
 ///
 /// 为什么单独一个文件：这些函数原先散在 `pack_page.dart` 里当私有方法，

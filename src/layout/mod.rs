@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 归档结构解析：从文件里定位数据、反推真实偏移
 //!
 //! 这一层只做「读懂结构、算准偏移」，**不做解压**。

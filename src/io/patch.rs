@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 补丁窗口 —— 读取时「就地改字节」，**绝不改动磁盘上的文件**
 //!
 //! # 用途

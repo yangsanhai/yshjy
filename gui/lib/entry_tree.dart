@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 // 包内目录树：**纯 Dart，不 import Flutter**，所以 `flutter test` 能直接测。
 //
 // 为什么不放引擎：引擎只给「带完整路径的平铺清单」，树是纯展示派生数据；

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 解压引擎 —— 把「定位」与「解码」彻底解耦
 //!
 //! # 设计（综合参考项目调研的结论）

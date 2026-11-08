@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 多语言（i18n）—— 界面文案与翻译
 //!
 //! # 为什么不引 fluent / gettext，自己写

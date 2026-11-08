@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 外部工具检测（**可选增强，不是依赖**）
 //!
 //! # 用户定下的原则（2026-10-16）
