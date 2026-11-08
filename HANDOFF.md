@@ -1,5 +1,29 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-11 · 移动硬盘同步完成 —— 盘上 6 个安卓提交已并入本机，Linux 侧只剩「重出包 + 重装」**
+>
+> 本机 HEAD 现在是「盘上 `886f913` + 一笔 `fix(signature)` 死代码修复」。盘上工作区当时零改动，两边没有文件级覆盖。
+>
+> **盘上带回来的产物（5 份 sha256 逐个校验通过）**：
+> `dist-win/`（setup.exe 15.1M、绿色版 zip 19.6M、CLI zip 7.3M）、
+> `dist-android/`（arm64 23.1M、armv7 14.6M）；已拷回本机同名目录，`.gitignore` 已挡，不入库。
+>
+> **当前唯一欠账 = Linux 1.0.0 重出包 + 重装**：
+> - 装机的 deb 是 11-08 22:59 那份，**不含** `fix(signature)`，也**不含**批 0 的 `gui/lib` 目录重构 → 界面必须重编
+> - 顺序：把 `dist/` 里 1.0.0 旧产物挪走（`release.sh` 拒绝覆盖同版本）→ `flutter build linux --release`
+>   → `release.sh` → `build-deb.sh` → `test-packages.sh`（期望 37/37）→ `tests/all.sh`（期望 62 通过 / 0 失败 / 5 跳过）
+>   → `sudo apt install ./dist/yshjy_1.0.0_amd64.deb` + 六项验收
+>
+> **Windows 侧**：1.0.0 三件套已出、老板已装机验收通过。但盘上 `dist-win/` 是 21:42 编的，
+> 批 0 目录重构（22:06）在它之后 —— 那份界面对应重构前的代码（行为等价，只是目录结构不同）。
+> 要不要用当前源码把 Windows 包重编一遍，等老板拍板。
+>
+> **安卓侧**：可装 APK + 真机（Redmi K70）全链路验收通过；剩两笔都不影响用：
+> 长按「打开方式」进 App 的 intent-filter、Android 10 以下存储分支未真机验。
+>
+> **GitHub 上架前**：脱敏只剩 13 处 `/home/user`（8 个文件，`grep -ro` 实测）；
+> `refs/analysis` 要单独确认不进库。
+
 > **2026-11-10 夜 · 📱 安卓版从零到可安装 APK（在 Windows 机上做，真机 Redmi K70 冠军版验收）**
 >
 > **完成度**：方案里 6 个批次全部落地，真机跑通「选包 → 预览 → 解压 → 导出」全链路。
