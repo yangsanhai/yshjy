@@ -13,9 +13,6 @@
 /// 作者（与 `Cargo.toml` 的 authors、LICENSE 保持一致）
 pub const 作者: &str = "yangsanhai";
 
-/// 项目标识
-pub const 项目: &str = "yshjy（杨三海解压）";
-
 /// 许可证标识（SPDX）
 pub const 许可: &str = "MIT";
 
@@ -30,6 +27,10 @@ pub const 署名行: &str = "yshjy · MIT License · Copyright (c) 2026 yangsanh
 ///
 /// 注意：删掉它本身不违法（MIT 允许改），但同时抹掉源码里的
 /// `SPDX-License-Identifier` / `Copyright` 头就违反 MIT 条款了 —— 这才是可举证的点。
+///
+/// `allow(dead_code)`：它**故意**不被任何代码引用（引用了就等于打印/使用它），
+/// 存活靠 `#[used]`。关掉这条 lint 是真实的意图说明，不是掩盖警告。
+#[allow(dead_code)]
 #[used]
 pub static 溯源标记: &str =
     "yshjy|MIT|Copyright (c) 2026 yangsanhai|github.com/yangsanhai|original-author-marker";
