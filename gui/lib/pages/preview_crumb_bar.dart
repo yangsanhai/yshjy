@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 预览页的面包屑路径条 —— 从 `home_page.dart` 抽出来的第 5a 块。
 ///
 /// **为什么是面包屑不是下拉框**（调研 07:616-631 / :682）：

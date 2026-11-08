@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 自动抓解压码 —— 从旁边的「说明.txt」里把密码找出来
 //!
 //! # 为什么做这个

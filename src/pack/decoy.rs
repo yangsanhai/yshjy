@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 干扰数据 / 假签名（第三期 B）
 //!
 //! 目的：让产物像业界隐写工具（隐写者 / Steganographier）做出来的那样「难啃」——

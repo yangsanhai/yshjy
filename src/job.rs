@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 单任务编排：一个文件从「认出是什么」到「解出来」的完整流程
 //!
 //! # 为什么编排必须在引擎里（台账 `7zip-工程层.md` §7.7）

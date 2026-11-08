@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 平台路径与「打开目录」——界面侧唯一的一份
 //!
 //! 为什么要有它：之前 4 个文件各自写 `$HOME/.local/state/yshjy`，等于把界面

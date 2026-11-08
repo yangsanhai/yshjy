@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 界面文案的多语言（T14）
 ///
 /// # 设计取舍（写清楚，下一轮别推翻重来）

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 预览页的三个小零件 —— 从 `home_page.dart` 抽出来的第 5d-1 步。
 ///
 /// 为什么先抽这三个：`_previewView` 主体（325 行）要传 25 个参数才能搬，

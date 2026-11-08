@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 分段虚接：把多个分散的数据段"拼"成一条连续流
 //!
 //! # 应对的场景（见 04-变态场景验证 E3）

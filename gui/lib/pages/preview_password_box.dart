@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 预览页的解压码输入区 —— 从 `home_page.dart` 抽出来的第 5d-2 第 1 段。
 ///
 /// **为什么在预览阶段就问密码**（2026-10-30 用户真机反馈的原话）：

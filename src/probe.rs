@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 文件类型探测 —— 「你给我的是啥文件」
 //!
 //! # 为什么需要它

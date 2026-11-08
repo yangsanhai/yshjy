@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 预览：**不解压**就把包里有什么列出来
 //!
 //! # 为什么它很重要（界面 S3 的数据源）

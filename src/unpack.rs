@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 统一解压器接口 —— 「加一个格式只改一处」的地基
 //!
 //! # 为什么要有这一层

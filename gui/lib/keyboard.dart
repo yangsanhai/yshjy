@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 桌面键盘操作 —— 键位判定的**唯一真源**（T11 无障碍 · 键盘那一半）
 ///
 /// # 键位从哪来（一个都不自己拍）

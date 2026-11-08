@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! I/O 抽象层
 //!
 //! 三个关键包装器（见 docs/ARCHITECTURE.md §5 与 08-三层贯通审查 B1/B4）：

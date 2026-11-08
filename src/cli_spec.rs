@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! CLI 选项表 —— **唯一真源**（2026-10-28 新增，验收见 `docs/CLI-GUI-PLAN.md` §1）
 //!
 //! ## 为什么要有这个文件

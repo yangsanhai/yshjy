@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 块缓存：给「不能随便 seek」的源套上 `Read + Seek`（第三期 C）
 //!
 //! # 它解决什么

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 // 文件挑选：对话框实现 + 「挑完之后干什么」的判断（批 7d）
 //
 // 为什么单独一层（2026-11-01）：

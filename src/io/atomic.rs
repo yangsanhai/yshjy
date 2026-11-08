@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 解压落盘的「原子写入」守卫
 //!
 //! # 为什么需要它（阶段 0 体检 T9-P1 / T8-P6 的修复）

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 批量队列：给一堆文件排队处理，一个坏了不影响其余
 //!
 //! # 为什么这一层必须单独做（见 `docs/V0.5-ENGINE.md` §6）

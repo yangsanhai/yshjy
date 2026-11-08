@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 码 → 人话（D21 / N1）
 ///
 /// 规矩：**引擎只给码，外壳查文案**。这个文件就是「外壳那一份表」。

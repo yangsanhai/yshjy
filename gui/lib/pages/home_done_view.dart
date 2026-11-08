@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 单个文件解压完的完成屏 —— 从 `home_page.dart` 抽出来的第 7 块。
 ///
 /// **别和第 2 块的 `BatchDoneView` 搞混**：那个是「整批跑完」的总账（横向列表、逐项成败），

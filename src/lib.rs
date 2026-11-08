@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! yshjy 引擎（杨三海解压）
 //!
 //! # 设计约束（见 docs/ARCHITECTURE.md）
@@ -49,6 +51,7 @@ pub mod safety;
 pub mod seek;
 pub mod scan;
 pub mod select;
+pub mod signature;
 pub mod tools;
 pub mod trash;
 pub mod unpack;

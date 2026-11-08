@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 批量解压完成卡（Sunpack 三段式：结果标题 / 量化副标题 / 直达按钮）
 /// —— 从 `home_page.dart` 抽出来的第 2 块。
 ///

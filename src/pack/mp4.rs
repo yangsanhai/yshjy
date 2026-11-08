@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! MP4（ISO BMFF）原子解析 —— 只做打包布局 L4 需要的那一小块
 //!
 //! # 这个模块只回答三个问题

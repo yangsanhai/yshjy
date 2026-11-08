@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 引擎事件流（引擎 → 外壳）
 //!
 //! # 为什么要有事件（见 `docs/V0.5-ENGINE.md` §2）

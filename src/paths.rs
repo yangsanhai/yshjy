@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 跨平台路径：状态目录 / 主目录
 //!
 //! 为什么单独一个模块：崩溃日志（`crash.rs`）和诊断包（`report.rs`）各写过一份

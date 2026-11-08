@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 「正在等系统把临时文件落盘」那一屏 —— 从 `home_page.dart` 抽出来的第 6 块 A 段。
 ///
 /// 这一屏只在**解压完、但磁盘还在慢慢写**时出现（机械盘上尤其明显，用户报过

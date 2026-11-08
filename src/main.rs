@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! yshjy 命令行 —— 「杨三海解压」
 //!
 //! 设计原则（见 `docs/CLI-SPEC.md`）：
@@ -106,6 +108,10 @@ fn 版本信息() -> String {
         },
         &[],
     ));
+    s.push('\n');
+    // 署名行（不翻译）：MIT 要求分发的副本里带版权声明，这是最容易被看到的一处。
+    // 另一半在 `src/signature.rs` 的隐藏溯源标记里（不打印，但 strings 搜得到）。
+    s.push_str(yshjy::signature::署名行);
     s.push('\n');
     s
 }

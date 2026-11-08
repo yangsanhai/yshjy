@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! `--pick`：全屏勾选要解哪些条目（2026-10-28）
 //!
 //! ## 为什么不手写

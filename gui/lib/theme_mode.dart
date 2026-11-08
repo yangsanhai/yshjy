@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 import 'package:flutter/material.dart';
 
 /// 全局主题模式（设置页切换后立刻生效，不用重启）

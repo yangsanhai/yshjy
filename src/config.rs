@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 配置与密码本（见 docs/BACKEND-SPEC.md §2）
 //!
 //! # 为什么自己算路径、不引 `directories`

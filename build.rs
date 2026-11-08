@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 构建脚本：把 `locales/*.toml` 嵌进二进制
 //!
 //! **为什么要 build.rs 而不是手写 `include_str!` 列表**：

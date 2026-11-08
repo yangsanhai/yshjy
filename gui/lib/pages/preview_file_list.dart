@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 预览页的文件清单（表头 + 卡片 + 滚动条 + 每一行）—— 从 `home_page.dart` 抽出来的
 /// 第 5b/5c 块（`_fileList` + `_entryRow` 合并）。
 ///

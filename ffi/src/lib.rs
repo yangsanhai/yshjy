@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 杨三海解压引擎的**稳定 C ABI**（v1）
 //!
 //! 为什么单独一个 crate 而不是塞进 `src/`：引擎本体是 `#![forbid(unsafe_code)]`，

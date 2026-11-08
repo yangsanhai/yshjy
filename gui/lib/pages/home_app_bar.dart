@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 主页顶部那条 AppBar —— 从 `home_page.dart` 抽出来的第 9 块（A 段）。
 ///
 /// 只抽 AppBar、**不抽 `_scaffold` 和 `_body`**：那两个是骨架 + 相位分派，

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! `--serve`：把引擎包成「一行一个 JSON」的双向管道
 //!
 //! 契约见 `docs/PROTOCOL.md`。这一层存在的唯一目的：

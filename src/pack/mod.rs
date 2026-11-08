@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 伪装打包 —— 把压缩包藏进视频 / 图片里
 //!
 //! 与「解压」方向相反。布局由数据表驱动，实测淘汰的布局（L5 分散多段 / L6 前后加垃圾）不提供。

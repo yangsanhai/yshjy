@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 诊断包 —— `--report` 一键收集报障信息（BACKEND-SPEC §4 的落地）
 //!
 //! # 为什么需要它

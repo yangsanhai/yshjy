@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 偏移修复 —— 坏包能被解开，很多时候只是**头部几个字节写错了**
 //!
 //! # 思路（综合参考项目）

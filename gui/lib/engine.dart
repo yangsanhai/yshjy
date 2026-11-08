@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 引擎客户端 —— 与 `yshjy --serve` 说话的那一层
 //!
 //! 设计原则（见仓库 docs/PROTOCOL.md）：

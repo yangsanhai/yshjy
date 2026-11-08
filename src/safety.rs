@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! 安全护栏（内置，不可绕过）
 //!
 //! 见 docs/ARCHITECTURE.md §8 与 06-工程与设计审查 A4。

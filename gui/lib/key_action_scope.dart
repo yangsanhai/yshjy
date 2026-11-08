@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 /// 「这块界面认哪些键」的通用外壳
 ///
 /// 用法：把一屏包起来，给它一张「动作 → 回调」表。

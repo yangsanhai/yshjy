@@ -2,6 +2,42 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.0] · 2026-11-08 —— 第一次正式发布：署名、七语 README、中英双套截图
+
+0.9.x 是把功能做出来，1.0 是把它整理成"能发出去"的样子。功能没有大改，
+这一版做的是发布前必须具备的东西：让别人知道它是谁写的、凭什么相信它，
+以及一个能让人看懂的项目首页。
+
+**用户可感知的变化**
+- **七语言 README**：简体中文（默认）／繁體中文／English／日本語／한국어／Русский／Español，
+  每份都写清「为什么做这个项目、做了哪些功能、支持哪些格式、装哪个包」，顶部可互相切换。
+- **两套界面截图**（各 6 张：预览／打包／设置／完成／历史／关于）：
+  中文 6 张在 `data/screenshots/`，英文 6 张在 `data/screenshots/en-US/`。
+- 界面语言本来就是 7 种（0.9.39 起全部到位），这版把文档里「界面只有中文」这类
+  **过时说法全部清掉**，README 与设置页说法一致。
+- `yshjy --version` 末尾带署名行；关于页可查开源许可清单（离线）。
+
+**署名与溯源（MIT 要求保留版权声明）**
+- 102 个源文件统一加头：`SPDX-License-Identifier: MIT` + `Copyright (c) 2026 yangsanhai`
+  （`src/` 55 个、`ffi/src`、`gui/lib` 45 个、`build.rs`），由 `scripts/add-spdx.py`
+  批量写入与校验，并接入 `tests/all.sh` 当门禁（缺头即红）。
+- 新增 `src/signature.rs`：作者／项目／许可写死为编译期常量（不读构建机 git 配置，
+  谁用这份源码重编都带同一个名字），`--version` 打印
+  `yshjy · MIT License · Copyright (c) 2026 yangsanhai`；另有 `#[used]` 溯源标记
+  `yshjy|MIT|Copyright (c) 2026 yangsanhai|github.com/yangsanhai|original-author-marker`，
+  `strings` 可检索。**不是隐写水印，也不改任何解压产物**。
+
+**门禁（全真跑，非估算）**
+- `cargo test` **448 通过 / 1 忽略** + 33 + 2 doctests
+- `cargo clippy --all-targets -- -D warnings` 干净（零警告）
+- `flutter analyze` No issues；`flutter test` **440 通过 / 0 红**
+- `bash tests/all.sh` **62 通过 / 0 失败 / 5 跳过**（375 秒）
+- `python3 scripts/add-spdx.py` 预演模式 **102/102** 全有署名头
+
+**已知边界**
+- Windows 1.0 安装包无法在 Linux 上交叉编译，由老板在 Windows 机器上跑
+  `pwsh -File scripts\build-win.ps1` 生成；本机只出 Linux 三件套。
+
 ## [0.9.58] · 2026-11-08 —— 打包页能拖了 + ZIP 时间修好 + 裸分卷能开（已装机，用户验收通过）
 
 这一版把 Windows 那轮改动（含共享逻辑）落到 Linux 装机版上，并把版本号从 0.9.57 升位到

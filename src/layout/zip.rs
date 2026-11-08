@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yangsanhai（杨三海解压）
 //! ZIP / ZIP64 结构解析与**偏移反推**
 //!
 //! # 核心问题
