@@ -1,10 +1,18 @@
 #include "flutter_window.h"
 
+#include <dwmapi.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
 #include "utils.h"
 #include "resource.h"
+
+// Windows 10 1809 之前这个属性是 19；1903 起是 20。和 win32_window.cpp 保持一致，
+// 老 SDK 头文件里没有这个宏，就地兜底。
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -73,6 +81,26 @@ bool FlutterWindow::OnCreate() {
         } else if (call.method_name() == "quit_now") {
           // Dart 已取消引擎、收拾干净（见 tray.dart 的说明），这里真退
           QuitFromTray();
+          result->Success();
+        } else if (call.method_name() == "set_titlebar_dark") {
+          // 界面切主题时把系统标题栏也刷成同一个色调；参数 {"dark": bool}
+          const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+          bool dark = false;
+          if (args) {
+            auto it = args->find(flutter::EncodableValue(std::string("dark")));
+            if (it != args->end()) {
+              if (const auto* b = std::get_if<bool>(&it->second)) {
+                dark = *b;
+              }
+            }
+          }
+          BOOL enable = dark ? TRUE : FALSE;
+          DwmSetWindowAttribute(GetHandle(), DWMWA_USE_IMMERSIVE_DARK_MODE,
+                                &enable, sizeof(enable));
+          // 有些 Windows 版本改完属性不会立刻重画边框，强制刷一次
+          SetWindowPos(GetHandle(), nullptr, 0, 0, 0, 0,
+                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                           SWP_NOACTIVATE | SWP_FRAMECHANGED);
           result->Success();
         } else {
           result->NotImplemented();

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../engine.dart';
 import '../key_action_scope.dart';
+// KeyAction 枚举在这里（keyHelpRows 已随快捷键表搬去关于页，这个枚举还在用）
 import '../keyboard.dart';
 import '../l10n.dart';
 import '../notify.dart';
@@ -358,8 +359,14 @@ class _SettingsPageState extends State<SettingsPage> {
       handlers: {
         KeyAction.primary: _saving || !_loaded ? null : () => _save(),
       },
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+      // 保存按钮：右下角常驻的圆形按钮（2026-11-05 用户要求 —— 原来那个文字按钮
+      // 夹在列表中间、跟着滚动跑，既不好找也不好看）。
+      // 用 Stack 把 ListView 和按钮分开：按钮不随内容滚动，一直钉在右下角。
+      child: Stack(
+        children: [
+          ListView(
+            // 底部多留 88：不然滚到底时最后一节会被圆形按钮压住
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
       children: [
         Text(t('settings.title'), style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
@@ -382,7 +389,15 @@ class _SettingsPageState extends State<SettingsPage> {
             DropdownMenuItem(value: 'light', child: Text(t('settings.theme.light'))),
             DropdownMenuItem(value: 'dark', child: Text(t('settings.theme.dark'))),
           ],
-          onChanged: (v) => setState(() => _theme = v ?? 'auto'),
+          // 选完**立刻生效**（和下面「界面语言」下拉同一个规矩）。
+          // 以前只 `setState(_theme)`、把 `themeMode.value` 留到 `_save()` 里 ——
+          // 用户切了深色/浅色看不到任何变化，以为主题功能坏了（2026-11-05 真机反馈）。
+          // 回归：test/settings_theme_test.dart
+          onChanged: (v) {
+            final picked = v ?? 'auto';
+            setState(() => _theme = picked);
+            themeMode.value = parseThemeMode(picked);
+          },
         ),
         const SizedBox(height: 12),
         // 界面语言（T14）：选完**立刻生效**（不用等「保存」），保存只是记住选择。
@@ -471,7 +486,10 @@ class _SettingsPageState extends State<SettingsPage> {
           dense: true,
           title: Text(t('settings.notify')),
           subtitle: Text(
-            t('settings.notify.hint'),
+            // Windows 没有 notify-send（走托盘气泡），文案不能照抄 Linux
+            t(Platform.isWindows
+                ? 'settings.notify.hintWindows'
+                : 'settings.notify.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _notify,
@@ -493,11 +511,18 @@ class _SettingsPageState extends State<SettingsPage> {
           dense: true,
           title: Text(t('settings.flush')),
           subtitle: Text(
-            t('settings.flush.hint'),
+            // Windows 没实现落盘检验（下面 onChanged 也禁掉）：文案不能照抄 Linux
+            t(Platform.isWindows
+                ? 'settings.flush.hintWindows'
+                : 'settings.flush.hint'),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           value: _flushMovable,
-          onChanged: (v) => setState(() => _flushMovable = v),
+          // Windows 版没有这套落盘检验（is_removable 与等待逻辑都是 Linux 专属）：
+          // 开关直接禁用并说清楚，别让用户以为打开就生效。
+          onChanged: Platform.isWindows
+              ? null
+              : (v) => setState(() => _flushMovable = v),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -522,10 +547,12 @@ class _SettingsPageState extends State<SettingsPage> {
           onChanged: (v) => setState(() => _autoFromBook = v),
         ),
         const SizedBox(height: 6),
-        Text(
-          t('settings.flush.note'),
-          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-        ),
+        // 「关着也会提醒拔盘」只在 Linux 成立；Windows 那条路径根本不会跑
+        if (!Platform.isWindows)
+          Text(
+            t('settings.flush.note'),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
         DropdownButtonFormField<String>(
           initialValue: _closeAction,
           isExpanded: true,
@@ -546,20 +573,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ? 'settings.closeAction.hintWindows'
               : 'settings.closeAction.hintDefault'),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-        ),
-        const SizedBox(height: 14),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Tooltip(
-            // 键位就地提示（T11）：Enter = 保存（焦点不在输入框里时；
-            // 在输入框里按 Enter 属于输入框自己，不会被截走）
-            message: 'Enter',
-            child: FilledButton.icon(
-              onPressed: _saving || !_loaded ? null : _save,
-              icon: const Icon(Icons.save_outlined, size: 18),
-              label: Text(_saving ? t('settings.saving') : t('settings.save')),
-            ),
-          ),
         ),
         const SizedBox(height: 20),
         _section(t('settings.section.paths'), cs),
@@ -591,9 +604,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 18),
-        _section(t('settings.section.caps'), cs),
-        const _CapsTable(),
-        const SizedBox(height: 18),
+        // 「支持的格式」表已搬到关于页（2026-11-05 用户要求：那些不是设置）——
+        // 见 pages/reference_tables.dart 的 CapsTable
         _section(t('settings.section.perf'), cs),
         // 并行任务数（T17-2）：三档下拉。
         //
@@ -673,13 +685,31 @@ class _SettingsPageState extends State<SettingsPage> {
           value: _warnExec,
           onChanged: (v) => setState(() => _warnExec = v),
         ),
-        const SizedBox(height: 18),
-        // 快捷键说明（T11）：位置照 RustDesk 设置页 —— 放在最下面一节。
-        // 行数据来自 `lib/keyboard.dart` 的 keyHelpRows（和 keyActionFor 同一份真相），
-        // 这里只负责画，不另抄一份键位表。
-        _section(t('settings.section.keys'), cs),
-        const _KeysTable(),
+        // 「快捷键」表已搬到关于页（2026-11-05）—— 见 pages/reference_tables.dart 的 KeysTable
       ],
+      ),
+          Positioned(
+            right: 20,
+            bottom: 20,
+            child: Tooltip(
+              // 键位就地提示（T11）：Enter = 保存（焦点不在输入框里时；
+              // 在输入框里按 Enter 属于输入框自己，不会被截走）
+              message: 'Enter',
+              child: FloatingActionButton(
+                key: const ValueKey('settings-save'),
+                // 圆形按钮没有文字，tooltip 同时充当无障碍名字和悬停提示
+                tooltip: _saving ? t('settings.saving') : t('settings.save'),
+                onPressed: _saving || !_loaded ? null : _save,
+                // ⚠️ 不转圈：CircularProgressIndicator 是无限动画，会让 pumpAndSettle 等到超时
+                //    （本项目在设置页踩过这个坑）。保存很快，沙漏图标 + 禁用态足够。
+                child: Icon(
+                  _saving ? Icons.hourglass_top : Icons.save_outlined,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -710,190 +740,4 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
         trailing: action,
       );
-}
-
-/// 支持的格式表（T17-1：进页面直接显示，不再需要点按钮）
-///
-/// 为什么不是写死的：能力位只在引擎的 `Caps` 里（`InArchive::caps()`），
-/// 界面自己抄一份就等于第二本账 —— 引擎哪天改了能力，界面还在按老账本显示。
-/// 所以这里每次进设置页都问引擎要（协议 `hello.formats`），要不到就如实说读不到。
-///
-/// 2026-11-01 改成自动加载：以前要点一下「读取各格式能力」才出表格，用户的感觉像
-/// 「在查远程数据」；而且那行标题括号里写「问引擎要的，不是写死的」是说给开发者听的。
-/// 现在进页面就自动读 —— 走的是**已经握过手的传输层**（不是 spawn 子进程），
-/// 一次往返，代价可以忽略。
-class _CapsTable extends StatefulWidget {
-  const _CapsTable();
-
-  @override
-  State<_CapsTable> createState() => _CapsTableState();
-}
-
-class _CapsTableState extends State<_CapsTable> {
-  List<Map<String, dynamic>>? _rows;
-  String? _err;
-  bool _loading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    if (_loading) return;
-    setState(() {
-      _loading = true;
-      _err = null;
-    });
-    try {
-      // 走**传输层**问引擎（协议 `hello.formats`），不再 spawn 子进程跑 `--caps`：
-      // ① iOS 禁止 fork/exec，子进程这条路在手机端物理上跑不了（而 caps 表就是要给手机端看的）；
-      // ② 桌面端也省一次进程启动，还和「界面只依赖 EngineTransport」这条规矩保持一致。
-      final h = await EngineClient.instance.hello();
-      if (!mounted) return;
-      final raw = h['formats'];
-      if (raw is! List) {
-        // 老引擎（还没有 hello.formats）—— 如实说读不到，别假装是空表
-        setState(() {
-          _err = t('settings.caps.tooOld');
-          _rows = null;
-        });
-        return;
-      }
-      setState(() {
-        _rows = raw.map((e) => (e as Map).cast<String, dynamic>()).toList();
-      });
-    } catch (e) {
-      if (mounted) setState(() => _err = '$e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final rows = _rows;
-    if (rows == null) {
-      // 读不到就如实说，**不摆一排按钮** —— 只给一个「重试」小文字按钮。
-      // ⚠️ 这里不用 CircularProgressIndicator：转圈是无限动画，任何 pumpAndSettle
-      //    都会等到超时（设置页已经在别的测试里被 pump 过）。
-      if (_loading) {
-        return Text(
-          t('settings.caps.reading'),
-          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-        );
-      }
-      return Row(
-        children: [
-          Expanded(
-            child: Text(
-              _err == null
-                  ? t('settings.caps.tooOld')
-                  : t('settings.caps.error', {'reason': _err!}),
-              style: TextStyle(fontSize: 12, color: cs.error),
-            ),
-          ),
-          TextButton(
-            onPressed: _load,
-            child: Text(t('settings.caps.retry')),
-          ),
-        ],
-      );
-    }
-    // ⚠️ Dart 的标识符只能是 ASCII —— 中文变量名编译不过（Rust 可以，Dart 不行）
-    final capsLabels = <String, String>{
-      'encrypted': t('settings.caps.encrypted'),
-      'encrypted_names': t('settings.caps.encryptedNames'),
-      'split_volumes': t('settings.caps.splitVolumes'),
-      'selective': t('settings.caps.selective'),
-      'restores_mtime': t('settings.caps.restoresMtime'),
-      'can_create': t('settings.caps.canCreate'),
-    };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final r in rows)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 96,
-                  child: Text(
-                    // format / shape 都是机器标识（zip / volumes…），展示名在这里拼
-                    r['shape'] == 'volumes'
-                        ? '${r['format']}${t('settings.caps.volumesSuffix')}'
-                        : '${r['format']}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    [
-                      for (final e in capsLabels.entries)
-                        if (r[e.key] == true) e.value,
-                    ].join(' · '),
-                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// 快捷键表（T11）—— 只读，因为键位是 UI-SPEC 定死的、不做重映射。
-///
-/// ★ 行的来源是 `lib/keyboard.dart` 的 `keyHelpRows`，**不是**在这里手写一份 ——
-///   否则以后改了键、说明还停在旧键上，用户照着按没反应只会以为功能坏了。
-/// ★ 键名（Enter / Esc / Ctrl+E）不翻译：各国用户看到的物理键就是这几个字。
-class _KeysTable extends StatelessWidget {
-  const _KeysTable();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      key: const ValueKey('keys-table'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final r in keyHelpRows)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 84,
-                  child: Text(
-                    r.keys,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'monospace',
-                      color: cs.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(t(r.whatKey),
-                      style: const TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 8),
-        Text(
-          t('keys.note'),
-          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
 }

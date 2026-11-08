@@ -182,6 +182,7 @@ pick_prompt = "pick entries to extract (space to toggle · a for all · Enter to
 pick_no_tty = "❌ --pick needs an interactive terminal; in scripts use --select \"1,3,5\" instead"
 pick_cancelled = "(cancelled, nothing was done)"
 report_done = "✅ Diagnostic package created: {path}\n   (It contains no file contents and no passwords. Add --no-paths before sharing it publicly.)"
+report_done_hidden = "✅ Diagnostic package created: {path}\n   (No file contents or passwords; paths are already redacted by --no-paths)"
 report_failed = "❌ Failed to create the diagnostic package: {err}"
 no_target = "❌ No file given.\n\n   Usage: yshjy <file>\n   More:  yshjy --help"
 bad_jobs = "❌ --jobs needs a number, e.g. --jobs 2 (got {value})"

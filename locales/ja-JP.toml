@@ -179,6 +179,7 @@ pick_prompt = "展開する項目を選ぶ（スペースで切替 · a で全�
 pick_no_tty = "❌ --pick は対話端末で使ってください。スクリプトでは --select \"1,3,5\" を使ってください"
 pick_cancelled = "（キャンセルしました。何もしていません）"
 report_done = "✅ 診断パッケージを作成しました：{path}\n   （ファイルの中身とパスワードは含まれません。公開するときは --no-paths を付けてください）"
+report_done_hidden = "✅ 診断パッケージを作成しました：{path}\n   （ファイル内容とパスワードは含みません。パスは --no-paths で伏字済み）"
 report_failed = "❌ 診断パッケージの作成に失敗しました：{err}"
 no_target = "❌ 処理するファイルが指定されていません。\n\n   使い方：yshjy <ファイル>\n   詳細：yshjy --help"
 bad_jobs = "❌ --jobs には数値が必要です（例：--jobs 2）。受け取った値：{value}"

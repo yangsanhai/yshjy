@@ -14,6 +14,7 @@ import 'pages/pack_page.dart';
 import 'pages/settings_page.dart';
 import 'tray.dart';
 import 'l10n.dart';
+import 'theme_mode.dart';
 
 /// 托盘状态行的一次决策结果
 ///
@@ -114,8 +115,35 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _eventSub = _client.events.listen(_onEngineEvent);
     // 托盘「退出」：先让 Dart 收拾，再让原生真退（见 _onQuitRequest 的说明）
     Tray.onQuitRequest(_onQuitRequest);
+    // 标题栏深浅跟着界面主题走（Windows 专属；设置页切主题后立刻生效）
+    themeMode.addListener(_syncTitleBar);
     // 首帧之后再弹引导（initState 里直接 showDialog 会拿不到 Navigator）
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboarding());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncTitleBar();
+      _maybeOnboarding();
+    });
+  }
+
+  /// 把 Windows 标题栏的深浅同步成当前界面主题。
+  ///
+  /// 为什么单独做：标题栏是系统画的，Flutter 的 ThemeMode 管不到它；
+  /// 「跟随系统」时系统切换深浅色也得跟着变，所以还要接 didChangePlatformBrightness。
+  void _syncTitleBar() {
+    if (!Platform.isWindows) return;
+    final bool sysDark =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    final bool dark = switch (themeMode.value) {
+      ThemeMode.dark => true,
+      ThemeMode.light => false,
+      ThemeMode.system => sysDark,
+    };
+    Tray.setTitleBarDark(dark);
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    _syncTitleBar();
   }
 
   /// 第一次打开时的三步引导（只弹一次；标记写在 state 目录）
@@ -158,6 +186,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    themeMode.removeListener(_syncTitleBar);
     _eventSub?.cancel();
     // 撤掉退出回调：界面都没了，再收到「请退出」没人接得住，
     // 而且回调里会碰 _client / setState，打到废对象上会炸。
@@ -327,8 +356,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         initialFile: widget.initialFile,
                         onStatus: _setStatus,
                         autoStart: widget.bootstrapEngine,
+                        // 只有首页在前台时才接拖放：两页都是铺满整页的 DropTarget，
+                        // 不按前台页关掉的话，在打包页拖文件会被首页抢走。
+                        acceptDrop: _index == 0,
                       ),
-                      PackPage(onStatus: _setStatus),
+                      PackPage(
+                        onStatus: _setStatus,
+                        acceptDrop: _index == 1,
+                      ),
                       // 不能加 const：切界面语言时父级 rebuild，同一个 const 实例会被
                       // Flutter 判定为「没变化」而跳过重建 —— 历史页内容会停在旧语言。
                       // ignore: prefer_const_constructors

@@ -228,12 +228,36 @@ fn read_available_mem_mib() -> Option<u64> {
     None
 }
 
+/// 外壳注册的磁盘探针
+///
+/// 为什么绕这一道：Windows 问「这块盘要不要寻道」要 `DeviceIoControl`
+/// （unsafe），而本 crate 是 `#![forbid(unsafe_code)]` —— 和内存探针同一套做法：
+/// 碰系统 API 的活归 bin，启动时注册，`detect_disk_kind` 先问探针。
+/// Linux 不注册，继续走 `/proc/mounts` + `/sys`。
+/// 磁盘探针的函数签名（单独起名，避免 clippy 的 type_complexity）
+type 磁盘探针类型 = fn(&Path) -> Option<DiskKind>;
+
+static 磁盘探针: std::sync::RwLock<Option<磁盘探针类型>> = std::sync::RwLock::new(None);
+
+/// 注册平台磁盘探针（外壳启动早期调用；重复注册以后一次为准）
+pub fn 注册磁盘探针(f: 磁盘探针类型) {
+    if let Ok(mut g) = 磁盘探针.write() {
+        *g = Some(f);
+    }
+}
+
 /// 判断某路径所在磁盘是不是机械盘
 ///
 /// 做法：在 `/proc/mounts` 里找**最长的**匹配挂载点 → 得到设备名 →
 /// 查 `/sys/block/<dev>/queue/rotational`（1 = 机械，0 = 固态）。
+/// Windows 走外壳注册的探针（见 [`注册磁盘探针`]）。
 /// 任何一步失败都返回 `None`（调用方降级为 Unknown）。
 fn detect_disk_kind(path: &Path) -> Option<DiskKind> {
+    if let Ok(g) = 磁盘探针.read()
+        && let Some(f) = *g
+    {
+        return f(path);
+    }
     let abs = std::fs::canonicalize(path).ok()?;
     let mounts = std::fs::read_to_string("/proc/mounts").ok()?;
 

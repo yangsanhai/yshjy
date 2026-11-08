@@ -182,6 +182,7 @@ pick_prompt = "选要解的条目（空格勾选 · a 全选 · Enter 确认）�
 pick_no_tty = "❌ --pick 要在交互终端里用；脚本里请改用 --select \"1,3,5\""
 pick_cancelled = "（已取消，什么都没做）"
 report_done = "✅ 诊断包已生成：{path}\n   （不含你的文件内容与任何密码；要贴到公开的地方，请加 --no-paths 重新生成一份）"
+report_done_hidden = "✅ 诊断包已生成：{path}\n   （不含你的文件内容与任何密码；路径已按 --no-paths 脱敏）"
 report_failed = "❌ 生成诊断包失败：{err}"
 no_target = "❌ 没告诉我要处理哪个文件。\n\n   用法：yshjy <文件>\n   更多：yshjy --help"
 bad_jobs = "❌ --jobs 要写个数，比如 --jobs 2（收到 {value}）"

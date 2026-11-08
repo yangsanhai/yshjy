@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/平台-Linux%20%E5%8F%91%E5%B8%83%E7%BA%A7%20%7C%20Windows%20%E5%91%BD%E4%BB%A4%E8%A1%8C-2EC5CE)
-![状态](https://img.shields.io/badge/状态-v0.9.55%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
+![状态](https://img.shields.io/badge/状态-v0.9.57%20-%E8%A3%85%E6%9C%BA%E7%89%88-2ECC71)
 
 > **两个版本**
 > - **常用版**（文件名 `yshjy-*`）—— 日常下载会遇到的格式全都在，体积小、依赖少，**推荐装这个**
@@ -40,7 +40,7 @@
 
 ---
 
-## ✅ 现在就能用（v0.9.55）
+## ✅ 现在就能用（v0.9.57）
 
 ```bash
 # 解压（最简单，就这一行）
@@ -266,6 +266,12 @@ A：**绝不**。所有修复都在内存里做，磁盘上的源文件一个字
 ## ⚖️ 许可与免责
 
 本项目采用 [MIT 许可证](LICENSE)。
+
+用到的第三方开源库一共 **190 个**（Rust 依赖）加 Flutter / pub 包那一半，各自仍归各自的许可证
+（MIT / Apache-2.0 / BSD-3-Clause / Zlib / Unicode-3.0 等）。完整清单和许可证文本**就装在软件里**：
+「关于」页 → 「开源许可」→「查看开源库清单」/「查看完整许可证文本」。
+清单由 `scripts/gen-third-party.py` 从 `Cargo.lock` 自动生成（`tests/all.sh` 会核对它有没有过期），
+所以它跟实际编译用的依赖永远一致。**看这些内容不需要联网** —— 软件整体对外的承诺就是完全离线。
 
 **免责声明**：本工具仅供**个人备份与合法分享**使用。请勿用于规避法律法规或分发侵权内容。
 使用者应自行承担因使用本工具产生的一切后果。

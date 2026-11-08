@@ -31,7 +31,7 @@
 //!   外部包**只需写要覆盖的条目**，其余自动回退内置 —— 改一句话不用抄整个文件
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// 编译期嵌入的语言包（由 `build.rs` 扫描 `locales/*.toml` 生成）
 mod embedded {
@@ -326,8 +326,10 @@ fn load_external(code: &str) -> Option<Catalog> {
     {
         dirs.push(PathBuf::from(d));
     }
-    if let Some(home) = std::env::var("HOME").ok().filter(|s| !s.is_empty()) {
-        dirs.push(Path::new(&home).join(".config/yshjy/locales"));
+    // 走 paths::home()：Windows 没有 HOME（只有 USERPROFILE），
+    // 以前只认 HOME 的话用户放的语言包在 Windows 上永远找不到（Linux 行为不变）。
+    if let Some(home) = crate::paths::home() {
+        dirs.push(home.join(".config/yshjy/locales"));
     }
     // 便携 / 测试用：程序旁边的 locales/（也就是源码里的那份）
     dirs.push(PathBuf::from("locales"));

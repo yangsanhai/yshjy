@@ -4,9 +4,11 @@
 // 「记得这些按键在相关页面写上不然快捷按键别人也不知道」。
 //
 // 两条腿：
-//   ① 设置页有一张**只读**快捷键表（行来自 `lib/keyboard.dart` 的 keyHelpRows，
+//   ① 一张**只读**快捷键表（行来自 `lib/keyboard.dart` 的 keyHelpRows，
 //      和 keyActionFor 同一份真相 —— 改键时说明自动跟着变）
-//   ② 主按钮上就地写着键位（悬停可见），用户不用为了找一个键跑去设置页
+//      ⚠️ 2026-11-05 起这张表在**关于页**，不在设置页（用户要求：那些不是设置）。
+//      表本身的显示断言在 test/about_tables_test.dart，这里只校验数据源与翻译。
+//   ② 主按钮上就地写着键位（悬停可见），用户不用为了找一个键跑去关于页
 //
 // 参考项目：RustDesk 设置页有「Keyboard shortcuts」卡片（可重映射 → 进独立配置页）；
 // LocalSend / Keka / FileRoller 设置里没有快捷键页。我们键位固定，做成只读表最省一步。
@@ -43,7 +45,9 @@ void main() {
     expect(t('settings.section.keys'), '快捷键');
   });
 
-  testWidgets('设置页最下面那节能看到完整的按键表', (tester) async {
+  // 快捷键表本身在关于页 —— 显示断言见 test/about_tables_test.dart。
+  // 这条只留设置页自己的就地提示（T11 收尾：打包/设置两页接 Enter 时一起写的）。
+  testWidgets('设置页保存按钮上写着 Enter', (tester) async {
     final fake = FakeEngine();
     installFakeEngine(fake);
     // 和 settings_perf_widget_test 同样的隔离方式：视口给足（ListView 只构建可视区）
@@ -51,9 +55,13 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    bool ready() =>
-        find.text('zip').evaluate().isNotEmpty ||
-        find.text('重试').evaluate().isNotEmpty;
+    // 结束条件：保存按钮可用（页面配置读完）。格式表搬走后不能再用「zip 出现」当信号。
+    bool ready() {
+      final f = find.byKey(const ValueKey('settings-save'));
+      if (f.evaluate().isEmpty) return false;
+      return tester.widget<FloatingActionButton>(f).onPressed != null;
+    }
+
     await tester.runAsync(() async {
       await tester.pumpWidget(
           const MaterialApp(home: Scaffold(body: SettingsPage())));
@@ -64,15 +72,6 @@ void main() {
     });
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('keys-table')), findsOneWidget,
-        reason: '设置页没有快捷键表 —— 用户根本不知道能用键盘');
-    expect(find.text('快捷键'), findsOneWidget);
-    for (final r in keyHelpRows) {
-      expect(find.text(r.keys), findsWidgets,
-          reason: '${r.keys} 这一行没显示出来');
-    }
-    expect(find.text(t('keys.note')), findsOneWidget);
-    // 保存按钮上也得有就地提示（T11 收尾：打包/设置两页接 Enter 时一起写的）
     expect(find.byTooltip('Enter'), findsWidgets,
         reason: '设置页保存按钮没标 Enter');
   });

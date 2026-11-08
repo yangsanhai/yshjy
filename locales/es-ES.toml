@@ -179,6 +179,7 @@ pick_prompt = "elige qué entradas extraer (espacio para marcar · a para todas 
 pick_no_tty = "❌ --pick necesita un terminal interactivo; en scripts usa --select \"1,3,5\""
 pick_cancelled = "(cancelado, no se hizo nada)"
 report_done = "✅ Paquete de diagnóstico creado: {path}\n   (No incluye el contenido de tus archivos ni contraseñas. Para publicarlo usa --no-paths.)"
+report_done_hidden = "✅ Paquete de diagnóstico creado: {path}\n   (Sin contenido de archivos ni contraseñas; las rutas ya están ocultas por --no-paths)"
 report_failed = "❌ No se pudo crear el paquete de diagnóstico: {err}"
 no_target = "❌ No indicaste ningún archivo.\n\n   Uso: yshjy <archivo>\n   Más: yshjy --help"
 bad_jobs = "❌ --jobs necesita un número, p. ej. --jobs 2 (recibido {value})"

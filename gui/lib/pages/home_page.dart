@@ -119,6 +119,12 @@ class HomePage extends StatefulWidget {
   /// 不该出现的时候没出现」这两条都只能靠手点。
   final int? debugBatchCount;
 
+  /// 当前页是否接受拖放（IndexedStack 里别的页在前台时要关掉）。
+  ///
+  /// 为什么：`DropTarget` 是铺满整页的，而 IndexedStack 里**所有页都挂在树上**；
+  /// 不按前台页关掉的话，在打包页拖文件会被首页抢走（变成解压）。
+  final bool acceptDrop;
+
   /// 测试用：把界面置成「引擎已确认暂停」（生产代码永远 false）
   ///
   /// 单独一个口子的理由：真实暂停要等引擎发 `PAUSED` 事件，测试里没有引擎；
@@ -150,6 +156,7 @@ class HomePage extends StatefulWidget {
     this.debugBatchCount,
     this.debugPaused = false,
     this.debugEvents,
+    this.acceptDrop = true,
   });
 
   @override
@@ -944,6 +951,11 @@ class _HomePageState extends State<HomePage> {
       widget.onStatus?.call(t('home.identified', {'files': '${pv.fileCount}'}));
     } on EngineError catch (e) {
       _showError(e.code, e.note, e);
+    } catch (e) {
+      // 传输层异常（管道断了 / 写失败）也必须落到错误页：只认 EngineError
+      // 会把界面永远吊在「正在识别…」（2026-11-07 管道并发写撞到过）。
+      debugPrint('open failed: $e');
+      _showError('ENGINE_EXITED', t('engine.noteExited'));
     }
   }
 
@@ -1335,6 +1347,8 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     // 整个窗口都能拖进来（新手第一反应就是拖）
     return DropTarget(
+      // 只有首页在前台时才接拖放（见 [acceptDrop] 的说明）
+      enable: widget.acceptDrop,
       onDragEntered: (_) => setState(() => _dragging = true),
       onDragExited: (_) => setState(() => _dragging = false),
       onDragDone: (detail) {

@@ -88,4 +88,18 @@ class Tray {
       // 同上
     }
   }
+
+  /// 把 Windows 窗口标题栏刷成和界面同一个深浅色（Linux 没有这条，静默忽略）。
+  ///
+  /// 为什么要在 Dart 侧刷：标题栏是系统画的，界面切「深色」时它不会自己变，
+  /// 黑内容配白标题栏很割裂。原生侧只做 DwmSetWindowAttribute，时机由界面决定。
+  static Future<void> setTitleBarDark(bool dark) async {
+    try {
+      await _ch.invokeMethod<void>('set_titlebar_dark', <String, dynamic>{
+        'dark': dark,
+      });
+    } catch (_) {
+      // 同上：非 Windows 壳 / 测试环境没有原生实现
+    }
+  }
 }

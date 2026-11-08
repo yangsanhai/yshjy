@@ -179,6 +179,7 @@ pick_prompt = "압축을 풀 항목 선택 (스페이스로 선택 · a 전체 �
 pick_no_tty = "❌ --pick 은 대화형 터미널에서 사용하세요. 스크립트에서는 --select \"1,3,5\" 를 쓰세요"
 pick_cancelled = "(취소했습니다. 아무것도 하지 않았습니다)"
 report_done = "✅ 진단 패키지를 만들었습니다: {path}\n   (파일 내용과 비밀번호는 포함되지 않습니다. 공개할 때는 --no-paths를 붙이세요)"
+report_done_hidden = "✅ 진단 패키지가 생성되었습니다: {path}\n   (파일 내용과 비밀번호는 포함하지 않으며, 경로는 --no-paths로 가려졌습니다)"
 report_failed = "❌ 진단 패키지 생성 실패: {err}"
 no_target = "❌ 처리할 파일을 지정하지 않았습니다.\n\n   사용법: yshjy <파일>\n   자세히: yshjy --help"
 bad_jobs = "❌ --jobs 에는 숫자가 필요합니다 (예: --jobs 2). 받은 값: {value}"
