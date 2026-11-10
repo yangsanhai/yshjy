@@ -21,3 +21,7 @@ android/app/src/main/jniLibs/
 # Kotlin 编译器的错误日志（构建产物，不入库）
 android/.kotlin/
 **/.kotlin/
+
+# 发布签名（一次性生成，备份在 D:\Work\yshjy-win\签名备份；入库等于把钥匙公开）
+android/app/key.properties
+android/app/*.jks

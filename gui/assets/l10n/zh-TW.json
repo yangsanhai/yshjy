@@ -578,5 +578,11 @@
   "licenses.loadFailed": "讀不到授權清單：{reason}",
   "licenses.creditsHeader": "參考與致謝",
   "licenses.creditsNote": "下面這些專案沒有一行程式碼進入本軟體，只在解題時讀過它們的實作與文件。列出是出於「用了別人的思路要說清」。",
-  "licenses.copyHint": "位址可以直接選取複製。本軟體完全離線，不會自動開啟網頁。"
+  "licenses.copyHint": "位址可以直接選取複製。本軟體完全離線，不會自動開啟網頁。",
+  "mobile.export.done": "已匯出 {n} 個檔案到「下載/yshjy」",
+  "mobile.export": "匯出到系統「下載」",
+  "mobile.dest.default": "預設：解到 App 私有目錄",
+  "mobile.empty.title": "網盤下載的「.mp4 / .png」，其實是壓縮檔",
+  "mobile.export.fail": "匯出沒成功",
+  "mobile.empty.hint": "點下面的按鈕選檔案；認不出的格式也能試"
 }

@@ -43,6 +43,9 @@ class _MobileHomePageState extends State<MobileHomePage> {
 
   bool _busy = false;
   bool _needPassword = false;
+
+  /// 正在导出到系统下载目录
+  bool _exporting = false;
   final TextEditingController _pw = TextEditingController();
 
   /// 用户点过「换个位置」才有；null = 用默认（App 私有目录）
@@ -204,6 +207,28 @@ class _MobileHomePageState extends State<MobileHomePage> {
     });
   }
 
+  /// 把解压结果导出到系统「下载」目录
+  ///
+  /// 解压默认落在 App 私有目录（零权限），手机上文件管理器看不到；
+  /// 这里走 MediaStore 一条一条插，**不需要「所有文件访问」权限**就能写进
+  /// `Download/yshjy/…`（方案 C 路，见 docs/ANDROID-整体方案 §5）。
+  Future<void> _export(String dir) async {
+    setState(() => _exporting = true);
+    try {
+      final n = await const MethodChannel('yshjy/export')
+          .invokeMethod<int>('exportToDownloads', {'dir': dir, 'subDir': 'yshjy'});
+      _toast(t('mobile.export.done', {'n': '${n ?? 0}'}));
+    } catch (_) {
+      _toast(t('mobile.export.fail'));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
   // ── 界面 ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -239,7 +264,7 @@ class _MobileHomePageState extends State<MobileHomePage> {
       ),
       const SizedBox(height: 24),
       Text(
-        t('home.dropDesc'),
+        t('mobile.empty.title'),
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.bodyMedium,
       ),
@@ -252,7 +277,7 @@ class _MobileHomePageState extends State<MobileHomePage> {
       ),
       const SizedBox(height: 12),
       Text(
-        t('home.anyFormatHint'),
+        t('mobile.empty.hint'),
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.outline),
       ),
@@ -451,7 +476,7 @@ class _MobileHomePageState extends State<MobileHomePage> {
       Card(
         child: ListTile(
           leading: const Icon(Icons.folder_outlined),
-          title: Text(t('home.outDefault'), maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(t('mobile.dest.default'), maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(dest, maxLines: 2, style: const TextStyle(fontSize: 12)),
           trailing: IconButton(
             tooltip: t('home.copyHowtoBtn'),
@@ -510,9 +535,16 @@ class _MobileHomePageState extends State<MobileHomePage> {
       Card(
         child: ListTile(
           leading: const Icon(Icons.folder_outlined),
-          title: Text(t('home.outDefault')),
+          title: Text(t('mobile.dest.default')),
           subtitle: Text(dest, maxLines: 2, style: const TextStyle(fontSize: 12)),
         ),
+      ),
+      const SizedBox(height: 12),
+      FilledButton.tonalIcon(
+        onPressed: _exporting ? null : () => _export(dest),
+        icon: const Icon(Icons.download_outlined),
+        label: Text(t('mobile.export')),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
       ),
       const SizedBox(height: 16),
       FilledButton(onPressed: _reset, child: Text(t('home.again'))),

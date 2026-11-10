@@ -578,5 +578,11 @@
   "licenses.loadFailed": "ライセンス一覧を読み込めません：{reason}",
   "licenses.creditsHeader": "参考と謝辞",
   "licenses.creditsNote": "以下のプロジェクトのコードは本ソフトに一切含まれていません。問題解決の際に実装やドキュメントを読んだだけです。「他人のアイデアを使ったら明記する」という方針により記載しています。",
-  "licenses.copyHint": "アドレスは選択してコピーできます。本ソフトは完全オフラインで、自動的に Web ページを開くことはありません。"
+  "licenses.copyHint": "アドレスは選択してコピーできます。本ソフトは完全オフラインで、自動的に Web ページを開くことはありません。",
+  "mobile.export.done": "{n} 個のファイルを「ダウンロード/yshjy」へ書き出しました",
+  "mobile.export": "「ダウンロード」へ書き出す",
+  "mobile.dest.default": "既定：アプリ専用フォルダに展開",
+  "mobile.empty.title": "ネットストレージの「.mp4 / .png」は実は圧縮ファイル",
+  "mobile.export.fail": "書き出しに失敗しました",
+  "mobile.empty.hint": "下のボタンでファイルを選択。判別できない形式も試せます"
 }

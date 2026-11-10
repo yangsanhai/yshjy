@@ -578,5 +578,11 @@
   "licenses.loadFailed": "读不到许可清单：{reason}",
   "licenses.creditsHeader": "参考与致谢",
   "licenses.creditsNote": "下面这些项目没有一行代码进入本软件，只在解题时读过它们的实现与文档。列出是出于「用了别人的思路要说清」。",
-  "licenses.copyHint": "地址可以直接选中复制。本软件完全离线，不会自动打开网页。"
+  "licenses.copyHint": "地址可以直接选中复制。本软件完全离线，不会自动打开网页。",
+  "mobile.export.done": "已导出 {n} 个文件到「下载/yshjy」",
+  "mobile.export": "导出到系统「下载」",
+  "mobile.dest.default": "默认：解到 App 私有目录",
+  "mobile.empty.title": "网盘下载的「.mp4 / .png」，其实是压缩包",
+  "mobile.export.fail": "导出没成功",
+  "mobile.empty.hint": "点下面的按钮选文件；认不出的格式也能试"
 }
