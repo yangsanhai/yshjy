@@ -4,15 +4,14 @@
 //!
 //! 桌面的设置页（745 行）里有一半在手机上不存在：托盘/关闭行为、磁盘类型（机械还是固态）、
 //! 落盘检验、并行任务数（手机就一个存储）、快捷键……这里**不搬**。
-//! 手机版只有：主题、语言、解压位置（看）、关于。
-
-import 'dart:io';
+//! 手机版只有：主题、语言、**解压位置**、路径、关于。
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:yshjy_gui/common/engine.dart';
 import 'package:yshjy_gui/common/l10n.dart';
+import 'package:yshjy_gui/common/mobile_prefs.dart';
 import 'package:yshjy_gui/common/platform_paths.dart';
 import 'package:yshjy_gui/common/theme_mode.dart';
 
@@ -23,13 +22,37 @@ class MobileSettingsPage extends StatefulWidget {
   State<MobileSettingsPage> createState() => _MobileSettingsPageState();
 }
 
-class _MobileSettingsPageState extends State<MobileSettingsPage> {
+class _MobileSettingsPageState extends State<MobileSettingsPage>
+    with WidgetsBindingObserver {
   String? _version;
+
+  /// 解到系统「下载」目录（需要「所有文件访问」）
+  bool _toDownload = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadVersion();
+    _loadPrefs();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 从系统设置页回来时刷新（用户可能刚把「所有文件访问」勾上/取消）
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    await MobilePrefs.refreshOut();
+    if (!mounted) return;
+    setState(() => _toDownload = MobilePrefs.outToDownloadActive.value);
   }
 
   Future<void> _loadVersion() async {
@@ -41,56 +64,34 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
     }
   }
 
-  /// 把 `[general] <key> = "<value>"` 写回 config.toml（只动这一个键，别的行原样保留）
-  Future<void> _writeGeneral(String key, String value) async {
-    final f = File('$configDir/config.toml');
-    try {
-      await f.parent.create(recursive: true);
-      final lines = (await f.exists()) ? (await f.readAsString()).split('\n') : <String>[];
-      var inGeneral = false;
-      var found = false;
-      var hasGeneral = false;
-      for (var i = 0; i < lines.length; i++) {
-        final t = lines[i].trim();
-        if (t.startsWith('[') && t.endsWith(']')) {
-          inGeneral = t == '[general]';
-          if (inGeneral) hasGeneral = true;
-          continue;
-        }
-        if (!inGeneral) continue;
-        final eq = t.indexOf('=');
-        if (eq <= 0) continue;
-        if (t.substring(0, eq).trim() == key) {
-          lines[i] = '$key = "$value"';
-          found = true;
-          break;
-        }
+  Future<void> _toggleDownload(bool v) async {
+    if (v) {
+      if (!await MobilePrefs.hasAllFiles()) {
+        // 这条权限没有「弹窗申请」，只能跳系统页让用户勾
+        await MobilePrefs.requestAllFiles();
+        _toast(t('mobile.out.needPermission'));
+        return;
       }
-      if (!found) {
-        if (!hasGeneral) lines.add('[general]');
-        // 插到 [general] 头后面（找不到就追加到末尾）
-        final idx = lines.indexWhere((l) => l.trim() == '[general]');
-        if (idx >= 0) {
-          lines.insert(idx + 1, '$key = "$value"');
-        } else {
-          lines.add('$key = "$value"');
-        }
-      }
-      await f.writeAsString(lines.join('\n'));
-    } catch (_) {
-      // 写不进去不拦操作：这一次的选择照样立刻生效，只是下次启动恢复默认
     }
+    await MobilePrefs.setOutToDownload(v);
+    await MobilePrefs.refreshOut();
+    if (mounted) setState(() => _toDownload = MobilePrefs.outToDownloadActive.value);
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _pickTheme(ThemeMode m) async {
     themeMode.value = m;
-    await _writeGeneral('theme', themeModeName(m));
+    await MobilePrefs.writeGeneral('theme', themeModeName(m));
     if (mounted) setState(() {});
   }
 
   Future<void> _pickLanguage(String code) async {
     await switchLocale(code);
-    await _writeGeneral('ui_language', code);
+    await MobilePrefs.writeGeneral('ui_language', code);
     if (mounted) setState(() {});
   }
 
@@ -116,6 +117,15 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: _pickLocale,
           ),
+          const Divider(),
+          _section(context, t('settings.section.output')),
+          SwitchListTile(
+            secondary: const Icon(Icons.download_outlined),
+            title: Text(t('mobile.out.download')),
+            subtitle: Text(t('mobile.out.download.hint')),
+            value: _toDownload,
+            onChanged: _toggleDownload,
+          ),
           _section(context, t('settings.section.paths')),
           ListTile(
             leading: const Icon(Icons.folder_special_outlined),
@@ -124,7 +134,10 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
             trailing: IconButton(
               icon: const Icon(Icons.copy_all_outlined),
               tooltip: t('home.copyHowtoBtn'),
-              onPressed: () => Clipboard.setData(ClipboardData(text: stateDir)),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: stateDir));
+                _toast(t('home.copiedSend'));
+              },
             ),
           ),
           ListTile(
@@ -181,7 +194,9 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
             : null,
         onTap: () => _pickTheme(m),
       );
-  Widget _section(BuildContext context, String title) => Padding(        padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+
+  Widget _section(BuildContext context, String title) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
         child: Text(
           title,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(

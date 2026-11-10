@@ -584,5 +584,8 @@
   "mobile.dest.default": "Predeterminado: carpeta privada de la app",
   "mobile.empty.title": "Ese «.mp4 / .png» descargado suele ser un archivo comprimido",
   "mobile.export.fail": "No se pudo exportar",
-  "mobile.empty.hint": "Pulsa el botón de abajo para elegir un archivo; también sirven formatos desconocidos"
+  "mobile.empty.hint": "Pulsa el botón de abajo para elegir un archivo; también sirven formatos desconocidos",
+  "mobile.out.download": "Extraer en «Descargas» del sistema",
+  "mobile.out.download.hint": "Requiere «Acceso a todos los archivos». Opcional: por defecto se extrae en la carpeta privada y puedes exportar con un toque",
+  "mobile.out.needPermission": "Activa «Acceso a todos los archivos» en los ajustes del sistema y vuelve a intentarlo"
 }

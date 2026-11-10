@@ -21,6 +21,7 @@ import 'package:yshjy_gui/common/format.dart';
 import 'package:yshjy_gui/common/humanize.dart';
 import 'package:yshjy_gui/common/history_store.dart';
 import 'package:yshjy_gui/common/l10n.dart';
+import 'package:yshjy_gui/common/mobile_prefs.dart';
 import 'package:yshjy_gui/common/platform_paths.dart';
 
 class MobileHomePage extends StatefulWidget {
@@ -46,6 +47,8 @@ class _MobileHomePageState extends State<MobileHomePage> {
 
   /// 正在导出到系统下载目录
   bool _exporting = false;
+
+
   final TextEditingController _pw = TextEditingController();
 
   /// 用户点过「换个位置」才有；null = 用默认（App 私有目录）
@@ -54,6 +57,8 @@ class _MobileHomePageState extends State<MobileHomePage> {
   @override
   void initState() {
     super.initState();
+    MobilePrefs.refreshOut();
+    MobilePrefs.outToDownloadActive.addListener(_onOutChanged);
     _sub = _api.events.listen((e) {
       final p = e.progress;
       if (p != null && mounted) setState(() => _progress = p);
@@ -63,6 +68,7 @@ class _MobileHomePageState extends State<MobileHomePage> {
   @override
   void dispose() {
     _sub?.cancel();
+    MobilePrefs.outToDownloadActive.removeListener(_onOutChanged);
     _pw.dispose();
     super.dispose();
   }
@@ -147,6 +153,8 @@ class _MobileHomePageState extends State<MobileHomePage> {
       _error = null;
       _progress = null;
     });
+    // 解大包要几分钟：挂前台服务，切后台才不会被系统杀掉
+    await MobilePrefs.startForeground(title: t('home.extracting'), text: t('shell.appName'));
     try {
       final r = await _api.extract(
         path,
@@ -176,6 +184,7 @@ class _MobileHomePageState extends State<MobileHomePage> {
       if (!mounted) return;
       setState(() => _error = EngineError('INTERNAL', '$e'));
     } finally {
+      await MobilePrefs.stopForeground();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -186,11 +195,21 @@ class _MobileHomePageState extends State<MobileHomePage> {
     } catch (_) {}
   }
 
-  /// 默认解压到 App 私有目录（方案 A：零权限、装上就能用）
+  void _onOutChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 默认解压位置
+  ///
+  /// - 方案 A（默认）：App 私有目录 `files/out/<包名>` —— 零权限、装上就能用；
+  /// - 方案 B（设置里打开且有「所有文件访问」）：直接解到系统「下载」下的 `yshjy/<包名>`，
+  ///   好处是文件管理器里立刻可见，不用再点一次「导出」。
   String _defaultDest(String path) {
     final base = path.split('/').last;
     final dot = base.lastIndexOf('.');
     final name = dot > 0 ? base.substring(0, dot) : base;
+    final root = MobilePrefs.downloadRootPath;
+    if (MobilePrefs.outToDownloadActive.value && root != null) return '$root/yshjy/$name';
     return '$stateDir/out/$name';
   }
 

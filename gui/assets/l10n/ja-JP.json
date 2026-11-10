@@ -584,5 +584,8 @@
   "mobile.dest.default": "既定：アプリ専用フォルダに展開",
   "mobile.empty.title": "ネットストレージの「.mp4 / .png」は実は圧縮ファイル",
   "mobile.export.fail": "書き出しに失敗しました",
-  "mobile.empty.hint": "下のボタンでファイルを選択。判別できない形式も試せます"
+  "mobile.empty.hint": "下のボタンでファイルを選択。判別できない形式も試せます",
+  "mobile.out.download": "「ダウンロード」へ直接展開",
+  "mobile.out.download.hint": "「すべてのファイルへのアクセス」が必要です。無効の場合はアプリ専用フォルダに展開し、完了後に書き出せます",
+  "mobile.out.needPermission": "先にシステム設定で「すべてのファイルへのアクセス」を許可してから、このスイッチを入れてください"
 }

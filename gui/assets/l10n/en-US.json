@@ -584,5 +584,8 @@
   "mobile.dest.default": "Default: the app's private folder",
   "mobile.empty.title": "That \".mp4 / .png\" from a file host is probably an archive",
   "mobile.export.fail": "Export failed",
-  "mobile.empty.hint": "Tap the button below to pick a file — unknown formats work too"
+  "mobile.empty.hint": "Tap the button below to pick a file — unknown formats work too",
+  "mobile.out.download": "Extract into system Downloads",
+  "mobile.out.download.hint": "Needs \"All files access\". Not required: the default is the app private folder, and you can export in one tap",
+  "mobile.out.needPermission": "Enable \"All files access\" in system settings first, then turn this on"
 }

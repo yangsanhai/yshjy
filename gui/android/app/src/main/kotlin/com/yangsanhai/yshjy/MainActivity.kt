@@ -1,6 +1,11 @@
 package com.yangsanhai.yshjy
 
+import android.Manifest
 import android.content.ContentValues
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -32,6 +37,50 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // 存储权限（方案 B）：默认走私有目录，用户想要「解到任意目录」时才要这个
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "yshjy/storage")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "hasAllFiles" -> result.success(hasAllFiles())
+                    "requestAllFiles" -> {
+                        openAllFilesSettings()
+                        result.success(true)
+                    }
+                    "downloadPath" -> result.success("/storage/emulated/0/Download")
+                    else -> result.notImplemented()
+                }
+            }
+
+        // 前台服务：解大包时防止被系统杀掉（Android 14+ 必须带类型，见 ExtractService）
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "yshjy/foreground")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        if (Build.VERSION.SDK_INT >= 33 &&
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            // 不弹权限也能跑服务，只是通知不可见；这里顺手要一下
+                            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+                        }
+                        val i = Intent(this, ExtractService::class.java).apply {
+                            putExtra("title", call.argument<String>("title"))
+                            putExtra("text", call.argument<String>("text"))
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(i)
+                        } else {
+                            startService(i)
+                        }
+                        result.success(true)
+                    }
+                    "stop" -> {
+                        stopService(Intent(this, ExtractService::class.java))
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "yshjy/export")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -97,5 +146,30 @@ class MainActivity : FlutterActivity() {
             count++
         }
         return count
+    }
+
+    /** 现在有没有「所有文件访问」权限（Android 11+ 才有这个概念） */
+    private fun hasAllFiles(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            // Android 10 及以下靠安装时授予的存储权限，视为已有
+            true
+        }
+
+    /** 跳到系统「所有文件访问」设置页，让用户自己勾 */
+    private fun openAllFilesSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:$packageName"),
+                )
+            )
+        } catch (e: Exception) {
+            // 个别 ROM 不认带包名的那条，退回总列表
+            startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+        }
     }
 }
