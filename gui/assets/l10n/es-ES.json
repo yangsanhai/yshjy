@@ -578,5 +578,11 @@
   "licenses.loadFailed": "No se pudo leer la lista de licencias: {reason}",
   "licenses.creditsHeader": "Referencias y créditos",
   "licenses.creditsNote": "Ninguno de los proyectos siguientes aportó una sola línea de código a esta aplicación; solo leímos sus implementaciones y su documentación al resolver problemas. Se listan porque si usas ideas ajenas, hay que decirlo.",
-  "licenses.copyHint": "Las direcciones se pueden seleccionar y copiar. Esta aplicación es totalmente sin conexión y nunca abre una página web por sí sola."
+  "licenses.copyHint": "Las direcciones se pueden seleccionar y copiar. Esta aplicación es totalmente sin conexión y nunca abre una página web por sí sola.",
+  "mobile.export.done": "Se exportaron {n} archivos a «Descargas/yshjy»",
+  "mobile.export": "Exportar a «Descargas»",
+  "mobile.dest.default": "Predeterminado: carpeta privada de la app",
+  "mobile.empty.title": "Ese «.mp4 / .png» descargado suele ser un archivo comprimido",
+  "mobile.export.fail": "No se pudo exportar",
+  "mobile.empty.hint": "Pulsa el botón de abajo para elegir un archivo; también sirven formatos desconocidos"
 }

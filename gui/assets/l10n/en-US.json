@@ -578,5 +578,11 @@
   "licenses.loadFailed": "Could not read the license list: {reason}",
   "licenses.creditsHeader": "References & credits",
   "licenses.creditsNote": "None of the projects below contributed a single line of code to this app; we only read their implementations and docs while solving problems. They are listed because if you use someone's ideas, say so.",
-  "licenses.copyHint": "Addresses can be selected and copied. This app is fully offline and never opens a web page by itself."
+  "licenses.copyHint": "Addresses can be selected and copied. This app is fully offline and never opens a web page by itself.",
+  "mobile.export.done": "Exported {n} files to Downloads/yshjy",
+  "mobile.export": "Export to Downloads",
+  "mobile.dest.default": "Default: the app's private folder",
+  "mobile.empty.title": "That \".mp4 / .png\" from a file host is probably an archive",
+  "mobile.export.fail": "Export failed",
+  "mobile.empty.hint": "Tap the button below to pick a file — unknown formats work too"
 }
