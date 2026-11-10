@@ -14,3 +14,10 @@ ios/Flutter/ephemeral/
 ios/Pods/
 
 *.iml
+
+# 安卓：Rust 编出来的 .so（scripts/build-android.ps1 生成，不入库）
+android/app/src/main/jniLibs/
+
+# Kotlin 编译器的错误日志（构建产物，不入库）
+android/.kotlin/
+**/.kotlin/
