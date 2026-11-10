@@ -58,6 +58,12 @@ String get stateDir {
 
 /// 配置目录（与引擎 `config_dir()` 一致）
 String get configDir {
+  // 安卓/iOS：原生注入的沙箱目录（见 setPlatformStateDir）就是配置目录 ——
+  // 手机上算不出 XDG，硬算会落到只读的根目录，配置根本写不进去。
+  final injectedState = _overrideStateDir;
+  if (injectedState != null && injectedState.isNotEmpty && (Platform.isAndroid || Platform.isIOS)) {
+    return injectedState;
+  }
   // 测试覆盖优先（见 [debugConfigDir] 的说明）
   final injected = debugConfigDir;
   if (injected != null && injected.isNotEmpty) return injected;

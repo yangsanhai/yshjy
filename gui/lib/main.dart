@@ -3,8 +3,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:yshjy_gui/common/app_settings.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/transport/ffi_transport.dart';
 import 'package:yshjy_gui/desktop/app_shell.dart';
 import 'package:yshjy_gui/common/l10n.dart';
 import 'package:yshjy_gui/common/platform_paths.dart';
@@ -51,6 +54,17 @@ Future<void> _loadUiLanguage() async {
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 安卓不许起子进程：引擎换成进程内 FFI（libyshjy.so，见 docs/ANDROID-整体方案 §4.2）。
+  // 桌面平台仍走 ProcessTransport —— 这条分支不碰已验收的三个桌面包。
+  if (Platform.isAndroid) {
+    EngineClient.transportFactory = (_, __) => FfiTransport();
+    // 沙箱目录只有原生知道（filesDir）。注入之后历史/配置才有地方写；
+    // 注入失败不拦启动 —— 界面对着默认路径也能开，只是存不住东西。
+    try {
+      final dir = await const MethodChannel('yshjy/paths').invokeMethod<String>('filesDir');
+      if (dir != null && dir.isNotEmpty) setPlatformStateDir(dir);
+    } catch (_) {}
+  }
   await _loadThemeMode();
   await _loadUiLanguage();
   // 右键「用杨三海解压打开」时，桌面环境会把文件路径当参数传进来
