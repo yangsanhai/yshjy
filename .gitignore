@@ -41,3 +41,6 @@ tests/data/
 # 过程日志（参考库拉取脚本的临时输出，别入库也别留）
 .unshallow.log
 /dist-win/
+
+# 安卓出包产物（scripts/build-android.ps1 生成；交付件另存 D:\Work\yshjy-win\安卓）
+dist-android/
