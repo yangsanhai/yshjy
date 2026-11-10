@@ -1,5 +1,40 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-10 · Windows 1.0.0 三件套出包（在 Windows 机上）· 待老板验收**
+>
+> **完成度**：Windows 交付链 100%（引擎常用版+全能版 / Flutter 界面 / 绿色版 zip / 命令行 zip / setup.exe / SHA256SUMS）。
+>
+> **已做完**：
+> 1. 从移动硬盘 `E:\yshjy-1.0.0-20261108`（Linux 侧 1.0.0 快照）原样重编，**源码一行没改**——
+>    `pwsh -File scripts\build-win.ps1 -TargetDir <本机盘>` 一条命令全量复现（引擎 44s + 23s，界面 89s）。
+> 2. **修掉一处出包坑（改的是脚本，不是源码）**：仓库在移动硬盘（exFAT）上时，Inno 最后一步
+>    「更新 Setup.exe 资源」报 `Resource update error: EndUpdateResource failed (110)` 并中止（重试同样失败）。
+>    已给 `build-win.ps1` 加兜底：直接输出失败时先编到本机临时目录，成功再拷回 `dist-win`。此后一条命令走到底。
+> 3. **补回这份 `.git` 丢的 `refs/`**：`refs/` 没随盘拷过来（旧快照里 1.85 GB），git 报「not a git repository」；
+>    已按 `.git\logs\HEAD` 最后一个 sha `8b6cc20` 重建 `refs\heads\main`，`git log / status` 恢复正常。
+>    工作区里 32 个文件显示改动，但 **0 增 0 删**——是 exFAT 丢了可执行位的模式位差异，内容没漂移。
+> 4. **冒烟验过**：`yshjy --version` → `yshjy 1.0.0（常用版）—— 杨三海解压` + 署名行
+>    `yshjy · MIT License · Copyright (c) 2026 yangsanhai`；exe 属性 `杨三海解压 / 杨三海 / 1.0.0 / MIT`；
+>    界面能开（1100×760 居中、中文常规字重）；拿 `E:\yshjy-探针-打包-230401.zip` 真解，2 个 4 MB 文件全出。
+>
+> **卡在哪·为什么停下**：没有阻塞。只剩两件只能老板做的——**本人肉眼验收**（双击 setup 走中文向导 /
+> 解压绿色版拖几个包试试）、**干净 Windows 机器复验**（不装 VC++ 运行库也能开）。
+>
+> **下一步第一步**：老板双击 `E:\yshjy-1.0.0-20261108\dist-win\yshjy-1.0.0-setup.exe`。
+>
+> **关键文件**：`dist-win\yshjy-1.0.0-setup.exe`(15.1M) / `yshjy-1.0.0-win-x64.zip`(18.7M，绿色版) /
+> `yshjy-1.0.0-win-x64-cli.zip`(6.9M) / `SHA256SUMS.txt`；交付副本在 `D:\Work\yshjy-win`；
+> 界面截图 `D:\Work\yshjy-win\截图\1.0.0-界面-*.png`。
+>
+> **证据**：`cargo build --release` 与 `--release --features full` 各一次（exit 0）；`flutter build windows --release`
+> 89.2s 出 `yshjy_gui.exe`；7z 打两个 zip；ISCC 6.7.3 编译安装包成功；GUI 冒烟启动 + 截图 + 真解 2 文件。
+> **没跑**：完整 `cargo test` / `flutter test`——源码与 Linux 侧 1.0.0 逐字节相同（只多 SPDX 头），测试已在 Linux 侧全绿。
+>
+> **版本锚**：`Synced through 8b6cc20`（release: 1.0.0）
+>
+> **自评**：88 / 100（包与冒烟都真跑过；扣分点是没完整跑 Rust/Flutter 测试套件，安装包也还没在干净机装过）。
+
+
 > **2026-11-08 · 0.9.58 已出包并装机，用户验收通过 —— 当前没有欠账**
 >
 > **这一版装的是 0.9.58**（`dpkg -l yshjy` = 0.9.58，`yshjy` / `yshys` 两条命令都是 0.9.58）。
@@ -130,76 +165,4 @@
 > **还没做**：① 爱发电赞赏链接（等实名注册，位置已留）② 推 GitHub（T9 截图；`/home/user`
 > 路径泄漏要先脱敏）③ `docs/TODO.md` 里「Windows CLI 缺分发包」等 Windows 侧三条修完一起改
 > ④ Linux 仓库仍缺硬盘提交 `74512bf`（要提交得先拉回来，否则历史分叉）。
-
-> **2026-11-04 深夜（前一版） · ✅ 0.9.54 已装机 + 全部验收通过 —— 当前没有欠账**
->
-> **这一版装的是 0.9.54**（`dpkg -l yshjy` = 0.9.54），桌面菜单启动的也是它（右下角「引擎 0.9.54」）。
->
-> **验收结果（全部真跑，详见 `docs/RELEASE-CHECK.md`）**：
-> - `cargo test` **446 通过 / 1 忽略**、`tests/all.sh` **61 通过 / 0 失败 / 5 跳过**
-> - `test-packages.sh` **37 通过 / 0 失败**
-> - 装机六项：dpkg 版本 ✔ / 两个命令名 ✔ / 菜单 14 种格式 ✔ / `pick.sh` 11-0 ✔ /
->   真打包真解压 sha256 逐一致（中文名+三层嵌套+500KB 随机二进制）✔ / 界面显示 0.9.54 ✔
->
-> **这一版修的东西**（两笔，都在 0.9.54）：
-> 1. 真机撞出来的「解压失败在目标目录留空文件夹」—— zip 家族 + 截断的 `.tar.gz` 两条路都修了，
->    改用 `空目录守卫`（`Drop` 兜所有返回路径），只删空目录。
->    **★ 教训**：第一版把清理写在函数末尾是**假绿**（`open_tar_stream` 的 `?` 会绕过），
->    测试只查「目录里面空不空」也漏了「目录该不该在」；靠反向验证才发现，已写进 CHANGELOG。
-> 2. 顺带确认：CLI 不带 `-p` 时的**交互式密码输入**是好的（pty 输对就解开、回车就放弃、管道不卡死）
->
-> **下次开工**：没有阻塞项。想推 GitHub 再做 T9 截图收尾（`metainfo` 里那段还注释着）；
-> 想加功能就从 `docs/TODO.md` 的「下一轮施工顺序」接。**别再复跑门禁当第一件事**。
-
-> **2026-11-04 深夜 · ✅ 真机验收通过 + 0.9.53 打好了（本地，未对外发布、未装机）**
->
-> **真机长跑（原「唯一欠的」）已销账** —— 用户亲自在界面上拖包验了三关，全过：
-> 1. **分卷 ZIP**：`C12_split.zip` + `C12_split.z01` 一起拖 → 正常认出并解开（A-5 真机验收 ✅）
-> 2. **坏包假尺寸**：`A6_declared_size_impossible.zip` → 预览页四处都写「尺寸异常」，**不再摆那个 1.17 GB**（A-6 真机验收 ✅）；
->    解压时按「包里有不安全的文件名（含控制字符之类）— 已拒绝写出来，这是安全保护，不是包坏了」拦下。
->    ★ 那个包的文件名列本来就是垃圾字节（真身 `00 23 00 00 … c3 b6 …`，NUL + 乱码），**显示成方块是对的**，
->    不是中文显示坏了 —— 已把这个认知记进 TODO「已裁定不做」（用户：不需要那么专业）。
-> 3. **伪装视频 + 密码**：`A2_steg_modeA_ascii_pwd.mp4`（`P@ssw0rd!2026`）和 `A3_steg_modeA_cn_pwd.mp4`（`demo-password`）
->    都认出来、都能解开 ✅
->
-> **这一轮做的**：
-> - 门禁复跑 `bash tests/all.sh` → **61 通过 / 0 失败 / 5 跳过**（313 秒），基线没漂
-> - 版本号 **0.9.52 → 0.9.53**（`bump-version.py`，11 处 / 8 个文件一致）；CHANGELOG 两段 `[未发布]` 已成版
-> - 引擎重编（bundle 里那份引擎原比源码旧一笔，4d87708 的 RAR 候选收一份没跟上）→ 已重编
-> - 产物：`dist/yshjy_0.9.53_amd64.deb`（11M）+ `yshjy-0.9.53-linux-x86_64.tar.gz` / `-full-`（各 4.3M）
-> - `test-packages.sh` → **37 通过 / 0 失败**（第一次跑有 1 红：dist 里还躺着 0.9.52 的旧 tar.gz，跑 release.sh 补齐后转绿）
->
-> **★ 装机仍是 0.9.52**：用户口径「先不发布，本地打包就行」。要装的话：
-> `sudo apt install ./dist/yshjy_0.9.53_amd64.deb`，装完还有发版流程的**五项验收**（这一步没做）。
->
-> **下次开工**：① 问用户要不要装机 + 五项验收 → ② 要不要推 GitHub（T9 截图依赖它，metainfo 里那段还注释着）。
-
-> **2026-11-02 · 🎉 P8 审计全部收官（9 条 A 类 + 6 条 B 类注释 + 死代码清理）—— 仍未发版**
->
-> 最后一轮做了三件事：
-> 1. **B 类 6 条注释落在具体代码行上**（不是写在文档里）：`scan.rs::scan_whole_file`（垃圾前缀也认）、
->    `unpack.rs` tar 家族（剥壳后列真实文件，7z 只报 1 files）、`extract_rar.rs` 的候选密码与缺卷自查、
->    `单卷解压`（为什么不用 PBKDF2 passcheck）。
-> 2. **★ 揪出 B-4 是假账**：账本引的 `rar5_cnpwd.rar` 库里不存在。用 `rar` 7.11 现造中文密码包实测 ——
->    我们能开，命中 **UTF-8**；GBK/UTF-16LE 对 RAR 永远命不中（RAR5 密码就是 UTF-8 文本，
->    `rars` 的 RAR4 更是强制 UTF-8）。已把 RAR 侧候选收成一份，账本按实测改。
->    RAR 中文密码现在是**机器验过的**：`tests/data/B4_rar5_cn_pwd.rar` + 两条回归测试。
-> 3. **死代码清理**：`scripts/dead_pub.sh`（已挂 `all.sh`，现 0 个）清掉 14 个无人用的 `pub`，
->    含 `rescue_broken_index`(47 行)、`try_remux_with_ffmpeg`(35 行)。
->
-> **验证**：`cargo test` **443 passed / 1 ignored**、`clippy -D warnings` 干净、
-> `flutter test` 421、`bash tests/all.sh` 全绿。
->
-> **★ 仍未发版**：装机还是 0.9.52，这些改动只在本地 git（A-5 / A-6 / B 类三笔）。
-> **当前状态：⏸ 暂停（2026-11-02 凌晨，用户原话「先结束，更新相关的，有时间我在搞」）**
-> —— 代码、文档、提交都已收尾，工作区干净，**没有任何半截活儿**。
->
-> **下次开工第一件事**（按顺序，别跳）：
-> 1. `cd ~/hermes/yshjy && bash tests/all.sh` 复跑一轮，确认基线还是 **61 通过 / 0 失败 / 5 跳过**
->    （`tests/data/` 不入库，但本机样本都在，不用重新生成）
-> 2. **真机长跑验证**（用户说过「开发完了还没测试」，这是唯一欠的）：GUI 已重编在
->    `gui/build/linux/x64/release/bundle/`（引擎已拷进 bundle，是 A-6 后的新版），
->    装机版 `/usr/bin/yshjy` 仍是旧的 0.9.52 —— 要用新界面得从 bundle 启动
-> 3. 真机验过之后再谈发版（发版流程见 `AGENTS.md` / 记忆：bump-version → release.sh →
->    build-deb.sh → test-packages.sh → sudo 装机 → 五项验收）
 
