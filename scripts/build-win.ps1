@@ -151,8 +151,21 @@ if ($sevenZip) {
 Write-Host '== 打安装包（Inno Setup）==' -ForegroundColor Cyan
 $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
 if (-not (Test-Path $iscc)) { throw "找不到 Inno Setup：$iscc" }
+$setup = Join-Path $dist "yshjy-$version-setup.exe"
 & $iscc "/DAppVersion=$version" (Join-Path $root 'scripts\yshjy-setup.iss')
-if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 编译失败' }
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $setup)) {
+  # 仓库在移动硬盘（exFAT）上时，Inno 最后一步「更新 Setup.exe 的资源」会报
+  # Resource update error: EndUpdateResource failed (110) —— 文件打不开，
+  # 杀软实时扫描 / 移动盘都可能触发。这不是源码问题，退一步就好：
+  # 先编到本机临时目录，成功后再把 exe 拷回 dist-win。
+  Write-Host '  直接输出失败，改在本机临时目录编译后拷回…' -ForegroundColor Yellow
+  $localOut = Join-Path $env:TEMP "yshjy-iscc-$PID"
+  New-Item -ItemType Directory -Path $localOut -Force | Out-Null
+  & $iscc "/DAppVersion=$version" "/O$localOut" (Join-Path $root 'scripts\yshjy-setup.iss')
+  if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 编译失败（本机临时目录同样失败）' }
+  Copy-Item (Join-Path $localOut "yshjy-$version-setup.exe") $setup -Force
+  Remove-Item -LiteralPath $localOut -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 # ── 6. 校验清单 ─────────────────────────────────────────────────────
 Write-Host '== 生成 SHA256SUMS.txt ==' -ForegroundColor Cyan
