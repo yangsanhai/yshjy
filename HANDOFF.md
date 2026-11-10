@@ -1,5 +1,44 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-10 夜 · 📱 安卓版从零到可安装 APK（在 Windows 机上做，真机 Redmi K70 冠军版验收）**
+>
+> **完成度**：方案里 6 个批次全部落地，真机跑通「选包 → 预览 → 解压 → 导出」全链路。
+>
+> **已做完**：
+> 1. **批 0 目录重构**：`gui/lib/` 拆成 `common/`(13 个共享) + `desktop/`(31 个桌面) + `mobile/`(新)；
+>    import 全改 `package:` 绝对路径，44 个文件 `git mv` 保历史；**桌面零回归**（analyze 干净、test 437 过/0 红/3 跳过）。
+> 2. **批 1 环境**：cmdline-tools + NDK 28.2.13676358 + rust target `aarch64-linux-android` + 环境变量。
+>    **没装 cargo-ndk** —— 它只是帮忙设 CC/AR/linker 的封装，脚本里直接设这几个变量等价（省掉一次网络安装）。
+> 3. **批 2 第一块 .so（止损点）**：`libyshjy.so` 6.01 MB、**9/9 个 ABI 符号**、**16 KB 页对齐**（`readelf` 核过），进 APK 真机打开。
+> 4. **批 3 FFI 桥接**：`FfiTransport` 实现 `EngineTransport`（`job_submit` + 回调 + 另起 isolate 里 `job_wait`）；
+>    **先在电脑上用同一份 C ABI 编 Windows dll 跑通测试**（hello + list 真包），再去真机 —— 这条路提前抓掉一个真 bug：
+>    `Isolate.run` 闭包捕获了整个实例（含 Completer）→ `object is unsendable`，改成只传库名 + 地址。
+> 5. **批 4 存储**：A 私有目录（默认，零权限）/ B 设置开关「解到系统下载」（MANAGE_EXTERNAL_STORAGE，跳系统页申请）/
+>    C 完成页「导出到系统下载」（MediaStore 一条条插，零权限）。**三条都在真机上验过**。
+> 6. **批 5 手机界面 + 前台服务**：底部三页签（解压/历史/设置）、六态流程（空/识别/预览/解压中/完成/出错）、
+>    7 语新文案；解压期间挂 `dataSync` 前台服务（logcat 核实 `Background started FGS: Allowed`）。
+> 7. **批 6 出包**：自签 keystore（RSA2048/10000 天，**不入库**，备份在 `D:\Work\yshjy-win\签名备份`）、
+>    `--split-per-abi` → arm64 23.1 MB / armv7 14.6 MB + `SHA256SUMS.txt`；应用图标也是这次画的（青色拆箱箭头）。
+>
+> **真机证据**（Redmi K70 冠军版 `2407FRK8EC`，Android 16 / arm64，包名 `com.yangsanhai.yshjy`）：
+> - 冷启动 ~380–510 ms；预览显示「ZIP · 2 个文件 · 8.0 MB」并由引擎真读出两个 4 MB 样本；
+> - 解压落盘：`/sdcard/Download/yshjy/test/打包输入/样本{0,1}.bin` 各 4,194,304 字节，中文目录名与 mtime 都对；
+> - 私有目录模式与「导出到下载」模式都验过；截图在 `D:\Work\yshjy-win\截图\安卓-*.png`。
+>
+> **卡在哪·为什么停下**：没有阻塞，功能齐了。留给以后的两件（都不影响用）：
+> ① 从文件管理器长按「打开方式」进 App（`VIEW`/`SEND` intent-filter）还没加；
+> ② 极老 ROM（Android 10 以下）的存储分支只写了没真机验。
+>
+> **下一步第一步**：老板装上 `D:\Work\yshjy-win\安卓\yshjy-1.0.0-arm64.apk` 用几天，提意见再改。
+>
+> **关键文件**：`gui/lib/mobile/`（手机界面）、`gui/lib/common/transport/ffi_transport.dart`（桥接）、
+> `gui/android/app/src/main/kotlin/com/yangsanhai/yshjy/{MainActivity,ExtractService}.kt`、
+> `scripts/build-android.ps1`（一条命令出包）、`docs/ANDROID-整体方案-2026-11-10.md`、`docs/ANDROID-使用说明.md`。
+>
+> **版本锚**：`Synced through 8421607`（批2 提交；安卓相关后续提交见 git log）。**自评**：90 / 100
+> （6 批全落 + 真机全链路；扣分点是 intent-filter 没做、老 ROM 分支没真机验）。
+
+
 > **2026-11-10 · Windows 1.0.0 三件套出包 · ✅ 老板已装、已看过，验收通过**
 >
 > **完成度**：Windows 交付链 100%（引擎常用版+全能版 / Flutter 界面 / 绿色版 zip / 命令行 zip / setup.exe / SHA256SUMS）。
@@ -142,30 +181,4 @@
 > 按硬规矩 3 未 commit）
 >
 > **自评**：90/100（界面观感与干净机器复验只能老板给）
-
-> **2026-11-05 夜 · 0.9.57「自己的应用图标 + 窗口图标」—— 已装机，用户确认「就这样」**
->
-> **这一批（0.9.56 + 0.9.57）做了什么**：
-> 1. **主题切换立刻生效** —— 真 bug：`onChanged` 只改页面局部 `_theme`，`themeMode.value` 只在保存时写；
->    修在 `settings_page.dart`，回归 `gui/test/settings_theme_test.dart` 3 条。
-> 2. **格式表 / 快捷键表搬到关于页**（`pages/reference_tables.dart`，铺开不折叠）；设置页 907 → 714 行。
-> 3. **保存按钮改右下角常驻圆形 FAB**（`ValueKey('settings-save')`，tooltip「保存」兼无障碍名；
->    刻意不用 CircularProgressIndicator —— 那个无限动画会让 pumpAndSettle 卡到超时，本项目踩过）。
-> 4. **开源许可**：`scripts/gen-third-party.py` 由 `cargo metadata` 生成 190 个依赖到
->    `gui/assets/third_party.json`；关于页两个入口（清单页 + Flutter 自带许可证页）；
->    仓库地址只做**可选中文本、不联网**（守 `tests/offline_probe.py` 那条承诺）；
->    7 语言各 +13 键（561 → **574**）；`tests/all.sh` 加了 `gen-third-party.py --check` 防清单过期。
-> 5. **应用图标**（用户要求「压缩软件是看书脊不是看封面」）：一摞书脊朝前的书 + 最上层播放三角，
->    7 档铺进 `gui/linux/icons/hicolor/`，Windows 的 `app_icon.ico` 同步；
->    补 `gtk_window_set_icon_name(window, "yshjy")` —— 此前任务栏 / Alt-Tab 一直是系统默认齿轮。
->
-> **验证**：界面测试 **435 条全过**、`flutter analyze` 干净；引擎 446 过/1 忽略；
-> `scripts/test-packages.sh` **37/37**；装机后 dpkg 0.9.57、CLI `--version` 0.9.57、
-> 装机图标 md5 与项目源一致、`nm -D yshjy_gui` 里确实有 `gtk_window_set_icon_name`。
->
-> **用户验收**：0.9.57 装机后看过图标与设置页，原话「看到了就这样」。
->
-> **还没做**：① 爱发电赞赏链接（等实名注册，位置已留）② 推 GitHub（T9 截图；`/home/user`
-> 路径泄漏要先脱敏）③ `docs/TODO.md` 里「Windows CLI 缺分发包」等 Windows 侧三条修完一起改
-> ④ Linux 仓库仍缺硬盘提交 `74512bf`（要提交得先拉回来，否则历史分叉）。
 
