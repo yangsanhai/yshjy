@@ -6,7 +6,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/home_busy_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_busy_view.dart';
 
 void main() {
   testWidgets('显示传进来的那句话 + 一个转圈', (tester) async {

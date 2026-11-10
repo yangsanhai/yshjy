@@ -9,9 +9,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/entry_tree.dart';
-import 'package:yshjy_gui/pages/preview_file_list.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/entry_tree.dart';
+import 'package:yshjy_gui/desktop/pages/preview_file_list.dart';
 
 EntryItem file(String path, int index, int size) => EntryItem(
       index: index,

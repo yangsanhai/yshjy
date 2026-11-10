@@ -9,8 +9,8 @@
 // 规则出处：`home_extract_request.dart` 的 canStartExtract 注释 + 主按钮原条件。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_extract_request.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_extract_request.dart';
 
 Preview pv({bool cover = false}) => Preview(
       format: 'zip',

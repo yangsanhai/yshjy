@@ -9,7 +9,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/clipboard_path.dart';
+import 'package:yshjy_gui/common/clipboard_path.dart';
 
 void main() {
   test('剪贴板是空的（null / 空串 / 纯空白）→ 一个路径都没有', () {

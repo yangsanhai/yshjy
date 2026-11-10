@@ -10,8 +10,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:yshjy_gui/l10n.dart';
-import 'package:yshjy_gui/platform_paths.dart';
+import 'package:yshjy_gui/common/l10n.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // 每个测试文件一个**独立的** config / state 目录。

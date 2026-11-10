@@ -12,10 +12,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/notify.dart';
-import 'package:yshjy_gui/pages/pack_page.dart';
-import 'package:yshjy_gui/transport/engine_transport.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/notify.dart';
+import 'package:yshjy_gui/desktop/pages/pack_page.dart';
+import 'package:yshjy_gui/common/transport/engine_transport.dart';
 
 /// 格式下拉的 key（与 pack_page.dart 里 `ValueKey('pack-format')` 对齐）
 const kFormatKey = ValueKey('pack-format');

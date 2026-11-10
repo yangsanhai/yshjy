@@ -7,8 +7,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/home_error_view.dart';
-import 'package:yshjy_gui/pages/home_space_shortage.dart';
+import 'package:yshjy_gui/desktop/pages/home_error_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_space_shortage.dart';
 
 Future<void> pumpAny(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(1000, 1600);

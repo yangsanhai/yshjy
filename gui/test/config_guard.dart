@@ -11,7 +11,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/platform_paths.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
 
 /// 在会读写 `config.toml` 的测试的 `setUp` / `setUpAll` 里调一次。
 ///

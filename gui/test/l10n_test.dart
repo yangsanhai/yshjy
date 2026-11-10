@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/l10n.dart';
+import 'package:yshjy_gui/common/l10n.dart';
 
 /// 测试用的读包（不用 rootBundle：这里是纯文件比对，`flutter test` 的 cwd 是 gui/）
 Map<String, String> readPack(String code) {

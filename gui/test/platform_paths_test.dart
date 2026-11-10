@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/platform_paths.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
 
 /// 「下载」目录要跨平台找得到（T7 / E6 / P1-3）
 ///

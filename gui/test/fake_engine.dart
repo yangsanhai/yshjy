@@ -17,8 +17,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/transport/engine_transport.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/transport/engine_transport.dart';
 
 /// 换上一个新的假引擎，**并把 `EngineClient` 的内部状态清干净**。
 ///

@@ -13,9 +13,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_page.dart';
-import 'package:yshjy_gui/transport/engine_transport.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
+import 'package:yshjy_gui/common/transport/engine_transport.dart';
 
 Future<void> pumpRealQueue(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1100, 1700);

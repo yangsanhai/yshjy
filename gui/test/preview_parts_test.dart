@@ -9,8 +9,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/preview_parts.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/preview_parts.dart';
 
 EntryItem f(String path, int index, int size) => EntryItem(
       index: index,

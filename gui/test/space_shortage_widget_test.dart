@@ -11,7 +11,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/home_page.dart';
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
 
 /// 真实量级：3 GiB 的包解到只有 2 GiB 的盘（2026-10-30 CLI 实测用的同一组数）
 const needB = 3221225472; // 3.00 GB

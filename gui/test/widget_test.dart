@@ -6,7 +6,7 @@
 // 子进程（然后 dispose 时撞「ProcessTransport 还没 start()」）。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/app_shell.dart';
+import 'package:yshjy_gui/desktop/app_shell.dart';
 
 import 'fake_engine.dart';
 

@@ -10,8 +10,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_page.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
 
 /// 一份「一个文件里两处像归档」的 scan item（数字取自 2026-10-30 探针实测）
 Map<String, dynamic> multiCandidateItem() => {

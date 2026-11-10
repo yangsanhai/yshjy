@@ -11,8 +11,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart' show EngineEvent;
-import 'package:yshjy_gui/pages/home_page.dart';
+import 'package:yshjy_gui/common/engine.dart' show EngineEvent;
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
 
 Future<void> pumpHome(WidgetTester tester, HomePage page) async {
   tester.view.physicalSize = const Size(1200, 2000);

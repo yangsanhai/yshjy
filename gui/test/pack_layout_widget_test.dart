@@ -16,10 +16,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/notify.dart';
-import 'package:yshjy_gui/pages/pack_page.dart';
-import 'package:yshjy_gui/transport/engine_transport.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/notify.dart';
+import 'package:yshjy_gui/desktop/pages/pack_page.dart';
+import 'package:yshjy_gui/common/transport/engine_transport.dart';
 
 const layoutTile = ValueKey('layout-select');
 const layoutDrop = ValueKey('layout-dropdown');

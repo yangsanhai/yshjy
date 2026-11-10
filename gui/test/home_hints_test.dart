@@ -6,9 +6,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_app_bar.dart';
-import 'package:yshjy_gui/pages/home_hints.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_app_bar.dart';
+import 'package:yshjy_gui/desktop/pages/home_hints.dart';
 
 EntryItem f(String path, int index, {bool isDir = false}) => EntryItem(
       index: index,

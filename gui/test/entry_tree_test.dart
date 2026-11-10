@@ -4,8 +4,8 @@
 // 深嵌套 / 同名中间目录 / 加密计数 / 空目录不参与勾选 —— 外加三态勾选与面包屑。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/entry_tree.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/entry_tree.dart';
 
 /// 造一条条目（默认是文件）
 EntryItem it(

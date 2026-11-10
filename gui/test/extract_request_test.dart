@@ -9,8 +9,8 @@
 //   （「只检查」会把封面切出来，磁盘上莫名多一个视频 —— 而界面说「没写任何文件」）。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_extract_request.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_extract_request.dart';
 
 /// 4 个文件 + 1 个目录（目录不该计入「是不是全选」）
 Preview sample({Map<String, dynamic>? cover}) => Preview(

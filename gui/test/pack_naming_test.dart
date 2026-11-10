@@ -7,7 +7,7 @@
 // 抽成纯函数之后，这两类问题都能用断言钉死。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pack_naming.dart';
+import 'package:yshjy_gui/common/pack_naming.dart';
 
 void main() {
   group('suggestOut：默认跟源同目录、同名、换扩展名', () {

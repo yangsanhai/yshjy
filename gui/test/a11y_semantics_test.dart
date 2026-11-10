@@ -13,9 +13,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/home_flush_view.dart';
-import 'package:yshjy_gui/pages/home_progress_view.dart';
-import 'package:yshjy_gui/pages/preview_crumb_bar.dart';
+import 'package:yshjy_gui/desktop/pages/home_flush_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_progress_view.dart';
+import 'package:yshjy_gui/desktop/pages/preview_crumb_bar.dart';
 
 void main() {
   testWidgets('面包屑每个格子都是「按钮 + 名字」语义，不是纯文本', (tester) async {

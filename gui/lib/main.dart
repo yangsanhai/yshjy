@@ -4,11 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'app_settings.dart';
-import 'app_shell.dart';
-import 'l10n.dart';
-import 'platform_paths.dart';
-import 'theme_mode.dart';
+import 'package:yshjy_gui/common/app_settings.dart';
+import 'package:yshjy_gui/desktop/app_shell.dart';
+import 'package:yshjy_gui/common/l10n.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
+import 'package:yshjy_gui/common/theme_mode.dart';
 
 /// 启动前读一次 `[general] theme`（之后由设置页切换，不用重启）
 Future<void> _loadThemeMode() async {
