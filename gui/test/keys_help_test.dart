@@ -15,13 +15,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/keyboard.dart';
-import 'package:yshjy_gui/l10n.dart';
-import 'package:yshjy_gui/pages/home_done_view.dart';
-import 'package:yshjy_gui/pages/home_empty_view.dart';
-import 'package:yshjy_gui/pages/home_progress_view.dart';
-import 'package:yshjy_gui/pages/settings_page.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/keyboard.dart';
+import 'package:yshjy_gui/common/l10n.dart';
+import 'package:yshjy_gui/desktop/pages/home_done_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_empty_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_progress_view.dart';
+import 'package:yshjy_gui/desktop/pages/settings_page.dart';
 
 import 'fake_engine.dart';
 

@@ -10,7 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/about_page.dart';
+import 'package:yshjy_gui/desktop/pages/about_page.dart';
 
 import 'fake_engine.dart';
 

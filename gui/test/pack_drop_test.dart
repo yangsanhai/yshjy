@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/pack_page.dart';
+import 'package:yshjy_gui/desktop/pages/pack_page.dart';
 
 const _channel = 'desktop_drop';
 const _codec = StandardMethodCodec();

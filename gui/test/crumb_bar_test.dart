@@ -8,7 +8,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/preview_crumb_bar.dart';
+import 'package:yshjy_gui/desktop/pages/preview_crumb_bar.dart';
 
 Future<List<String>> pumpCrumb(
   WidgetTester tester, {

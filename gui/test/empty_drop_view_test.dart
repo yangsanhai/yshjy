@@ -7,7 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/home_empty_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_empty_view.dart';
 
 Future<Map<String, List<String>>> pumpEmpty(
   WidgetTester tester, {

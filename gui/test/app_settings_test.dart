@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/app_settings.dart';
-import 'package:yshjy_gui/platform_paths.dart';
+import 'package:yshjy_gui/common/app_settings.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
 
 import 'config_guard.dart';
 

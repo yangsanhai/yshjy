@@ -11,10 +11,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/app_shell.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/tray.dart';
-import 'package:yshjy_gui/transport/engine_transport.dart';
+import 'package:yshjy_gui/desktop/app_shell.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/tray.dart';
+import 'package:yshjy_gui/common/transport/engine_transport.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

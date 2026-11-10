@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/l10n.dart';
-import 'package:yshjy_gui/pages/history_page.dart';
+import 'package:yshjy_gui/common/l10n.dart';
+import 'package:yshjy_gui/desktop/pages/history_page.dart';
 
 /// 这一组测的是「切了界面语言，页面到底有没有跟着变」。
 ///
@@ -50,7 +50,7 @@ void main() {
   });
 
   test('外壳里不能把页面写成 const —— 否则切语言时 Flutter 跳过重建', () {
-    final src = File('lib/app_shell.dart').readAsStringSync();
+    final src = File('lib/desktop/app_shell.dart').readAsStringSync();
     for (final page in ['HistoryPage', 'SettingsPage']) {
       expect(src.contains('const $page('), isFalse,
           reason: 'app_shell 里写 `const $page(` 会让语言切换不生效：父级 rebuild 时同一个 '
@@ -60,7 +60,7 @@ void main() {
   });
 
   test('状态栏初始文字不能在字段里算 t()', () {
-    final src = File('lib/app_shell.dart').readAsStringSync();
+    final src = File('lib/desktop/app_shell.dart').readAsStringSync();
     // 行首锚定：文档注释里引用的「String _status = t(...)」不能算数
     expect(RegExp(r'^\s*String\??\s+_status\s*=\s*t\(', multiLine: true).hasMatch(src), isFalse,
         reason: '字段初始化只在 State 创建时求值一次，用户切语言后状态栏会停在旧语言'

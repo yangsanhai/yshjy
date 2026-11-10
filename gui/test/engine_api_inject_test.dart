@@ -19,9 +19,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/notify.dart';
-import 'package:yshjy_gui/pages/home_page.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/notify.dart';
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
 
 /// 带伪装封面 + 两个文件的最小预览（与 verify_only_widget_test 同一份样本口径：
 /// 有封面才验得出「普通解压带 cover、只检查不带」）。

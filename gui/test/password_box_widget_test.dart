@@ -10,8 +10,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_page.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
 
 /// 造一份预览结果（加密包：3 个文件加密、AES-256）
 Preview encPreview({int encryptedCount = 3}) => Preview(

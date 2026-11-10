@@ -9,8 +9,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_progress_view.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_progress_view.dart';
 
 Progress prog({int done = 0, int total = 1000, int df = 0, int tf = 10}) =>
     Progress(doneBytes: done, totalBytes: total, doneFiles: df, totalFiles: tf);

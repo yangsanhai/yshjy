@@ -20,8 +20,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/settings_page.dart';
-import 'package:yshjy_gui/platform_paths.dart';
+import 'package:yshjy_gui/desktop/pages/settings_page.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
 
 import 'config_guard.dart';
 import 'fake_engine.dart';

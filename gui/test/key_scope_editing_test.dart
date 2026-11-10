@@ -9,8 +9,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/key_action_scope.dart';
-import 'package:yshjy_gui/keyboard.dart';
+import 'package:yshjy_gui/desktop/key_action_scope.dart';
+import 'package:yshjy_gui/desktop/keyboard.dart';
 
 void main() {
   testWidgets('焦点在输入框里时，Enter 归输入框（不触发主操作）', (tester) async {

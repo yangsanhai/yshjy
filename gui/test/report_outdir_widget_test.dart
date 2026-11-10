@@ -12,11 +12,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/notify.dart';
-import 'package:yshjy_gui/pages/home_page.dart';
-import 'package:yshjy_gui/platform_paths.dart';
-import 'package:yshjy_gui/transport/engine_transport.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/common/notify.dart';
+import 'package:yshjy_gui/desktop/pages/home_page.dart';
+import 'package:yshjy_gui/common/platform_paths.dart';
+import 'package:yshjy_gui/common/transport/engine_transport.dart';
 
 Future<void> pumpError(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1100, 1700);

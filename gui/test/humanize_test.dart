@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/humanize.dart';
-import 'package:yshjy_gui/l10n.dart';
+import 'package:yshjy_gui/common/humanize.dart';
+import 'package:yshjy_gui/common/l10n.dart';
 
 /// 文案表 / 判断函数的单测（2026-10-30 补）
 ///

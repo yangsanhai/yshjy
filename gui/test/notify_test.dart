@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/notify.dart';
+import 'package:yshjy_gui/common/notify.dart';
 
 /// 通知是「锦上添花」：坏掉不许拖垮主流程。
 /// PRD 要求「不崩、不阻塞」——两条都要真测到（第二方复核指出原先只测了第一条）。

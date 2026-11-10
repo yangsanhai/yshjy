@@ -11,7 +11,7 @@
 // 这里把两件事分别钉住，避免以后又被"多加一个 hello 调用"改回去。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
+import 'package:yshjy_gui/common/engine.dart';
 
 import 'fake_engine.dart';
 

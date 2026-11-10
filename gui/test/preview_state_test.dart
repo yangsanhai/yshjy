@@ -9,8 +9,8 @@
 //   目录进 select 的后果：引擎按序号找不到对应文件，表现为「解出来的东西跟列表不符」。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/engine.dart';
-import 'package:yshjy_gui/pages/home_preview_state.dart';
+import 'package:yshjy_gui/common/engine.dart';
+import 'package:yshjy_gui/desktop/pages/home_preview_state.dart';
 
 EntryItem file(int index, String path) => EntryItem(
       index: index,

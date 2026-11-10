@@ -11,7 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yshjy_gui/pages/home_batch_done_view.dart';
+import 'package:yshjy_gui/desktop/pages/home_batch_done_view.dart';
 
 Map<String, dynamic> batchResult({
   int ok = 1,
