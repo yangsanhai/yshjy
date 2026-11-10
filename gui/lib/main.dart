@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:yshjy_gui/common/app_settings.dart';
+import 'package:yshjy_gui/common/app_theme.dart';
 import 'package:yshjy_gui/common/engine.dart';
-import 'package:yshjy_gui/common/transport/ffi_transport.dart';
-import 'package:yshjy_gui/desktop/app_shell.dart';
 import 'package:yshjy_gui/common/l10n.dart';
 import 'package:yshjy_gui/common/platform_paths.dart';
 import 'package:yshjy_gui/common/theme_mode.dart';
+import 'package:yshjy_gui/common/transport/ffi_transport.dart';
+import 'package:yshjy_gui/desktop/app_shell.dart';
+import 'package:yshjy_gui/mobile/mobile_shell.dart';
 
 /// 启动前读一次 `[general] theme`（之后由设置页切换，不用重启）
 Future<void> _loadThemeMode() async {
@@ -52,18 +54,24 @@ Future<void> _loadUiLanguage() async {
   }
 }
 
+/// 安卓上把引擎换成**进程内 FFI**，并把原生才知道的沙箱目录注入进来
+Future<void> _setupAndroid() async {
+  EngineClient.transportFactory = (_, __) => FfiTransport();
+  // 沙箱目录只有原生知道（filesDir/cacheDir）。注入之后历史/配置才有地方写；
+  // 注入失败不拦启动 —— 界面对着默认路径也能开，只是存不住东西。
+  try {
+    const ch = MethodChannel('yshjy/paths');
+    final files = await ch.invokeMethod<String>('filesDir');
+    if (files != null && files.isNotEmpty) setPlatformStateDir(files);
+    final cache = await ch.invokeMethod<String>('cacheDir');
+    if (cache != null && cache.isNotEmpty) setPlatformCacheDir(cache);
+  } catch (_) {}
+}
+
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 安卓不许起子进程：引擎换成进程内 FFI（libyshjy.so，见 docs/ANDROID-整体方案 §4.2）。
-  // 桌面平台仍走 ProcessTransport —— 这条分支不碰已验收的三个桌面包。
   if (Platform.isAndroid) {
-    EngineClient.transportFactory = (_, __) => FfiTransport();
-    // 沙箱目录只有原生知道（filesDir）。注入之后历史/配置才有地方写；
-    // 注入失败不拦启动 —— 界面对着默认路径也能开，只是存不住东西。
-    try {
-      final dir = await const MethodChannel('yshjy/paths').invokeMethod<String>('filesDir');
-      if (dir != null && dir.isNotEmpty) setPlatformStateDir(dir);
-    } catch (_) {}
+    await _setupAndroid();
   }
   await _loadThemeMode();
   await _loadUiLanguage();
@@ -73,8 +81,9 @@ Future<void> main(List<String> args) async {
 
 /// 应用入口：只负责主题与语言无关的壳
 ///
-/// 配色按 UI-SPEC 的「青色系」（#00BCD4）—— 与主人喜欢的初音色系一致。
-/// 主题默认跟随系统，设置页可以切成浅色/深色（立刻生效，不用重启）。
+/// **同一份主题、两套壳**：桌面（`desktop/app_shell.dart`，左侧导航 + 托盘 + 拖放）
+/// 与手机（`mobile/mobile_shell.dart`，底部三页签）。分岔只在这一行，
+/// 逻辑全在 `common/` 里共享 —— 与参考项目 rustdesk 的做法一致。
 class YshjyApp extends StatelessWidget {
   /// 启动时要直接打开的文件（来自命令行 / 右键菜单），可能为空
   final String? initialFile;
@@ -83,21 +92,6 @@ class YshjyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF00BCD4);
-    // Windows 上 Flutter 默认字体是 Segoe UI，中文全靠系统回退；实测回退会挑到
-    // 「Microsoft YaHei Light」，11~12px 的小字笔画发细，看着发灰像半透明。
-    // 显式把中文回退钉成常规字重的「Microsoft YaHei UI」，西文仍用 Segoe UI。
-    // （Linux 不动：那边回退到 Noto Sans CJK，本来就没这毛病。）
-    final bool isWindows = Platform.isWindows;
-    ThemeData theme(Brightness b) => ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: b),
-          visualDensity: VisualDensity.standard,
-          fontFamily: isWindows ? 'Segoe UI' : null,
-          fontFamilyFallback:
-              isWindows ? const ['Microsoft YaHei UI', 'Microsoft YaHei'] : null,
-        );
-
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeMode,
       builder: (_, mode, __) => ValueListenableBuilder<String>(
@@ -107,10 +101,10 @@ class YshjyApp extends StatelessWidget {
         builder: (_, ___, ____) => MaterialApp(
           title: t('app.name'),
           debugShowCheckedModeBanner: false,
-          theme: theme(Brightness.light),
-          darkTheme: theme(Brightness.dark),
+          theme: buildYshjyTheme(Brightness.light),
+          darkTheme: buildYshjyTheme(Brightness.dark),
           themeMode: mode,
-          home: AppShell(initialFile: initialFile),
+          home: isMobileForm ? const MobileApp() : AppShell(initialFile: initialFile),
         ),
       ),
     );
