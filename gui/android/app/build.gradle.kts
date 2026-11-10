@@ -34,10 +34,10 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // 引擎是 Rust 编出来的 libyshjy.so（scripts/build-android.ps1 放进 jniLibs/）
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-        }
+        // 注意：这里**不能**写 ndk.abiFilters —— `flutter build apk --split-per-abi`
+        // 自己会设 splits 的 abi 过滤，两边同设会直接报
+        // "Conflicting configuration ... cannot be present when splits abi filters are set"。
+        // 打进去的 .so 由 jniLibs/ 里放什么决定（scripts/build-android.ps1 只放 arm64/armv7）。
     }
 
     signingConfigs {

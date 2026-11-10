@@ -584,5 +584,8 @@
   "mobile.dest.default": "默认：解到 App 私有目录",
   "mobile.empty.title": "网盘下载的「.mp4 / .png」，其实是压缩包",
   "mobile.export.fail": "导出没成功",
-  "mobile.empty.hint": "点下面的按钮选文件；认不出的格式也能试"
+  "mobile.empty.hint": "点下面的按钮选文件；认不出的格式也能试",
+  "mobile.out.download": "解到系统「下载」目录",
+  "mobile.out.download.hint": "需要「所有文件访问」权限。不开也行：默认解到 App 私有目录，完成页可一键导出",
+  "mobile.out.needPermission": "请先在系统设置里打开「所有文件访问」，再回来打开这个开关"
 }

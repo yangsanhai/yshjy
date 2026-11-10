@@ -103,18 +103,45 @@ if ((Test-Path $nm) -and (Test-Path $readelf)) {
 # ── 3. 打 APK ───────────────────────────────────────────────────────
 Write-Host '== 打 APK ==' -ForegroundColor Cyan
 Push-Location (Join-Path $root 'gui')
+$apkDir = Join-Path $root 'gui\build\app\outputs\flutter-apk'
 try {
-  $apkArgs = @('build', 'apk')
-  if ($Debug) { $apkArgs += '--debug' } else { $apkArgs += '--release' }
-  & flutter @apkArgs
-  if ($LASTEXITCODE -ne 0) { throw 'flutter build apk 失败' }
+  if ($Debug) {
+    & flutter build apk --debug
+    if ($LASTEXITCODE -ne 0) { throw 'flutter build apk 失败' }
+  } else {
+    # 按 ABI 拆包：arm64 单包 ~25 MB（不拆的话两个 ABI 合在一起 50+ MB，手机上白占一半）
+    & flutter build apk --release --split-per-abi
+    if ($LASTEXITCODE -ne 0) { throw 'flutter build apk 失败' }
+  }
 } finally { Pop-Location }
 
-# ── 4. 汇总 ─────────────────────────────────────────────────────────
-$apkDir = Join-Path $root 'gui\build\app\outputs\flutter-apk'
+# ── 4. 归拢交付件 + 校验清单 ─────────────────────────────────────────
+$ver = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+$dist = Join-Path $root 'dist-android'
+New-Item -ItemType Directory -Path $dist -Force | Out-Null
+
+if (-not $Debug) {
+  foreach ($pair in @(@{ Src = 'app-arm64-v8a-release.apk';  Dst = "yshjy-$ver-arm64.apk" },
+                     @{ Src = 'app-armeabi-v7a-release.apk'; Dst = "yshjy-$ver-armv7.apk" })) {
+    $src = Join-Path $apkDir $pair.Src
+    if (Test-Path $src) { Copy-Item $src (Join-Path $dist $pair.Dst) -Force }
+  }
+  $files = Get-ChildItem $dist -Filter '*.apk' | Where-Object { $_.Name -like "yshjy-$ver-*" }
+  $lines = foreach ($x in $files) {
+    $h = (Get-FileHash -Algorithm SHA256 -LiteralPath $x.FullName).Hash.ToLower()
+    "$h  $($x.Name)"
+  }
+  $lines | Set-Content -Path (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
+}
+
 Write-Host ''
 Write-Host '== 完成 ==' -ForegroundColor Green
-Get-ChildItem $apkDir -Filter *.apk -ErrorAction SilentlyContinue |
-  Sort-Object LastWriteTime -Descending |
+$show = if ($Debug) { $apkDir } else { $dist }
+Get-ChildItem $show -Filter '*.apk' -ErrorAction SilentlyContinue |
+  Sort-Object Name |
   Select-Object Name, @{n = '大小(MB)'; e = { [math]::Round($_.Length / 1MB, 1) } }, LastWriteTime |
   Format-Table -AutoSize
+if (-not $Debug) {
+  Write-Host "校验清单：$dist\SHA256SUMS.txt" -ForegroundColor Cyan
+  Get-Content (Join-Path $dist 'SHA256SUMS.txt') | ForEach-Object { "  $_" }
+}

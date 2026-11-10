@@ -584,5 +584,8 @@
   "mobile.dest.default": "預設：解到 App 私有目錄",
   "mobile.empty.title": "網盤下載的「.mp4 / .png」，其實是壓縮檔",
   "mobile.export.fail": "匯出沒成功",
-  "mobile.empty.hint": "點下面的按鈕選檔案；認不出的格式也能試"
+  "mobile.empty.hint": "點下面的按鈕選檔案；認不出的格式也能試",
+  "mobile.out.download": "解到系統「下載」目錄",
+  "mobile.out.download.hint": "需要「所有檔案存取」權限。不開也行：預設解到 App 私有目錄，完成頁可一鍵匯出",
+  "mobile.out.needPermission": "請先在系統設定開啟「所有檔案存取」，再回來開啟這個開關"
 }
