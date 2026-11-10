@@ -38,6 +38,22 @@ String get homeDir {
   return env['HOME'] ?? env['USERPROFILE'] ?? '.';
 }
 
+String? _overrideCacheDir;
+
+/// 原生层（iOS/Android）注入缓存目录；桌面不需要调
+void setPlatformCacheDir(String path) {
+  _overrideCacheDir = path;
+}
+
+/// 缓存目录：临时文件（SAF 拷过来的输入包、解出来的封面）放这里
+///
+/// 安卓上走原生给的 `cacheDir`（系统空间紧张时可以清）；桌面上缓存就是 state 目录，
+/// 不另开一处 —— 少一个要清理的地方。
+String get cacheDir {
+  final injected = _overrideCacheDir;
+  if (injected != null && injected.isNotEmpty) return injected;
+  return stateDir;
+}
 /// 状态目录（崩溃日志 / 历史 / 引导标记）—— 目录可能还不存在
 String get stateDir {
   final injected = _overrideStateDir;
