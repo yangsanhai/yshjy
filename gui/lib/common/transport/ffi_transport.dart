@@ -176,7 +176,12 @@ class FfiTransport implements EngineTransport {
     final api = _api!;
     String result;
     try {
-      result = await Isolate.run(() => _waitJobResultIsolate(_libraryName, job.address));
+      // 只把「库名 + 地址」带过去：闭包里若碰 	his（或 Pointer），
+      // Isolate.run 会试图发送整个 FfiTransport（带 Completer）→
+      // Illegal argument in isolate message: object is unsendable。实测踩过。
+      final libraryName = _libraryName;
+      final address = job.address;
+      result = await Isolate.run(() => _waitJobResultIsolate(libraryName, address));
     } catch (e) {
       result = jsonEncode({
         'ok': false,
