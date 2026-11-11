@@ -27,13 +27,18 @@
 >
 > **本机同步验收（2026-11-11 实测，接收侧重跑）**：
 > - `cargo test`：448 过 / 1 忽略 + 33 + 2 doctests，rc=0 ✓
-> - `tests/all.sh`：**62 通过 / 1 失败 / 5 跳过**（468 秒），唯一挂的是 `flutter test`
+> - `tests/all.sh`：修复前 **62 通过 / 1 失败 / 5 跳过**（468 秒）→ 修复后 **63 通过 / 0 失败 / 5 跳过**（293 秒）✓
 > - `flutter test` 里的两条红都不是产品 bug，是**测试自身**的两处问题：
 >   ① `手机外壳：三个页签都在…` —— 断言找 `跟随系统`，而语言包实际值是 `跟随系统（推荐）`（`settings.theme.auto`），
 >      精确匹配落空。盘上那张「437 过 / 0 红」是**批 0 重构时（22:06）**的数字，批 5 加了这条测试之后没再重跑全量，属过期绿。
 >   ② `金标：手机首页空态` —— `goldens/mobile_home_empty.png` 是 Windows 上录的 1179×2556 基准，
 >      本机字体渲染差 9.26%（`gui/test/failures/` 里有 diff 图），属平台差异。
-> - 修法待老板拍板：① 断言改成从语言包取文案（别再手写中文字面量）；② 金标按平台存双基准，或只在该平台跑。
+> - **已修（同日，`flutter test` 转绿）**：
+>   ① 断言一律走 `t(key)` 从语言包取，不再手写中文字面量；
+>   ② 金标按平台分文件（`mobile_home_empty_linux.png` / `_windows.png`），字体候选加了 Linux 的 Noto CJK 与文泉驿，
+>      本机基准用真字体渲染（中文不是方块，已看过图）；更新本平台基准：`flutter test test/mobile_ui_test.dart --update-goldens`；
+>   ③ 顺带修掉一个**真问题**：设置页一进去就 `hello()`，不注入假引擎会真 spawn 子进程，
+>      那个 6 小时超时 Timer 在假时钟里永不完成 → 用例结束报「A Timer is still pending」。测试里已装 `FakeEngine`。
 
 > **2026-11-10 夜 · 📱 安卓版从零到可安装 APK（在 Windows 机上做，真机 Redmi K70 冠军版验收）**
 >
