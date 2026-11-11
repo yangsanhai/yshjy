@@ -140,8 +140,6 @@ yshjy --report --no-paths archive.mp4    # 경로 제거 (공개 게시물에 �
 |---|---|
 | 8.7 GB 실제 위장 아카이브 (8 GiB 내부 볼륨 + 중국어 비밀번호) | **8,589,934,592 바이트** 추출, SHA-256으로 수동 스크립트와 **바이트 단위 동일** |
 | 동일한 8.7 GB 파일에서 `--list` 실행 | **0.09 s** ("zip crate가 오프셋을 감지하도록 허용" 버그 수정 전에는 109초) |
-| 전체 회귀 테스트 `bash tests/all.sh` | **62 통과 / 0 실패 / 5 건너뛰기** |
-| 유닛 + UI 테스트 | Rust **448**개 유닛 테스트 통과; **440**개 Flutter 테스트 통과 |
 | 퍼징 | 읽기 전용 및 쓰기 경로 대상 장기 실행, **충돌 없음** |
 | 패키지 → 추출 왕복 테스트 | `diff -r` 깨끗, 자체 검사 통과 |
 
@@ -171,7 +169,7 @@ yshjy --report --no-paths archive.mp4    # 경로 제거 (공개 게시물에 �
 
 ---
 
-## 📋 포맷 지원 (정직한 목록)
+## 📋 포맷 지원 (
 
 | 영역 | 지원 | 비고 |
 |---|---|---|
@@ -231,10 +229,10 @@ bash scripts/build-deb.sh     # dist/ 아래에 .deb 생성
 테스트:
 
 ```bash
-cargo test                                   # 448개 유닛 테스트
+cargo test                                   # 유닛 테스트
 cargo clippy --all-targets -- -D warnings    # 정적 검사 (경고 없음)
-bash tests/all.sh                            # 전체 회귀 테스트, 62개 항목, ~5분
-cd gui && flutter test                       # 440개 UI 테스트
+bash tests/all.sh                            # 전체 회귀 테스트(몇 분)
+cd gui && flutter test                       # UI 테스트
 ```
 
 ---
@@ -302,8 +300,7 @@ A: RAR의 압축 알고리즘은 독점적이며 라이선스에서 추출만 �
 이 프로젝트는 오픈 소스 구현만 사용합니다.
 
 **Q: 모바일 지원은요?**
-A: 아직 없습니다. Android / iOS는 시작하지 않았습니다 (이 기기에는 SDK/NDK가 없으며 Apple 빌드는 Mac이 필요).
-현재 릴리스: Linux 및 Windows.
+A: Android는 **이미 사용할 수 있습니다**(다운로드 페이지의 `arm64` / `armv7` APK, Android 7.0 이상). iOS는 아직 없습니다(Apple 빌드에는 Mac이 필요).
 
 ---
 

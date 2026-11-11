@@ -144,9 +144,6 @@ yshjy --report --no-paths archive.mp4    # rutas redactadas (usa esto para publi
 |---|---|
 | Archivo disfrazado real de 8.7 GB (volúmenes internos de 8 GiB + contraseña en chino) | extraídos **8,589,934,592 bytes**, SHA-256 **idéntico byte a byte** a un script escrito a mano |
 | `--list` en ese mismo archivo de 8.7 GB | **0.09 s** (109 s antes de corregir el error "dejar que el crate zip detecte el desplazamiento") |
-| Regresión completa `bash tests/all.sh` | **62 aprobados / 0 fallidos / 5 omitidos** |
-| Pruebas unitarias + de interfaz | **448** pruebas unitarias en Rust en verde; **440** pruebas de Flutter en verde |
-| Fuzzing | los objetivos de solo lectura y escritura se ejecutan durante mucho tiempo, **cero fallos** |
 | Empaquetar → extraer ida y vuelta | `diff -r` limpio, autocomprobación aprobada |
 
 ---
@@ -175,7 +172,7 @@ yshjy --report --no-paths archive.mp4    # rutas redactadas (usa esto para publi
 
 ---
 
-## 📋 Soporte de formatos (lista honesta)
+## 📋 Soporte de formatos 
 
 | Área | Soportados | Notas |
 |---|---|---|
@@ -237,10 +234,10 @@ bash scripts/build-deb.sh     # produce un .deb en dist/
 Pruebas:
 
 ```bash
-cargo test                                   # 448 pruebas unitarias
+cargo test                                   # pruebas unitarias
 cargo clippy --all-targets -- -D warnings    # comprobaciones estáticas (cero advertencias)
-bash tests/all.sh                            # regresión completa, 62 elementos, ~5 min
-cd gui && flutter test                       # 440 pruebas de interfaz
+bash tests/all.sh                            # regresión completa (unos minutos)
+cd gui && flutter test                       # pruebas de interfaz
 ```
 
 ---
@@ -297,23 +294,7 @@ remoto en esa máquina, lo cual está varias capas por encima de un extractor.
 **P: ¿Algún riesgo de seguridad?**
 R: Defensas integradas: bloqueo de traversal de ruta (`../../etc/passwd`), protección contra bombas zip
 (relación de compresión más tamaño total), y una advertencia cuando salen ejecutables. Pero sé
-honesto contigo mismo: estos paquetes de "renombrar y extraer" son un foco de malware. Escanea antes
-de ejecutar.
-
-**P: ¿Puede darme un video completo y reproducible?**
-R: Sí. `yshjy --extract-cover archive.mp4`, o marca solo "Portada disfrazada" en la interfaz gráfica —
-la portada ya es un MP4 completo y se extrae sin tocar.
-
-**P: ¿Modifica mis archivos originales?**
-R: **Nunca.** Cada reparación ocurre en memoria; el archivo en el disco no se toca, byte por byte.
-
-**P: ¿Por qué extrae RAR pero no crea RAR?**
-R: El algoritmo de compresión de RAR es propietario y su licencia solo permite extracción.
-Este proyecto usa implementaciones de código abierto exclusivamente.
-
-**P: ¿Móvil?**
-R: Todavía no. Android / iOS no han comenzado (no hay SDK/NDK en esta máquina, y las compilaciones de Apple
-necesitan una Mac). Lanzamientos actuales: Linux y Windows.
+. Para iOS todavía no: hace falta un Mac para compilar.
 
 ---
 
