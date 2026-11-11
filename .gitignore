@@ -68,3 +68,8 @@ dist-android/
 
 # 金标失败时的差异图（flutter test 自动生成）
 gui/test/failures/
+
+# 大测试样本不进库（随机数据压不动，永久占体积）；job.rs 的 golden 夹具要保留。
+spike/testdata/*
+!spike/testdata/rar_fixtures/
+!spike/testdata/rar_fixtures/**
