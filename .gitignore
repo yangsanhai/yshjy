@@ -44,3 +44,6 @@ tests/data/
 
 # 安卓出包产物（scripts/build-android.ps1 生成；交付件另存 D:\Work\yshjy-win\安卓）
 dist-android/
+
+# 金标失败时的差异图（flutter test 自动生成）
+gui/test/failures/
