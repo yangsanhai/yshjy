@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/common/l10n.dart';
 import 'package:yshjy_gui/mobile/mobile_shell.dart';
 
+import 'fake_engine.dart';
+
 /// K70 冠军版的逻辑分辨率（1080×2400 物理 / 3.0 dpr ≈ 360×800；取它实际报的 393×852 宽高比）
 const Size _phoneSize = Size(393, 852);
 
@@ -27,6 +29,10 @@ const Size _phoneSize = Size(393, 852);
 /// 只注册成别的名字的话界面还是用 Ahem（方块字），金标图看不清文案。
 Future<void> _loadCjkFont() async {
   const candidates = [
+    // Linux（本机 / CI 的基准图要用它，否则中文字是方块）
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', // 思源黑体，TTC
+    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', // 文泉驿微米黑，TTC
+    // Windows（出包那台）
     r'C:\Windows\Fonts\simhei.ttf', // 黑体，纯 TTF
     r'C:\Windows\Fonts\simsun.ttc', // 宋体，TTC
     r'C:\Windows\Fonts\msyh.ttc', // 微软雅黑，TTC
@@ -48,10 +54,25 @@ Future<void> _loadCjkFont() async {
 }
 
 void main() {
+  late FakeEngine fake;
+
   setUpAll(() async {
     await _loadCjkFont();
     await initLocale('zh-CN');
   });
+
+  // 设置页一进去就会 `hello()` 问引擎版本。不注入假引擎就会真 spawn 子进程，
+  // 它那个 6 小时超时 Timer 在假时钟里永不完成 → 用例结束报
+  // 「A Timer is still pending」（2026-11-11 本机跑全量时撞到）。
+  // 每个用例给一个新 fake（EngineClient 是单例，旧流已关）。
+  setUp(() {
+    fake = FakeEngine();
+    installFakeEngine(fake);
+  });
+
+  tearDown(() => fake.dispose());
+
+  tearDownAll(restoreRealTransport);
 
   testWidgets('手机外壳：三个页签都在，能切到历史与设置', (tester) async {
     await tester.binding.setSurfaceSize(_phoneSize);
@@ -61,19 +82,23 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('解压'), findsWidgets);
-    expect(find.text('历史'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
+    // 文案一律从语言包取，不写死中文字面量：写死「跟随系统」会漏掉包里那个「（推荐）」，
+    // 而且界面语言一变就整条假红（本机第一次跑全量就红在这里）。
+    expect(find.text(t('shell.nav.extract')), findsWidgets);
+    expect(find.text(t('shell.nav.history')), findsOneWidget);
+    expect(find.text(t('shell.nav.settings')), findsOneWidget);
 
-    // 切到历史：空态文案应该出现
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('历史')));
+    // 切到历史：页标题应该出现
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text(t('shell.nav.history'))));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('历史记录'), findsWidgets);
+    expect(find.text(t('history.title')), findsWidgets);
 
     // 切到设置：主题三项都在
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('设置')));
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text(t('shell.nav.settings'))));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('跟随系统'), findsWidgets);
+    expect(find.text(t('settings.theme.auto')), findsWidgets);
 
     await tester.binding.setSurfaceSize(null);
   });
@@ -85,9 +110,12 @@ void main() {
     await tester.pumpWidget(const MobileApp());
     await tester.pump(const Duration(milliseconds: 400));
 
+    // 基准按平台分开存：Windows 与 Linux 的中文字体回退不同，同一张图跨平台必差。
+    // 更新本平台的基准：flutter test test/mobile_ui_test.dart --update-goldens
+    final golden = 'goldens/mobile_home_empty_${Platform.operatingSystem}.png';
     await expectLater(
       find.byType(MaterialApp),
-      matchesGoldenFile('goldens/mobile_home_empty.png'),
+      matchesGoldenFile(golden),
     );
     await tester.binding.setSurfaceSize(null);
   });
