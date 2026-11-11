@@ -70,3 +70,13 @@ python3 scripts/desensitize.py --denylist ~/.hermes/.private/yshjy-denywords.txt
 - `--path` / `--path-glob` 是「**只保留**这些路径」，不是「只改这些路径」——
   2026-11-11 用 `--path-glob '*.md'` 想把替换限制在文档里，结果把 `src/`、`tests/`、`scripts/`
   全删了（1067 个文件只剩 114 个）。要么全库替换，要么写脚本精确替换。
+
+**rsync 会带回大样本**：`spike/testdata/`（50MB）和 `tests/data/`（47MB）在开发库里是完整的，
+同步后发布库工作树也会多出来。发布库的 `.gitignore` 已经挡住了它们，但提交前务必确认：
+
+```
+git status --short | grep -E 'spike/testdata|tests/data' | head
+```
+
+只应该有清单（`M`/`D`）或那 19 个放行的小夹具，**不能出现几十个 ??
+（2026-11-11 就因为没检查，把 50MB 大样本 add 进库，白推了一次 31MB）。**
