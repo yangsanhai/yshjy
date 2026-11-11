@@ -370,25 +370,8 @@ para engañar. Úsala solo para tus propias copias de seguridad y compartir de m
 
 ## ⚖️ Licencia y descargo de responsabilidad
 
-[MIT](LICENSE) — úsalo, modifícalo, redistribúyelo, comercialmente o no. El único requisito
-es mantener el aviso de copyright y el texto de la licencia.
+Este proyecto se publica bajo la [licencia MIT](LICENSE): puedes usarlo, modificarlo y redistribuirlo libremente, incluso con fines comerciales. La única condición es conservar el aviso de copyright y el texto de la licencia (ver `LICENSE` y la cabecera de cada archivo de código).
 
-Ese reconocimiento vive en dos lugares:
+Las bibliotecas de terceros conservan sus propias licencias; la lista completa y los textos vienen con la aplicación en Acerca de → Licencias de código abierto. No hace falta conexión a internet.
 
-1. Cada archivo de origen comienza con `SPDX-License-Identifier: MIT` +
-   `Copyright (c) 2026 yangsanhai`
-2. Está compilado en el binario: `yshjy --version` imprime el reconocimiento, y un
-   **marcador de procedencia no imprimible** está incrustado, para que cualquiera que vea
-   `yshjy|MIT|Copyright (c) 2026 yangsanhai` en un volcado de `strings` sepa de dónde vino el código
-   (esta es cómo se honra el requisito de atribución de MIT — no es una marca de agua encubierta, y **nunca
-   altera los archivos que extraes**)
-
-Dependencias de terceros de código abierto: **190** dependencias Rust más los paquetes Flutter / pub,
-cada una bajo su propia licencia (MIT / Apache-2.0 / BSD-3-Clause / Zlib / Unicode-3.0 …).
-La lista completa y los textos de licencia **se envían dentro de la aplicación**: Acerca de → Licencias de código abierto.
-La lista se genera a partir de `Cargo.lock` mediante `scripts/gen-third-party.py` y `tests/all.sh`
-verifica que no esté desactualizada, por lo que siempre coincide con lo que realmente se compiló.
-**Nada de esto necesita una conexión a red** — toda la promesa del producto es estar fuera de línea.
-
-**Descargo de responsabilidad:** solo para **copia de seguridad personal y compartir legalmente**. No lo uses para
-evadir la ley ni para distribuir contenido que infrinja derechos. Eres responsable de lo que hagas con él.
+**Descargo**: está pensado solo para copias de seguridad personales y para compartir de forma legal. No lo uses para eludir la ley ni para distribuir contenido que infrinja derechos. El uso que hagas de la herramienta es tu responsabilidad.
