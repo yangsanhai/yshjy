@@ -36,7 +36,28 @@ fuzz/corpus/
 fuzz/artifacts/
 fuzz/coverage/
 *.tar.gz
-tests/data/
+# 测试夹具：默认整个目录不进库（大样本、生成物都在里面），
+# 但下面这些是 Rust 单元测试直接读的小夹具 —— 不放行的话 CI 上 cargo test 会
+# 报 No such file（2026-11-11 首次推 GitHub 时踩到：本机有水，所以一直是绿的）。
+tests/data/*
+!tests/data/A3_steg_modeA_cn_pwd.mp4
+!tests/data/A6_declared_size_impossible.zip
+!tests/data/B4_rar5_cn_pwd.rar
+!tests/data/C12_split.z01
+!tests/data/C4_plain.tar.gz
+!tests/data/D2b_prefixed_2355200.zip
+!tests/data/D9_no_central_directory.zip
+!tests/data/aes_secret.zip
+!tests/data/extended_timestamp_bad.zip
+!tests/data/implode_legacy.zip
+!tests/data/rar5_header_encrypted.rar
+!tests/data/rar_mtime_sample.rar
+!tests/data/sevenz_encrypted.7z
+!tests/data/zip64_magic_in_filename.zip
+!tests/data/zipcrypto_secret.zip
+!tests/data/rar_vol_sample/
+!tests/data/rar_vol_sample/**
+
 
 # 过程日志（参考库拉取脚本的临时输出，别入库也别留）
 .unshallow.log
