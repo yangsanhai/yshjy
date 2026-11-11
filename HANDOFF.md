@@ -84,7 +84,7 @@
 > **安卓侧**：可装 APK + 真机（Redmi K70）全链路验收通过；剩两笔都不影响用：
 > 长按「打开方式」进 App 的 intent-filter、Android 10 以下存储分支未真机验。
 >
-> **GitHub 上架前**：脱敏只剩 13 处 `/home/yangsanhai`（8 个文件，`grep -ro` 实测）；
+> **GitHub 上架前**：脱敏只剩 13 处 `/home/user`（8 个文件，`grep -ro` 实测）；
 > `refs/analysis` 要单独确认不进库。
 >
 > **本机同步验收（2026-11-11 实测，接收侧重跑）**：
