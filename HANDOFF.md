@@ -1,5 +1,22 @@
 # yshjy 交接文档（重开对话先读这个）
 
+> **2026-11-12 凌晨 · 隐私修正：真实文件名 / 解压密码 / 网盘目录曾随公开仓库上线**
+>
+> 用户在 GitHub 上看到界面示例里出现他真实的文件名与解压密码，指出「你不是脱敏了吗」。
+> 原因：`desensitize.py` 只替换了 `/home/<作者>` 路径，**正文里的真实信息一处没动**。
+> 共 122 处（7 语界面文案 locales、README、DESIGN、CLI-SPEC、UI-SPEC、CHANGELOG、DEVLOG、tests/README）。
+>
+> 处理：
+> 1. 全库换通用示例（示例视频 / demo-password / 示例包）；RAR 回归夹具用新密码重造（227B）。
+> 2. `git filter-repo --replace-text` 重写**全部历史**，GitHub main + tag 强推（新 HEAD 59f8478，450 提交）。
+> 3. `scripts/desensitize.py` 增加 `--denylist`：词表在库外 `~/.hermes/.private/yshjy-denywords.txt`（600），
+>    推送前 `--denylist ... --check` 必须返回 0。流程写进 `PUBLISHING.md`。
+> 4. README 许可段删掉自辩式说明（不打印的溯源标记 / 不是偷偷埋水印 / 190 个依赖），只留 MIT 要求的一句，7 语言同步。
+>
+> **没解决干净的**：force push 后旧提交对象 GitHub 不立刻回收，实测旧 sha 仍能通过 API 打开；
+> 要立刻彻底清须联系 GitHub Support 或删库重建（用户未定）。已发布的 Win/安卓包内 README/CHANGELOG
+> 仍是旧文案，需重出包才更新。
+>
 > **2026-11-11 深夜 · 已上 GitHub（公开）+ Release v1.0.0 三平台安装包**
 >
 > **仓库**：https://github.com/yangsanhai/yshjy （public / MIT / 445 个提交 / CI 三个 job 全绿）
