@@ -15,7 +15,7 @@
 **教训（2026-11-11）**：第一版只做了路径替换，结果仓库公开后用户发现正文里还留着他真实的
 文件名、解压密码和网盘目录号（README / DESIGN / CLI-SPEC / 界面文案 / tests/README 共 122 处）。
 路径脱敏**不等于**内容脱敏 —— 所以加了 --denylist：词表放在**库外的私有文件**里
-（`~/.hermes/.private/yshjy-denywords.txt`，660 权限），脚本本身不含任何敏感词，
+（`~/hermes/.private/yshjy-denywords.txt`，660 权限），脚本本身不含任何敏感词，
 推送前必须 `--denylist ... --check` 返回 0。
 
 规则：
