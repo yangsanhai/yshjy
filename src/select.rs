@@ -310,17 +310,17 @@ mod tests {
     #[test]
     fn 中文路径可匹配() {
         assert!(glob_match("游戏数据/**/*.exe", "游戏数据/01/08/Lake.exe"));
-        assert!(glob_match("*魔女*", "2-示例视频2.0"));
+        assert!(glob_match("*示例*", "2-示例视频2.0"));
         assert!(
-            !glob_match("*魔女*", "2-示例视频2.0/Lake.exe"),
+            !glob_match("*示例*", "2-示例视频2.0/Lake.exe"),
             "单个 * 不跨目录 —— 跨层要用 ** 或交给 Selection（不含 / 的模式按文件名匹配）"
         );
-        let s = Selection::matching("*魔女*");
+        let s = Selection::matching("*示例*");
         assert!(
             !s.matches(0, "2-示例视频2.0/Lake.exe", false),
-            "不含 / 的模式只看文件名，Lake.exe 里没有「魔女」"
+            "不含 / 的模式只看文件名，Lake.exe 里没有「示例」"
         );
-        assert!(s.matches(1, "2-示例视频2.0", true), "条目名本身含「魔女」");
+        assert!(s.matches(1, "2-示例视频2.0", true), "条目名本身含「示例」");
     }
 
     #[test]

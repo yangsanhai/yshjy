@@ -371,25 +371,8 @@ Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## ⚖️ Licence & disclaimer
 
-[MIT](LICENSE) — use it, modify it, redistribute it, commercially or not. The one requirement
-is keeping the copyright notice and the licence text.
+This project is released under the [MIT Licence](LICENSE): free to use, modify and redistribute, including commercially. The only requirement is keeping the copyright notice and the licence text (see `LICENSE` and the header of each source file).
 
-That attribution lives in two places:
+Bundled third-party libraries keep their own licences; the full list and licence texts ship with the app under About → Open-source licences. None of it needs a network connection.
 
-1. Every source file starts with `SPDX-License-Identifier: MIT` +
-   `Copyright (c) 2026 yangsanhai`
-2. It is compiled into the binary: `yshjy --version` prints the attribution, and a
-   **non-printing provenance marker** is embedded, so anyone who sees
-   `yshjy|MIT|Copyright (c) 2026 yangsanhai` in a `strings` dump knows where the code came
-   from (this is how MIT's attribution requirement is honoured — it is not a covert
-   watermark, and it **never alters the files you extract**)
-
-Third-party open-source crates: **190** Rust dependencies plus the Flutter / pub packages,
-each under its own licence (MIT / Apache-2.0 / BSD-3-Clause / Zlib / Unicode-3.0 …).
-The full list and licence texts **ship inside the app**: About → Open-source licences.
-The list is generated from `Cargo.lock` by `scripts/gen-third-party.py` and `tests/all.sh`
-verifies it isn't stale, so it always matches what was actually compiled.
-**None of it needs a network connection** — the whole product promise is being offline.
-
-**Disclaimer**: for **personal backup and lawful sharing** only. Do not use it to evade
-the law or to distribute infringing content. You are responsible for what you do with it.
+**Disclaimer**: intended for personal backup and lawful sharing only. Do not use it to evade the law or distribute infringing content. You are responsible for how you use it.
