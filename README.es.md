@@ -312,9 +312,7 @@ contribuyentes futuros sepan exactamente dónde está el límite.
 - **Sin opción de archivo de diccionario, y el límite de candidatos es fijo.** `max_candidates` tiene un límite
   fijo; ninguna configuración convierte esto en un forzador de contraseñas (una prueba lo hace cumplir).
 - **Sin red, sin subidas.** No es "prometemos no enviar" — **no hay código de red en el programa en absoluto**.
-- **Sin recolección de contraseñas.** Las contraseñas extraídas de un leeme se **prueban y descartan**,
-  nunca se escriben en tu libro de contraseñas. Ese libro es tuyo para editar, o para llenar mediante
-  `--import-passwords`.
+- **Sin recolección de contraseñas.** Las contraseñas no se guardan a escondidas.
 - **Sin modificación de tus archivos.** Cada reparación se hace en memoria.
 
 **El riesgo real son los archivos que otras personas te entregan.** Estos paquetes son un foco de malware.
