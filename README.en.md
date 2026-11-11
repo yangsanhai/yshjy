@@ -327,9 +327,8 @@ saves everyone a misunderstanding.
   ceiling; no configuration turns this into a brute-forcer (a test enforces it).
 - **No network, no uploads.** Not "we promise not to send" — there is **no networking code
   in the program at all**.
-- **No password harvesting.** Passwords scraped from a readme are **tried and discarded**,
-  never written into your password book. That book is yours to edit, or to fill via
-  `--import-passwords`.
+- **No password harvesting.** A password found in a readme is **tried and thrown away** —
+  never stored.
 - **No modification of your files.** Every repair is done in memory.
 
 **The real risk is the archives other people hand you.** These packs are a malware hotspot.
