@@ -4,6 +4,16 @@
 
 ## [1.0.0] · 2026-11-08 —— 第一次正式发布：署名、七语 README、中英双套截图
 
+**2026-11-11 深夜 · 上 GitHub（公开）+ Release v1.0.0**
+
+- 仓库 https://github.com/yangsanhai/yshjy （MIT / 445 提交 / CI 三 job 全绿）
+- 发布库 `~/hermes/yshjy-github`：`filter-repo` 去掉 `target-full` 与 21 个大测试样本（pack 232MB → 11.9MB），
+  `scripts/desensitize.py` 脱敏 452 处家目录路径；推送走 SSH over 443（HTTPS 每次 26 秒被 408 掐断）。
+- Release v1.0.0 共 8 个包：Linux（deb + 两档 tar.gz）、Windows（setup.exe / 绿色版 / CLI）、
+  Android（arm64 / armv7），附 3 份 SHA256SUMS。
+- CI 首次跑红的原因已修：`.gitignore` 忽略了整个 `tests/data/`，7 条 Rust 单测在 CI 上找不到夹具；
+  现在放行了单测直接读的 19 个小夹具（3.9MB）。
+
 **2026-11-11 重出包（同版本号，源码前进 8 个提交后重新打包并装机）**
 
 - 并入移动硬盘上的 6 个安卓提交（`gui/lib` 拆成 `common/` + `desktop/` + `mobile/`、手机界面、FFI 桥接、`build-android.ps1`）与 Windows 出包提交；界面重新 `flutter build linux --release`。
