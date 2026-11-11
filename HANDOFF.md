@@ -1,6 +1,6 @@
 # yshjy 交接文档（重开对话先读这个）
 
-> **2026-11-11 · 移动硬盘同步完成 —— 盘上 6 个安卓提交已并入本机，Linux 侧只剩「重出包 + 重装」**
+> **2026-11-11 · 移动硬盘同步 + Linux 1.0.0 重出包装机完成（六项验收全过）**
 >
 > 本机 HEAD 现在是「盘上 `886f913` + 一笔 `fix(signature)` 死代码修复」。盘上工作区当时零改动，两边没有文件级覆盖。
 >
@@ -8,12 +8,12 @@
 > `dist-win/`（setup.exe 15.1M、绿色版 zip 19.6M、CLI zip 7.3M）、
 > `dist-android/`（arm64 23.1M、armv7 14.6M）；已拷回本机同名目录，`.gitignore` 已挡，不入库。
 >
-> **当前唯一欠账 = Linux 1.0.0 重出包 + 重装**：
-> - 装机的 deb 是 11-08 22:59 那份，**不含** `fix(signature)`，也**不含**批 0 的 `gui/lib` 目录重构 → 界面必须重编
-> - 顺序：把 `dist/` 里 1.0.0 旧产物挪走（`release.sh` 拒绝覆盖同版本）→ `flutter build linux --release`
->   → `release.sh` → `build-deb.sh` → `test-packages.sh`（期望 37/37）→ `tests/all.sh`
->   （2026-11-11 实测：**62 通过 / 1 失败 / 5 跳过**，唯一的红是安卓批带来的 `mobile_ui_test.dart` 两条，见本卡末「同步验收」）
->   → `sudo apt install ./dist/yshjy_1.0.0_amd64.deb` + 六项验收
+> **Linux 1.0.0 已重出包 + 已装机（2026-11-11 22:5x，六项验收全过）**：
+> - 旧的 1.0.0 七件产物挪到 scratch（`yshjy-dist-1.0.0-old/`，没删）；界面重新 `flutter build linux --release`
+>   （`libapp.so` 22:52，`version.json` = 1.0.0）；
+> - 两档 tar.gz 各 4.16 MiB、`yshjy_1.0.0_amd64.deb` 11.09 MiB，`test-packages.sh` **37/37**；
+> - 装机六项：`dpkg` 1.0.0 / `yshjy`+`yshys` 都 1.0.0 / 菜单 **14** 种格式 / `--version` 末尾署名行 /
+>   装机 `libapp.so` 与 deb 内那份 md5 相同（`39a9ee21…`）/ 真打包→真解压两个 4 MB+1 MB 文件 sha256 逐个一致（中文子目录名保住）。
 >
 > **Windows 侧**：1.0.0 三件套已出、老板已装机验收通过。但盘上 `dist-win/` 是 21:42 编的，
 > 批 0 目录重构（22:06）在它之后 —— 那份界面对应重构前的代码（行为等价，只是目录结构不同）。
