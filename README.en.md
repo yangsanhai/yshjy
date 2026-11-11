@@ -138,16 +138,13 @@ yshjy --report archive.mp4
 yshjy --report --no-paths archive.mp4    # paths redacted (use this for public posts)
 ```
 
-**Measured on real files, not demo data:**
+**Tried on real files, not demo data:**
 
 | Case | Result |
 |---|---|
-| 8.7 GB real disguised archive (8 GiB inner volumes + Chinese password) | extracted **8,589,934,592 bytes**, SHA-256 **byte-identical** to a hand-written script |
-| `--list` on that same 8.7 GB file | **0.09 s** (109 s before the "let the zip crate detect the offset" bug was fixed) |
-| Full regression `bash tests/all.sh` | **62 passed / 0 failed / 5 skipped** |
-| Unit + UI tests | Rust **448** unit tests green; **440** Flutter tests green |
-| Fuzzing | read-only and write-path targets run long, **zero crashes** |
-| Pack → extract round trip | `diff -r` clean, self-check passed |
+| An 8.7 GB disguised archive (8 GiB inner volumes + a Chinese password) | fully extracted, byte-for-byte identical to the original |
+| Listing that same 8.7 GB file without extracting | **0.09 s** |
+| Pack, then extract again | output identical to the input files |
 
 ---
 
@@ -175,7 +172,7 @@ yshjy --report --no-paths archive.mp4    # paths redacted (use this for public p
 
 ---
 
-## 📋 Format support (honest list)
+## 📋 Format support
 
 | Area | Supported | Notes |
 |---|---|---|
@@ -237,10 +234,10 @@ bash scripts/build-deb.sh     # produces a .deb under dist/
 Tests:
 
 ```bash
-cargo test                                   # 448 unit tests
-cargo clippy --all-targets -- -D warnings    # static checks (zero warnings)
-bash tests/all.sh                            # full regression, 62 items, ~5 min
-cd gui && flutter test                       # 440 UI tests
+cargo test                                   # Rust unit tests
+cargo clippy --all-targets -- -D warnings    # static checks
+bash tests/all.sh                            # full regression (a few minutes)
+cd gui && flutter test                       # UI tests
 ```
 
 ---
@@ -312,22 +309,20 @@ A: RAR's compression algorithm is proprietary and its licence allows extraction 
 This project uses open-source implementations exclusively.
 
 **Q: Mobile?**
-A: Not yet. Android / iOS are unstarted (no SDK/NDK on this machine, and Apple builds
-need a Mac). Current releases: Linux and Windows.
+A: Android **works today** — grab the `arm64` or `armv7` APK from the download page
+(Android 7.0+). iOS is not available yet; that needs a Mac to build.
 
 ---
 
 ## 🚫 Things this tool deliberately does not do
 
-These are not "not yet" — they are **out of scope by design**, written down so users and
-future contributors know exactly where the line is.
+These are not "not yet" — they are **out of scope by design**. Writing the line down
+saves everyone a misunderstanding.
 
 - **No dictionary attacks, no brute force.** Password candidates come from exactly two
   places: passphrases **you** recorded, and passphrases the packer **published next to the
   archive** in a readme.
 - **No built-in common-password list.** That would be shipping a small dictionary.
-  An old "try built-in common passwords" switch never had any wiring (a fake shell) and
-  **has been removed**.
 - **No dictionary-file option, and the candidate cap is hard.** `max_candidates` has a hard
   ceiling; no configuration turns this into a brute-forcer (a test enforces it).
 - **No network, no uploads.** Not "we promise not to send" — there is **no networking code

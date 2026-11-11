@@ -129,9 +129,6 @@ yshjy --report --no-paths archive.mp4    # 路徑已刪除（用於公開張貼�
 |---|---|
 | 8.7 GB 真實偽裝壓縮檔（8 GiB 內部分卷 + 中文密碼） | 解壓縮 **8,589,934,592 位元組**，SHA-256 **位元組完全一致**（與手動腳本比對） |
 | 在同一個 8.7 GB 檔案上執行 `--list` | **0.09 秒**（在修復 "讓 zip crate 偵測偏移" Bug 之前需要 109 秒） |
-| 完整回歸測試 `bash tests/all.sh` | **62 通過 / 0 失敗 / 5 跳過** |
-| 單元 + UI 測試 | Rust **448** 個單元測試通過；**440** 個 Flutter 測試通過 |
-| Fuzzing | 讀取和寫入路徑目標長時間執行，**零崩潰** |
 | 打包 → 解壓縮往返測試 | `diff -r` 乾淨，自檢通過 |
 
 ---
@@ -214,10 +211,10 @@ bash scripts/build-deb.sh     # 在 dist/ 中產生 .deb
 測試：
 
 ```bash
-cargo test                                   # 448 個單元測試
+cargo test                                   # 單元測試
 cargo clippy --all-targets -- -D warnings    # 靜態檢查（零警告）
-bash tests/all.sh                            # 完整回歸測試，62 個項目，約 5 分鐘
-cd gui && flutter test                       # 440 個 UI 測試
+bash tests/all.sh                            # 完整回歸測試（幾分鐘）
+cd gui && flutter test                       # UI 測試
 ```
 
 ---
@@ -271,7 +268,7 @@ A: **絕不會。** 所有修復都在記憶體中進行；磁碟上的檔案不
 A: RAR 的壓縮演算法是專有的，其授權只允許解壓縮。這個專案僅使用開源實作。
 
 **Q: 手機版？**
-A: 尚未支援。Android / iOS 還沒有開始（這台機器上沒有 SDK/NDK，且 Apple 的建置需要 Mac）。目前的版本：Linux 和 Windows。
+A: Android **已經可以用**（下載頁的 `arm64` / `armv7` APK，Android 7.0 起）。iOS 還沒支援 —— 需要 Mac 才能編譯。
 
 ---
 
