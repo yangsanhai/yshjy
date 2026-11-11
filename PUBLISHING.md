@@ -55,7 +55,7 @@
 推送前必须多跑这一步（词表放在**库外**、权限 600，脚本本身不含任何敏感词）：
 
 ```
-python3 scripts/desensitize.py --denylist ~/.hermes/.private/yshjy-denywords.txt --check
+python3 scripts/desensitize.py --denylist ~/hermes/.private/yshjy-denywords.txt --check
 ```
 
 返回 0 才能推。命中只报文件名与规则序号，不把词回显到终端/日志。
