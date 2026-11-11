@@ -11,7 +11,8 @@
 > **当前唯一欠账 = Linux 1.0.0 重出包 + 重装**：
 > - 装机的 deb 是 11-08 22:59 那份，**不含** `fix(signature)`，也**不含**批 0 的 `gui/lib` 目录重构 → 界面必须重编
 > - 顺序：把 `dist/` 里 1.0.0 旧产物挪走（`release.sh` 拒绝覆盖同版本）→ `flutter build linux --release`
->   → `release.sh` → `build-deb.sh` → `test-packages.sh`（期望 37/37）→ `tests/all.sh`（期望 62 通过 / 0 失败 / 5 跳过）
+>   → `release.sh` → `build-deb.sh` → `test-packages.sh`（期望 37/37）→ `tests/all.sh`
+>   （2026-11-11 实测：**62 通过 / 1 失败 / 5 跳过**，唯一的红是安卓批带来的 `mobile_ui_test.dart` 两条，见本卡末「同步验收」）
 >   → `sudo apt install ./dist/yshjy_1.0.0_amd64.deb` + 六项验收
 >
 > **Windows 侧**：1.0.0 三件套已出、老板已装机验收通过。但盘上 `dist-win/` 是 21:42 编的，
@@ -23,6 +24,16 @@
 >
 > **GitHub 上架前**：脱敏只剩 13 处 `/home/user`（8 个文件，`grep -ro` 实测）；
 > `refs/analysis` 要单独确认不进库。
+>
+> **本机同步验收（2026-11-11 实测，接收侧重跑）**：
+> - `cargo test`：448 过 / 1 忽略 + 33 + 2 doctests，rc=0 ✓
+> - `tests/all.sh`：**62 通过 / 1 失败 / 5 跳过**（468 秒），唯一挂的是 `flutter test`
+> - `flutter test` 里的两条红都不是产品 bug，是**测试自身**的两处问题：
+>   ① `手机外壳：三个页签都在…` —— 断言找 `跟随系统`，而语言包实际值是 `跟随系统（推荐）`（`settings.theme.auto`），
+>      精确匹配落空。盘上那张「437 过 / 0 红」是**批 0 重构时（22:06）**的数字，批 5 加了这条测试之后没再重跑全量，属过期绿。
+>   ② `金标：手机首页空态` —— `goldens/mobile_home_empty.png` 是 Windows 上录的 1179×2556 基准，
+>      本机字体渲染差 9.26%（`gui/test/failures/` 里有 diff 图），属平台差异。
+> - 修法待老板拍板：① 断言改成从语言包取文案（别再手写中文字面量）；② 金标按平台存双基准，或只在该平台跑。
 
 > **2026-11-10 夜 · 📱 安卓版从零到可安装 APK（在 Windows 机上做，真机 Redmi K70 冠军版验收）**
 >
