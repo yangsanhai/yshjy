@@ -11,7 +11,7 @@
 
 词表在库外（私有）：项目目录/.private/yshjy-leak-patterns.txt
   格式：每行 `HARD<TAB>关键词` 或 `WARN<TAB>关键词`，`#` 开头是注释。
-  词表刻意不进仓库 —— 里面列的词本身就是内部信息。
+  词表刻意不进仓库 —— 它列的那些词本身就是不该公开的内容。
 
 用法：
   python3 scripts/leak-scan.py <目录>              # 扫一遍，有 HARD 命中则退出码 1
@@ -107,8 +107,8 @@ DOC_REF = re.compile(r'(docs/[A-Za-z0-9_\u4e00-\u9fff.-]+\.(?:md|txt|rs|py|sh))'
 def dangling_refs(root):
     """找出「指向仓库里不存在的文件」的引用。
 
-    公开库会删掉一部分内部文档，代码注释和历史档案里那些 `项目文档` 就变成悬空指针 ——
-    贡献者照着去找会扑空，也会让人以为漏了文件。发布前必须为 0。
+    公开库会删掉一部分不随仓库发布的文档，代码注释和历史档案里那些 `项目文档`
+    就变成悬空指针 —— 贡献者照着去找会扑空，也会让人以为漏了文件。发布前必须为 0。
     """
     root = pathlib.Path(root).resolve()
     tracked = tracked_files(root) or []
