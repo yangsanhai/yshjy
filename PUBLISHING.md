@@ -23,7 +23,13 @@
      --exclude='gui/linux/flutter/ephemeral/' --exclude='gui/android/.gradle/' \
      --exclude='ffi/target/' --exclude='spike/build/' \
      --exclude='spike/testdata/' --exclude='tests/data/pack/' \
+     --exclude='.gitignore' --exclude='docs/FORMAT-PLAN.md' \
      ~/hermes/yshjy/ ~/hermes/yshjy-github/
+
+   `docs/FORMAT-PLAN.md`（格式与「全能版」方向的想法存档）**不公开**：里面是规划与
+   自研/许可的法律判断，属于内部方向文档，放公开仓库等于把"我在盘算什么"摊给外人看。
+   用户口径：**内部分析报告 / 审计台账不进公开仓库**。改这份文档只在开发库改。
+   同理 `.gitignore` 也别同步：发布库那份多三条忽略规则（见下），被覆盖会让大样本变可见。
 
    `spike/testdata/`（55MB）和 `tests/data/pack/`（22MB）一定要排除：它们是开发库里的实物，
    搬过来会让发布库工作树多出一堆未跟踪文件，`git add -A` 一不小心就把几十 MB 推上去。
