@@ -4,6 +4,15 @@
 
 ## [1.0.0] · 2026-11-08 —— 第一次正式发布：署名、七语 README、中英双套截图
 
+**2026-11-17 · 发布收尾（同版本号，源码零改动）**
+
+- Release v1.0.0 补齐为 **11 个资产**：加回 Linux 全能版 tar.gz；三平台的校验文件改成带平台后缀
+  （`SHA256SUMS-windows.txt` / `-linux` / `-android`）—— 原来都叫 `SHA256SUMS.txt`，后传的会覆盖先传的。
+- README 七种语言：校验文件名跟着改；补上 **Android 安装说明**（arm64 / armv7 怎么选、需要 Android 7.0 起、
+  手机版只做解压和预览）；平台徽章加上 Android；Linux 表里补上全能版那一行。
+- 软件中心元数据（AppStream）里的**界面截图正式启用**。
+- 仓库做了一次结构整理：只保留与使用、二次开发有关的文档，规划与内部记录不再随仓库发布。
+
 **2026-11-11 · 公开上架 + Release v1.0.0**
 
 - 仓库 https://github.com/yangsanhai/yshjy （MIT / CI 三个 job 全绿）
