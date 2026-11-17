@@ -22,7 +22,14 @@
      --exclude='gui/build/' --exclude='gui/.dart_tool/' \
      --exclude='gui/linux/flutter/ephemeral/' --exclude='gui/android/.gradle/' \
      --exclude='ffi/target/' --exclude='spike/build/' \
+     --exclude='spike/testdata/' --exclude='tests/data/pack/' \
      ~/hermes/yshjy/ ~/hermes/yshjy-github/
+
+   `spike/testdata/`（55MB）和 `tests/data/pack/`（22MB）一定要排除：它们是开发库里的实物，
+   搬过来会让发布库工作树多出一堆未跟踪文件，`git add -A` 一不小心就把几十 MB 推上去。
+   注意 rsync **也会覆盖 `.gitignore`** —— 发布库那份比开发库多三条忽略规则
+   （`spike/testdata/*` 与两条 rar_fixtures 白名单），被覆盖后大样本立刻变成可见状态。
+   同步后先 `git status --short` 看一眼 `.gitignore` 有没有变成 `M`。
 
 3. 脱敏（幂等，跑几次都一样）：
    `cd ~/hermes/yshjy-github && python3 scripts/desensitize.py`
@@ -62,6 +69,31 @@ python3 scripts/desensitize.py --denylist ~/hermes/.private/yshjy-denywords.txt 
 
 词表要覆盖：真实文件名、真实解压密码、网盘目录号、任何能定位到个人的路径片段。
 新发现一个就追加一行，别只改文件不记账。
+
+**安装包是另一条链路，`--check` 管不到它（2026-11-17 的教训）。**
+`desensitize.py --check` 只扫仓库里被跟踪的文件；`Release` 上挂的 `.exe/.zip/.apk/.deb/.tar.gz`
+是另一条流水线做出来的，里面打进去的 `README/CHANGELOG` 是不是脱敏版，脚本一概不知。
+2026-11-17 复查就发现 v1.0.0 的 8 个资产里 5 个带着真实文件名和解压密码（那批包是 11-11 出的，
+比脱敏提交还早一天），另外 `tar.gz` 里连 `HANDOFF.md`、`DEVLOG.md` 都打进包了。
+
+所以**每次上传前必须把每个包解开扫一遍**：
+
+- `zip`/`apk`：`unzip -p` 逐个读 `.md/.txt/.json`
+- `tar.gz`：`tar -xzOf` 同上
+- `deb`：`dpkg-deb -x` 到临时目录再扫
+- `setup.exe`：Inno 内嵌，按 UTF-16LE 搜词表也能查
+- 包里只该有 `README / CHANGELOG / CONTRIBUTING / LICENSE / install.sh`，
+  `HANDOFF.md`、`DEVLOG.md` 属于内部交接记录，`scripts/release.sh` 的 `DOCS` 已把它们去掉
+
+检查脚本梗概（对每个词做 `in` 判断，命中只报文件名+规则号）：
+
+```
+words = [非注释行 for 行 in 词表]
+for 包 in [...]:
+    for 文本成员 in 包:
+        命中 = [n for n,w in enumerate(words,1) if w in 文本]
+        if 命中: 报文件名
+```
 
 **历史里已经泄露过的词**只能 `git filter-repo --replace-text <表达式文件> --force` 重写历史再强推。
 注意两点：
