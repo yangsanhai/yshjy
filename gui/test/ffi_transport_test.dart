@@ -21,10 +21,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yshjy_gui/common/transport/ffi_transport.dart';
 
-const _dllPath = r'C:\yshjy-1.0.0-20261108\ffi\target\release\yshjy_ffi.dll';
+const _dllPath = r'C:\build\ffi\release\yshjy_ffi.dll';
 
 /// 一个真包（移动硬盘上的探针样本；没有就跳过依赖它的那条用例）
-const _sampleZip = r'C:\yshjy-探针-打包-230401.zip';
+const _sampleZip = r'C:\samples\sample.zip';
 
 void main() {
   test('FFI 传输：hello 能拿到 ok 与协议版本（含回调/isolate 等待链路）', () async {

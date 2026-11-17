@@ -18,7 +18,7 @@
 | 机器 | 仓库路径 | 系统 | 能做什么 |
 |---|---|---|---|
 | 开发机（旧） | `~/hermes/yshjy` | Linux | 完整（引擎 + Flutter 界面 + 出 deb 包 + 跑 `tests/all.sh`） |
-| 这台（新） | `C:\yshjy-20261030` | Windows 11 | 引擎已通（MSVC）；**图形界面是 Windows 的主战场** |
+| 这台（新） | Windows 机器上的源码副本 | Windows 11 | 引擎已通（MSVC）；**图形界面是 Windows 的主战场** |
 
 **跨机器的四条**：
 1. **`target/` 不要同步、也不要当备份** —— 它是按平台生成的（Linux 那份 14 G 在 Windows 上一个也用不上），删了随时重建。

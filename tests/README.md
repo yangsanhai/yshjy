@@ -303,4 +303,4 @@ zip 命令统一加 `-X`（不写 extra 属性）进一步保证稳定。
 
 **入 git 建议**：`tests/.work/`（临时目录）应 ignore；`tests/data/`（15MB，其中 11 个文件每次重跑字节都不同）与 `tests/assets/`（1MB，可重建）是否入库自行决定，反正 `make_samples.py` 能一键重造。
 
-原始分析依据见 `refs/analysis/`（`steganographier-hide.md`、`fake-archive-ecosystem.md`、`01-格式总矩阵.md` 等）。
+原始分析依据（竞品调研与技术验证笔记）属内部资料，不随仓库公开；需要时在开发库里查。
