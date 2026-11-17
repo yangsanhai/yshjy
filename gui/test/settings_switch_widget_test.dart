@@ -94,7 +94,7 @@ void main() {
 
   testWidgets('没有配置文件：两个开关默认都是关（与引擎默认一致）', (tester) async {
     await _pump(tester);
-    // 2026-10-31 用户口径：自动找解压码属于「程序主动翻你的东西/替你试码」，
+    // 2026-10-31 既定策略：自动找解压码属于「程序主动翻你的东西/替你试码」，
     // 必须用户自己在设置里打开，不许默认替他做。
     expect(_switchValue(tester, '自动从「说明.txt」里找解压码'), isFalse);
     expect(_switchValue(tester, '自动试「密码本」里的解压码'), isFalse);

@@ -44,7 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _notify = true;
   /// 解压完成后是否自动打开输出目录（默认关：批量解压会弹一堆窗口）
   bool _openAfter = false;
-  // 解压后检验「移动设备是否真落盘」（默认关，见 docs/TODO.md 与 src/flush.rs）
+  // 解压后检验「移动设备是否真落盘」（默认关，见 项目文档 与 src/flush.rs）
   bool _flushMovable = false;
   // 自动找解压码的两个开关（T8 界面半）：默认都开，与引擎 `config.rs` 的默认值一致。
   // 分两档是因为代价不同：密码本是用户亲手记的，说明文件是程序去翻包旁边的文本。

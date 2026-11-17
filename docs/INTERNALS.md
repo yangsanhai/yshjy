@@ -4,7 +4,7 @@
 > - `DESIGN.md` = **产品**要什么样（用户视角、功能清单、拍板记录）—— 2026-10-16 定稿，仍有效
 > - `docs/ARCHITECTURE.md` = **2026-10-16 写代码前**的架构设计草案 —— **部分已过时**（见 §9）
 > - **本文件 = 代码现在长什么样**（模块/机制/落点/探针），从真实源码扫描出来，不是手写计划
-> - `docs/TODO.md` = 唯一待办真源 · `HANDOFF.md` = 每轮状态与证据 · `CHANGELOG.md` = 踩坑档案
+> - `项目文档` = 唯一待办真源 · `内部记录` = 每轮状态与证据 · `CHANGELOG.md` = 踩坑档案
 >
 > 生成方式：`python3 scripts/scan-src.py` 扫 `src/` 得出模块表与依赖矩阵；
 > `--check` 只打印关键计数（行数/事件数/错误码数）。脚本随代码走，见 §10。**代码变了就重跑一遍，别手改数字。**
@@ -236,7 +236,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 - 事件流（`event.rs`）：30 种事件名，JSON 出；GUI 与 CLI 都消费同一份。
 - 进度（`progress.rs`）：**`EtaEstimator` 是唯一实现**（α=0.3 平滑、样本<3 不估算）。
   约束：CLI 与界面**必须显示同一个剩余时间** —— 所以 CLI 用 indicatif 时也只 `set_position`，
-  ETA 自己塞进 `{msg}`（`docs/REFERENCE-INDEX.md:139-140`）。
+  ETA 自己塞进 `{msg}`（`项目文档:139-140`）。
 - 双维度：`SetTotal(files, bytes)`（7-Zip 学来的），窄终端按「文件名→速度/剩余→项号」顺序丢字段。
 
 ### 4.5 伪装打包
@@ -250,7 +250,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 
 ### 4.6 ⚠️ 两条代码路径：`api.rs`（界面）vs `main.rs`（CLI）
 
-**这是本项目最容易漏改的地方**，HANDOFF 里明确记过：「RAR 接进度事件时只改 `api.rs`，拿真二进制实测仍是 0 条事件」。
+**这是本项目最容易漏改的地方**，内部记录 里明确记过：「RAR 接进度事件时只改 `api.rs`，拿真二进制实测仍是 0 条事件」。
 
 | 路径 | 入口 | 谁用 |
 |---|---|---|
@@ -325,7 +325,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 | 加**CLI 选项** | `src/cli_spec.rs` 一行 | 跑 `scripts/gen-cli-assets.py` + `tests/cli_spec_match.sh` |
 | 改**错误文案** | `error.rs`（码）+ `i18n.rs` / `locales/*.toml`（文案） | 引擎层**不许**写中文句子 |
 | 改**进度条** | `progress.rs`（算法）+ `main.rs`（渲染） | GUI 与 CLI 必须显示同一个 ETA |
-| 改**界面** | `gui/lib/pages/*.dart` | 改完必须 `flutter build linux` 再 `cp` 引擎（HANDOFF 铁律） |
+| 改**界面** | `gui/lib/pages/*.dart` | 改完必须 `flutter build linux` 再 `cp` 引擎（内部记录 铁律） |
 | 改**协议** | `api.rs` + `docs/PROTOCOL.md` | 同步 `contract/run.py`；**还要看 `main.rs` 那条路** |
 | 加**事件** | `event.rs` + `api.rs`/`main.rs` 两处接线 | `docs/PROTOCOL.md` + 契约探针 |
 | 改**安全策略** | `safety.rs` | 护栏不可绕过；要问用户走 `ask.rs` |
@@ -363,7 +363,7 @@ pub struct Caps {                                 // 能力位（对应用户能
 |---|---|
 | §3「模块划分（crate 结构）」 | 早不是那套划分了 —— 以**本文档 §3** 为准（52 文件 29,584 行） |
 | §12「v0.1 实现顺序（建议）」 | 已完成到 0.9.28，那节只是历史 |
-| §13「待办（写代码前要补的）」 | 已清空；真源是 `docs/TODO.md` |
+| §13「待办（写代码前要补的）」 | 已清空；真源是 `项目文档` |
 | §357「GUI 选型：为什么是 Flutter + 协议而不是 FFI」 | 仍成立（桌面走协议），但**移动端已定走 ffigen + C ABI**，两条路并存 |
 | §210「并发与进度模型」 | 仍是这个思路，但细节以 `progress.rs` / `batch.rs` 源码为准 |
 

@@ -5,7 +5,7 @@
 //! 与桌面壳（`desktop/app_shell.dart`）是**两个独立实现**，只共用 `common/` 里的逻辑：
 //! 桌面用左侧 `NavigationRail` + 托盘 + 快捷键 + 拖放，这些在手机上都不存在
 //! （参考项目 rustdesk 也是这么分的：`desktop/` 与 `mobile/` 各写各的，
-//! 见 docs/ANDROID-整体方案-2026-11-10.md §1.1）。
+//! 见 项目文档 §1.1）。
 
 import 'dart:io';
 

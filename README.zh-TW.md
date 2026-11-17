@@ -152,7 +152,17 @@ yshjy --report --no-paths archive.mp4    # 路徑已刪除（用於公開張貼�
 | `yshjy-1.0.0-win-x64-cli.zip`（CLI 版） | 解壓縮，將資料夾加入 PATH | 腳本、批次作業 |
 
 > Windows 版本已捆綁 VC++ 運行時（`msvcp140` / `vcruntime140` / `vcruntime140_1`），所以在全新的 Windows 機器上無需先安裝任何東西。
-> 所有三個版本都附帶 `SHA256SUMS.txt`。
+> 每個封裝都附對應平台的校驗檔（`SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` / `SHA256SUMS-android.txt`）。
+
+**Android**
+
+| 檔案 | 怎麼安裝 | 適合誰 |
+|---|---|---|
+| `yshjy-1.0.0-arm64.apk` | 傳進手機點開安裝（需允許「未知來源」） | 近幾年絕大多數手機 |
+| `yshjy-1.0.0-armv7.apk` | 同上 | 很老的 32 位元機型（2016 年前後為主） |
+
+> 需要 Android 7.0 起。兩個封裝簽章相同，換著裝會直接覆蓋，不會變成兩個 App。
+> 手機版只做「解壓 + 預覽」，打包／偽裝請用桌面版。
 
 ---
 
@@ -294,7 +304,7 @@ A: Android **已經可以用**（下載頁的 `arm64` / `armv7` APK，Android 7.
 - `DESIGN.md` —— 產品設計（需求、功能、決策日誌）
 - `docs/ARCHITECTURE.md` —— 架構
 - `docs/INTERNALS.md` —— **內部概述**：目前程式碼的樣子（模組職責、依賴、機制，由 `scripts/scan-src.py` 產生）
-- `docs/TODO.md` —— **唯一的完整性單一真實來源**
+- `CHANGELOG.md` —— 每一版的改動與過程中踩過的坑
 - `docs/CLI-SPEC.md` / `docs/UI-SPEC.md` —— CLI 和 UI 規範
 - `docs/` 中的其他文件 —— 每種格式的測量和沿途遇到的陷阱
 

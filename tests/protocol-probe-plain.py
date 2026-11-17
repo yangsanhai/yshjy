@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 
-BIN = os.path.expanduser("~/hermes/yshjy/target/release/yshjy")
+BIN = os.path.expanduser("项目目录/target/release/yshjy")
 WORK = os.path.expanduser("~/.hermes/cache/scratch/yshjy_probe_plain")
 shutil.rmtree(WORK, ignore_errors=True)
 os.makedirs(WORK)

@@ -5,7 +5,7 @@
 #   pwsh -File scripts\build-android.ps1 -Debug           # 快一点，调界面时用
 #   pwsh -File scripts\build-android.ps1 -SkipEngine      # 引擎没改，只重打 APK
 #
-# 依赖（批 1 装过，见 docs/ANDROID-整体方案-2026-11-10.md §8）：
+# 依赖（批 1 装过，见 项目文档 §8）：
 #   Android SDK + ndk;28.2.13676358 + rustup 目标 aarch64-linux-android
 #   **不需要 cargo-ndk** —— 它只是帮忙设 CC/AR/linker 环境变量的封装，这里直接设。
 #

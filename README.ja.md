@@ -150,7 +150,17 @@ yshjy --report --no-paths archive.mp4    # パスを編集（公開投稿用）
 | `yshjy-1.0.0-win-x64-cli.zip` （CLI） | 展開してフォルダーをPATHに追加 | スクリプト、バッチジョブ |
 
 > WindowsビルドにはVC++ランタイム (`msvcp140` / `vcruntime140` / `vcruntime140_1`) がバンドルされているため、クリーンなWindowsマシンでも事前インストールは不要です。
-> 3つすべてに `SHA256SUMS.txt` が同梱されています。
+> 各パッケージにプラットフォーム別のチェックサム（`SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` / `SHA256SUMS-android.txt`）が同梱されています。
+
+**Android**
+
+| ファイル | インストール方法 | 対象 |
+|---|---|---|
+| `yshjy-1.0.0-arm64.apk` | スマホにコピーして開く（「提供元不明のアプリ」を許可） | ここ数年のほとんどの端末 |
+| `yshjy-1.0.0-armv7.apk` | 同上 | 古い 32bit 端末（2016 年前後） |
+
+> Android 7.0 以上。2 つのパッケージは同じ署名なので、上書きインストールになります。
+> モバイル版は「解凍 + プレビュー」のみ。作成（偽装）はデスクトップ版で。
 
 ---
 
@@ -292,7 +302,7 @@ A: Android は**すでに使えます**（ダウンロードページの `arm64`
 - `DESIGN.md` — 製品デザイン（要件、機能、決定ログ）
 - `docs/ARCHITECTURE.md` — アーキテクチャ
 - `docs/INTERNALS.md` — **内部概要**：現在のコードの様子（モジュールの責任、依存関係、メカニズム、`scripts/scan-src.py` によって生成）
-- `docs/TODO.md` — **完全性の唯一の情報源**
+- `CHANGELOG.md` — 各バージョンの変更点と、途中で踏んだ落とし穴
 - `docs/CLI-SPEC.md` / `docs/UI-SPEC.md` — CLIとUIの仕様
 - `docs/` の残り — フォーマットごとの測定と、途中で遭遇した落とし穴
 

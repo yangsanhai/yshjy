@@ -22,6 +22,6 @@ android/app/src/main/jniLibs/
 android/.kotlin/
 **/.kotlin/
 
-# 发布签名（一次性生成，备份在 C:\Work\yshjy-win\签名备份；入库等于把钥匙公开）
+# 发布签名（一次性生成，签名文件与密钥都不入库）
 android/app/key.properties
 android/app/*.jks

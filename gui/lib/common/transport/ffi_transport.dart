@@ -3,7 +3,7 @@
 //! FFI 传输：**进程内**跑引擎（安卓用）
 //!
 //! 为什么需要它：安卓不允许 `fork/exec` 我们自己的二进制，桌面那条
-//! `Process.start('yshjy --serve')` 在手机上直接不通（见 docs/ANDROID-整体方案-2026-11-10.md §4.2）。
+//! `Process.start('yshjy --serve')` 在手机上直接不通（见 项目文档 §4.2）。
 //!
 //! 与 `ProcessTransport` 的**行为契约完全一致**：只搬「整行 JSON」。区别只在底下：
 //!

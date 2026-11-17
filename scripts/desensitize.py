@@ -8,14 +8,14 @@
   python3 scripts/desensitize.py --check                  # 只查家目录残留，命中退出码 1
   python3 scripts/desensitize.py --denylist <文件> --check # 查黑名单词，命中退出码 1
 
-为什么要有这个脚本：开发库（~/hermes/yshjy）里到处是 `/home/<作者>` 这样的真实路径
+为什么要有这个脚本：开发库（项目目录）里到处是 `/home/<作者>` 这样的真实路径
 （测试记录 JSON、文档里的命令示例、几个测试 fixture）。发布库是它的**只读副本**，
 每次同步后跑一遍这个脚本再提交 —— 手工改一定会漏，而且漏了看不出来。
 
 **教训（2026-11-11）**：第一版只做了路径替换，结果仓库公开后用户发现正文里还留着他真实的
 文件名、解压密码和网盘目录号（README / DESIGN / CLI-SPEC / 界面文案 / tests/README 共 122 处）。
 路径脱敏**不等于**内容脱敏 —— 所以加了 --denylist：词表放在**库外的私有文件**里
-（`~/hermes/.private/yshjy-denywords.txt`，660 权限），脚本本身不含任何敏感词，
+（`项目目录/.private/yshjy-denywords.txt`，660 权限），脚本本身不含任何敏感词，
 推送前必须 `--denylist ... --check` 返回 0。
 
 规则：

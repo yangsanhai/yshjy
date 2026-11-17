@@ -8,7 +8,7 @@
 # 1. 让界面找得到引擎（打包后会随包带，这里开发时指到编译产物）
 export YSHJY_BIN=$HOME/hermes/yshjy/target/release/yshjy
 
-cd ~/hermes/yshjy/gui
+cd 项目目录/gui
 flutter pub get
 flutter run -d linux          # 开发模式（热重载）
 flutter build linux --release # 出发布版：build/linux/x64/release/bundle/yshjy_gui

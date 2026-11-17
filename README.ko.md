@@ -165,7 +165,17 @@ yshjy --report --no-paths archive.mp4    # 경로 제거 (공개 게시물에 �
 
 > Windows 빌드에는 VC++ 런타임 (`msvcp140` / `vcruntime140` / `vcruntime140_1`)이 번들로 제공되어
 > 깨끗한 Windows 시스템에서도 사전 설치가 필요 없습니다.
-> 세 가지 모두 `SHA256SUMS.txt`와 함께 제공됩니다.
+> 각 패키지에는 플랫폼별 체크섬(`SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` / `SHA256SUMS-android.txt`)이 함께 제공됩니다.
+
+**Android**
+
+| 파일 | 설치 방법 | 대상 |
+|---|---|---|
+| `yshjy-1.0.0-arm64.apk` | 휴대폰으로 복사해 실행 (알 수 없는 출처 허용) | 최근 대부분의 기기 |
+| `yshjy-1.0.0-armv7.apk` | 동일 | 오래된 32비트 기기 (2016년 전후) |
+
+> Android 7.0 이상. 두 패키지는 서명이 같아 덮어쓰기로 설치됩니다.
+> 모바일 버전은 압축 해제와 미리보기만 지원하며, 만들기(위장)는 데스크톱 버전을 사용하세요.
 
 ---
 
@@ -327,7 +337,7 @@ A: Android는 **이미 사용할 수 있습니다**(다운로드 페이지의 `a
 - `DESIGN.md` — 제품 설계 (요구 사항, 기능, 결정 로그)
 - `docs/ARCHITECTURE.md` — 아키텍처
 - `docs/INTERNALS.md` — **내부 개요**: 오늘날 코드가 어떤 모습인지 (모듈 책임, 의존성, 메커니즘, `scripts/scan-src.py`에서 생성)
-- `docs/TODO.md` — **완료를 위한 단일 진실 공원**
+- `CHANGELOG.md` — 버전별 변경 사항과 그 과정에서 밟은 함정
 - `docs/CLI-SPEC.md` / `docs/UI-SPEC.md` — CLI 및 UI 사양
 - 나머지 `docs/` — 포맷별 측정 및 과정 중 발생한 함정
 

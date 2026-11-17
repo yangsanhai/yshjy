@@ -651,7 +651,7 @@ where
 /// 换来的是「进程被杀 / 断电不再留半截正式名」这个真实收益。
 /// 想彻底解决「坏数据落地」，得迁到 `extract_with_control_and_errors` 拿逐条目错误
 /// —— 那要重写整个回调层（`decide` 用 `ArchiveMember`，写出机制也不同），
-/// 风险和收益不匹配，先记账（见 `docs/TODO.md` 第 12 项备注）。
+/// 风险和收益不匹配，先记账（见 `项目文档` 第 12 项备注）。
 struct CountingWriter {
     /// 原子写入守卫：写 `<名字>.yshjy-part`，`Drop` 时被关闭
     part: Option<crate::io::PartFile>,

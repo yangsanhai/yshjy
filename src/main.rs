@@ -118,7 +118,7 @@ fn 版本信息() -> String {
 
 /// CLI 选项表 —— **唯一真源**（`src/cli_spec.rs`）
 ///
-/// 补全脚本与 man 页也从这张表生成，别再手抄副本（`docs/CLI-GUI-PLAN.md` §1）。
+/// 补全脚本与 man 页也从这张表生成，别再手抄副本（`docs/CLI-SPEC.md`）。
 mod cli_spec;
 
 /// `--pick`：全屏勾选要解哪些条目（用 dialoguer，不手搓；见模块头注释）
@@ -172,7 +172,7 @@ static 取消令牌: std::sync::OnceLock<yshjy::progress::CancelToken> = std::sy
 /// 三个阶段（`ctrlc` 的 handler 跑在自己的专用线程上，不是信号上下文，可以放心用 Rust）：
 /// 1. `--pick` 全屏里：`console` 后端把 Ctrl-C 变成 SIGINT，`dialoguer` 的复原代码
 ///    （写 `\x1b[?25h` 显示光标）**根本没有执行机会** → 终端光标一直不回来，得 `reset`。
-///    见 `docs/TODO.md` 那条；这里补上复原再按惯例退 130。
+///    见 `项目文档` 那条；这里补上复原再按惯例退 130。
 /// 2. 解压阶段：转成引擎的「取消」—— 已解出的文件保留、写了一半的删掉，比硬杀干净。
 /// 3. 其余阶段（`--list` / 预览 / 参数还没走完）：直接退 130，与系统默认行为等价
 ///    （被 SIGINT 杀掉时 shell 看到的就是 130）。
@@ -1419,7 +1419,7 @@ fn do_extract(a: 解压参数) -> ExitCode {
     // --delete-source 是不可恢复的破坏性动作：开工前必须问一句。
     //
     // 非交互（管道 / 脚本 / --quiet / --json）一律拒绝 —— 破坏性动作绝不在没人
-    // 看着的场合里静默通过（用户口径：删东西要先问）。想自动化请用 --trash-source
+    // 看着的场合里静默通过（既定策略：删东西要先问）。想自动化请用 --trash-source
     // （进回收站，能还原）。
     if source_action == 源包处置::永久删除 {
         use std::io::IsTerminal;

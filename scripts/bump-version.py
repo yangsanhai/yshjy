@@ -16,7 +16,7 @@
     生成物  docs/yshjy.1（man 页）+ scripts/completions/*（三份补全）
             → 改完版本还要 `cargo build --release && python3 scripts/gen-cli-assets.py`
             （本脚本也顺手改 man 页，但下次重跑生成器会按 Cargo.toml 覆盖，结果一致）
-    不动    CHANGELOG.md / HANDOFF.md / docs/TODO.md（历史记录，改了就是假账）
+    不动    CHANGELOG.md / 内部记录 / 项目文档（历史记录，改了就是假账）
             dist/（已发布快照，出包时重新生成）
 
 设计上的两个硬约束（踩过才这么写）：

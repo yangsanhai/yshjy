@@ -1,6 +1,6 @@
 // 预览树（第三期 A）纯函数单测。
 //
-// 覆盖方案 `docs/THIRD-PHASE-PLAN.md` §A「验收」点名的 6 组：空包 / 单层平铺 /
+// 覆盖方案 `项目文档` §A「验收」点名的 6 组：空包 / 单层平铺 /
 // 深嵌套 / 同名中间目录 / 加密计数 / 空目录不参与勾选 —— 外加三态勾选与面包屑。
 
 import 'package:flutter_test/flutter_test.dart';

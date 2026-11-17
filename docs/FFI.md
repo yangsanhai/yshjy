@@ -6,7 +6,7 @@
 ## 1. 构建
 
 ```bash
-cd ~/hermes/yshjy/ffi
+cd 项目目录/ffi
 cargo build --release
 # Linux:   target/release/libyshjy_ffi.so   + libyshjy_ffi.a
 ```

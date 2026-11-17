@@ -168,7 +168,17 @@ yshjy --report --no-paths archive.mp4    # rutas redactadas (usa esto para publi
 
 > Las compilaciones para Windows incluyen el tiempo de ejecución de VC++ (`msvcp140` / `vcruntime140` /
 > `vcruntime140_1`), por lo que una máquina Windows limpia no necesita nada instalado primero.
-> Las tres incluyen `SHA256SUMS.txt`.
+> Cada paquete incluye su archivo de sumas de verificación (`SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` / `SHA256SUMS-android.txt`).
+
+**Android**
+
+| Archivo | Cómo instalar | Para quién |
+|---|---|---|
+| `yshjy-1.0.0-arm64.apk` | Cópialo al teléfono y ábrelo (permite «orígenes desconocidos») | Casi todos los teléfonos recientes |
+| `yshjy-1.0.0-armv7.apk` | Igual | Teléfonos antiguos de 32 bits (hasta 2016 aprox.) |
+
+> Requiere Android 7.0+. Ambos APK están firmados con la misma clave: instalar uno sobre otro simplemente reemplaza la app.
+> La versión móvil solo extrae y previsualiza; empaquetar es cosa de la versión de escritorio.
 
 ---
 
@@ -330,7 +340,7 @@ para engañar. Úsala solo para tus propias copias de seguridad y compartir de m
 - `docs/ARCHITECTURE.md` — arquitectura
 - `docs/INTERNALS.md` — **descripción general interna**: cómo se ve el código hoy (responsabilidades de módulos,
   dependencias, mecanismos, generado por `scripts/scan-src.py`)
-- `docs/TODO.md` — la **única fuente de verdad** para la completitud
+- `CHANGELOG.md` — qué cambió en cada versión y los tropiezos del camino
 - `docs/CLI-SPEC.md` / `docs/UI-SPEC.md` — especificaciones de CLI e interfaz
 - el resto de `docs/` — mediciones por formato y los obstáculos encontrados en el camino
 

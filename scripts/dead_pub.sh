@@ -3,7 +3,7 @@
 #
 # 为什么需要这个：Rust 里 `pub` 会**压住** dead_code 检查，所以
 # `cargo clippy --all-targets -D warnings` 全绿**挡不住**这类烂账
-# （见 docs/IMPL-PROVENANCE.md「死代码」那节）。
+# （见 项目文档「死代码」那节）。
 #
 # 用法：
 #   bash scripts/dead_pub.sh            # 人看

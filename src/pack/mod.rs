@@ -752,7 +752,7 @@ pub fn build_ctx_decoy<W: Write>(
     out.write_all(封面后)
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write cover tail: {e}")))?;
 
-    // L3 的干扰数据写在**文件末尾**（T18-1 三个不做之一的口径，3a 用户拍板）：
+    // L3 的干扰数据写在**文件末尾**（T18-1 三个不做之一的口径，3a 设计定稿）：
     // 插点在头部，末尾噪声不影响任何偏移，视频照常能播；顺带让文件尾巴看起来
     // 像「有脏数据」，比裸 ZIP 结尾更像正常视频。
     if layout == PackLayout::HeadFreeAtom {
@@ -769,7 +769,7 @@ pub fn build_ctx_decoy<W: Write>(
     };
 
     // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
-    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    // （`--keep` 这条口子按既定策略整条删掉了：打包完就删，不用留。）
     let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
@@ -794,7 +794,7 @@ pub fn build_ctx_decoy<W: Write>(
 ///
 /// 为什么单独开一个函数而不是给 [`PackOptions`] 加 `plain: bool`：
 /// 那个结构体在测试里有十几处**逐字段**构造，加一个字段就得把所有测试一起改，
-/// 而且改漏一处就是编译错误（HANDOFF「给广泛构造的结构体加字段」那条教训）。
+/// 而且改漏一处就是编译错误（内部记录「给广泛构造的结构体加字段」那条教训）。
 pub fn build_plain<W: Write>(opts: &PackOptions, out: &mut W) -> Result<PackReport> {
     build_plain_ctx(opts, out, &mut |_| {})
 }
@@ -828,7 +828,7 @@ pub fn build_plain_ctx<W: Write>(
     进度(PackTick::TotalHint(zip_size));
     拷贝带进度(&tmp, out, 进度)?;
     // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
-    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    // （`--keep` 这条口子按既定策略整条删掉了：打包完就删，不用留。）
     let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
@@ -1817,7 +1817,7 @@ pub fn build_sfx_ctx<W: Write>(
         .map_err(|e| Error::new(ErrorCode::Internal).context(format!("write size: {e}")))?;
 
     // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
-    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    // （`--keep` 这条口子按既定策略整条删掉了：打包完就删，不用留。）
     let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {
@@ -1889,7 +1889,7 @@ pub fn build_sfx_sh_ctx<W: Write>(
     拷贝带进度(&tmp, out, 进度)?;
 
     // 中间 ZIP 用完就删 —— 它可能跟成品一样大，留着就是在悄悄占用户磁盘。
-    // （`--keep` 这条口子按用户口径整条删掉了：打包完就删，不用留。）
+    // （`--keep` 这条口子按既定策略整条删掉了：打包完就删，不用留。）
     let _ = fs::remove_file(&tmp);
 
     Ok(PackReport {

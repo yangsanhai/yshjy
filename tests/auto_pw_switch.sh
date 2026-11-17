@@ -23,7 +23,7 @@ export XDG_CONFIG_HOME="$T/cfg"
 mkdir -p "$T/cfg/yshjy"
 printf 'bookPW\n' > "$T/cfg/yshjy/passwords.txt"
 
-# ★ 2026-10-31 起「自动找解压码」**默认关**（用户口径：程序不许默认翻他的东西）。
+# ★ 2026-10-31 起「自动找解压码」**默认关**（既定策略：程序不许默认翻他的东西）。
 # 所以这条探针要验“两档各自只关自己”时，必须先把两档显式打开 —— 否则
 # “default: should extract” 验的就不再是默认开，而是默认关（会误判成功能坏了）。
 cat > "$T/cfg/yshjy/config.toml" <<'TOMLEOF'

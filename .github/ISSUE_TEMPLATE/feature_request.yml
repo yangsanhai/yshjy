@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        先说一句：`docs/TODO.md` 里有一份**「不做清单」**（AppImage、7z 写包、自动更新、
+        先说一句：README 的「不做什么」一节有一份**清单**（AppImage、7z 写包、自动更新、
         云盘同步、内置文件管理器…），这些是已经定过不做的。提之前扫一眼，免得白写。
 
   - type: textarea

@@ -23,7 +23,7 @@
 //!
 //! 「SAF 到底算哪一档」**没有验证**（本机 Wayland 桌面 + 无 Android SDK 设备）。
 //! 本轮只把「探测 + 降级 + 协议字段」做成可单测的代码，落地验收写进
-//! `docs/TODO.md` 的平台节，不冒充已完成。
+//! `项目文档` 的平台节，不冒充已完成。
 
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};

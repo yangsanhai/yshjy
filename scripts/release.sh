@@ -23,7 +23,7 @@ if [ "$V" != "$V_GUI" ]; then
 fi
 ARCH=$(uname -m)
 DOCS=(CHANGELOG.md CONTRIBUTING.md install.sh LICENSE README.md)
-# 注意别往包里塞 HANDOFF.md / DEVLOG.md —— 那是内部交接记录，里面有本机家目录路径
+# 注意别往包里塞 内部记录 / 开发日志 —— 那是内部交接记录，里面有本机家目录路径
 # 和调试细节，2026-11-17 复查公开 Release 时发现旧包把它们打进去了。
 
 echo "==> yshjy $V（$ARCH）"

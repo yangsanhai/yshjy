@@ -58,7 +58,7 @@ zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2
 crossterm = "0.29.0"
 unicode-width = "0.2.2"
 # --list 的表格：中文按显示宽度对齐、窄终端自动折行（MIT，参考真身 refs/upstream/comfy-table）
-# 只多带一个 unicode-segmentation；台账见 docs/REFERENCE-INDEX.md §8
+# 只多带一个 unicode-segmentation；台账见 项目文档 §8
 comfy-table = "8"
 # --pick 的全屏勾选：raw mode / 分页 / 退出复原这些边界它全覆盖（MIT，真身 refs/upstream/dialoguer）
 dialoguer = "0.12"
@@ -70,7 +70,7 @@ rars = { version = "0.11.0", features = ["write", "encryption", "parallel"] }
 
 # Windows 才用的系统 API：时区偏移（crash.rs，W1）、可用内存（外壳探针，W5）。
 # 只在 Windows 构建时拉进来 —— Linux/macOS 那半的依赖树与产物一个字节都不变。
-# 台账：docs/REFERENCE-INDEX.md §9（API 归属按 windows-sys 0.61 源码核对过）
+# 台账：项目文档 §9（API 归属按 windows-sys 0.61 源码核对过）
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",

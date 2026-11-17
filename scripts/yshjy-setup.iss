@@ -3,7 +3,7 @@
 ; 由 scripts/build-win.ps1 调用；版本号在脚本里用 /DAppVersion 传进来，
 ; 单独手编时也可以直接改下面的默认值。
 ;
-; 为什么这么排：老板拍板「按用户装、不弹 UAC」，所以 PrivilegesRequired=lowest；
+; 为什么这么排：维护者拍板「按用户装、不弹 UAC」，所以 PrivilegesRequired=lowest；
 ; 文件关联只做右键菜单（Win10+ 不允许程序静默改默认打开方式），
 ; 装完不写系统级注册表，卸载能干净删掉。
 

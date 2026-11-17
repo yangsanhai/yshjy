@@ -13,7 +13,7 @@
 #   SHA256SUMS.txt               校验清单
 #
 # 为什么把 VC++ 运行库塞进包里：干净 Windows 没装过 VS，双击会报
-# 「丢失 MSVCP140.dll」。见 docs/WIN-PACKAGING-FIX.md 第 1 条。
+# 「丢失 MSVCP140.dll」。见 项目文档 第 1 条。
 
 param(
   # 引擎 target 目录（默认仓库里的 target；嫌慢可以指到别的盘）

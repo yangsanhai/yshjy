@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 
 # ── 补全与 man 页：打包前从 CLI 选项表重新生成 ──
 # 手写副本必然漂移（2026-10-28 实测：补全漏 17 个选项、man 漏 17 个），
-# 所以出包前一律重新生成，不做人工核对。做法见 docs/CLI-GUI-PLAN.md §1。
+# 所以出包前一律重新生成，不做人工核对。做法见 docs/CLI-SPEC.md。
 if [ -x target/release/yshjy ]; then
     python3 scripts/gen-cli-assets.py
 else

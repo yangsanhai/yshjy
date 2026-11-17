@@ -6,7 +6,7 @@
 **简体中文** ｜ [繁體中文](README.zh-TW.md) ｜ [English](README.en.md) ｜ [日本語](README.ja.md) ｜ [한국어](README.ko.md) ｜ [Русский](README.ru.md) ｜ [Español](README.es.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2EC5CE.svg)](LICENSE)
-![平台](https://img.shields.io/badge/平台-Linux%20%2B%20Windows-2EC5CE)
+![平台](https://img.shields.io/badge/平台-Linux%20%2B%20Windows%20%2B%20Android-2EC5CE)
 ![版本](https://img.shields.io/badge/版本-v1.0.0-2ECC71)
 ![界面语言](https://img.shields.io/badge/界面语言-7%20种-9B59B6)
 
@@ -141,6 +141,7 @@ yshjy --report --no-paths 包.mp4         # 路径脱敏（要贴到公开地方
 |---|---|---|
 | `yshjy_1.0.0_amd64.deb` | `sudo apt install ./yshjy_1.0.0_amd64.deb` | 大多数人：能从菜单启动、有右键菜单 |
 | `yshjy-1.0.0-linux-x86_64.tar.gz` | 解出来，把 `yshjy` 丢进 `~/.local/bin/` | 不想装包、只要命令行 |
+| `yshjy-full-1.0.0-linux-x86_64.tar.gz`（全能版） | 同上 | 暂时不用选：全能版现在和常用版功能完全一样，以后冷门格式（ISO / CAB 等）只放进这个包 |
 
 **Windows**
 
@@ -152,7 +153,17 @@ yshjy --report --no-paths 包.mp4         # 路径脱敏（要贴到公开地方
 
 > Windows 包已带 VC++ 运行库（`msvcp140` / `vcruntime140` / `vcruntime140_1`），
 > 干净的 Windows 机器不用先装运行库。
-> 三个包都附 `SHA256SUMS.txt`，下载后可以自己核对。
+> 每个包都附对应平台的校验文件（`SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` / `SHA256SUMS-android.txt`），下载后可以自己核对。
+
+**Android**
+
+| 文件 | 怎么装 | 适合谁 |
+|---|---|---|
+| `yshjy-1.0.0-arm64.apk` | 传进手机点开安装（需允许「未知来源」） | 近几年绝大多数手机 |
+| `yshjy-1.0.0-armv7.apk` | 同上 | 很老的 32 位机型（2016 年前后为主） |
+
+> 需要 Android 7.0 起。两个包签名相同，换着装会直接覆盖，不会变成两个 App。
+> 手机版只做「解压 + 预览」，打包 / 伪装请用桌面版。
 
 ---
 

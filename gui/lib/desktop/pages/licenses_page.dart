@@ -161,7 +161,7 @@ class _LicensesPageState extends State<LicensesPage> {
             const SizedBox(height: 4),
             // 逐项不显示 json 里的中文 `what`：界面有 7 种语言，只翻译 7 个项目的
             // 长句说明不值当（而且会漂）。那句通用口径走 l10n，细节留在
-            // docs/REFERENCE-INDEX.md 里给想看的人。
+            // 项目文档 里给想看的人。
             Text(
               t('licenses.creditsNote'),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.5),

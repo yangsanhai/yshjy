@@ -7,7 +7,7 @@
 /// `docs/UI-SPEC.md` §4b.6「键鼠操作约定」+ §七「无障碍与细节」：
 ///   Enter 确认（= 本屏主操作）/ Del 删除选中（要确认）/ Esc 取消当前操作或关面板
 ///   Ctrl+A 全选 / Ctrl+V 粘贴路径（自动开始识别）
-/// `docs/REFERENCE-INDEX.md` 的「键盘快捷键」行补了 Ctrl+E：
+/// 键位表补了 Ctrl+E：
 ///   `refs/外部-归档软件/PeaZip/peazip-sources/res/share/lang/en.txt:1414`
 ///   原文 `keyboard shortcuts: Ctrl+E (or F12) extracts the entire archive`
 ///   —— 我们只抄 Ctrl+E，不抄 F12（F 键区留给以后做「F 键全家桶」时统一规划）。
