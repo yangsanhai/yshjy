@@ -213,7 +213,7 @@
   `.yshjy-part` 残留；`.tar.gz` 中文名 + mtime 正确；308 字符长路径可解（本机 `LongPathsEnabled=1`）；
   大小写同名（`UPPER.txt` / `upper.txt`）自动变成 `upper (1).txt`。
 - **GUI**：双击是空首页；「选择文件」→ 系统文件框 → 选中后进预览（实点）；解压完成弹 Windows
-  通知气泡（截图见 `C:\Work\yshjy-win\截图`）。
+  通知气泡（截图在 Windows 机器上）。
 - **启动竞态修完复测：同一份包连开 10 次，10 次都进预览页**（修之前约一半卡在识别）。
 - `flutter analyze` 干净；`flutter test` **432 全过 / 0 红 / 3 跳过**（Windows 上那条
   `clipboard_path_test` 的 POSIX 路径断言已改成按平台）。
@@ -2320,7 +2320,7 @@ Delete 那条同时红（`Expected: no matching candidates / Found 1 widget with
 
 ## [0.9.32] · 2026-10-30（GUI「加密包是死路」修复 + Windows W1~W10 战役一起发版）
 
-> 仓库搬到 Windows 机器（`C:\yshjy-20261030`，与 Linux 机走移动硬盘同一份 `.git`）后的第一轮代码改动，
+> 仓库搬到 Windows 机器（与 Linux 机走移动硬盘同一份 `.git`）后的第一轮代码改动，
 > 加上「加密包在图形界面里永远没有解压码输入框」这个真机 bug 的修复，一起发 **0.9.32**。
 > 待办来源与验收标准：`docs/TODO.md` 的「2026-10-30 Windows 实测审计」。**装机版现在是 0.9.32。**
 

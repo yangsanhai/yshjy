@@ -22,7 +22,9 @@ if [ "$V" != "$V_GUI" ]; then
   exit 1
 fi
 ARCH=$(uname -m)
-DOCS=(CHANGELOG.md CONTRIBUTING.md DEVLOG.md HANDOFF.md install.sh LICENSE README.md)
+DOCS=(CHANGELOG.md CONTRIBUTING.md install.sh LICENSE README.md)
+# 注意别往包里塞 HANDOFF.md / DEVLOG.md —— 那是内部交接记录，里面有本机家目录路径
+# 和调试细节，2026-11-17 复查公开 Release 时发现旧包把它们打进去了。
 
 echo "==> yshjy $V（$ARCH）"
 
